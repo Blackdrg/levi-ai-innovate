@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quotes Bot - Your Daily Inspiration</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>">
+</head>
+<body>
+    <!-- Background gradient effect -->
+    <div class="background"></div>
+    
+    <div class="app">
+        <header>
+            <h1>✨ Quotes Bot</h1>
+            <p class="tagline">Your daily whisper of wisdom</p>
+        </header>
+
+        <div class="chat-container">
+            <div class="messages" id="messages">
+                <div class="message bot">
+                    <p>Hello! 👋 I'm your Quotes Bot.</p>
+                    <p>I can share quotes about:</p>
+                    <ul>
+                        <li>🎯 Motivation</li>
+                        <li>❤️ Love</li>
+                        <li>🌿 Life</li>
+                        <li>🎲 Random inspiration</li>
+                    </ul>
+                    <p>What would you like today?</p>
+                </div>
+            </div>
+
+            <div class="quick-actions">
+                <button onclick="quick('motivation')">✨ Motivation</button>
+                <button onclick="quick('love')">❤️ Love</button>
+                <button onclick="quick('life')">🌿 Life</button>
+                <button onclick="quick('random')">🎲 Random</button>
+            </div>
+
+            <form class="input-area" id="chatForm">
+                <input 
+                    type="text" 
+                    id="userInput" 
+                    placeholder="Speak your heart..."
+                    autocomplete="off"
+                >
+                <button type="submit">Send</button>
+            </form>
+        </div>
+
+        <footer>
+            <p>"Every quote is a door to a new perspective."</p>
+        </footer>
+    </div>
+
+    <script src="chat.js"></script>
+</body>
+</html>
+
