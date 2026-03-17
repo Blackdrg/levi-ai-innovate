@@ -1,5 +1,10 @@
 
-from waitress import serve
+try:
+    from waitress import serve
+except ImportError:
+    print("Waitress not found. Please install it with 'pip install waitress'.")
+    exit(1)
+
 from backend.main import app
 
 if __name__ == "__main__":

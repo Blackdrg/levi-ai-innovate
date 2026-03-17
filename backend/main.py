@@ -92,17 +92,50 @@ limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title="LEVI Quotes API")
 app.state.limiter = limiter
 
+# Allow CORS for development and production
+origins = [
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "https://your-firebase-project.web.app",
+    "https://your-firebase-project.firebaseapp.com",
+]
+env_origins = os.getenv("CORS_ORIGINS")
+if env_origins:
+    origins.extend(env_origins.split(","))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"] if os.getenv("DEBUG") else origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+from fastapi.responses import JSONResponse
+
+# Global exception handler for better stability
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logging.error(f"Global error: {exc}")
+    import traceback
+    logging.error(traceback.format_exc())
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "An internal error occurred. Our creative circuits are being realigned."},
+    )
+
+@app.on_event("startup")
+async def startup_event():
+    logging.info("Starting LEVI backend... Model loading triggered in background.")
+    # Debug: Log environment info
+    logging.info(f"CORS origins: {origins}")
+    logging.info(f"Database URL: {DATABASE_URL}")
+
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "version": "2.0.0"}
 
 @app.get("/daily_quote")
 def daily_quote(db: Session = Depends(get_db)):
@@ -139,31 +172,35 @@ def search_quotes(query: Query, db: Session = Depends(get_db)):
     if cached:
         return cached
 
-    # 2. Embed Query
-    query_embedding = embed_text(query.text)
-    
-    # 3. Vector Search
-    if "postgresql" in DATABASE_URL:
-        base_query = db.query(Quote)
-        if query.mood:
-            base_query = base_query.filter(Quote.mood == query.mood)
-        results = base_query.order_by(Quote.embedding.l2_distance(query_embedding)).limit(query.top_k).all()
+    if not query.text:
+        # Return random quotes if no query
+        results = db.query(Quote).order_by(func.random()).limit(query.top_k).all()
     else:
-        # Fallback for SQLite: In-memory search
-        all_quotes_query = db.query(Quote)
-        if query.mood:
-            all_quotes_query = all_quotes_query.filter(Quote.mood == query.mood)
-        all_quotes = all_quotes_query.all()
+        # 2. Embed Query
+        query_embedding = embed_text(query.text)
         
-        q_emb = np.array(query_embedding)
-        scored = []
-        for q in all_quotes:
-            if q.embedding is not None:
-                sim = cosine_sim(q_emb, np.array(q.embedding))
-                scored.append((q, sim))
-        
-        scored.sort(key=lambda x: x[1], reverse=True)
-        results = [s[0] for s in scored[:query.top_k]]
+        # 3. Vector Search
+        if "postgresql" in DATABASE_URL:
+            base_query = db.query(Quote)
+            if query.mood:
+                base_query = base_query.filter(Quote.mood == query.mood)
+            results = base_query.order_by(Quote.embedding.l2_distance(query_embedding)).limit(query.top_k).all()
+        else:
+            # Fallback for SQLite: In-memory search
+            all_quotes_query = db.query(Quote)
+            if query.mood:
+                all_quotes_query = all_quotes_query.filter(Quote.mood == query.mood)
+            all_quotes = all_quotes_query.all()
+            
+            q_emb = np.array(query_embedding)
+            scored = []
+            for q in all_quotes:
+                if q.embedding is not None:
+                    sim = cosine_sim(q_emb, np.array(q.embedding))
+                    scored.append((q, sim))
+            
+            scored.sort(key=lambda x: x[1], reverse=True)
+            results = [s[0] for s in scored[:query.top_k]]
     
     formatted_results = [
         {"quote": q.text, "author": q.author, "topic": q.topic, "mood": q.mood, "similarity": 0.9} 

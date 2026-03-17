@@ -3,33 +3,44 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Inspiration Feed - LEVI AI</title>
-    
-    <!-- SEO & PWA -->
-    <meta name="description" content="See what inspirations are currently moving the LEVI community. Live wisdom feed.">
     <meta name="theme-color" content="#8B5CF6">
-    <meta name="msapplication-navbutton-color" content="#8B5CF6">
-    <meta name="apple-mobile-web-app-status-bar-style" content="#8B5CF6">
+    <title>Inspiration Feed - LEVI AI Community Wisdom</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="https://img.icons8.com/fluency/192/000000/brain.png">
+    
+    <!-- OpenGraph / Social -->
+    <meta property="og:title" content="LEVI AI Community Feed - Live Inspiration">
+    <meta property="og:description"
+        content="See what's inspiring the world. Join the LEVI community and share your wisdom.">
+    <meta property="og:url" content="https://levi-ai.example.com/feed.html">
+    <meta property="og:type" content="website">
+    <meta property="og:image" content="https://img.icons8.com/fluency/512/000000/brain.png">
+    <meta name="twitter:card" content="summary_large_image">
 
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="css/styles.css">
     <link rel="stylesheet" href="css/animations.css">
-    <script src="js/ui.js" defer></script>
+    <script src="js/ui.js" type="module" defer></script>
 </head>
 <body class="bg-primary text-main min-h-screen p-6 md:p-12">
     <!-- Navigation -->
-    <nav class="max-w-7xl mx-auto mb-16 flex justify-between items-center">
-        <a href="index.html" class="flex items-center gap-2 group">
-            <span class="text-2xl font-black bg-gradient-to-r from-violet-400 to-emerald-400 bg-clip-text text-transparent group-hover:opacity-80 transition-opacity">LEVI</span>
-        </a>
+    <nav class="w-full max-w-7xl mx-auto flex justify-between items-center mb-16 p-4">
+        <a href="index.html"
+            class="text-2xl font-black bg-gradient-to-r from-violet-400 to-emerald-400 bg-clip-text text-transparent hover:opacity-80 transition-opacity">LEVI</a>
         <div class="flex flex-wrap gap-3 items-center justify-end">
-            <button onclick="window.toggleLanguage()" class="glass px-3 py-2 rounded-xl text-xs hover:bg-white/5 transition-all">🌐 EN/HI</button>
+            <button onclick="window.toggleLanguage()" class="glass px-3 py-2 rounded-xl text-xs hover:bg-white/5 transition-all">🌐
+                EN/HI</button>
             <button id="dark-toggle" class="glass p-2 rounded-xl hover:bg-white/5 transition-all">☀️</button>
-            <a href="chat.html" class="glass px-4 py-2 rounded-xl hover:bg-white/5 transition-all text-xs md:text-sm font-medium">Chat</a>
-            <a href="studio.html" class="glass px-4 py-2 rounded-xl hover:bg-white/5 transition-all text-xs md:text-sm font-medium">Studio</a>
-            <a href="quotes.html" class="glass px-4 py-2 rounded-xl hover:bg-white/5 transition-all text-xs md:text-sm font-medium">Gallery</a>
+            <a href="chat.html"
+                class="glass px-4 py-2 rounded-xl hover:bg-white/5 transition-all text-xs md:text-sm font-medium">Chat</a>
+            <a href="studio.html"
+                class="glass px-4 py-2 rounded-xl hover:bg-white/5 transition-all text-xs md:text-sm font-medium">Studio</a>
+            <a href="feed.html"
+                class="glass px-4 py-2 rounded-xl hover:bg-white/5 transition-all text-xs md:text-sm font-medium">Feed</a>
+            <a href="quotes.html"
+                class="glass px-4 py-2 rounded-xl hover:bg-white/5 transition-all text-xs md:text-sm font-medium">Explore</a>
         </div>
     </nav>
 

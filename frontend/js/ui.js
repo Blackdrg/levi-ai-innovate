@@ -28,6 +28,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Audio Init
   initAmbientAudio();
 
+  // Connection Check
+  checkConnection();
+
   // Init animations
   document.querySelectorAll('.animate-pulse-glow').forEach(el => {
     el.classList.add('animate-pulse-glow');
@@ -48,34 +51,52 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
+async function checkConnection() {
+  const statusEl = document.createElement('div');
+  statusEl.id = 'connection-status';
+  statusEl.className = 'fixed bottom-4 right-4 z-[9999] px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest glass transition-all opacity-0 pointer-events-none';
+  document.body.appendChild(statusEl);
+
+  try {
+    const { getAnalytics } = await import('./api.js');
+    await getAnalytics();
+    statusEl.innerText = 'Connected to Core';
+    statusEl.classList.add('text-emerald-400', 'opacity-50');
+  } catch (err) {
+    console.error('[LEVI] Connection test failed:', err);
+    statusEl.innerText = 'Connection Issues Detected';
+    statusEl.classList.add('text-red-400', 'opacity-100', 'animate-pulse');
+    statusEl.classList.remove('pointer-events-none');
+    statusEl.style.cursor = 'help';
+    statusEl.title = 'The frontend cannot reach the backend. Ensure "python run_app.py" is running in your terminal.';
+  }
+}
+
 function updateNav() {
   const user = localStorage.getItem('levi_user');
   const navContainer = document.querySelector('nav .flex.gap-4.items-center') || document.querySelector('nav div.flex');
   if (!navContainer) return;
 
-  // Clear existing dynamic parts to prevent duplicates
   const dynamicClass = 'levi-dynamic-nav';
   navContainer.querySelectorAll(`.${dynamicClass}`).forEach(el => el.remove());
 
-  const authBtn = document.createElement('div');
-  authBtn.className = `flex items-center gap-4 ${dynamicClass}`;
-  
+  let navHTML = '';
   if (user) {
-    authBtn.innerHTML = `
-      <div class="flex items-center gap-2">
+    navHTML = `
+      <div class="flex items-center gap-2 ${dynamicClass}">
         <span class="text-[10px] font-bold text-muted uppercase tracking-widest">${user}</span>
         <button onclick="logout()" class="text-[10px] text-red-400 hover:text-red-300 transition-colors">Logout</button>
       </div>
-      <a href="my-gallery.html" class="glass px-3 py-2 rounded-xl text-xs hover:bg-white/5 transition-all">Studio</a>
-      <a href="feed.html" class="glass px-3 py-2 rounded-xl text-xs hover:bg-white/5 transition-all">Feed</a>
+      <a href="my-gallery.html" class="glass px-3 py-2 rounded-xl text-xs hover:bg-white/5 transition-all ${dynamicClass}">Studio</a>
+      <a href="feed.html" class="glass px-3 py-2 rounded-xl text-xs hover:bg-white/5 transition-all ${dynamicClass}">Feed</a>
     `;
   } else {
-    authBtn.innerHTML = `
-      <a href="auth.html" class="btn-primary px-4 py-2 rounded-xl text-xs">Login</a>
+    navHTML = `
+      <a href="auth.html" class="btn-primary px-4 py-2 rounded-xl text-xs ${dynamicClass}">Login</a>
     `;
   }
   
-  navContainer.appendChild(authBtn);
+  navContainer.insertAdjacentHTML('beforeend', navHTML);
 }
 
 function logout() {

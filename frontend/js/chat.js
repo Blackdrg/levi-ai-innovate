@@ -22,29 +22,34 @@ function addMessage(text, role, className = '') {
   const label = role === 'user' ? 'You' : 'LEVI AI';
   const labelClass = role === 'user' ? 'text-white/70' : 'text-emerald-400';
 
-  msg.innerHTML = `
+  let messageHTML = `
     <div class="text-[10px] font-bold uppercase tracking-widest ${labelClass} mb-2">${label}</div>
     <div class="text-md leading-relaxed">${text}</div>
-    ${role === 'bot' ? `
-    <div class="flex items-center gap-3 mt-4 pt-3 border-t border-white/5">
-      <button onclick="window.shareQuote('${text.replace(/'/g, "\\'")}')" class="text-xs text-muted hover:text-white transition-colors flex items-center gap-1">
-        📤 Share
-      </button>
-      <button onclick="window.generateVisual('${text.replace(/'/g, "\\'")}')" class="text-xs text-muted hover:text-violet-400 transition-colors flex items-center gap-1">
-        🎨 Visual
-      </button>
-      <button onclick="window.speakText('${text.replace(/'/g, "\\'")}')" class="text-xs text-muted hover:text-emerald-400 transition-colors flex items-center gap-1">
-        🔊 Listen
-      </button>
-      <button onclick="window.regenerateChat(this, '${text.replace(/'/g, "\\'")}')" class="text-xs text-muted hover:text-violet-400 transition-colors flex items-center gap-1">
-        🔄 Regenerate
-      </button>
-      <button onclick="window.likeQuote(this, '${text.replace(/'/g, "\\'")}')" data-type="feed" class="text-xs text-muted hover:text-pink-400 transition-colors flex items-center gap-1 ml-auto">
-        🤍 Like
-      </button>
-    </div>
-    ` : ''}
   `;
+
+  if (role === 'bot') {
+    messageHTML += `
+      <div class="flex items-center gap-3 mt-4 pt-3 border-t border-white/5">
+        <button onclick="window.shareQuote('${text.replace(/'/g, "\\'")}')" class="text-xs text-muted hover:text-white transition-colors flex items-center gap-1">
+          📤 Share
+        </button>
+        <button onclick="window.generateVisual('${text.replace(/'/g, "\\'")}')" class="text-xs text-muted hover:text-violet-400 transition-colors flex items-center gap-1">
+          🎨 Visual
+        </button>
+        <button onclick="window.speakText('${text.replace(/'/g, "\\'")}')" class="text-xs text-muted hover:text-emerald-400 transition-colors flex items-center gap-1">
+          🔊 Listen
+        </button>
+        <button onclick="window.regenerateChat(this, '${text.replace(/'/g, "\\'")}')" class="text-xs text-muted hover:text-violet-400 transition-colors flex items-center gap-1">
+          🔄 Regenerate
+        </button>
+        <button onclick="window.likeQuote(this, '${text.replace(/'/g, "\\'")}')" data-type="feed" class="text-xs text-muted hover:text-pink-400 transition-colors flex items-center gap-1 ml-auto">
+          🤍 Like
+        </button>
+      </div>
+    `;
+  }
+
+  msg.innerHTML = messageHTML;
   chatBox.appendChild(msg);
   chatBox.scrollTop = chatBox.scrollHeight;
   return msg;
@@ -116,12 +121,12 @@ async function sendMessage() {
 
   try {
     const data = await chat(text, sessionId);
-    if (typingId && ui.removeTypingMessage) ui.removeTypingMessage(typingId);
     addMessage(data.response, 'bot');
   } catch (err) {
+    addMessage("I'm sorry, I'm having trouble connecting to my creative circuits right now. Please try again later.", 'bot');
+    console.error("Error sending message:", err);
+  } finally {
     if (typingId && ui.removeTypingMessage) ui.removeTypingMessage(typingId);
-    addMessage("I'm sorry, I'm having trouble connecting to my creative circuits right now.", 'bot');
-    console.error(err);
   }
 }
 

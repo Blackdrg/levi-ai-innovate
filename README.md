@@ -7,7 +7,9 @@ LEVI is now **fully functional** w/ modern frontend architecture, semantic quote
 ## ✨ Features (Live!)
 
 - **Semantic Quote Search**: /api/search_quotes (embeddings-powered)
+
 - **AI Chat**: /api/chat (session-aware conversations)
+
 - **Quote Generation**: /api/generate  
 - **Modern UI**: Dark theme (#0F172A), glass cards, hover animations, 80vh chat
 - **Central API Client**: frontend/js/api.js routes all via nginx /api/
@@ -22,20 +24,62 @@ Nginx (80)
         ↳ Postgres/pgvector + Redis + RASA
 ```
 
-## 🚀 Quick Start
+## 🚀 How to Run (Local Development)
+
+To start both the backend and frontend simultaneously with automatic port management:
 
 ```bash
-docker compose up --build
+python run_app.py
 ```
 
-**~2min** → <http://localhost> 🎉
+- **Frontend**: [http://localhost:8080](http://localhost:8080)
+- **Backend**: [http://localhost:8000](http://localhost:8000)
 
-**Test Flow:**
+## 🌐 How to Deploy (Firebase & Cloud Run)
 
-1. Landing hero → "Start Chat"
-2. Chat: Type message → LEVI responds (via /api/chat)
-3. Quotes: Search keyword → glass cards w/ hover
-4. API: `curl -X POST http://localhost/api/health`
+LEVI is pre-configured for a hybrid cloud deployment: **Firebase Hosting** for the frontend and **Google Cloud Run** for the backend.
+
+### 1. Backend Deployment (Cloud Run)
+
+- **Containerize**: Use [Dockerfile.prod](file:///c:/Users/mehta/Desktop/LEVI/backend/Dockerfile.prod) to build your image.
+
+  ```bash
+  gcloud builds submit --tag gcr.io/YOUR_PROJECT_ID/levi-backend ./backend
+  ```
+
+- **Deploy**: Deploy to Cloud Run.
+
+  ```bash
+  gcloud run deploy levi-backend --image gcr.io/YOUR_PROJECT_ID/levi-backend --platform managed --allow-unauthenticated
+  ```
+
+- **Update URL**: Note the provided Service URL.
+
+### 2. Frontend Deployment (Firebase)
+
+- **Configure**: Open [firebase.json](file:///c:/Users/mehta/Desktop/LEVI/firebase.json) and replace `https://your-backend-url.a.run.app` with your Cloud Run Service URL.
+- **Initialize**:
+
+  ```bash
+  firebase init hosting
+  ```
+
+- **Deploy**:
+
+  ```bash
+  firebase deploy --only hosting
+  ```
+
+### 3. Security
+
+- Update `origins` in [main.py](file:///c:/Users/mehta/Desktop/LEVI/backend/main.py) with your actual Firebase URL to ensure CORS is correctly handled.
+
+## 🛠️ Robustness Features
+
+- **Unified Lifecycle**: `run_app.py` manages both services and automatically kills stale processes.
+- **Fail-safe AI**: Backend automatically switches to rule-based wisdom if heavy models fail to load.
+- **Network Resilience**: Service Worker uses a Network-First strategy to ensure you always get fresh AI responses while staying fast.
+- **Health Monitoring**: Integrated healthchecks in Docker ensures automatic recovery of any crashed services.
 
 ## 📱 Pages
 

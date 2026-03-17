@@ -1,86 +1,96 @@
 import os
 import random
 import requests
+import logging
 from mtranslate import translate
 
-try:
-    from transformers import pipeline
-    generator = pipeline('text-generation', model='distilgpt2', device=-1)  # CPU
-    HAS_GENERATOR = True
-except Exception as e:
-    print(f"Warning: Failed to load text-generation model: {e}")
-    HAS_GENERATOR = False
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
+HAS_GENERATOR = False
+generator = None
 
-import logging
+import threading
 
-logging.basicConfig(level=logging.INFO)
+def load_model():
+    def _load():
+        global generator, HAS_GENERATOR
+        try:
+            from transformers import pipeline
+            logger.info("Attempting to load text-generation model in background...")
+            generator = pipeline('text-generation', model='distilgpt2', device=-1)  # CPU
+            HAS_GENERATOR = True
+            logger.info("Text-generation model loaded successfully.")
+        except Exception as e:
+            logger.warning(f"Failed to load text-generation model: {e}. Using rule-based fallback.")
+            HAS_GENERATOR = False
+
+    # Run loading in a background thread to prevent blocking
+    thread = threading.Thread(target=_load)
+    thread.daemon = True
+    thread.start()
+
+# Proactively start loading in background
+load_model()
 
 def generate_response(prompt: str, history: list = None, mood: str = "", max_length: int = 150, lang: str = "en") -> str:
     """
     Generates a contextual and persona-driven response, deciding whether to generate a quote or a conversational reply.
     """
-    logging.info(f"Generating response for prompt: '{prompt}' (lang: {lang})")
+    logger.info(f"Generating response for prompt: '{prompt}' (lang: {lang})")
     
+    # Pre-checks
+    if not prompt or not isinstance(prompt, str):
+        return "I am listening, seeker. Your silence is profound."
+
     # 1. Translate prompt to English if it's in Hindi for intent detection
     input_text = prompt
     if lang == "hi":
         try:
             input_text = translate(prompt, 'en', 'auto')
-            logging.info(f"Translated input to English: {input_text}")
+            logger.info(f"Translated input to English: {input_text}")
         except Exception as e:
-            logging.error(f"Translation error: {e}")
+            logger.error(f"Translation error: {e}")
     
     msg = input_text.lower().strip()
-    logging.info(f"Normalized msg: '{msg}'")
-    # 1. Intent Detection: Check if the user is asking for a quote or a visual.
-    quote_keywords = ["quote", "wisdom", "inspiration", "inspire", "saying", "motto", "thought", "wisdom", "vichar", "suvichar"]
+    
+    # 1. Intent Detection
+    quote_keywords = ["quote", "wisdom", "inspiration", "inspire", "saying", "motto", "thought", "vichar", "suvichar"]
     visual_keywords = ["visual", "image", "picture", "art", "draw", "paint", "canvas", "background", "chitra", "photo"]
     
     is_quote_request = any(word in msg for word in quote_keywords)
     is_visual_request = any(word in msg for word in visual_keywords)
     
     if is_visual_request:
-        logging.info("Intent: Visual generation request")
         resp = "I can certainly create a visual for you. Simply ask for a 'quote' first, or use the 'Visual' button on any of my previous messages to see it brought to life."
         if lang == "hi":
-            try:
-                resp = translate(resp, 'hi', 'en')
+            try: resp = translate(resp, 'hi', 'en')
             except: pass
         return resp
 
     if is_quote_request:
-        logging.info("Intent: Quote generation")
-        # Extract topic from the prompt, or use a general theme
         topic = input_text.replace("quote", "").replace("about", "").replace("in hindi", "").strip()
         if not topic or topic in quote_keywords:
             topic = "life"
         
-        # Determine mood from prompt or fallback to a default
         detected_mood = mood or "thought-provoking"
         for m in ["stoic", "zen", "cyberpunk", "philosophical", "calm", "energetic"]:
             if m in msg:
                 detected_mood = m
                 break
         
-        # Generate a quote using the specialized function
         quote = generate_quote(topic, mood=detected_mood)
         
-        # Translate to Hindi if needed
         if lang == "hi":
             try:
-                logging.info(f"Translating quote to Hindi: {quote}")
-                translated_quote = translate(quote, 'hi', 'en')
-                logging.info(f"Translated quote result: {translated_quote}")
-                return translated_quote
+                logger.info(f"Translating quote to Hindi: {quote}")
+                return translate(quote, 'hi', 'en')
             except Exception as e:
-                logging.error(f"Quote translation error: {e}")
+                logger.error(f"Quote translation error: {e}")
         return quote
 
-    # 2. Conversational Fallback
-    logging.info("Intent: Conversational response")
-    
-    # Predefined responses for common inputs to bypass buggy model
+    # 2. Conversational Predefined Responses
     responses = {
         "hello": "Greetings, seeker of wisdom. How may I inspire you today?",
         "hi": "Hello. I am LEVI, your artistic companion. What's on your mind?",
@@ -92,79 +102,50 @@ def generate_response(prompt: str, history: list = None, mood: str = "", max_len
     if msg in responses:
         resp = responses[msg]
         if lang == "hi":
-            try:
-                resp = translate(resp, 'hi', 'en')
+            try: resp = translate(resp, 'hi', 'en')
             except: pass
         return resp
 
-    # Construct context for the model
-    context = (
-        "LEVI is a wise, creative, and brief AI. "
-        "User: Hello\nLEVI: Greetings. How can I inspire you today?\n"
-    )
-
-    if history:
-        for entry in history[-2:]:
-            u = entry.get('user', '')
-            b = entry.get('bot', '')
-            if u and b:
-                context += f"User: {u}\nLEVI: {b}\n"
-    
-    context += f"User: {input_text}\nLEVI:"
-
-    if not HAS_GENERATOR:
-        logging.warning("Generator model not available. Returning fallback response.")
+    # 3. Model-based Generation or Fallback
+    if not HAS_GENERATOR or generator is None:
+        logger.warning("Generator model not available. Returning fallback response.")
         resp = "I am currently reflecting on the deeper patterns of the universe. Ask me for 'wisdom' or a specific 'mood' like Stoic or Cyberpunk, and I shall provide a spark for your journey."
         if lang == "hi":
-            try:
-                resp = translate(resp, 'hi', 'en')
+            try: resp = translate(resp, 'hi', 'en')
             except: pass
         return resp
 
-    logging.info(f"Generating with context: {context}")
     try:
-        logging.info(f"Full Prompt to Model: {context}")
+        # Construct context
+        context = "LEVI is a wise, creative, and brief AI companion.\n"
+        if history:
+            for entry in history[-2:]:
+                u, b = entry.get('user', ''), entry.get('bot', '')
+                if u and b: context += f"User: {u}\nLEVI: {b}\n"
+        context += f"User: {input_text}\nLEVI:"
+
         result = generator(
             context,
-            max_new_tokens=max_length,
+            max_new_tokens=60, # Keep it brief for performance
             num_return_sequences=1,
             do_sample=True,
-            temperature=0.7,
-            top_k=50,
-            top_p=0.9,
-            repetition_penalty=1.2,
-            no_repeat_ngram_size=2,
+            temperature=0.8,
             pad_token_id=generator.tokenizer.eos_token_id
         )
         
-        response = result[0]['generated_text']
-        logging.info(f"Raw generated response: {response}")
-        response = response.split("LEVI:")[-1].strip()
-        response = response.split("User:")[0].strip()
+        response = result[0]['generated_text'].split("LEVI:")[-1].split("User:")[0].strip()
         
         if not response:
-            logging.warning("Generated response is empty. Returning fallback.")
-            response = "Your words resonate with the silence of the cosmos. What more can we explore together?"
-            if lang == "hi":
-                try:
-                    response = translate(response, 'hi', 'en')
-                except: pass
-            return response
+            response = "The silence between us is filled with potential. What shall we explore?"
             
         if lang == "hi":
-            try:
-                response = translate(response, 'hi', 'en')
+            try: response = translate(response, 'hi', 'en')
             except: pass
         return response
 
     except Exception as e:
-        logging.error(f"Generation error: {e}")
-        resp = "A momentary lapse in the cosmic connection. Ask again, and let us realign the stars."
-        if lang == "hi":
-            try:
-                resp = translate(resp, 'hi', 'en')
-            except: pass
-        return resp
+        logger.error(f"Generation error: {e}")
+        return "A momentary lapse in the cosmic connection. Ask again, and let us realign the stars."
 
 
 

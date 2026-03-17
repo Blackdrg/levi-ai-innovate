@@ -9,15 +9,21 @@ import base64
 import math
 
 def get_keywords_from_quote(quote: str, mood: str = "") -> str:
-    """Extracts visually descriptive keywords from the quote and mood."""
-    # 1. Stop words to ignore
+    """Extracts visually descriptive keywords from the quote and mood using a pre-trained model."""
+    try:
+        from transformers import pipeline
+        keyword_extractor = pipeline("feature-extraction", model="distilbert-base-uncased")
+        keywords = keyword_extractor(quote, top_k=5)
+        return ",".join([keyword["token_str"] for keyword in keywords])
+    except Exception as e:
+        print(f"Keyword extraction error: {e}")
+        return get_keywords_from_quote_fallback(quote, mood)
+
+def get_keywords_from_quote_fallback(quote: str, mood: str = "") -> str:
+    """Fallback keyword extraction method."""
     stop_words = {"the", "a", "an", "is", "are", "was", "were", "to", "for", "in", "on", "at", "by", "with", "from", "and", "or", "but", "not", "no", "yes", "my", "your", "his", "her", "their", "our", "it", "this", "that", "these", "those", "of", "be", "been", "being", "have", "has", "had", "do", "does", "did", "can", "could", "shall", "should", "will", "would", "may", "might", "must"}
-    
-    # 2. Extract words, clean them, and filter
     words = re.findall(r'\b\w+\b', quote.lower())
     meaningful_words = [w for w in words if w not in stop_words and len(w) > 3]
-    
-    # 3. Mood-based keywords
     mood_keywords = {
         'inspiring': 'light,dawn,mountain,soaring',
         'calm': 'serene,lake,zen,forest',
@@ -29,16 +35,11 @@ def get_keywords_from_quote(quote: str, mood: str = "") -> str:
         'cyberpunk': 'neon,glitch,vibrant,city',
         'futuristic': 'technology,digital,geometry,void'
     }
-    
     base_keywords = mood_keywords.get(mood.lower(), 'abstract,artistic')
-    
-    # 4. Combine: take top 2 words from quote and add mood keywords
     if meaningful_words:
-        # Sort by length as a proxy for "meaningful" if no NLP is available
         meaningful_words.sort(key=len, reverse=True)
         top_words = meaningful_words[:3]
         return f"{base_keywords},{','.join(top_words)}"
-    
     return base_keywords
 
 def generate_quote_image(quote: str, author: str = "", mood: str = "", size: tuple = (1080, 1080), custom_bg: str = None) -> BytesIO:
@@ -71,12 +72,13 @@ def generate_quote_image(quote: str, author: str = "", mood: str = "", size: tup
     if bg_img is None:
         keywords = get_keywords_from_quote(quote, mood)
         
-        # Try multiple sources
+        # Try multiple sources in random order for more variety
         bg_urls = [
-            f"https://loremflickr.com/{size[0]}/{size[1]}/{keywords}/all",
-            f"https://picsum.photos/seed/{random.randint(0, 1000)}/{size[0]}/{size[1]}",
-            f"https://source.unsplash.com/featured/{size[0]}x{size[1]}?{keywords.replace(',', '+')}"
+            f"https://loremflickr.com/{size[0]}/{size[1]}/{keywords}/all?lock={random.randint(0, 1000)}",
+            f"https://picsum.photos/seed/{random.randint(0, 10000)}/{size[0]}/{size[1]}",
+            f"https://source.unsplash.com/featured/{size[0]}x{size[1]}?{keywords.replace(',', '+')}&sig={random.randint(0, 1000)}"
         ]
+        random.shuffle(bg_urls)
         
         for url in bg_urls:
             try:
@@ -87,8 +89,9 @@ def generate_quote_image(quote: str, author: str = "", mood: str = "", size: tup
                     if bg_img.size != size:
                         bg_img = bg_img.resize(size, Image.Resampling.LANCZOS)
                     
-                    # Dynamic Dark Overlay based on mood
-                    overlay_opacity = 160 if mood.lower() in ['philosophical', 'melancholic', 'cyberpunk'] else 130
+                    # Dynamic Dark Overlay based on mood + randomness
+                    base_opacity = 160 if mood.lower() in ['philosophical', 'melancholic', 'cyberpunk'] else 130
+                    overlay_opacity = base_opacity + random.randint(-20, 20)
                     overlay = Image.new('RGBA', size, (0, 0, 0, overlay_opacity))
                     bg_img = Image.alpha_composite(bg_img, overlay)
                     break
@@ -122,47 +125,42 @@ def generate_quote_image(quote: str, author: str = "", mood: str = "", size: tup
     
     # 3. Add Artistic "Star/Noise" Overlay (only if no background)
     if bg_img.getextrema()[3][0] == 255: # If opaque (likely gradient)
-        for _ in range(300):
+        for _ in range(random.randint(200, 500)):
             x, y = random.randint(0, size[0]), random.randint(0, size[1])
-            r = random.randint(1, 3)
-            opacity = random.randint(50, 200)
+            r = random.randint(1, 4)
+            opacity = random.randint(30, 180)
             draw.ellipse([x-r, y-r, x+r, y+r], fill=(255, 255, 255, opacity))
 
     # 3. Add Abstract Artistic Shapes
-    for _ in range(5):
+    for _ in range(random.randint(3, 8)):
         x1, y1 = random.randint(0, size[0]), random.randint(0, size[1])
-        x2, y2 = x1 + random.randint(100, 400), y1 + random.randint(100, 400)
-        draw.rectangle([x1, y1, x2, y2], outline=(255, 255, 255, 20), width=2)
-        draw.ellipse([x1, y1, x2, y2], outline=(255, 255, 255, 10), width=1)
+        x2, y2 = x1 + random.randint(50, 500), y1 + random.randint(50, 500)
+        shape_opacity = random.randint(5, 25)
+        if random.random() > 0.5:
+            draw.rectangle([x1, y1, x2, y2], outline=(255, 255, 255, shape_opacity), width=random.randint(1, 3))
+        else:
+            draw.ellipse([x1, y1, x2, y2], outline=(255, 255, 255, shape_opacity), width=random.randint(1, 2))
 
     # 4. Stylized Typography
     try:
         # Define font styles based on mood
         mood_fonts = {
-            'stoic': ["georgiab.ttf", "timesbd.ttf", "DejaVuSerif-Bold.ttf"],
-            'cyberpunk': ["arialbd.ttf", "verdana.ttf", "DejaVuSans-Bold.ttf"],
-            'zen': ["georgia.ttf", "times.ttf", "DejaVuSerif.ttf"],
-            'energetic': ["impact.ttf", "arialbd.ttf", "DejaVuSans-Bold.ttf"],
-            'melancholic': ["georgia.ttf", "times.ttf", "DejaVuSerif.ttf"]
+            'stoic': ["Georgia", "Times New Roman", "DejaVu Serif"],
+            'cyberpunk': ["Arial", "Verdana", "DejaVu Sans"],
+            'zen': ["Georgia", "Times New Roman", "DejaVu Serif"],
+            'energetic': ["Impact", "Arial Black", "DejaVu Sans"],
+            'melancholic': ["Georgia", "Times New Roman", "DejaVu Serif"]
         }
         
-        # Try to find a font that matches the mood
-        preferred_fonts = mood_fonts.get(mood.lower(), ["georgia.ttf", "arial.ttf", "DejaVuSerif.ttf"])
-        
-        font_paths = [
-            "C:\\Windows\\Fonts\\", 
-            "/usr/share/fonts/truetype/dejavu/",
-            "/System/Library/Fonts/Supplemental/"
-        ]
+        preferred_fonts = mood_fonts.get(mood.lower(), ["Georgia", "Arial", "DejaVu Serif"])
         
         font_path = None
-        for pf in preferred_fonts:
-            for bp in font_paths:
-                full_path = os.path.join(bp, pf)
-                if os.path.exists(full_path):
-                    font_path = full_path
-                    break
-            if font_path: break
+        for font_name in preferred_fonts:
+            try:
+                font_path = ImageFont.truetype(font_name, 1).path
+                break
+            except IOError:
+                continue
             
         if font_path:
             # Dynamic font size based on quote length

@@ -1,37 +1,58 @@
 services:
   db:
-    image: pgvector/pgvector:0.6.2-pg16
-    restart: always
+    image: ankane/pgvector
     environment:
-      POSTGRES_DB: levi
       POSTGRES_USER: levi
-      POSTGRES_PASSWORD: levi
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-levi}
+      POSTGRES_DB: levi
     ports:
       - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U levi"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
 
   redis:
     image: redis:alpine
-    restart: always
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   backend:
     build: ./backend
     restart: always
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://levi:levi@db:5432/levi
+      DATABASE_URL: postgresql://levi:${POSTGRES_PASSWORD:-levi}@db:5432/levi
       REDIS_URL: redis://redis:6379
+      SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-in-prod}
+      CORS_ORIGINS: "*"
+      # Optimization for production
+      PYTHONUNBUFFERED: 1
+      TRANSFORMERS_CACHE: /app/model_cache
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     volumes:
       - ./backend:/app
-    command: bash -c "pip install -r requirements.txt && python seed.py && uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
+      - ./model_cache:/app/model_cache
+    command: bash -c "python seed.py && uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2"
 
   rasa-train:
     build: ./rasa
@@ -57,15 +78,17 @@ services:
       - ./rasa:/app
     command: rasa run actions
 
-  frontend:
+  nginx:
     image: nginx:alpine
     ports:
       - "80:80"
     volumes:
-      - ./frontend:/usr/share/nginx/html:ro
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./frontend:/usr/share/nginx/html
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    restart: always
 
 
 volumes:
