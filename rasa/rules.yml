@@ -1,0 +1,18 @@
+version: "3.1"
+
+rules:
+  - rule: Greet user
+    steps:
+    - intent: greeting
+    - action: utter_greet
+
+  - rule: Say goodbye anytime
+    steps:
+    - intent: goodbye
+    - action: utter_goodbye
+
+  - rule: Fallback handling
+    steps:
+    - intent: fallback
+    - action: utter_fallback
+

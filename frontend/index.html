@@ -3,62 +3,261 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quotes Bot - Your Daily Inspiration</title>
-    <link rel="stylesheet" href="style.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>">
-</head>
-<body>
-    <!-- Background gradient effect -->
-    <div class="background"></div>
+    <title>LEVI - AI Artistic Companion</title>
     
-    <div class="app">
-        <header>
-            <h1>✨ Quotes Bot</h1>
-            <p class="tagline">Your daily whisper of wisdom</p>
-        </header>
-
-        <div class="chat-container">
-            <div class="messages" id="messages">
-                <div class="message bot">
-                    <p>Hello! 👋 I'm your Quotes Bot.</p>
-                    <p>I can share quotes about:</p>
-                    <ul>
-                        <li>🎯 Motivation</li>
-                        <li>❤️ Love</li>
-                        <li>🌿 Life</li>
-                        <li>🎲 Random inspiration</li>
-                    </ul>
-                    <p>What would you like today?</p>
-                </div>
-            </div>
-
-            <div class="quick-actions">
-                <button onclick="quick('motivation')">✨ Motivation</button>
-                <button onclick="quick('love')">❤️ Love</button>
-                <button onclick="quick('life')">🌿 Life</button>
-                <button onclick="quick('random')">🎲 Random</button>
-            </div>
-
-            <form class="input-area" id="chatForm">
-                <input 
-                    type="text" 
-                    id="userInput" 
-                    placeholder="Speak your heart..."
-                    autocomplete="off"
-                >
-                <button type="submit">Send</button>
-            </form>
+    <!-- SEO & PWA -->
+    <meta name="description"
+        content="Experience the fusion of artificial intelligence and artistic inspiration. Wisdom, quotes, and visual art at your fingertips.">
+    <meta name="theme-color" content="#8B5CF6">
+    <meta name="msapplication-navbutton-color" content="#8B5CF6">
+    <meta name="apple-mobile-web-app-status-bar-style" content="#8B5CF6">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="https://img.icons8.com/fluency/192/000000/brain.png">
+    
+    <!-- OpenGraph -->
+    <meta property="og:title" content="LEVI AI - Artistic Wisdom">
+    <meta property="og:description" content="Meet your AI Muse. Generate wisdom and artistic visuals in seconds.">
+    <meta property="og:type" content="website">
+    <meta property="og:image" content="https://img.icons8.com/fluency/512/000000/brain.png">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/animations.css">
+    <script src="js/ui.js" defer></script>
+    <script src="js/api.js" type="module"></script>
+</head>
+<body class="bg-primary text-main min-h-screen flex flex-col items-center p-6 md:p-12 overflow-x-hidden">
+    
+    <!-- Navigation -->
+    <nav class="w-full max-w-7xl mx-auto flex justify-between items-center mb-16">
+        <a href="index.html"
+            class="text-2xl font-black bg-gradient-to-r from-violet-400 to-emerald-400 bg-clip-text text-transparent">LEVI</a>
+        <div class="flex flex-wrap gap-3 items-center justify-end">
+            <button onclick="window.toggleLanguage()"
+                class="glass px-3 py-2 rounded-xl text-xs hover:bg-white/5 transition-all">🌐 EN/HI</button>
+            <button id="dark-toggle" class="glass p-2 rounded-xl hover:bg-white/5 transition-all">☀️</button>
+            <a href="chat.html"
+                class="glass px-4 py-2 rounded-xl hover:bg-white/5 transition-all text-xs md:text-sm font-medium">Chat</a>
+            <a href="studio.html"
+                class="glass px-4 py-2 rounded-xl hover:bg-white/5 transition-all text-xs md:text-sm font-medium">Studio</a>
+            <a href="feed.html"
+                class="glass px-4 py-2 rounded-xl hover:bg-white/5 transition-all text-xs md:text-sm font-medium">Feed</a>
+            <a href="quotes.html"
+                class="glass px-4 py-2 rounded-xl hover:bg-white/5 transition-all text-xs md:text-sm font-medium">Explore</a>
         </div>
+    </nav>
 
-        <footer>
-            <p>"Every quote is a door to a new perspective."</p>
-        </footer>
-    </div>
+    <!-- Hero Section -->
+    <section class="hero text-center max-w-4xl mx-auto animate-fade-in">
+        <div class="inline-block px-4 py-1 rounded-full glass border-primary/20 text-primary text-sm font-semibold mb-6">
+            ✨ Meet Your AI Muse
+        </div>
+        <h1
+            class="text-6xl md:text-8xl font-black mb-8 tracking-tight bg-gradient-to-r from-violet-400 via-emerald-400 to-pink-400 bg-clip-text text-transparent">
+            LEVI AI
+        </h1>
+        <p class="text-xl md:text-2xl text-muted mb-12 leading-relaxed max-w-2xl mx-auto">
+            Experience the fusion of artificial intelligence and artistic inspiration.
+            Wisdom, quotes, and visual art at your fingertips.
+        </p>
+        
+        <div class="flex flex-col sm:flex-row gap-6 justify-center mb-16">
+            <a href="chat.html" class="btn-primary text-xl px-12 py-5 block">
+                Start Conversation →
+            </a>
+            <a href="quotes.html"
+                class="glass hover:bg-white/10 text-white px-12 py-5 rounded-2xl text-xl font-semibold transition-all duration-300 border border-white/10 block">
+                Browse Gallery
+            </a>
+        </div>
+    </section>
 
-    <script src="chat.js"></script>
+    <!-- Daily Inspiration Section -->
+    <section class="w-full max-w-3xl mx-auto mb-20 animate-fade-in delay-200">
+        <div id="daily-quote-card" class="glass-card p-10 rounded-[2.5rem] relative overflow-hidden text-center group">
+            <!-- Dynamic Background -->
+            <div id="daily-bg"
+                class="absolute inset-0 bg-cover bg-center opacity-10 transition-transform duration-700 group-hover:scale-110">
+            </div>
+            <div class="absolute inset-0 bg-gradient-to-b from-transparent via-bg-primary/40 to-bg-primary"></div>
+    
+            <div class="relative z-10">
+                <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-violet-500 to-emerald-500"></div>
+                <h3 class="mood-selector-title text-sm font-bold uppercase tracking-widest text-primary mb-6">Daily
+                    Inspiration</h3>
+                <p id="daily-quote-text" class="text-2xl md:text-3xl italic font-serif leading-relaxed mb-6 text-white/90">
+                    "Loading your daily dose of wisdom..."
+                </p>
+                <p id="daily-quote-author" class="text-lg text-emerald-400 font-semibold">— LEVI</p>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Feature Showcase Section -->
+    <section class="w-full max-w-7xl mx-auto mb-32 animate-fade-in delay-500">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div class="glass-card p-8 rounded-3xl border-white/5 hover:border-violet-500/30 transition-all">
+                <div class="text-3xl mb-4">🌍</div>
+                <h4 class="text-xl font-bold mb-3 text-main">Global Wisdom</h4>
+                <p class="text-sm text-muted">Connected to the world's largest open-source quote archives (ZenQuotes,
+                    Quotable) for fresh, daily inspiration.</p>
+            </div>
+            <div class="glass-card p-8 rounded-3xl border-white/5 hover:border-emerald-500/30 transition-all">
+                <div class="text-3xl mb-4">🎨</div>
+                <h4 class="text-xl font-bold mb-3 text-main">Artistic Engine</h4>
+                <p class="text-sm text-muted">Generating high-end visual art using open-source image providers (Unsplash,
+                    LoremFlickr) and LEVI's design logic.</p>
+            </div>
+            <div class="glass-card p-8 rounded-3xl border-white/5 hover:border-pink-500/30 transition-all">
+                <div class="text-3xl mb-4">🧠</div>
+                <h4 class="text-xl font-bold mb-3 text-main">Hybrid AI</h4>
+                <p class="text-sm text-muted">Seamlessly switching between high-performance local models and lightweight
+                    fallbacks for 100% reliability.</p>
+            </div>
+        </div>
+    </section>
+    
+    <!-- What's New Section -->
+    <section class="w-full max-w-7xl mx-auto mb-32 animate-fade-in delay-700">
+        <h2 class="text-4xl font-bold text-center text-white mb-12">What's New: The LEVI Evolution</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div class="glass-card p-8 rounded-3xl border-white/5 hover:border-violet-500/30 transition-all">
+                <div class="text-3xl mb-4">🧠</div>
+                <h4 class="text-xl font-bold mb-3 text-main">Smarter Conversations</h4>
+                <p class="text-sm text-muted">LEVI's conversational AI has been upgraded. It now understands a wider range
+                    of prompts, allowing for more natural and meaningful interactions. Ask anything, and discover new depths
+                    of wisdom.</p>
+            </div>
+            <div class="glass-card p-8 rounded-3xl border-white/5 hover:border-emerald-500/30 transition-all">
+                <div class="text-3xl mb-4">🖼️</div>
+                <h4 class="text-xl font-bold mb-3 text-main">Enhanced Visuals</h4>
+                <p class="text-sm text-muted">The visual generation engine has been completely overhauled. Experience more
+                    artistic and inspiring images with improved typography, dynamic layouts, and stunning details. Your
+                    words have never looked so beautiful.</p>
+            </div>
+        </div>
+        <div class="text-center mt-12">
+            <a href="chat.html" class="btn-primary text-lg px-10 py-4">Experience the New LEVI</a>
+        </div>
+    </section>
+
+    <!-- Mood Selector Section -->
+    <section class="w-full max-w-4xl mx-auto text-center animate-fade-in delay-400 mb-20">
+        <h3 class="mood-selector-title text-2xl font-bold mb-8">How are you feeling today?</h3>
+        <div class="flex flex-wrap justify-center gap-4 mb-12">
+            <button onclick="generateFromMood('Inspiring')"
+                class="glass hover:border-violet-500 px-6 py-3 rounded-xl transition-all hover:-translate-y-1">🌟
+                Inspiring</button>
+            <button onclick="generateFromMood('Calm')"
+                class="glass hover:border-emerald-500 px-6 py-3 rounded-xl transition-all hover:-translate-y-1">🍃
+                Calm</button>
+            <button onclick="generateFromMood('Energetic')"
+                class="glass hover:border-pink-500 px-6 py-3 rounded-xl transition-all hover:-translate-y-1">⚡
+                Energetic</button>
+            <button onclick="generateFromMood('Stoic')"
+                class="glass hover:border-slate-500 px-6 py-3 rounded-xl transition-all hover:-translate-y-1">🏛️
+                Stoic</button>
+            <button onclick="generateFromMood('Cyberpunk')"
+                class="glass hover:border-fuchsia-500 px-6 py-3 rounded-xl transition-all hover:-translate-y-1">🌃
+                Cyberpunk</button>
+            <button onclick="generateFromMood('Zen')"
+                class="glass hover:border-green-500 px-6 py-3 rounded-xl transition-all hover:-translate-y-1">🧘
+                Zen</button>
+            <button onclick="generateFromMood('Philosophical')"
+                class="glass hover:border-amber-500 px-6 py-3 rounded-xl transition-all hover:-translate-y-1">📖
+                Philosophical</button>
+        </div>
+    </section>
+
+    <!-- Footer with Analytics -->
+    <footer class="w-full max-w-7xl mx-auto border-t border-white/10 pt-12 pb-8 text-center">
+        <div class="flex flex-col md:flex-row justify-between items-center gap-6 text-muted text-sm">
+            <div>© 2026 LEVI AI. All artistic rights reserved.</div>
+            <div id="analytics-display" class="glass px-4 py-2 rounded-full">
+                Loading community stats...
+            </div>
+            <div class="flex gap-4">
+                <a href="privacy.html" class="hover:text-primary transition-colors">Privacy</a>
+                <a href="terms.html" class="hover:text-primary transition-colors">Terms</a>
+            </div>
+        </div>
+    </footer>
+<script type="module">
+    import { getDailyQuote, generateQuote, getAnalytics } from './js/api.js';
+
+    async function init() {
+        loadDaily();
+        loadStats();
+    }
+
+    async function loadDaily() {
+        try {
+            const data = await getDailyQuote();
+            document.getElementById('daily-quote-text').innerText = `"${data.quote}"`;
+            document.getElementById('daily-quote-author').innerText = `— ${data.author}`;
+
+            // Set dynamic background from open source
+            const bgEl = document.getElementById('daily-bg');
+            if (bgEl) {
+                bgEl.style.backgroundImage = `url('https://loremflickr.com/1080/400/abstract,nature,art/all?lock=${Math.floor(Math.random() * 1000)}')`;
+            }
+        } catch (err) {
+            console.error(err);
+            document.getElementById('daily-quote-text').innerText = "Believe in yourself and all that you are.";
+        }
+    }
+
+    async function loadStats() {
+        try {
+            const stats = await getAnalytics();
+            document.getElementById('analytics-display').innerText = `Total Inspirations: ${stats.total_chats || 0} ✨`;
+        } catch (err) {
+            document.getElementById('analytics-display').style.display = 'none';
+        }
+    }
+
+    window.generateFromMood = async (mood) => {
+        const quoteText = document.getElementById('daily-quote-text');
+        const quoteAuthor = document.getElementById('daily-quote-author');
+        const card = document.getElementById('daily-quote-card');
+
+        quoteText.classList.add('opacity-50');
+        quoteAuthor.innerText = "LEVI is thinking...";
+
+        try {
+            const data = await generateQuote(mood, mood);
+            const quote = data.generated_quote || "The best way to predict the future is to create it.";
+
+            // Simple parsing for "Quote" - Author format
+            let finalQuote = quote;
+            let finalAuthor = "LEVI";
+            if (quote.includes(' - ')) {
+                [finalQuote, finalAuthor] = quote.split(' - ');
+            }
+
+            quoteText.innerText = finalQuote.replace(/"/g, '');
+            quoteAuthor.innerText = `— ${finalAuthor}`;
+
+            // Optional: Add a subtle animation to the card
+            card.classList.add('animate-pulse-once');
+            setTimeout(() => card.classList.remove('animate-pulse-once'), 1000);
+
+        } catch (err) {
+            console.error("Error generating quote from mood:", err);
+            quoteText.innerText = "The stars align for those who seek.";
+            quoteAuthor.innerText = "— LEVI";
+        } finally {
+            quoteText.classList.remove('opacity-50');
+        }
+    };
+
+    init();
+
+                                                                                                    if ('serviceWorker' in navigator) {
+                                                                                                        window.addEventListener('load', () => {
+                                                                                                            navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW failed:', err));
+                                                                                                        });
+                                                                                                    }
+                                                                                                </script>
 </body>
 </html>
-

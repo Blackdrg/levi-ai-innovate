@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Studio - LEVI AI</title>
+    
+    <!-- SEO & PWA -->
+    <meta name="description" content="Your personal collection of AI-generated wisdom and artistic creations.">
+    <meta name="theme-color" content="#8B5CF6">
+    <meta name="msapplication-navbutton-color" content="#8B5CF6">
+    <meta name="apple-mobile-web-app-status-bar-style" content="#8B5CF6">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="https://img.icons8.com/fluency/192/000000/brain.png">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/animations.css">
+    <script src="js/ui.js" defer></script>
+</head>
+<body class="bg-primary text-main min-h-screen p-6 md:p-12">
+    <!-- Navigation -->
+    <nav class="max-w-7xl mx-auto mb-16 flex justify-between items-center">
+        <a href="index.html" class="flex items-center gap-2 group">
+            <span class="text-2xl font-black bg-gradient-to-r from-violet-400 to-emerald-400 bg-clip-text text-transparent group-hover:opacity-80 transition-opacity">LEVI</span>
+        </a>
+        <div class="flex gap-4 items-center">
+            <button onclick="window.toggleLanguage()" class="glass px-3 py-2 rounded-xl text-xs hover:bg-white/5 transition-all">🌐 EN/HI</button>
+            <button id="dark-toggle" class="glass p-2 rounded-xl hover:bg-white/5 transition-all">☀️</button>
+            <a href="chat.html" class="glass px-4 py-2 rounded-xl hover:bg-white/5 transition-all text-sm font-medium">Chat</a>
+            <a href="quotes.html" class="glass px-4 py-2 rounded-xl hover:bg-white/5 transition-all text-sm font-medium">Gallery</a>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto">
+        <header class="text-center mb-16 animate-fade-in">
+            <h1 class="text-5xl md:text-7xl font-black mb-6 tracking-tight">Your Studio</h1>
+            <p class="text-xl text-muted max-w-2xl mx-auto">Your personal collection of AI-generated wisdom and artistic creations.</p>
+        </header>
+
+        <!-- Gallery Grid -->
+        <div id="user-gallery" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 animate-fade-in delay-200">
+            <!-- Items will be injected here -->
+        </div>
+
+        <!-- Empty State -->
+        <div id="empty-state" class="hidden text-center py-32 animate-fade-in">
+            <div class="text-6xl mb-6">🎨</div>
+            <h2 class="text-2xl font-bold mb-4 text-muted">Your studio is currently empty.</h2>
+            <p class="text-muted mb-8">Start a conversation or explore quotes to create your first masterpiece.</p>
+            <a href="chat.html" class="btn-primary px-8 py-4 rounded-xl">Generate Art</a>
+        </div>
+    </main>
+
+    <!-- Background Decoration -->
+    <div class="fixed top-0 right-0 w-[600px] h-[600px] bg-violet-600/5 rounded-full blur-[120px] pointer-events-none -z-10"></div>
+    <div class="fixed bottom-0 left-0 w-[400px] h-[400px] bg-emerald-600/5 rounded-full blur-[100px] pointer-events-none -z-10"></div>
+
+    <footer class="w-full max-w-7xl mx-auto border-t border-white/10 pt-12 pb-8 text-center mt-20">
+        <div class="flex flex-col md:flex-row justify-between items-center gap-6 text-muted text-sm">
+            <div>© 2026 LEVI AI. All artistic rights reserved.</div>
+            <div class="flex gap-4">
+                <a href="privacy.html" class="hover:text-primary transition-colors">Privacy</a>
+                <a href="terms.html" class="hover:text-primary transition-colors">Terms</a>
+            </div>
+        </div>
+    </footer>
+</body>
+    <script type="module" src="js/my-gallery.js"></script>
+</body>
+</html>

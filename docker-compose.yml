@@ -1,0 +1,73 @@
+services:
+  db:
+    image: pgvector/pgvector:0.6.2-pg16
+    restart: always
+    environment:
+      POSTGRES_DB: levi
+      POSTGRES_USER: levi
+      POSTGRES_PASSWORD: levi
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+
+  redis:
+    image: redis:alpine
+    restart: always
+    ports:
+      - "6379:6379"
+
+  backend:
+    build: ./backend
+    restart: always
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - redis
+    environment:
+      DATABASE_URL: postgresql://levi:levi@db:5432/levi
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - ./backend:/app
+    command: bash -c "pip install -r requirements.txt && python seed.py && uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
+
+  rasa-train:
+    build: ./rasa
+    volumes:
+      - ./rasa:/app
+    command: rasa train
+    profiles:
+      - train
+
+  rasa-server:
+    build: ./rasa
+    ports:
+      - "5005:5005"
+    volumes:
+      - ./rasa:/app
+    command: rasa run --enable-api --cors "*" -m models --port 5005 --debug
+
+  rasa-actions:
+    build: ./rasa
+    ports:
+      - "5055:5055"
+    volumes:
+      - ./rasa:/app
+    command: rasa run actions
+
+  frontend:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+
+
+volumes:
+  postgres_data:
+

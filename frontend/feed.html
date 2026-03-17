@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inspiration Feed - LEVI AI</title>
+    
+    <!-- SEO & PWA -->
+    <meta name="description" content="See what inspirations are currently moving the LEVI community. Live wisdom feed.">
+    <meta name="theme-color" content="#8B5CF6">
+    <meta name="msapplication-navbutton-color" content="#8B5CF6">
+    <meta name="apple-mobile-web-app-status-bar-style" content="#8B5CF6">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="https://img.icons8.com/fluency/192/000000/brain.png">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/animations.css">
+    <script src="js/ui.js" defer></script>
+</head>
+<body class="bg-primary text-main min-h-screen p-6 md:p-12">
+    <!-- Navigation -->
+    <nav class="max-w-7xl mx-auto mb-16 flex justify-between items-center">
+        <a href="index.html" class="flex items-center gap-2 group">
+            <span class="text-2xl font-black bg-gradient-to-r from-violet-400 to-emerald-400 bg-clip-text text-transparent group-hover:opacity-80 transition-opacity">LEVI</span>
+        </a>
+        <div class="flex flex-wrap gap-3 items-center justify-end">
+            <button onclick="window.toggleLanguage()" class="glass px-3 py-2 rounded-xl text-xs hover:bg-white/5 transition-all">🌐 EN/HI</button>
+            <button id="dark-toggle" class="glass p-2 rounded-xl hover:bg-white/5 transition-all">☀️</button>
+            <a href="chat.html" class="glass px-4 py-2 rounded-xl hover:bg-white/5 transition-all text-xs md:text-sm font-medium">Chat</a>
+            <a href="studio.html" class="glass px-4 py-2 rounded-xl hover:bg-white/5 transition-all text-xs md:text-sm font-medium">Studio</a>
+            <a href="quotes.html" class="glass px-4 py-2 rounded-xl hover:bg-white/5 transition-all text-xs md:text-sm font-medium">Gallery</a>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto">
+        <header class="text-center mb-16 animate-fade-in">
+            <div class="inline-block px-4 py-1 rounded-full glass border-primary/20 text-primary text-sm font-semibold mb-6">
+                ✨ Live from the Community
+            </div>
+            <h1 class="text-5xl md:text-7xl font-black mb-6 tracking-tight">Wisdom Feed</h1>
+            <p class="text-xl text-muted max-w-2xl mx-auto">See what inspirations are currently moving the LEVI community.</p>
+        </header>
+
+        <!-- Feed Grid -->
+        <div id="feed-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 animate-fade-in delay-200">
+            <!-- Items injected here -->
+        </div>
+
+        <div id="loading-state" class="text-center py-20">
+            <div class="animate-spin w-12 h-12 border-4 border-violet-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+            <p class="text-muted">Fetching latest inspirations...</p>
+        </div>
+    </main>
+
+    <!-- Background Decoration -->
+    <div class="fixed top-0 right-0 w-[600px] h-[600px] bg-violet-600/5 rounded-full blur-[120px] pointer-events-none -z-10"></div>
+    <div class="fixed bottom-0 left-0 w-[400px] h-[400px] bg-emerald-600/5 rounded-full blur-[100px] pointer-events-none -z-10"></div>
+
+    <footer class="w-full max-w-7xl mx-auto border-t border-white/10 pt-12 pb-8 text-center mt-20">
+        <div class="flex flex-col md:flex-row justify-between items-center gap-6 text-muted text-sm">
+            <div>© 2026 LEVI AI. All artistic rights reserved.</div>
+            <div class="flex gap-4">
+                <a href="privacy.html" class="hover:text-primary transition-colors">Privacy</a>
+                <a href="terms.html" class="hover:text-primary transition-colors">Terms</a>
+            </div>
+        </div>
+    </footer>
+</body>
+    <script type="module">
+        import { getFeed } from './js/api.js';
+
+        const container = document.getElementById('feed-container');
+        const loader = document.getElementById('loading-state');
+
+        async function loadFeed() {
+            try {
+                const items = await getFeed(21);
+                loader.classList.add('hidden');
+                
+                if (items.length === 0) {
+                    container.innerHTML = '<div class="col-span-full text-center py-20 text-muted">No community inspirations yet. Be the first!</div>';
+                    return;
+                }
+
+                container.innerHTML = items.map((item, index) => `
+                    <div class="glass-card p-6 rounded-[2rem] flex flex-col gap-6 animate-fade-in-up" style="animation-delay: ${index * 0.1}s">
+                        <div class="relative overflow-hidden rounded-2xl group">
+                            <img src="${item.image}" alt="Community Wisdom" class="w-full h-auto transition-transform duration-500 group-hover:scale-105">
+                            <div class="absolute top-4 right-4">
+                                <span class="glass px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest text-emerald-400">${item.mood}</span>
+                            </div>
+                        </div>
+                        <div>
+                            <p class="text-lg italic font-serif leading-relaxed mb-4">"${item.text}"</p>
+                            <div class="flex justify-between items-center mb-4">
+                                <p class="text-xs text-muted font-medium">— ${item.author}</p>
+                                <p class="text-[10px] text-muted/50">${new Date(item.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                            </div>
+                            <div class="flex items-center gap-4 pt-4 border-t border-white/5">
+                                <button onclick="window.likeItemOnFeed(this, ${item.id})" class="flex items-center gap-2 text-xs font-bold uppercase tracking-widest hover:text-pink-400 transition-all">
+                                    <span class="text-lg">🤍</span>
+                                    <span>${item.likes || 0} Likes</span>
+                                </button>
+                                <button onclick="window.downloadImage('${item.image}')" class="text-[10px] uppercase tracking-widest text-muted hover:text-white ml-auto">Download</button>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (err) {
+                console.error(err);
+                container.innerHTML = '<div class="col-span-full text-center py-20 text-red-400">Failed to load the wisdom stream. Please try again.</div>';
+            }
+        }
+
+        window.likeItemOnFeed = async (btn, id) => {
+            try {
+                const api = window.api || (await import('./js/api.js'));
+                const res = await api.likeItem('feed', id);
+                btn.querySelector('span:first-child').innerText = '❤️';
+                btn.querySelector('span:last-child').innerText = `${res.new_likes} Likes`;
+                btn.classList.add('text-pink-400');
+            } catch (err) {
+                console.error("Like failed", err);
+            }
+        };
+
+        window.downloadImage = (dataUrl) => {
+            const link = document.createElement('a');
+            link.href = dataUrl;
+            link.download = `levi-community-${Date.now()}.png`;
+            link.click();
+        };
+
+        loadFeed();
+        // Refresh every 30 seconds
+        setInterval(loadFeed, 30000);
+    </script>
+</body>
+</html>

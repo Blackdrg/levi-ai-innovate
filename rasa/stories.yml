@@ -1,0 +1,41 @@
+version: "3.1"
+
+stories:
+  - story: greeting to quote mood
+    steps:
+    - intent: greeting
+    - action: utter_greet
+    - intent: quote_by_mood
+    - action: action_recommend_quote
+    - action: utter_quote_by_mood
+
+  - story: topic query
+    steps:
+    - intent: quote_by_topic
+    - action: action_recommend_quote
+    - action: utter_quote_by_topic
+
+  - story: author request
+    steps:
+    - intent: quote_by_author
+    - action: action_recommend_quote
+    - action: utter_quote_by_author
+
+  - story: generate flow
+    steps:
+    - intent: generate_quote
+    - action: action_generate_quote
+    - action: utter_generate
+
+  - story: fallback recovery
+    steps:
+    - intent: fallback
+    - action: utter_fallback
+    - intent: quote_by_mood
+    - action: action_recommend_quote
+
+  - story: goodbye anytime
+    steps:
+    - intent: goodbye
+    - action: utter_goodbye
+

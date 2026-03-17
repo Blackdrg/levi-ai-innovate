@@ -1,0 +1,21 @@
+{
+  "name": "LEVI AI - Artistic Wisdom",
+  "short_name": "LEVI",
+  "description": "Experience the fusion of artificial intelligence and artistic inspiration.",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#050B14",
+  "theme_color": "#8B5CF6",
+  "icons": [
+    {
+      "src": "https://img.icons8.com/fluency/192/000000/brain.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://img.icons8.com/fluency/512/000000/brain.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

@@ -1,0 +1,233 @@
+version: "3.1"
+
+nlu:
+  - intent: greeting
+    examples: |
+      - hi
+      - hello
+      - hey
+      - good morning
+      - good afternoon
+      - good evening
+      - hey there
+      - hello!
+      - hi!
+      - morning
+      - afternoon
+      - evening
+      - g'day
+      - howdy
+      - what's up
+      - yo
+      - sup
+      - hey buddy
+      - hello friend
+      - good day
+      - greetings
+      - welcome
+      - nice to see you
+      - how are you
+      - what's good
+      - hola
+      - bonjour
+      - ciao
+      - hallo
+      - aloha
+      - namaste
+      - salam
+      - konnichiwa
+      - anyaong
+      - olá
+      - cześć
+      - hej
+      - sveiki
+      - zdravstvuyte
+      - marhaba
+      - shalom
+      - ni hao
+      - sawasdee
+      - hello everyone
+      - hi team
+      - hey guys
+
+  - intent: goodbye
+    examples: |
+      - bye
+      - goodbye
+      - see you later
+      - see ya
+      - bye bye
+      - farewell
+      - take care
+      - cheers
+      - catch you later
+      - talk soon
+      - ttyl
+      - later
+      - cya
+      - good night
+      - night
+      - sleep well
+      - have a good one
+      - hasta luego
+      - au revoir
+      - arrivederci
+      - sayonara
+      - adios
+      - tschüss
+      - do svidaniya
+      - ma'a as-salaama
+      - shalom
+      - zai jian
+      - sawasdee
+      - do widzenia
+      - hej då
+      - viszlát
+      - ciao
+      - hasta la vista
+      - peace out
+      - i'm out
+      - gotta go
+      - leaving now
+      - signing off
+      - logout
+      - exit
+
+  - intent: quote_by_mood
+    examples: |
+      - give me a happy quote
+      - something inspirational
+      - motivate me
+      - I need motivation
+      - sad quote please
+      - something reflective
+      - uplifting quote
+      - motivational quote
+      - inspirational words
+      - cheer me up
+      - make me smile
+      - positive quote
+      - encouraging message
+      - hopeful saying
+      - optimistic thought
+      - joyful quote
+      - energetic motivation
+      - empowering words
+      - calm and peaceful quote
+      - wise and serene
+      - funny and lighthearted
+      - humorous quote
+      - laugh quote
+      - something funny
+      - joke quote
+      - angry mood quote
+      - frustrated vent
+      - love quote for happy
+      - romantic mood
+      - passionate quote
+      - excited energy
+      - adventurous spirit
+      - brave mood
+      - courageous words
+      - determined motivation
+      - persistent quote
+      - resilient saying
+      - grateful thankful
+      - peaceful zen
+      - mindful reflection
+      - quote for anxiety
+      - calm my nerves
+      - stress relief quote
+      - tired exhausted quote
+      - energize me
+      - refresh my mood
+      - morning motivation
+      - evening wind down
+      - a [happy](mood) quote
+      - [motivational](mood) please
+      - [sad](mood) reflection
+      - something [inspirational](mood)
+
+  - intent: quote_by_topic
+    examples: |
+      - quote about love
+      - success quotes
+      - life wisdom
+      - dream big quote
+      - failure lessons
+      - happiness sayings
+      - friendship words
+      - family importance
+      - work motivation
+      - health wellness
+      - money wealth
+      - time management
+      - leadership skills
+      - courage bravery
+      - perseverance grit
+      - change adaptation
+      - innovation creativity
+      - gratitude thankful
+      - peace harmony
+      - hope faith
+      - forgiveness healing
+      - nature beauty
+      - travel adventure
+      - learning growth
+      - wisdom knowledge
+      - quote on [success](topic)
+      - [love](topic) quote
+      - wisdom about [life](topic)
+      - motivation for [work](topic)
+      - inspiration on [dreams](topic)
+
+  - intent: quote_by_author
+    examples: |
+      - quote by Steve Jobs
+      - what did Einstein say
+      - Churchill quote
+      - quote from Maya Angelou
+      - Mark Twain wisdom
+      - Gandhi saying
+      - MLK quote
+      - Nelson Mandela words
+      - Oprah inspiration
+      - Dalai Lama teaching
+      - Aristotle philosophy
+      - Shakespeare line
+      - Nietzsche thought
+      - Lao Tzu wisdom
+      - Rumi poetry
+      - quote from [Steve Jobs](author)
+      - [Einstein](author) quote
+      - wisdom by [Churchill](author)
+      - [Gandhi](author) saying
+      - [Angelou](author) words
+
+  - intent: generate_quote
+    examples: |
+      - generate a quote
+      - make up a quote
+      - create original quote
+      - invent wise saying
+      - new quote please
+      - generate [funny](mood) quote
+      - make [motivational](mood) saying
+      - create quote about [success](topic)
+      - invent [love](topic) quote
+      - generate by [Jobs](author) style
+      - original [inspirational](mood) quote
+      - make something [wise](mood)
+
+  - intent: fallback
+    examples: |
+      - what
+      - huh
+      - I don't understand
+      - sorry?
+      - repeat that
+      - unclear
+      - not sure
+      - help
+      - ?
+
