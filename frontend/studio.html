@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LEVI Studio - Creative Customization</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/animations.css">
+    <script src="js/studio.js" type="module" defer></script>
+    <script src="js/ui.js" defer></script>
+</head>
+<body class="bg-primary text-main min-h-screen flex flex-col">
+    <nav class="glass border-b border-white/5 p-4 flex justify-between items-center z-50">
+        <a href="index.html" class="flex items-center gap-2 group">
+            <span class="text-2xl font-black bg-gradient-to-r from-violet-400 to-emerald-400 bg-clip-text text-transparent">LEVI Studio</span>
+        </a>
+        <div class="flex flex-wrap gap-3 items-center justify-end">
+            <button onclick="window.toggleLanguage()" class="glass px-3 py-2 rounded-xl text-xs hover:bg-white/5 transition-all">🌐 EN/HI</button>
+            <button id="dark-toggle" class="glass p-2 rounded-xl hover:bg-white/5 transition-all">☀️</button>
+            <a href="chat.html" class="glass px-4 py-2 rounded-xl hover:bg-white/5 transition-all text-xs md:text-sm font-medium">Chat</a>
+            <a href="feed.html" class="glass px-4 py-2 rounded-xl hover:bg-white/5 transition-all text-xs md:text-sm font-medium">Feed</a>
+            <a href="quotes.html" class="glass px-4 py-2 rounded-xl hover:bg-white/5 transition-all text-xs md:text-sm font-medium">Gallery</a>
+        </div>
+    </nav>
+
+    <main class="flex-1 max-w-7xl mx-auto w-full p-6 md:p-12 grid grid-cols-1 lg:grid-cols-2 gap-12">
+        <!-- Preview Section -->
+        <div class="flex flex-col gap-6">
+            <div class="glass-card p-4 rounded-[2.5rem] relative group overflow-hidden aspect-square flex items-center justify-center bg-slate-900/50">
+                <div id="studio-loading" class="absolute inset-0 bg-black/60 backdrop-blur-md z-10 flex flex-col items-center justify-center hidden">
+                    <div class="animate-spin w-12 h-12 border-4 border-violet-500 border-t-transparent rounded-full mb-4"></div>
+                    <p class="text-xs uppercase tracking-widest text-violet-400">Rendering Art...</p>
+                </div>
+                <img id="studio-preview" src="" alt="Studio Preview" class="w-full h-full object-cover rounded-[2rem] shadow-2xl transition-all duration-700">
+                <div id="empty-preview" class="text-center p-12">
+                    <div class="text-6xl mb-4 opacity-20">🎨</div>
+                    <p class="text-muted italic">Configure your masterpiece to begin...</p>
+                </div>
+            </div>
+            
+            <div class="flex gap-4">
+                <button id="download-studio" class="btn-primary flex-1 py-4 rounded-2xl font-bold tracking-wide disabled:opacity-50" disabled>Download Artwork</button>
+                <button id="save-studio" class="glass px-8 py-4 rounded-2xl font-bold hover:bg-white/5 transition-all disabled:opacity-50" disabled>Save to Studio</button>
+            </div>
+        </div>
+
+        <!-- Controls Section -->
+        <div class="space-y-8">
+            <div class="glass-card p-8 rounded-[2rem] space-y-6">
+                <h2 class="text-2xl font-bold bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent">Canvas Configuration</h2>
+                
+                <!-- Quote Input -->
+                <div class="space-y-3">
+                    <label class="text-xs font-bold uppercase tracking-widest text-muted">Wisdom Text</label>
+                    <textarea id="studio-quote" placeholder="Enter the wisdom you wish to visualize..." 
+                        class="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 focus:ring-2 ring-violet-500/50 outline-none transition-all h-32 resize-none"></textarea>
+                </div>
+
+                <!-- Author Input -->
+                <div class="space-y-3">
+                    <label class="text-xs font-bold uppercase tracking-widest text-muted">Author Signature</label>
+                    <input id="studio-author" type="text" placeholder="LEVI AI" 
+                        class="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 focus:ring-2 ring-violet-500/50 outline-none transition-all">
+                </div>
+
+                <!-- Muse Style Picker -->
+                <div class="space-y-3">
+                    <label class="text-xs font-bold uppercase tracking-widest text-muted">Muse Style</label>
+                    <div class="grid grid-cols-3 gap-3">
+                        <button class="style-btn glass p-3 rounded-xl text-[10px] uppercase font-bold hover:border-violet-500 transition-all active" data-mood="philosophical">Ethereal</button>
+                        <button class="style-btn glass p-3 rounded-xl text-[10px] uppercase font-bold hover:border-emerald-500 transition-all" data-mood="zen">Zen</button>
+                        <button class="style-btn glass p-3 rounded-xl text-[10px] uppercase font-bold hover:border-fuchsia-500 transition-all" data-mood="cyberpunk">Cyber</button>
+                        <button class="style-btn glass p-3 rounded-xl text-[10px] uppercase font-bold hover:border-amber-500 transition-all" data-mood="stoic">Classic</button>
+                        <button class="style-btn glass p-3 rounded-xl text-[10px] uppercase font-bold hover:border-sky-500 transition-all" data-mood="calm">Serene</button>
+                        <button class="style-btn glass p-3 rounded-xl text-[10px] uppercase font-bold hover:border-red-500 transition-all" data-mood="energetic">Vibrant</button>
+                    </div>
+                </div>
+
+                <!-- Custom Background -->
+                <div class="space-y-3">
+                    <label class="text-xs font-bold uppercase tracking-widest text-muted">Custom Atmosphere (Keywords or Upload)</label>
+                    <div class="flex gap-3">
+                        <input id="studio-bg-keywords" type="text" placeholder="e.g. galaxy, mountains, neon" 
+                            class="flex-1 bg-white/5 border border-white/10 rounded-2xl px-6 py-4 focus:ring-2 ring-violet-500/50 outline-none transition-all">
+                        <label class="glass p-4 rounded-2xl cursor-pointer hover:bg-white/5 transition-all">
+                            <span>📁</span>
+                            <input type="file" id="studio-bg-upload" class="hidden" accept="image/*">
+                        </label>
+                    </div>
+                </div>
+
+                <button id="generate-studio" class="w-full bg-gradient-to-r from-violet-600 to-indigo-600 py-5 rounded-2xl font-black uppercase tracking-widest hover:shadow-[0_0_30px_rgba(139,92,246,0.4)] transition-all transform active:scale-[0.98]">
+                    Invoke Muse
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <footer class="p-8 text-center text-muted text-[10px] uppercase tracking-widest">
+        &copy; 2026 LEVI AI - Artistic Synthesis Engine
+    </footer>
+</body>
+</html>

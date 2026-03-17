@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LEVI - Join the Wisdom Circle</title>
+    
+    <!-- SEO & PWA -->
+    <meta name="description" content="Join the LEVI AI community. Login or register to save your artistic journey.">
+    <meta name="theme-color" content="#8B5CF6">
+    <meta name="msapplication-navbutton-color" content="#8B5CF6">
+    <meta name="apple-mobile-web-app-status-bar-style" content="#8B5CF6">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="https://img.icons8.com/fluency/192/000000/brain.png">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/animations.css">
+    <script src="js/ui.js" defer></script>
+</head>
+<body class="bg-primary text-main min-h-screen flex flex-col items-center justify-center p-6">
+    <!-- Navigation -->
+    <nav class="fixed top-0 w-full max-w-7xl mx-auto flex justify-between items-center p-6 z-50">
+        <a href="index.html" class="text-2xl font-black bg-gradient-to-r from-violet-400 to-emerald-400 bg-clip-text text-transparent">LEVI</a>
+        <div class="flex gap-4 items-center">
+            <button onclick="window.toggleLanguage()" class="glass px-3 py-2 rounded-xl text-xs hover:bg-white/5 transition-all">🌐 EN/HI</button>
+            <button id="dark-toggle" class="glass p-2 rounded-xl hover:bg-white/5 transition-all">☀️</button>
+        </div>
+    </nav>
+
+    <main class="w-full max-w-md animate-fade-in-up">
+        <div class="glass-card p-10 rounded-[2.5rem] relative overflow-hidden">
+            <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-violet-500 to-emerald-500"></div>
+            
+            <div id="auth-header" class="text-center mb-10">
+                <h1 id="auth-title" class="text-3xl font-black mb-2">Welcome Back</h1>
+                <p id="auth-subtitle" class="text-muted">Enter your details to continue your journey.</p>
+            </div>
+
+            <form id="auth-form" class="space-y-6">
+                <div>
+                    <label class="block text-sm font-bold text-muted mb-2 px-1 uppercase tracking-widest">Username</label>
+                    <input id="username" type="text" placeholder="your_name" required 
+                        class="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 outline-none focus:ring-2 ring-violet-500/50 transition-all">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-muted mb-2 px-1 uppercase tracking-widest">Password</label>
+                    <input id="password" type="password" placeholder="••••••••" required 
+                        class="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 outline-none focus:ring-2 ring-violet-500/50 transition-all">
+                </div>
+                
+                <button type="submit" id="submit-btn" class="btn-primary w-full py-5 rounded-2xl text-lg font-bold">
+                    Login →
+                </button>
+            </form>
+
+            <div class="mt-8 text-center text-sm">
+                <p id="toggle-text" class="text-muted">
+                    Don't have an account? 
+                    <button onclick="toggleAuthMode()" class="text-primary font-bold hover:underline">Create Account</button>
+                </p>
+            </div>
+            
+            <div id="auth-message" class="hidden mt-6 p-4 rounded-xl text-center text-sm bg-red-500/10 text-red-400 border border-red-500/20">
+                Invalid credentials.
+            </div>
+        </div>
+    </main>
+
+    <!-- Background Decoration -->
+    <div class="fixed top-0 right-0 w-[600px] h-[600px] bg-violet-600/5 rounded-full blur-[120px] pointer-events-none -z-10"></div>
+    <div class="fixed bottom-0 left-0 w-[400px] h-[400px] bg-emerald-600/5 rounded-full blur-[100px] pointer-events-none -z-10"></div>
+
+    <footer class="fixed bottom-0 w-full border-t border-white/10 py-6 text-center">
+        <div class="flex justify-center gap-8 text-muted text-[10px] uppercase tracking-widest">
+            <a href="privacy.html" class="hover:text-primary transition-colors">Privacy</a>
+            <a href="terms.html" class="hover:text-primary transition-colors">Terms</a>
+        </div>
+    </footer>
+    <script type="module" src="js/auth.js"></script>
+</body>
+</html>

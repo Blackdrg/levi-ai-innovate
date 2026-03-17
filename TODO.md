@@ -1,33 +1,15 @@
-# Clean Project Structure Implementation - COMPLETE ✅
+# LEVI Clean Architecture Fix - TODO
 
-## Summary
-✅ Removed all RASA legacy folders (rasa_bot/, actions/)
-✅ Removed all fix scripts and temp files
-✅ Renamed backend/chatbot.py → backend/quote_service.py
-✅ Updated backend/app.py imports
-✅ Added production files: Procfile, runtime.txt, .gitignore
-✅ Backend now: app.py, quote_service.py, __init__.py
-✅ Matches target structure exactly
+## Plan Steps (Approved)
 
-## Final Structure Verified
-```
-LEVI/
-├── backend/
-│   ├── __init__.py
-│   ├── app.py
-│   └── quote_service.py
-├── frontend/
-│   ├── index.html
-│   ├── style.css
-│   └── chat.js
-├── database/
-│   └── quotes.json
-├── requirements.txt
-├── Procfile
-├── runtime.txt
-├── .gitignore
-└── README.md
-```
+1. [x] Create frontend/js/api.js (centralized API client)
+2. [x] Edit frontend/chat.html (add api.js script)
+3. [x] Edit frontend/quotes.html (add api.js script)
+4. [x] Edit frontend/js/chat.js (use api.js, simplify + theme compat)
+5. [x] Edit frontend/js/quotes.js (use api.js, simplify cards)
+6. [x] Edit frontend/css/styles.css (apply indigo/amber dark theme, glassmorphism)
+7. [x] Edit frontend/index.html (enhance hero section)
+8. [x] Test & Complete (docker-compose up, verify functionality)
 
-**Task Complete!** Run `python backend/app.py` or deploy to Heroku.
+**Progress: All edits and implementation complete! Project is ready to run.**
 

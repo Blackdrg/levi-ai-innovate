@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LEVI Gallery - AI Artistic Inspiration</title>
+    
+    <!-- SEO & PWA -->
+    <meta name="description" content="Explore the LEVI Gallery. A curated collection of AI-enhanced wisdom and artistic quotes.">
+    <meta name="theme-color" content="#8B5CF6">
+    <meta name="msapplication-navbutton-color" content="#8B5CF6">
+    <meta name="apple-mobile-web-app-status-bar-style" content="#8B5CF6">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="https://img.icons8.com/fluency/192/000000/brain.png">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/animations.css">
+    <script src="js/quotes.js" type="module" defer></script>
+    <script src="js/ui.js" defer></script>
+</head>
+<body class="bg-primary text-main min-h-screen p-6 md:p-12">
+    <!-- Navigation -->
+    <nav class="max-w-7xl mx-auto mb-12 flex justify-between items-center">
+        <a href="index.html" class="flex items-center gap-2 group">
+            <span class="text-2xl font-black bg-gradient-to-r from-violet-400 to-emerald-400 bg-clip-text text-transparent group-hover:opacity-80 transition-opacity">LEVI</span>
+        </a>
+        <div class="flex flex-wrap gap-3 items-center justify-end">
+            <button onclick="window.toggleLanguage()" class="glass px-3 py-2 rounded-xl text-xs hover:bg-white/5 transition-all">🌐 EN/HI</button>
+            <button id="dark-toggle" class="glass p-2 rounded-xl hover:bg-white/5 transition-all">☀️</button>
+            <a href="chat.html" class="glass px-4 py-2 rounded-xl hover:bg-white/5 transition-all text-xs md:text-sm font-medium">Chat</a>
+            <a href="studio.html" class="glass px-4 py-2 rounded-xl hover:bg-white/5 transition-all text-xs md:text-sm font-medium">Studio</a>
+            <a href="feed.html" class="glass px-4 py-2 rounded-xl hover:bg-white/5 transition-all text-xs md:text-sm font-medium">Feed</a>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto">
+        <header class="text-center mb-16 animate-fade-in">
+            <h1 class="text-5xl md:text-7xl font-black mb-6 tracking-tight">Wisdom Gallery</h1>
+            <p class="text-xl text-muted max-w-2xl mx-auto">Explore our curated collection of AI-enhanced wisdom and artistic quotes.</p>
+        </header>
+
+        <!-- Search & Filter Bar -->
+        <div class="glass p-6 rounded-[2rem] border-white/10 shadow-2xl mb-12 animate-fade-in delay-200">
+            <div class="flex flex-col md:flex-row gap-6">
+                <div class="flex-1 relative">
+                    <input id="search-input" type="text" 
+                        placeholder="Search for topics, authors, or emotions..." 
+                        class="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 focus:ring-2 ring-violet-500/50 outline-none transition-all pr-12">
+                    <span class="absolute right-4 top-1/2 -translate-y-1/2 text-muted">🔍</span>
+                </div>
+                
+                <div class="flex flex-wrap gap-2 items-center">
+                    <span class="text-sm font-bold text-muted mr-2">FILTER:</span>
+                    <button class="mood-btn glass hover:border-violet-500 px-4 py-2 rounded-xl text-xs transition-all" data-mood="inspiring">✨ Inspiring</button>
+                    <button class="mood-btn glass hover:border-emerald-500 px-4 py-2 rounded-xl text-xs transition-all" data-mood="calm">🍃 Calm</button>
+                    <button class="mood-btn glass hover:border-pink-500 px-4 py-2 rounded-xl text-xs transition-all" data-mood="energetic">⚡ Energetic</button>
+                    <button class="mood-btn glass hover:border-slate-500 px-4 py-2 rounded-xl text-xs transition-all" data-mood="stoic">🏛️ Stoic</button>
+                    <button class="mood-btn glass hover:border-fuchsia-500 px-4 py-2 rounded-xl text-xs transition-all" data-mood="cyberpunk">🌃 Cyberpunk</button>
+                    <button class="mood-btn glass hover:border-indigo-500 px-4 py-2 rounded-xl text-xs transition-all" data-mood="zen">🧘 Zen</button>
+                    <button class="mood-btn glass hover:border-amber-500 px-4 py-2 rounded-xl text-xs transition-all" data-mood="philosophical">📖 Philosophical</button>
+                    <button onclick="window.loadQuotes()" class="glass px-4 py-2 rounded-xl text-xs hover:bg-white/10 ml-auto border-violet-500/50 transition-all" title="Shuffle Archives">🔄 Shuffle</button>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Quotes Grid -->
+        <div id="quotes-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 animate-fade-in delay-400">
+            <!-- Loading State -->
+            <div class="col-span-full text-center py-20">
+                <div class="animate-spin w-12 h-12 border-4 border-violet-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+                <p class="text-muted">Curating wisdom for you...</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- Background Decoration -->
+    <div class="fixed top-0 right-0 w-[600px] h-[600px] bg-violet-600/5 rounded-full blur-[120px] pointer-events-none -z-10"></div>
+    <div class="fixed bottom-0 left-0 w-[400px] h-[400px] bg-emerald-600/5 rounded-full blur-[100px] pointer-events-none -z-10"></div>
+
+    <footer class="w-full max-w-7xl mx-auto border-t border-white/10 pt-12 pb-8 text-center mt-20">
+        <div class="flex flex-col md:flex-row justify-between items-center gap-6 text-muted text-sm">
+            <div>© 2026 LEVI AI. All artistic rights reserved.</div>
+            <div class="flex gap-4">
+                <a href="privacy.html" class="hover:text-primary transition-colors">Privacy</a>
+                <a href="terms.html" class="hover:text-primary transition-colors">Terms</a>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>
+
+
