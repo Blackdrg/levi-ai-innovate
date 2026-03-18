@@ -9,7 +9,7 @@
     "rewrites": [
       {
         "source": "/api/**",
-        "destination": "https://your-backend-url.a.run.app/api/:splat"
+        "destination": "https://your-backend-url.a.run.app/:splat"
       },
       {
         "source": "**",

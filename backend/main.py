@@ -93,21 +93,11 @@ app = FastAPI(title="LEVI Quotes API")
 app.state.limiter = limiter
 
 # Allow CORS for development and production
-origins = [
-    "http://localhost:8080",
-    "http://127.0.0.1:8080",
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
-    "https://your-firebase-project.web.app",
-    "https://your-firebase-project.firebaseapp.com",
-]
-env_origins = os.getenv("CORS_ORIGINS")
-if env_origins:
-    origins.extend(env_origins.split(","))
+origins = ["*"]  # Allow all origins for debugging and flexible cloud deployment
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if os.getenv("DEBUG") else origins,
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
