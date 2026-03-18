@@ -5,6 +5,8 @@ services:
     dockerfilePath: backend/Dockerfile.prod
     dockerContext: .
     plan: free
+    healthCheckPath: /health
+    preDeployCommand: python seed.py
     envVars:
       - key: RENDER
         value: "true"
@@ -35,6 +37,7 @@ services:
     dockerfilePath: rasa/Dockerfile.server
     dockerContext: .
     plan: free
+    healthCheckPath: /
     envVars:
       - key: PORT
         value: "5005"
@@ -45,6 +48,7 @@ services:
     dockerfilePath: rasa/Dockerfile.actions
     dockerContext: .
     plan: free
+    healthCheckPath: /
     envVars:
       - key: PORT
         value: "5055"
