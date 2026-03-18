@@ -8,8 +8,10 @@ try:
     r = redis.from_url(REDIS_URL)
     r.ping()
     HAS_REDIS = True
-except Exception:
-    print("Warning: Redis not available. Falling back to in-memory cache.")
+except Exception as e:
+    # Safely mask URL for logs
+    masked_url = REDIS_URL.split('@')[-1] if '@' in REDIS_URL else REDIS_URL
+    print(f"Warning: Redis not available at {masked_url}. Error: {e}. Falling back to in-memory cache.")
     HAS_REDIS = False
     _memory_cache = {}
 

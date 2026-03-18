@@ -5,7 +5,8 @@ FROM python:3.11-slim
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     TRANSFORMERS_CACHE=/app/model_cache \
-    PYTHONPATH=/app
+    PYTHONPATH=/app \
+    PATH="/opt/venv/bin:$PATH"
 
 WORKDIR /app
 
@@ -15,6 +16,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     curl \
     && rm -rf /var/lib/apt/lists/*
+
+# Create and use a virtual environment to avoid pip root warnings
+RUN python -m venv /opt/venv
 
 # Copy requirements and install dependencies
 COPY backend/requirements.txt .

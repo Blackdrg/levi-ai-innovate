@@ -2,6 +2,10 @@ FROM rasa/rasa:3.6.20-full
 
 WORKDIR /app
 
+# Create and use a virtual environment
+ENV PATH="/opt/venv/bin:$PATH"
+RUN python -m venv /opt/venv
+
 COPY rasa/requirements.txt .
 RUN pip install -r requirements.txt
 
