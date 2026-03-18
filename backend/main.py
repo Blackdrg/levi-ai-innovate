@@ -91,12 +91,6 @@ class ChatMessage(BaseModel):
     message: str
     lang: Optional[str] = "en"
 
-# Create tables
-try:
-    Base.metadata.create_all(bind=engine)
-except Exception as e:
-    print(f"Error creating tables: {e}")
-
 limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title="LEVI Quotes API")
 app.state.limiter = limiter
@@ -128,9 +122,18 @@ async def global_exception_handler(request: Request, exc: Exception):
 @app.on_event("startup")
 async def startup_event():
     logging.info("Starting LEVI backend... Model loading triggered in background.")
+    
+    # Create tables on startup
+    try:
+        logging.info("Initializing database tables...")
+        Base.metadata.create_all(bind=engine)
+        logging.info("Database tables initialized successfully.")
+    except Exception as e:
+        logging.error(f"Error creating tables on startup: {e}")
+
     # Debug: Log environment info
     logging.info(f"CORS origins: {origins}")
-    logging.info(f"Database URL: {DATABASE_URL}")
+    logging.info(f"Database URL scheme: {DATABASE_URL.split('://')[0] if DATABASE_URL else 'None'}")
 
 @app.get("/health")
 def health():

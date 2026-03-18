@@ -10,6 +10,10 @@ import math
 
 def get_keywords_from_quote(quote: str, mood: str = "") -> str:
     """Extracts visually descriptive keywords from the quote and mood using a pre-trained model."""
+    # Fallback immediately on Render Free Tier to save RAM (distilbert is 250MB+)
+    if os.getenv("RENDER") or os.getenv("DYNO"):
+        return get_keywords_from_quote_fallback(quote, mood)
+        
     try:
         from transformers import pipeline
         keyword_extractor = pipeline("feature-extraction", model="distilbert-base-uncased")
