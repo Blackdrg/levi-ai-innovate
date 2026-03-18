@@ -47,9 +47,10 @@ extended_quotes = [
 ]
 
 # Load from CSV if exists
-if os.path.exists("backend/data/quotes.csv"):
+csv_path = "backend/data/quotes.csv" if os.path.exists("backend/data/quotes.csv") else "data/quotes.csv"
+if os.path.exists(csv_path):
     try:
-        df = pd.read_csv("backend/data/quotes.csv")
+        df = pd.read_csv(csv_path)
         for _, row in df.iterrows():
             extended_quotes.append({
                 "text": row['text'],

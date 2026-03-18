@@ -11,5 +11,8 @@ RUN pip install -r requirements.txt
 
 COPY rasa/ .
 
+# Train the rasa model during build
+RUN rasa train
+
 # Default command for rasa-server
 CMD ["run", "--enable-api", "--cors", "*", "-m", "models", "--port", "5005", "--debug"]

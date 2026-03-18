@@ -30,8 +30,11 @@ RUN mkdir -p /app/model_cache && chmod 777 /app/model_cache
 # Copy backend application code
 COPY backend/ .
 
+# Make entrypoint script executable
+RUN chmod +x entrypoint.sh
+
 # Expose port (Render uses 10000 by default or $PORT)
 EXPOSE 10000
 
-# Command to run the application with 1 worker to save RAM on Free Tier
-CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000} --workers 1
+# Use entrypoint script to run seeding then start the app
+ENTRYPOINT ["./entrypoint.sh"]
