@@ -13,7 +13,8 @@ services:
           name: levi-db
           property: connectionString
       - key: REDIS_URL
-        fromRedis:
+        fromService:
+          type: redis
           name: levi-redis
           property: connectionString
       - key: SECRET_KEY
@@ -39,10 +40,11 @@ services:
     dockerContext: rasa
     plan: free
 
+  - type: redis
+    name: levi-redis
+    plan: free
+    ipAllowList: []
+
 databases:
   - name: levi-db
-    plan: free
-
-redis:
-  - name: levi-redis
     plan: free
