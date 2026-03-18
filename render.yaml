@@ -4,7 +4,6 @@ services:
     runtime: docker
     dockerfilePath: backend/Dockerfile.prod
     dockerContext: .
-    port: 10000
     plan: free
     envVars:
       - key: RENDER
@@ -35,7 +34,6 @@ services:
     runtime: docker
     dockerfilePath: rasa/Dockerfile.server
     dockerContext: .
-    port: 5005
     plan: free
     envVars:
       - key: PORT
@@ -46,7 +44,6 @@ services:
     runtime: docker
     dockerfilePath: rasa/Dockerfile.actions
     dockerContext: .
-    port: 5055
     plan: free
     envVars:
       - key: PORT
