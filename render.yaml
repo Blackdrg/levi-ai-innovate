@@ -9,14 +9,9 @@ services:
       - key: PORT
         value: "8000"
       - key: DATABASE_URL
-        fromDatabase:
-          name: levi-db
-          property: connectionString
+        sync: false # Set this manually in Render dashboard
       - key: REDIS_URL
-        fromService:
-          type: redis
-          name: levi-redis
-          property: connectionString
+        sync: false # Set this manually in Render dashboard
       - key: SECRET_KEY
         generateValue: true
       - key: CORS_ORIGINS
@@ -38,13 +33,4 @@ services:
     runtime: docker
     dockerfilePath: rasa/Dockerfile.actions
     dockerContext: rasa
-    plan: free
-
-  - type: redis
-    name: levi-redis
-    plan: free
-    ipAllowList: []
-
-databases:
-  - name: levi-db
     plan: free
