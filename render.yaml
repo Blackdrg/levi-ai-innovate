@@ -3,7 +3,7 @@ services:
     name: backend
     runtime: docker
     dockerfilePath: backend/Dockerfile.prod
-    dockerContext: backend
+    dockerContext: .
     plan: free
     envVars:
       - key: RENDER
@@ -22,17 +22,29 @@ services:
         value: /app/model_cache
       - key: CLIENT_KEY
         generateValue: true
+      - key: LOG_LEVEL
+        value: "info"
+      - key: WEB_CONCURRENCY
+        value: "1"
+      - key: PORT
+        value: "10000"
 
   - type: web
     name: rasa-server
     runtime: docker
     dockerfilePath: rasa/Dockerfile.server
-    dockerContext: rasa
+    dockerContext: .
     plan: free
+    envVars:
+      - key: PORT
+        value: "5005"
 
   - type: web
     name: rasa-actions
     runtime: docker
     dockerfilePath: rasa/Dockerfile.actions
-    dockerContext: rasa
+    dockerContext: .
     plan: free
+    envVars:
+      - key: PORT
+        value: "5055"

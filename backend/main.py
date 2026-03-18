@@ -97,6 +97,7 @@ app = FastAPI(title="LEVI Quotes API")
 app.state.limiter = limiter
 
 # Allow CORS for development and production
+env_origins = os.getenv("CORS_ORIGINS", "").split(",")
 origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
@@ -106,6 +107,18 @@ origins = [
     "https://levi-k8iuadcvd-daksh-mehats-projects.vercel.app",
     "https://levi-ai.vercel.app",  # Common production pattern
 ]
+# Add origins from environment variables if present
+if env_origins:
+    for o in env_origins:
+        if o.strip() and o.strip() not in origins:
+            origins.append(o.strip())
+# Handle wildcard correctly for allow_credentials=True
+if "*" in origins:
+    # If wildcard is present, we must replace it with the specific origin of the request
+    # but FastAPI CORSMiddleware doesn't support that directly with allow_credentials=True
+    # So we'll just log it for now.
+    print("WARNING: '*' in origins with allow_credentials=True is not supported. Use specific origins.")
+
 
 app.add_middleware(
     CORSMiddleware,
