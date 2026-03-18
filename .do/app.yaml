@@ -1,0 +1,34 @@
+name: levi-ai-app
+
+# Backend Service (Containerized AI Engine)
+services:
+- name: levi-backend
+  # Build from the production Dockerfile
+  dockerfile_path: backend/Dockerfile.prod
+  source_dir: backend
+  github:
+    repo: Blackdrg/LEVI
+    branch: master
+  # Port the container will listen on. DigitalOcean sets the PORT env var.
+  http_port: 8080
+  # Instance size: AI models require more memory.
+  # Options: professional-xs (1GB), professional-s (2GB), etc.
+  instance_size_slug: professional-s
+  instance_count: 1
+  # Health check to ensure the service is running
+  health_check:
+    http_path: /health
+  # Route all API traffic to this service
+  routes:
+  - path: /api
+
+# Frontend Service (Static Website)
+static_sites:
+- name: levi-frontend
+  source_dir: frontend
+  github:
+    repo: Blackdrg/LEVI
+    branch: master
+  # Route all other traffic to the frontend
+  routes:
+  - path: /

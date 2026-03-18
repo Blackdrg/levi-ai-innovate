@@ -39,33 +39,36 @@ python run_app.py
 
 LEVI is pre-configured for a hybrid cloud deployment: **Firebase Hosting** for the frontend and **Google Cloud Run** for the backend.
 
+> ⚠️ **IMPORTANT**: The backend **cannot** be hosted directly on Vercel/Firebase Functions because the AI models (`torch`/`transformers`) exceed the serverless size limits (250MB). You **must** use a containerized service like **Google Cloud Run** for the backend.
+
 ### 1. Backend Deployment (Cloud Run)
-
 - **Containerize**: Use [Dockerfile.prod](file:///c:/Users/mehta/Desktop/LEVI/backend/Dockerfile.prod) to build your image.
-
   ```bash
   gcloud builds submit --tag gcr.io/YOUR_PROJECT_ID/levi-backend ./backend
   ```
-
 - **Deploy**: Deploy to Cloud Run.
-
   ```bash
-  gcloud run deploy levi-backend --image gcr.io/YOUR_PROJECT_ID/levi-backend --platform managed --allow-unauthenticated
+  gcloud run deploy levi-backend --image gcr.io/YOUR_PROJECT_ID/levi-backend --platform managed --allow-unauthenticated --memory 2Gi
   ```
-
 - **Update URL**: Note the provided Service URL.
 
-### 2. Frontend Deployment (Firebase)
+### 3. Frontend Deployment (Vercel, Firebase, or Digital Ocean)
 
-- **Configure**: Open [firebase.json](file:///c:/Users/mehta/Desktop/LEVI/firebase.json) and replace `https://your-backend-url.a.run.app` with your Cloud Run Service URL.
-- **Initialize**:
+#### Using Digital Ocean (Recommended for Unified Hosting):
+- **Commit**: Ensure the `.do/app.yaml` file is committed to your repository.
+- **Create App**: In your Digital Ocean dashboard, go to `Apps` -> `Create App` and select your GitHub repository.
+- **Deploy**: Digital Ocean will automatically detect and use the `app.yaml` to configure and deploy both the frontend and backend.
 
+#### Using Vercel (Recommended for Analytics):
+- **Configure**: Open [vercel.json](file:///c:/Users/mehta/Desktop/LEVI/vercel.json) and replace `https://your-backend-url.a.run.app` with your Cloud Run Service URL.
+- **Deploy**:
   ```bash
-  firebase init hosting
+  vercel deploy --prod
   ```
 
+#### Using Firebase:
+- **Configure**: Open [firebase.json](file:///c:/Users/mehta/Desktop/LEVI/firebase.json) and replace `https://your-backend-url.a.run.app` with your Cloud Run Service URL.
 - **Deploy**:
-
   ```bash
   firebase deploy --only hosting
   ```
