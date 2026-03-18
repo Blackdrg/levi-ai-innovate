@@ -27,7 +27,7 @@ services:
       - key: TRANSFORMERS_CACHE
         value: /app/model_cache
 
-  - type: pserv
+  - type: web
     name: rasa-server
     runtime: docker
     dockerfilePath: ./rasa/Dockerfile.server
@@ -36,7 +36,7 @@ services:
     branch: main
     plan: free
 
-  - type: pserv
+  - type: web
     name: rasa-actions
     runtime: docker
     dockerfilePath: ./rasa/Dockerfile.actions
@@ -45,7 +45,7 @@ services:
     branch: main
     plan: free
 
-  - type: pserv
+  - type: web
     name: db
     runtime: docker
     dockerfilePath: ./Dockerfile.db
