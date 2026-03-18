@@ -9,6 +9,10 @@ from datetime import datetime, timedelta, date
 import os
 import requests
 from dotenv import load_dotenv
+
+# Ensure environment variables are loaded at the very beginning
+load_dotenv()
+
 try:
     from backend.db import SessionLocal, engine, get_db, DATABASE_URL
     from backend.models import Quote, Analytics, FeedItem, Base
@@ -35,7 +39,6 @@ from slowapi.util import get_remote_address
 from sqlalchemy import func
 
 print("Starting LEVI backend...")
-load_dotenv()
 
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-prod")
 CLIENT_KEY = os.getenv("CLIENT_KEY")
@@ -142,6 +145,13 @@ async def global_exception_handler(request: Request, exc: Exception):
 @app.on_event("startup")
 async def startup_event():
     logging.info("Starting LEVI backend... Model loading triggered in background.")
+    
+    # Check for Redis connection
+    from redis_client import HAS_REDIS, REDIS_URL
+    if not HAS_REDIS:
+        logging.warning("REDIS_URL is not set or connection failed. Session persistence and caching will be limited.")
+    else:
+        logging.info(f"Redis connected successfully (masked: {REDIS_URL.split('@')[-1] if '@' in REDIS_URL else REDIS_URL})")
     
     # Create tables on startup
     try:

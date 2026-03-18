@@ -2,6 +2,10 @@ import redis
 import os
 import json
 import hashlib
+from dotenv import load_dotenv
+
+# Ensure environment variables are loaded
+load_dotenv()
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 try:
@@ -10,8 +14,15 @@ try:
     HAS_REDIS = True
 except Exception as e:
     # Safely mask URL for logs
+    # If the URL is localhost, it's definitely missing in the environment
+    is_missing = "localhost" in REDIS_URL
     masked_url = REDIS_URL.split('@')[-1] if '@' in REDIS_URL else REDIS_URL
-    print(f"Warning: Redis not available at {masked_url}. Error: {e}. Falling back to in-memory cache.")
+    
+    if is_missing:
+        print(f"Warning: REDIS_URL environment variable is MISSING. Defaulting to {REDIS_URL}. Error: {e}. Falling back to in-memory cache.")
+    else:
+        print(f"Warning: Redis not available at {masked_url}. Error: {e}. Falling back to in-memory cache.")
+    
     HAS_REDIS = False
     _memory_cache = {}
 
