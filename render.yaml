@@ -1,0 +1,75 @@
+services:
+  - type: web
+    name: backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile.prod
+    dockerContext: ./backend
+    repo: https://github.com/Blackdrg/LEVI
+    branch: main
+    healthCheckPath: /health
+    plan: free
+    envVars:
+      - key: PORT
+        value: "8000"
+      - key: DATABASE_URL
+        value: postgresql://levi:levi@db:5432/levi # Connecting to the 'db' service internally
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: redis
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: "*"
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: TRANSFORMERS_CACHE
+        value: /app/model_cache
+
+  - type: pserv
+    name: rasa-server
+    runtime: docker
+    dockerfilePath: ./rasa/Dockerfile
+    dockerContext: ./rasa
+    repo: https://github.com/Blackdrg/LEVI
+    branch: main
+    plan: free
+    # Rasa server start command
+    startCommand: rasa run --enable-api --cors "*" -m models --port 5005 --debug
+
+  - type: pserv
+    name: rasa-actions
+    runtime: docker
+    dockerfilePath: ./rasa/Dockerfile
+    dockerContext: ./rasa
+    repo: https://github.com/Blackdrg/LEVI
+    branch: main
+    plan: free
+    # Rasa actions server start command
+    startCommand: rasa run actions
+
+  - type: pserv
+    name: db
+    runtime: docker
+    dockerfilePath: ./Dockerfile.db
+    dockerContext: .
+    repo: https://github.com/Blackdrg/LEVI
+    branch: main
+    plan: free
+    envVars:
+      - key: POSTGRES_USER
+        value: levi
+      - key: POSTGRES_PASSWORD
+        value: levi
+      - key: POSTGRES_DB
+        value: levi
+    disk:
+      name: postgres_data
+      mountPath: /var/lib/postgresql/data
+      sizeGB: 10
+
+  - type: redis
+    name: redis
+    plan: free
+    ipAllowList: [] # Allow all internal traffic
