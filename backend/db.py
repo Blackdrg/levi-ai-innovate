@@ -8,13 +8,18 @@ load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+# Strict guard for production (Render/Heroku/etc)
+IS_PROD = os.getenv("RENDER") == "true" or os.getenv("NODE_ENV") == "production"
+
 # Handle empty or missing DATABASE_URL
 if not DATABASE_URL or not DATABASE_URL.strip():
+    if IS_PROD:
+        raise ValueError("CRITICAL: DATABASE_URL environment variable is NOT set in production!")
     DATABASE_URL = "sqlite:///./levi_v2.db"
 else:
     DATABASE_URL = DATABASE_URL.strip()
 
-# SQLAlchemy 1.4+ requires postgresql:// instead of postgres://
+# Render sometimes gives postgres:// but SQLAlchemy 1.4+ needs postgresql://
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 

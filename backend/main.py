@@ -167,8 +167,8 @@ async def startup_event():
     logging.info(f"CLIENT_KEY is {'SET' if CLIENT_KEY else 'NOT SET'}")
 
 @app.get("/")
-def read_root():
-    return {"message": "Welcome to LEVI AI API", "docs": "/docs", "health": "/health"}
+def health_check():
+    return {"status": "ok", "message": "LEVI backend is running", "docs": "/docs", "health": "/health"}
 
 @app.get("/health")
 def health():
