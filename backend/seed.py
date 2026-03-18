@@ -1,8 +1,13 @@
 import pandas as pd
 from sqlalchemy.orm import Session
-from backend.db import SessionLocal, engine
-from backend.models import Quote, Base
-from backend.embeddings import embed_text
+try:
+    from backend.db import SessionLocal, engine
+    from backend.models import Quote, Base
+    from backend.embeddings import embed_text
+except ImportError:
+    from db import SessionLocal, engine
+    from models import Quote, Base
+    from embeddings import embed_text
 import numpy as np
 import os
 
