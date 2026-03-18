@@ -5,7 +5,10 @@ sys.path.append('.')
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 
-from backend.main import app
+try:
+    from backend.main import app
+except ImportError:
+    from main import app
 
 app_client = TestClient(app)
 

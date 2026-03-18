@@ -5,7 +5,10 @@ try:
 except ImportError:
     HAS_PGVECTOR = False
 
-from backend.db import Base, DATABASE_URL
+try:
+    from backend.db import Base, DATABASE_URL
+except ImportError:
+    from db import Base, DATABASE_URL
 from sqlalchemy.sql import func
 
 class Quote(Base):
