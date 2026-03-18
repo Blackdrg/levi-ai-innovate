@@ -12,7 +12,7 @@ services:
       - key: PORT
         value: "8000"
       - key: DATABASE_URL
-        value: postgresql://levi:levi@db:5432/levi # Connecting to the 'db' service internally
+        value: postgresql://levi:levi@db:5432/levi
       - key: REDIS_URL
         fromService:
           type: redis
@@ -30,24 +30,20 @@ services:
   - type: pserv
     name: rasa-server
     runtime: docker
-    dockerfilePath: ./rasa/Dockerfile
+    dockerfilePath: ./rasa/Dockerfile.server
     dockerContext: ./rasa
     repo: https://github.com/Blackdrg/LEVI
     branch: main
     plan: free
-    # Rasa server start command
-    startCommand: rasa run --enable-api --cors "*" -m models --port 5005 --debug
 
   - type: pserv
     name: rasa-actions
     runtime: docker
-    dockerfilePath: ./rasa/Dockerfile
+    dockerfilePath: ./rasa/Dockerfile.actions
     dockerContext: ./rasa
     repo: https://github.com/Blackdrg/LEVI
     branch: main
     plan: free
-    # Rasa actions server start command
-    startCommand: rasa run actions
 
   - type: pserv
     name: db
@@ -64,12 +60,8 @@ services:
         value: levi
       - key: POSTGRES_DB
         value: levi
-    disk:
-      name: postgres_data
-      mountPath: /var/lib/postgresql/data
-      sizeGB: 10
 
   - type: redis
     name: redis
     plan: free
-    ipAllowList: [] # Allow all internal traffic
+    ipAllowList: []
