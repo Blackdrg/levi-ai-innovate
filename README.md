@@ -1,146 +1,134 @@
-# LEVI - AI Quotes Bot w/ Clean Architecture 🌟
+# LEVI - AI Wisdom & Creative Muse 🌟
 
-[![Docker](https://img.shields.io/badge/Docker-Ready-brightgreen?logo=docker)](https://www.docker.com/)
+LEVI is a full-stack AI application designed to spark creativity through semantic quote search, AI-driven conversations, and artistic visual generation. Built with a modern glassmorphism UI and a robust microservices backend.
 
-LEVI is now **fully functional** w/ modern frontend architecture, semantic quote search, AI chat, and glassmorphism dark theme (indigo/amber).
+---
 
-## ✨ Features (Live!)
+## 🏗️ Architecture Overview
 
-- **Semantic Quote Search**: /api/search_quotes (embeddings-powered)
+LEVI follows a decoupled, high-performance architecture optimized for production environments like **Vercel** and **Render**:
 
-- **AI Chat**: /api/chat (session-aware conversations)
-
-- **Quote Generation**: /api/generate  
-- **Modern UI**: Dark theme (#0F172A), glass cards, hover animations, 80vh chat
-- **Central API Client**: frontend/js/api.js routes all via nginx /api/
-- **Responsive**: Tailwind + custom CSS, PWA-ready
-
-## 🏗️ Fixed Architecture
-
-```
-Nginx (80) 
-  → frontend/ (index.html/chat.html/quotes.html)
-  ↳ /api/ → backend:8000 (FastAPI)
-        ↳ Postgres/pgvector + Redis + RASA
+```mermaid
+graph TD
+    Vercel[Vercel Frontend] -->|Proxy /api| Render[Render Backend]
+    Render -->|SQL| Postgres[PostgreSQL + pgvector]
+    Render -->|Cache| Redis[Redis]
+    Render -->|NLU| Rasa[Rasa Server]
+    Rasa -->|Actions| Actions[Rasa Actions]
 ```
 
-## 🚀 How to Run (Local Development)
+- **Frontend**: Static files + Tailwind CSS + Vanilla JS, hosted on **Vercel**.
+- **Backend API**: FastAPI (Python), containerized and hosted on **Render**.
+- **AI Engine**: Sentence Transformers (Embeddings) + DistilGPT2 (Generation) + Rasa (NLU).
+- **Data Layer**: PostgreSQL with `pgvector` for semantic search and Redis for session caching.
 
-To start both the backend and frontend simultaneously with automatic port management:
+---
 
-```bash
-python run_app.py
-```
+## ✨ Core Features
 
-- **Frontend**: [http://localhost:8080](http://localhost:8080)
-- **Backend**: [http://localhost:8000](http://localhost:8000)
+- **Semantic Search**: Find quotes by meaning, not just keywords, using vector embeddings.
+- **AI Chat**: Engage in philosophical or creative conversations with LEVI.
+- **Visual Generation**: Generate artistic, shareable images from any quote.
+- **Multi-language Support**: Support for English and Hindi conversations.
+- **Daily Wisdom**: Fresh quotes delivered daily via open-source API integration.
+- **Public Feed**: Share and discover liked quotes and generated visuals.
 
-## 🌐 How to Deploy (Firebase & Cloud Run)
-
-LEVI is pre-configured for a hybrid cloud deployment: **Firebase Hosting** for the frontend and **Google Cloud Run** for the backend.
-
-> ⚠️ **IMPORTANT**: The backend **cannot** be hosted directly on Vercel/Firebase Functions because the AI models (`torch`/`transformers`) exceed the serverless size limits (250MB). You **must** use a containerized service like **Google Cloud Run** for the backend.
-
-### 1. Backend Deployment (Cloud Run)
-- **Containerize**: Use [Dockerfile.prod](file:///c:/Users/mehta/Desktop/LEVI/backend/Dockerfile.prod) to build your image.
-  ```bash
-  gcloud builds submit --tag gcr.io/YOUR_PROJECT_ID/levi-backend ./backend
-  ```
-- **Deploy**: Deploy to Cloud Run.
-  ```bash
-  gcloud run deploy levi-backend --image gcr.io/YOUR_PROJECT_ID/levi-backend --platform managed --allow-unauthenticated --memory 2Gi
-  ```
-- **Update URL**: Note the provided Service URL.
-
-### 3. Frontend Deployment (Vercel, Firebase, or Digital Ocean)
-
-#### Using Digital Ocean (Recommended for Unified Hosting):
-- **Commit**: Ensure the `.do/app.yaml` file is committed to your repository.
-- **Create App**: In your Digital Ocean dashboard, go to `Apps` -> `Create App` and select your GitHub repository.
-- **Deploy**: Digital Ocean will automatically detect and use the `app.yaml` to configure and deploy both the frontend and backend.
-
-#### Using Vercel (Recommended for Analytics):
-- **Configure**: Open [vercel.json](file:///c:/Users/mehta/Desktop/LEVI/vercel.json) and replace `https://your-backend-url.a.run.app` with your Cloud Run Service URL.
-- **Deploy**:
-  ```bash
-  vercel deploy --prod
-  ```
-
-#### Using Firebase:
-- **Configure**: Open [firebase.json](file:///c:/Users/mehta/Desktop/LEVI/firebase.json) and replace `https://your-backend-url.a.run.app` with your Cloud Run Service URL.
-- **Deploy**:
-  ```bash
-  firebase deploy --only hosting
-  ```
-
-### 3. Security
-
-- Update `origins` in [main.py](file:///c:/Users/mehta/Desktop/LEVI/backend/main.py) with your actual Firebase URL to ensure CORS is correctly handled.
-
-## 🛠️ Robustness Features
-
-- **Unified Lifecycle**: `run_app.py` manages both services and automatically kills stale processes.
-- **Fail-safe AI**: Backend automatically switches to rule-based wisdom if heavy models fail to load.
-- **Network Resilience**: Service Worker uses a Network-First strategy to ensure you always get fresh AI responses while staying fast.
-- **Health Monitoring**: Integrated healthchecks in Docker ensures automatic recovery of any crashed services.
-
-## 📱 Pages
-
-| Page | URL | Features |
-|------|-----|----------|
-| Landing | / | Hero + CTAs (Indigo theme) |
-| Chat | /chat.html | Real-time API chat, typing indicator |
-| Quotes | /quotes.html | Semantic search, glassmorphism cards |
-
-## 🎨 UI Theme
-
-```
-BG: #0F172A    Text: #F8FAFC
-User: #6366F1  Bot/Card: #1E293B  
-Accent: #F59E0B  Glass: rgba(30,41,59,.8) + blur
-```
+---
 
 ## 🛠️ Tech Stack
 
-- **Frontend**: HTML/JS/CSS (api.js central client)
-- **Backend**: FastAPI 0.104, pgvector, sentence-transformers, Torch CPU
-- **Services**: nginx, postgres, redis, rasa 3.6
-- **Docker**: All-in-one compose (fixed pip syntax)
+### Frontend
+- **Framework**: Vanilla JavaScript (ES6+)
+- **Styling**: Tailwind CSS + Custom Glassmorphism CSS
+- **Icons/UI**: Lucide Icons + FontAwesome
+- **Deployment**: Vercel (via `vercel.json` rewrites)
 
-## 🔧 Fixed Issues
-
-- **API Routing**: All via `/api/` (nginx proxy)
-- **requirements.txt**: Torch CPU install syntax
-- **CSS Lint**: Safari backdrop-filter + vanilla CSS
-- **JS IDs**: chatBox= `#messages`, searchInput= `#search-input`
-
-## 📁 Structure (Spec Match)
-
-```
-frontend/
-├── index.html (hero)
-├── chat.html (w/ api.js/chat.js)
-├── quotes.html (w/ api.js/quotes.js)
-├── js/api.js (central)
-└── css/styles.css (dark glass theme)
-```
-
-## 📊 API Docs
-
-<http://localhost/api/docs> (Swagger)
-
-## 🤖 Recent Updates (BLACKBOXAI)
-
-```
-✅ Clean API architecture (11 steps exact)
-✅ Modern theme + animations
-✅ Docker build fixed (torch pip)
-✅ CSS Safari/linter clean
-✅ All pages live/functional
-```
-
-**Production-ready!** Contributions welcome 🚀
+### Backend
+- **Framework**: FastAPI (Asynchronous Python)
+- **Database**: SQLAlchemy 2.0 + PostgreSQL (pgvector)
+- **Caching**: Redis (Session & Search Caching)
+- **AI/ML**: 
+  - `transformers` (DistilGPT2)
+  - `sentence-transformers` (MiniLM-L6-v2)
+  - `rasa` (Natural Language Understanding)
+- **Image Gen**: Pillow (PIL) for dynamic compositing.
 
 ---
-*LEVI: Leveraging Embeddings for Valuable Inspiration*
 
+## 🚀 Production Deployment Guide
+
+### 1. Backend (Render)
+The backend is optimized for the **Render Free Tier** (512MB RAM).
+
+- **Blueprints**: Use the provided [render.yaml](render.yaml) for one-click setup.
+- **Environment Variables**:
+  - `DATABASE_URL`: Internal string from Render Postgres.
+  - `REDIS_URL`: Internal string from Render Redis.
+  - `CLIENT_KEY`: Random secret for API security.
+  - `CORS_ORIGINS`: Set to your Vercel domain.
+- **Health Checks**: Set path to `/` in Render dashboard.
+- **Pre-deploy**: `python seed.py` is automatically configured to populate your DB.
+
+### 2. Frontend (Vercel)
+- **Proxying**: The [vercel.json](vercel.json) file handles routing `/api/*` to your Render backend to bypass CORS issues.
+- **Deployment**: Connect your GitHub repo to Vercel and it will auto-deploy the `frontend/` directory.
+
+---
+
+## 💻 Local Development
+
+### Prerequisites
+- Python 3.11+
+- Docker & Docker Compose (optional but recommended)
+
+### Quick Start
+1. **Clone the repo**:
+   ```bash
+   git clone https://github.com/Blackdrg/LEVI.git
+   cd LEVI
+   ```
+2. **Run with one command**:
+   ```bash
+   python run_app.py
+   ```
+   This will start the Backend (8000) and Frontend (8080) simultaneously.
+
+### Manual Backend Setup
+```bash
+cd backend
+pip install -r requirements.txt
+python seed.py  # Seed the initial database
+uvicorn main:app --reload
+```
+
+---
+
+## 📱 Project Structure
+
+```text
+LEVI/
+├── backend/            # FastAPI Application
+│   ├── data/           # Initial CSV datasets
+│   ├── tests/          # Pytest suite
+│   └── Dockerfile.prod # Optimized production image
+├── frontend/           # Vanilla JS Website
+│   ├── js/             # API client & UI logic
+│   └── css/            # Glassmorphism styling
+├── rasa/               # Rasa NLU configuration
+├── render.yaml         # Render Infrastructure-as-Code
+├── vercel.json         # Vercel routing configuration
+└── Dockerfile          # Root deployment target
+```
+
+---
+
+## 🛡️ Security & Performance
+- **Background Loading**: AI models load in separate threads to pass health checks immediately.
+- **Hybrid Imports**: Code works seamlessly in both local and containerized environments.
+- **Worker Optimization**: Uvicorn set to 1 worker in production to save memory.
+- **Database Guards**: Strict checks ensure PostgreSQL is used in production while SQLite works for local testing.
+
+---
+
+## 📄 License
+MIT License - Developed by Blackdrg.
