@@ -6,8 +6,8 @@ services:
     dockerContext: backend
     plan: free
     envVars:
-      - key: PORT
-        value: "8000"
+      - key: RENDER
+        value: "true"
       - key: DATABASE_URL
         sync: false
       - key: REDIS_URL
