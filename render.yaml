@@ -2,21 +2,19 @@ services:
   - type: web
     name: backend
     runtime: docker
-    dockerfilePath: ./backend/Dockerfile.prod
-    dockerContext: ./backend
-    repo: https://github.com/Blackdrg/LEVI
-    branch: main
-    healthCheckPath: /health
+    dockerfilePath: backend/Dockerfile.prod
+    dockerContext: backend
     plan: free
     envVars:
       - key: PORT
         value: "8000"
       - key: DATABASE_URL
-        value: postgresql://levi:levi@db:5432/levi
+        fromDatabase:
+          name: levi-db
+          property: connectionString
       - key: REDIS_URL
-        fromService:
-          type: redis
-          name: redis
+        fromRedis:
+          name: levi-redis
           property: connectionString
       - key: SECRET_KEY
         generateValue: true
@@ -30,38 +28,21 @@ services:
   - type: web
     name: rasa-server
     runtime: docker
-    dockerfilePath: ./rasa/Dockerfile.server
-    dockerContext: ./rasa
-    repo: https://github.com/Blackdrg/LEVI
-    branch: main
+    dockerfilePath: rasa/Dockerfile.server
+    dockerContext: rasa
     plan: free
 
   - type: web
     name: rasa-actions
     runtime: docker
-    dockerfilePath: ./rasa/Dockerfile.actions
-    dockerContext: ./rasa
-    repo: https://github.com/Blackdrg/LEVI
-    branch: main
+    dockerfilePath: rasa/Dockerfile.actions
+    dockerContext: rasa
     plan: free
 
-  - type: web
-    name: db
-    runtime: docker
-    dockerfilePath: ./Dockerfile.db
-    dockerContext: .
-    repo: https://github.com/Blackdrg/LEVI
-    branch: main
+databases:
+  - name: levi-db
     plan: free
-    envVars:
-      - key: POSTGRES_USER
-        value: levi
-      - key: POSTGRES_PASSWORD
-        value: levi
-      - key: POSTGRES_DB
-        value: levi
 
-  - type: redis
-    name: redis
+redis:
+  - name: levi-redis
     plan: free
-    ipAllowList: []
