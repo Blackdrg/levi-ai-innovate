@@ -6,12 +6,27 @@ from sqlalchemy.orm import sessionmaker
 
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./levi_v2.db")
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+# Handle empty or missing DATABASE_URL
+if not DATABASE_URL or not DATABASE_URL.strip():
+    DATABASE_URL = "sqlite:///./levi_v2.db"
+else:
+    DATABASE_URL = DATABASE_URL.strip()
+
+# SQLAlchemy 1.4+ requires postgresql:// instead of postgres://
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+# Debug logging for URL scheme (safe for logs)
+scheme = DATABASE_URL.split("://")[0]
+print(f"DATABASE_URL scheme: {scheme}")
 
 if "postgresql" in DATABASE_URL:
-    engine = create_engine(DATABASE_URL)
+    # Production PostgreSQL
+    engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 else:
-    # SQLite fallback
+    # SQLite fallback for local development
     engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
