@@ -110,20 +110,18 @@ origins = [
 # Add origins from environment variables if present
 if env_origins:
     for o in env_origins:
-        if o.strip() and o.strip() not in origins:
-            origins.append(o.strip())
+        origin = o.strip()
+        if origin and origin != "*" and origin not in origins:
+            origins.append(origin)
+
 # Handle wildcard correctly for allow_credentials=True
-if "*" in origins:
-    # If wildcard is present, we must replace it with the specific origin of the request
-    # but FastAPI CORSMiddleware doesn't support that directly with allow_credentials=True
-    # So we'll just log it for now.
-    print("WARNING: '*' in origins with allow_credentials=True is not supported. Use specific origins.")
+allow_all = "*" in env_origins or os.getenv("CORS_ORIGINS") == "*"
 
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
+    allow_origins=["*"] if allow_all else origins,
+    allow_credentials=not allow_all, # credentials cannot be used with wildcard
     allow_methods=["*"],
     allow_headers=["*"],
 )
