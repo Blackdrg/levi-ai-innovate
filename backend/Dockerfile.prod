@@ -25,6 +25,9 @@ RUN mkdir -p /app/model_cache && chmod 777 /app/model_cache
 # Copy application code
 COPY . .
 
+# Set PYTHONPATH to include the current directory
+ENV PYTHONPATH=/app
+
 # Expose port (Cloud Run uses PORT environment variable)
 EXPOSE 8080
 

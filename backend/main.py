@@ -9,15 +9,20 @@ from datetime import datetime, timedelta, date
 import os
 import requests
 from dotenv import load_dotenv
-from backend.db import SessionLocal, engine, get_db, DATABASE_URL
-from backend.models import Quote, Analytics, FeedItem, Base
-
-# Create tables
-Base.metadata.create_all(bind=engine)
-from backend.embeddings import embed_text, cosine_sim
-from backend.redis_client import get_cached_search, cache_search, get_conversation, save_conversation
-from backend.generation import generate_quote, generate_response
-from backend.image_gen import generate_quote_image
+try:
+    from backend.db import SessionLocal, engine, get_db, DATABASE_URL
+    from backend.models import Quote, Analytics, FeedItem, Base
+    from backend.embeddings import embed_text, cosine_sim
+    from backend.redis_client import get_cached_search, cache_search, get_conversation, save_conversation
+    from backend.generation import generate_quote, generate_response
+    from backend.image_gen import generate_quote_image
+except ImportError:
+    from db import SessionLocal, engine, get_db, DATABASE_URL
+    from models import Quote, Analytics, FeedItem, Base
+    from embeddings import embed_text, cosine_sim
+    from redis_client import get_cached_search, cache_search, get_conversation, save_conversation
+    from generation import generate_quote, generate_response
+    from image_gen import generate_quote_image
 import numpy as np
 import hashlib
 import json
@@ -86,7 +91,11 @@ class ChatMessage(BaseModel):
     message: str
     lang: Optional[str] = "en"
 
-# No Base.metadata.create_all here, handled in db.py if needed
+# Create tables
+try:
+    Base.metadata.create_all(bind=engine)
+except Exception as e:
+    print(f"Error creating tables: {e}")
 
 limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title="LEVI Quotes API")
