@@ -2,10 +2,10 @@ FROM rasa/rasa:3.6.20-full
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY rasa/requirements.txt .
 RUN pip install -r requirements.txt
 
-COPY . .
+COPY rasa/ .
 
 # Default command for rasa-actions
-CMD ["run", "actions"]
+CMD ["run", "actions", "--port", "5055"]
