@@ -20,6 +20,8 @@ services:
         value: "1"
       - key: TRANSFORMERS_CACHE
         value: /app/model_cache
+      - key: CLIENT_KEY
+        generateValue: true
 
   - type: web
     name: rasa-server

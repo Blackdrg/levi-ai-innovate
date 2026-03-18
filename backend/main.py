@@ -38,6 +38,7 @@ print("Starting LEVI backend...")
 load_dotenv()
 
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-prod")
+CLIENT_KEY = os.getenv("CLIENT_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
@@ -142,6 +143,7 @@ async def startup_event():
     # Debug: Log environment info
     logging.info(f"CORS origins: {origins}")
     logging.info(f"Database URL scheme: {DATABASE_URL.split('://')[0] if DATABASE_URL else 'None'}")
+    logging.info(f"CLIENT_KEY is {'SET' if CLIENT_KEY else 'NOT SET'}")
 
 @app.get("/health")
 def health():
