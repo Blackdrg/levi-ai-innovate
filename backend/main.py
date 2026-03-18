@@ -96,7 +96,15 @@ app = FastAPI(title="LEVI Quotes API")
 app.state.limiter = limiter
 
 # Allow CORS for development and production
-origins = ["*"]  # Allow all origins for debugging and flexible cloud deployment
+origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "https://levi-git-main-daksh-mehats-projects.vercel.app",
+    "https://levi-k8iuadcvd-daksh-mehats-projects.vercel.app",
+    "https://levi-ai.vercel.app",  # Common production pattern
+]
 
 app.add_middleware(
     CORSMiddleware,
