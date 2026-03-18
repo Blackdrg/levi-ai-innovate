@@ -166,6 +166,10 @@ async def startup_event():
     logging.info(f"Database URL scheme: {DATABASE_URL.split('://')[0] if DATABASE_URL else 'None'}")
     logging.info(f"CLIENT_KEY is {'SET' if CLIENT_KEY else 'NOT SET'}")
 
+@app.get("/")
+def read_root():
+    return {"message": "Welcome to LEVI AI API", "docs": "/docs", "health": "/health"}
+
 @app.get("/health")
 def health():
     return {"status": "ok", "version": "2.0.0"}
