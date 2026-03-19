@@ -1,272 +1,637 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#8B5CF6">
-    <title>LEVI AI - Artistic Wisdom & Visual Inspiration</title>
-    
-    <!-- SEO & PWA -->
-    <meta name="description"
-        content="LEVI: Your AI Muse for artistic inspiration. Generate wisdom, philosophical quotes, and stunning visual art in seconds.">
-    <meta name="keywords" content="AI, quotes, art generator, wisdom, philosophy, inspiration, LEVI">
-    <link rel="canonical" href="https://levi-ai.example.com/">
-    
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="https://img.icons8.com/fluency/192/000000/brain.png">
-    
-    <!-- OpenGraph / Social -->
-    <meta property="og:title" content="LEVI AI - Artistic Wisdom & Visual Inspiration">
-    <meta property="og:description"
-        content="Experience the fusion of AI and art. Generate unique wisdom and stunning visuals.">
-    <meta property="og:url" content="https://levi-ai.example.com/">
-    <meta property="og:type" content="website">
-    <meta property="og:image" content="https://img.icons8.com/fluency/512/000000/brain.png">
-    <meta name="twitter:card" content="summary_large_image">
-    
+    <meta name="theme-color" content="#09090f">
+    <title>LEVI AI — Cosmic Wisdom & Artistic Muse</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600;1,700&family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap"
+        rel="stylesheet">
+
+    <!-- Scripts -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="css/styles.css">
-    <link rel="stylesheet" href="css/animations.css">
-    <script src="js/ui.js" type="module" defer></script>
-    <script src="js/api.js" type="module"></script>
-    <!-- Vercel Analytics & Speed Insights -->
-    <script defer src="/_vercel/insights/script.js"></script>
-    <script defer src="/_vercel/speed-insights/script.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        space: '#09090f',
+                        indigo: {
+                            950: '#1e1b4b',
+                            900: '#312e81',
+                            800: '#3730a3',
+                        },
+                        gold: {
+                            DEFAULT: '#d4af37',
+                            light: '#f1e5ac',
+                            dark: '#996515',
+                        }
+                    },
+                    fontFamily: {
+                        display: ['Cormorant Garamond', 'serif'],
+                        sans: ['DM Sans', 'sans-serif'],
+                    },
+                    animation: {
+                        'float': 'float 6s ease-in-out infinite',
+                        'orb': 'orb 20s linear infinite',
+                        'pulse-glow': 'pulse-glow 4s ease-in-out infinite',
+                    },
+                    keyframes: {
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-20px)' },
+                        },
+                        orb: {
+                            '0%': { transform: 'translate(0, 0) scale(1)' },
+                            '33%': { transform: 'translate(30px, -50px) scale(1.1)' },
+                            '66%': { transform: 'translate(-20px, 20px) scale(0.9)' },
+                            '100%': { transform: 'translate(0, 0) scale(1)' },
+                        },
+                        'pulse-glow': {
+                            '0%, 100%': { opacity: 0.3 },
+                            '50%': { opacity: 0.6 },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #09090f;
+            color: #e2e8f0;
+            overflow-x: hidden;
+        }
+
+        .noise-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('https://www.transparenttextures.com/patterns/stardust.png');
+            opacity: 0.05;
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        .orb {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(80px);
+            z-index: -1;
+            opacity: 0.4;
+        }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.03);
+            -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .nav-blur {
+            -webkit-backdrop-filter: blur(20px);
+            backdrop-filter: blur(20px);
+            background: rgba(9, 9, 15, 0.8);
+        }
+
+        .orb-1 { width: 500px; height: 500px; top: -100px; left: -100px; }
+        .orb-2 { width: 400px; height: 400px; bottom: -50px; right: -50px; animation-delay: -5s; }
+        .orb-3 { width: 300px; height: 300px; top: 40%; right: 10%; animation-delay: -10s; }
+        .typing-dot-2 { animation-delay: 0.2s; }
+        .typing-dot-3 { animation-delay: 0.4s; }
+
+        .gold-gradient {
+            background: linear-gradient(to right, #d4af37, #f1e5ac, #996515);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero-title {
+            line-height: 1.1;
+        }
+
+        .section-heading {
+            font-family: 'Cormorant Garamond', serif;
+            font-weight: 600;
+        }
+
+        /* Utility Styles */
+        .lang-btn.active {
+            background-color: #d4af37;
+            color: #09090f;
+        }
+
+        .backend-offline {
+            display: none;
+            background: #ef4444;
+            color: white;
+            text-align: center;
+            padding: 8px;
+            font-size: 12px;
+            font-weight: bold;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            position: fixed;
+            top: 80px;
+            left: 0;
+            width: 100%;
+            z-index: 30;
+        }
+    </style>
 </head>
-<body class="bg-primary text-main min-h-screen flex flex-col items-center p-6 md:p-12 overflow-x-hidden">
-    
-    <!-- Navigation -->
-    <nav class="w-full max-w-7xl mx-auto flex justify-between items-center mb-16 p-4">
-        <a href="index.html"
-            class="text-2xl font-black bg-gradient-to-r from-violet-400 to-emerald-400 bg-clip-text text-transparent hover:opacity-80 transition-opacity">LEVI</a>
-        <div class="flex flex-wrap gap-3 items-center justify-end">
-            <button onclick="window.toggleLanguage()"
-                class="glass px-3 py-2 rounded-xl text-xs hover:bg-white/5 transition-all">🌐 EN/HI</button>
-            <button id="dark-toggle" class="glass p-2 rounded-xl hover:bg-white/5 transition-all">☀️</button>
-            <a href="chat.html"
-                class="glass px-4 py-2 rounded-xl hover:bg-white/5 transition-all text-xs md:text-sm font-medium">Chat</a>
-            <a href="studio.html"
-                class="glass px-4 py-2 rounded-xl hover:bg-white/5 transition-all text-xs md:text-sm font-medium">Studio</a>
-            <a href="feed.html"
-                class="glass px-4 py-2 rounded-xl hover:bg-white/5 transition-all text-xs md:text-sm font-medium">Feed</a>
-            <a href="quotes.html"
-                class="glass px-4 py-2 rounded-xl hover:bg-white/5 transition-all text-xs md:text-sm font-medium">Explore</a>
+
+<body class="font-sans">
+    <div class="noise-overlay"></div>
+    <div id="offline-banner" class="backend-offline">System Offline — Connecting to Cosmic Archive...</div>
+
+    <!-- Atmospheric Orbs -->
+    <div class="orb orb-1 bg-indigo-900 animate-orb"></div>
+    <div class="orb orb-2 bg-purple-900 animate-orb"></div>
+    <div class="orb orb-3 bg-blue-900 animate-orb"></div>
+
+    <!-- Navbar -->
+    <nav class="fixed top-0 left-0 w-full z-40 transition-all duration-500 nav-blur border-b border-white/5">
+        <div class="max-w-7xl mx-auto px-6 h-20 flex justify-between items-center">
+            <div class="flex items-center">
+                <div id="status-indicator" class="w-2 h-2 rounded-full bg-red-500 mr-3 animate-pulse"
+                    title="System Status"></div>
+                <a href="index.html" class="font-display text-3xl font-bold gold-gradient tracking-wider">LEVI</a>
+            </div>
+
+            <div class="hidden md:flex items-center space-x-8">
+                <a href="#hero" class="text-sm font-medium hover:text-gold transition-colors">Home</a>
+                <a href="chat.html" class="text-sm font-medium hover:text-gold transition-colors">AI Chat</a>
+                <a href="studio.html" class="text-sm font-medium hover:text-gold transition-colors">Studio</a>
+                <a href="feed.html" class="text-sm font-medium hover:text-gold transition-colors">Feed</a>
+                <a href="quotes.html" class="text-sm font-medium hover:text-gold transition-colors">Explore</a>
+                <a href="auth.html" id="nav-auth-btn"
+                    class="px-5 py-2 glass rounded-full text-sm font-semibold border border-gold/20 text-gold hover:bg-gold hover:text-space transition-all duration-300">Sign
+                    In</a>
+            </div>
+
+            <button class="md:hidden text-white" aria-label="Toggle Menu">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+            </button>
         </div>
     </nav>
 
     <!-- Hero Section -->
-    <section class="hero text-center max-w-4xl mx-auto animate-fade-in">
-        <div class="inline-block px-4 py-1 rounded-full glass border-primary/20 text-primary text-sm font-semibold mb-6">
-            ✨ Meet Your AI Muse
-        </div>
-        <h1
-            class="text-6xl md:text-8xl font-black mb-8 tracking-tight bg-gradient-to-r from-violet-400 via-emerald-400 to-pink-400 bg-clip-text text-transparent">
-            LEVI AI
-        </h1>
-        <p class="text-xl md:text-2xl text-muted mb-12 leading-relaxed max-w-2xl mx-auto">
-            Experience the fusion of artificial intelligence and artistic inspiration.
-            Wisdom, quotes, and visual art at your fingertips.
-        </p>
-        
-        <div class="flex flex-col sm:flex-row gap-6 justify-center mb-16">
-            <a href="chat.html" class="btn-primary text-xl px-12 py-5 block">
-                Start Conversation →
-            </a>
-            <a href="quotes.html"
-                class="glass hover:bg-white/10 text-white px-12 py-5 rounded-2xl text-xl font-semibold transition-all duration-300 border border-white/10 block">
-                Browse Gallery
-            </a>
+    <section id="hero" class="relative pt-40 pb-20 px-6 overflow-hidden">
+        <div class="max-w-7xl mx-auto grid lg:grid-cols-2 gap-12 items-center">
+            <div class="animate-fade-in">
+                <div class="inline-flex items-center space-x-2 px-4 py-1.5 glass rounded-full border border-gold/10 mb-8">
+                    <span class="w-2 h-2 bg-gold rounded-full animate-pulse"></span>
+                    <span class="text-xs font-bold tracking-widest uppercase text-gold/80">Your AI Muse Awaits</span>
+                </div>
+                <h1 class="font-display text-7xl md:text-8xl font-bold hero-title mb-8">
+                    Where <span class="gold-gradient italic">Intelligence</span> <br>
+                    Meets <span class="gold-gradient italic">Wisdom.</span>
+                </h1>
+                <p class="text-lg md:text-xl text-slate-400 mb-10 leading-relaxed max-w-xl">
+                    Experience the fusion of deep learning and philosophical insight. LEVI generates original wisdom,
+                    artistic visuals, and soulful conversation.
+                </p>
+                <div class="flex flex-wrap gap-4">
+                    <a href="chat.html"
+                        class="px-8 py-4 bg-gold text-space font-bold rounded-xl hover:bg-gold-light transition-all duration-300 shadow-lg shadow-gold/20 transform hover:-translate-y-1">
+                        Start Conversation
+                    </a>
+                    <a href="studio.html"
+                        class="px-8 py-4 glass text-white font-bold rounded-xl hover:bg-white/5 transition-all duration-300 border border-white/10 transform hover:-translate-y-1">
+                        Create Art
+                    </a>
+                    </div>
+            </div>
+            
+            <div class="relative animate-float">
+                <div class="glass p-8 rounded-[2rem] border border-white/10 shadow-2xl relative z-10 overflow-hidden">
+                    <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-gold/40 to-transparent">
+                    </div>
+                    <div class="flex items-center justify-between mb-8">
+                        <div class="flex space-x-2">
+                            <div class="w-3 h-3 rounded-full bg-red-500/20"></div>
+                            <div class="w-3 h-3 rounded-full bg-yellow-500/20"></div>
+                            <div class="w-3 h-3 rounded-full bg-green-500/20"></div>
+                        </div>
+                        <span class="text-[10px] font-bold tracking-widest uppercase text-slate-500">Semantic Search Active</span>
+                    </div>
+                    <div class="relative">
+                        <input type="text" placeholder="Explore the nature of existence... (Ctrl+K)"
+                            class="w-full bg-space/50 border border-white/5 rounded-xl px-6 py-4 text-sm focus:outline-none focus:border-gold/30 transition-all">
+                        <button class="absolute right-4 top-1/2 -translate-y-1/2 text-gold" aria-label="Search">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="flex flex-wrap gap-2 mt-6">
+                        <span
+                            class="px-3 py-1 bg-indigo-950/40 border border-indigo-800/30 rounded-full text-[10px] font-bold text-indigo-300 uppercase cursor-pointer hover:border-gold/30 transition-all">#
+                            Stoicism</span>
+                        <span
+                            class="px-3 py-1 bg-indigo-950/40 border border-indigo-800/30 rounded-full text-[10px] font-bold text-indigo-300 uppercase cursor-pointer hover:border-gold/30 transition-all">#
+                            Cyberpunk</span>
+                        <span
+                            class="px-3 py-1 bg-indigo-950/40 border border-indigo-800/30 rounded-full text-[10px] font-bold text-indigo-300 uppercase cursor-pointer hover:border-gold/30 transition-all">#
+                            Zen Wisdom</span>
+                    </div>
+                </div>
+                <!-- Background decorative elements -->
+                <div class="absolute -top-10 -right-10 w-40 h-40 bg-gold/10 rounded-full blur-3xl"></div>
+                <div class="absolute -bottom-10 -left-10 w-40 h-40 bg-indigo-600/10 rounded-full blur-3xl"></div>
+            </div>
+            </div>
+    </section>
+
+    <!-- Stats Bar -->
+    <section class="py-12 border-y border-white/5 bg-space/50">
+        <div class="max-w-7xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-8">
+            <div class="text-center">
+                <div id="stat-quotes" class="text-3xl md:text-4xl font-display font-bold gold-gradient mb-2">0</div>
+                <div class="text-[10px] font-bold tracking-widest uppercase text-slate-500">Wisdom Generated</div>
+            </div>
+            <div class="text-center">
+                <div id="stat-artists" class="text-3xl md:text-4xl font-display font-bold gold-gradient mb-2">0</div>
+                <div class="text-[10px] font-bold tracking-widest uppercase text-slate-500">Artists Joined</div>
+            </div>
+            <div class="text-center">
+                <div id="stat-uptime" class="text-3xl md:text-4xl font-display font-bold gold-gradient mb-2">0%</div>
+                <div class="text-[10px] font-bold tracking-widest uppercase text-slate-500">Creative Uptime</div>
+            </div>
+            <div class="text-center">
+                <div id="stat-active" class="text-3xl md:text-4xl font-display font-bold gold-gradient mb-2">24/7</div>
+                <div class="text-[10px] font-bold tracking-widest uppercase text-slate-500">Muse Active</div>
+            </div>
+            </div>
+            </section>
+
+    <!-- Features Section -->
+    <section id="features" class="py-32 px-6">
+        <div class="max-w-7xl mx-auto">
+            <div class="text-center mb-20">
+                <h2 class="section-heading text-5xl mb-4">Crafted for the <span class="gold-gradient">Inspired.</span></h2>
+                <p class="text-slate-400 max-w-2xl mx-auto">Leveraging state-of-the-art AI to provide a unique
+                    intersection of philosophy and digital art.</p>
+            </div>
+    
+            <div class="grid md:grid-cols-3 gap-8">
+                <!-- Feature 1 -->
+                <div
+                    class="glass p-10 rounded-3xl border border-white/5 hover:border-gold/20 transition-all duration-500 group">
+                    <div
+                        class="w-14 h-14 bg-indigo-950/50 rounded-2xl flex items-center justify-center mb-8 border border-white/5 group-hover:scale-110 transition-transform">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-gold" fill="none" viewBox="0 0 24 24"
+                            stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold mb-4">Semantic Wisdom</h3>
+                    <p class="text-slate-400 text-sm leading-relaxed mb-6">Search through thousands of philosophical
+                        insights using natural language. LEVI understands the context, not just keywords.</p>
+                    <span
+                        class="px-3 py-1 bg-white/5 rounded-full text-[9px] font-bold tracking-widest uppercase text-slate-500">Sentence-Transformers</span>
+                </div>
+    
+                <!-- Feature 2 -->
+                <div
+                    class="glass p-10 rounded-3xl border border-white/5 hover:border-gold/20 transition-all duration-500 group">
+                    <div
+                        class="w-14 h-14 bg-indigo-950/50 rounded-2xl flex items-center justify-center mb-8 border border-white/5 group-hover:scale-110 transition-transform">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-gold" fill="none" viewBox="0 0 24 24"
+                            stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 002-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold mb-4">Visual Synthesis</h3>
+                    <p class="text-slate-400 text-sm leading-relaxed mb-6">Transform text into stunning artistic visuals.
+                        Every quote can be brought to life with custom styles and backgrounds.</p>
+                    <span
+                        class="px-3 py-1 bg-white/5 rounded-full text-[9px] font-bold tracking-widest uppercase text-slate-500">Stable
+                        Diffusion</span>
+                </div>
+    
+                <!-- Feature 3 -->
+                <div
+                    class="glass p-10 rounded-3xl border border-white/5 hover:border-gold/20 transition-all duration-500 group">
+                    <div
+                        class="w-14 h-14 bg-indigo-950/50 rounded-2xl flex items-center justify-center mb-8 border border-white/5 group-hover:scale-110 transition-transform">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-gold" fill="none" viewBox="0 0 24 24"
+                            stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold mb-4">Contextual Chat</h3>
+                    <p class="text-slate-400 text-sm leading-relaxed mb-6">Engage in deep, meaningful conversations with
+                        LEVI. It remembers your journey and offers personalized guidance.</p>
+                    <span
+                        class="px-3 py-1 bg-white/5 rounded-full text-[9px] font-bold tracking-widest uppercase text-slate-500">DistilGPT2
+                        + Rasa</span>
+                </div>
+            </div>
         </div>
     </section>
 
-    <!-- Daily Inspiration Section -->
-    <section class="w-full max-w-3xl mx-auto mb-20 animate-fade-in delay-200">
-        <div id="daily-quote-card" class="glass-card p-10 rounded-[2.5rem] relative overflow-hidden text-center group">
-            <!-- Dynamic Background -->
-            <div id="daily-bg"
-                class="absolute inset-0 bg-cover bg-center opacity-10 transition-transform duration-700 group-hover:scale-110">
+    <!-- AI Chat Demo Section -->
+    <section id="chat-demo" class="py-32 px-6 bg-indigo-950/20">
+        <div class="max-w-7xl mx-auto grid lg:grid-cols-2 gap-20 items-center">
+            <div class="relative order-2 lg:order-1">
+                <div class="glass p-6 rounded-[2.5rem] border border-white/10 shadow-2xl h-[500px] flex flex-col">
+                    <div class="flex items-center justify-between pb-6 border-b border-white/5 mb-6">
+                        <div class="flex items-center space-x-4">
+                            <div
+                                class="w-12 h-12 rounded-full bg-gold/20 flex items-center justify-center border border-gold/30">
+                                <span class="font-display text-xl text-gold font-bold">L</span>
+                            </div>
+                            <div>
+                                <div class="text-sm font-bold">LEVI AI</div>
+                                <div class="text-[10px] text-emerald-400 flex items-center">
+                                    <span class="w-1.5 h-1.5 bg-emerald-400 rounded-full mr-2 animate-pulse"></span>
+                                    Live
+                                </div>
+                            </div>
+                        </div>
+                        <button id="clear-chat"
+                            class="text-[9px] font-bold tracking-widest uppercase text-slate-500 hover:text-gold transition-colors">Clear
+                            Chat</button>
+                    </div>
+    
+                    <div id="chat-messages" class="flex-grow overflow-y-auto space-y-4 pr-2 custom-scrollbar">
+                        <div class="flex justify-start">
+                            <div class="glass px-5 py-3 rounded-2xl rounded-tl-none max-w-[80%] text-sm border-white/5">
+                                Greetings, seeker. What wisdom shall we explore today?
+                            </div>
+                        </div>
+                        <div class="flex justify-end">
+                            <div
+                                class="bg-gold text-space px-5 py-3 rounded-2xl rounded-tr-none max-w-[80%] text-sm font-medium">
+                                Tell me something about the nature of time.
+                            </div>
+                        </div>
+                        <div class="flex justify-start">
+                            <div class="glass px-5 py-3 rounded-2xl rounded-tl-none max-w-[80%] text-sm border-white/5">
+                                <div class="flex items-center space-x-2 mb-2">
+                                    <span class="w-1 h-1 bg-gold rounded-full"></span>
+                                    <span class="text-[9px] font-bold tracking-widest uppercase text-gold/80">Generating
+                                        Quote</span>
+                                </div>
+                                "Time is not a river that flows, but a canvas that expands with every breath we take."
+                            </div>
+                        </div>
+                        <div id="typing-indicator" class="flex justify-start opacity-0 transition-opacity">
+                            <div class="glass px-5 py-3 rounded-2xl rounded-tl-none border-white/5 flex space-x-1">
+                                <div class="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce"></div>
+                                <div class="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce typing-dot-2"></div>
+                                <div class="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce typing-dot-3"></div>
+                            </div>
+                        </div>
+                    </div>
+    
+                    <div class="mt-6">
+                        <div class="flex items-center space-x-2 mb-4">
+                            <button
+                                class="lang-btn text-[9px] font-bold px-3 py-1 rounded-full bg-gold text-space transition-all active"
+                                data-lang="en">English</button>
+                            <button
+                                class="lang-btn text-[9px] font-bold px-3 py-1 rounded-full bg-white/5 text-slate-400 transition-all"
+                                data-lang="hi">Hindi</button>
+                        </div>
+                        <div class="flex space-x-3">
+                            <input type="text" placeholder="Ask about life, stoicism, or art..."
+                                class="flex-grow bg-space/50 border border-white/5 rounded-xl px-5 py-3 text-sm focus:outline-none focus:border-gold/30">
+                            <button class="p-3 bg-gold text-space rounded-xl hover:bg-gold-light transition-all"
+                                aria-label="Send Message">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                                    stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <!-- Floating elements -->
+                <div class="absolute -bottom-6 -right-6 glass p-4 rounded-2xl border border-gold/20 animate-float">
+                    <div class="text-[10px] font-bold text-gold uppercase mb-1">Hindi Active</div>
+                    <div class="text-xs italic">"समय ही सब कुछ है।"</div>
+                </div>
             </div>
-            <div class="absolute inset-0 bg-gradient-to-b from-transparent via-bg-primary/40 to-bg-primary"></div>
+    
+            <div class="order-1 lg:order-2">
+                <h2 class="section-heading text-5xl mb-8">Conversations with <span
+                        class="gold-gradient italic">Depth.</span></h2>
+                <p class="text-slate-400 mb-10 text-lg">LEVI isn't just a chatbot. It's a multilingual philosophical
+                    companion that
+                    adapts to your mood and intent.</p>
+                <ul class="space-y-6">
+                    <li class="flex items-start space-x-4">
+                        <div
+                            class="w-6 h-6 rounded-full bg-gold/10 flex items-center justify-center mt-1 border border-gold/20">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-gold" fill="none"
+                                viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-white">Multilingual Fluency</h4>
+                            <p class="text-slate-400 text-sm">Switch seamlessly between English and Hindi.</p>
+                        </div>
+                    </li>
+                    <li class="flex items-start space-x-4">
+                        <div
+                            class="w-6 h-6 rounded-full bg-gold/10 flex items-center justify-center mt-1 border border-gold/20">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-gold" fill="none"
+                                viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-white">Mood Awareness</h4>
+                            <p class="text-slate-400 text-sm">LEVI detects your emotional state and adjusts its tone.</p>
+                        </div>
+                    </li>
+                    </ul>
+            </div>
+        </div>
+    </section>
+<!-- Gallery Section -->
+<section id="gallery" class="py-32 px-6">
+    <div class="max-w-7xl mx-auto text-center mb-20">
+        <h2 class="section-heading text-5xl mb-4">The <span class="gold-gradient">Visual</span> Archive.</h2>
+        <p class="text-slate-400">A collection of wisdom synthesized into artistic visions.</p>
+    </div>
+
+    <div class="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+        <!-- Gallery Item 1 -->
+        <div class="group relative overflow-hidden rounded-[2rem] glass border border-white/5 aspect-square">
+            <img src="https://images.unsplash.com/photo-1464802686167-b939a67e06a1?auto=format&fit=crop&q=80"
+                alt="Cosmic Art"
+                class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-50">
+            <div class="absolute inset-0 bg-gradient-to-t from-space via-transparent to-transparent"></div>
+            <div class="absolute bottom-8 left-8 right-8">
+                <p class="font-display text-xl italic mb-4 leading-relaxed">"The universe is not outside of you. Look
+                    inside
+                    yourself; everything that you want, you already are."</p>
+                <div class="flex items-center justify-between">
+                    <span class="text-[10px] font-bold tracking-widest uppercase text-gold">Rumi</span>
+                    <button class="text-white hover:text-gold transition-colors" aria-label="Like Quote">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                            stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Gallery Item 2 -->
+        <div class="group relative overflow-hidden rounded-[2rem] glass border border-white/5 aspect-square">
+            <img src="https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&q=80"
+                alt="Nature Art"
+                class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-50">
+            <div class="absolute inset-0 bg-gradient-to-t from-space via-transparent to-transparent"></div>
+            <div class="absolute bottom-8 left-8 right-8">
+                <p class="font-display text-xl italic mb-4 leading-relaxed">"In every walk with nature, one receives
+                    far
+                    more than he seeks."</p>
+                <div class="flex items-center justify-between">
+                    <span class="text-[10px] font-bold tracking-widest uppercase text-gold">John Muir</span>
+                    <button class="text-white hover:text-gold transition-colors" aria-label="Like Quote">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                            stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    
+            <!-- Generate Item -->
+            <div
+                class="flex flex-col items-center justify-center p-12 rounded-[2rem] border-2 border-dashed border-white/10 hover:border-gold/30 transition-all cursor-pointer group">
+                <div
+                    class="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-gold" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                </div>
+                <h3 class="text-lg font-bold mb-2">Your Turn</h3>
+                <p class="text-slate-500 text-sm text-center">Synthesize your own vision using LEVI Studio.</p>
+            </div>
+            </div>
+            <div class="mt-16 text-center">
+                <button id="view-all-feed"
+                    class="px-8 py-4 glass text-gold font-bold rounded-xl hover:bg-gold hover:text-space transition-all duration-300 border border-gold/20 transform hover:-translate-y-1">
+                    View More Wisdom
+                </button>
+            </div>
+    </section>
+    
+    <!-- Daily Wisdom -->
+    <section class="py-32 px-6">
+        <div class="max-w-4xl mx-auto relative">
+            <div class="absolute -top-10 -left-10 text-9xl font-display text-white/5 pointer-events-none italic">"</div>
+            <div class="glass p-16 rounded-[3rem] border border-white/10 text-center relative overflow-hidden">
+                <div class="absolute top-0 left-0 w-full h-1 bg-gold/20"></div>
+                <div class="text-[10px] font-bold tracking-[0.3em] uppercase text-gold mb-10">Daily Wisdom — <span
+                        id="daily-category">Philosophical</span></div>
+                <h3 id="daily-quote" class="font-display text-4xl md:text-5xl italic leading-tight mb-10">
+                    "The quiet mind is the source of all artistic creation. Let the noise fade, and the muse will
+                    speak."
+                </h3>
+                <div id="daily-author" class="text-sm font-bold tracking-widest uppercase text-slate-400">LEVI AI</div>
+                <div class="flex items-center justify-center space-x-4 mt-6">
+                    <div class="w-10 h-[1px] bg-white/20"></div>
+                    <div class="w-10 h-[1px] bg-white/20"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="py-32 px-6 overflow-hidden">
+        <div class="max-w-7xl mx-auto glass p-20 rounded-[4rem] border border-white/5 relative overflow-hidden text-center">
+            <div class="orb w-[300px] h-[300px] bg-gold/10 top-[-150px] left-[-150px] opacity-20"></div>
+            <div class="orb w-[300px] h-[300px] bg-indigo-600/10 bottom-[-150px] right-[-150px] opacity-20"></div>
     
             <div class="relative z-10">
-                <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-violet-500 to-emerald-500"></div>
-                <h3 class="mood-selector-title text-sm font-bold uppercase tracking-widest text-primary mb-6">Daily
-                    Inspiration</h3>
-                <p id="daily-quote-text" class="text-2xl md:text-3xl italic font-serif leading-relaxed mb-6 text-white/90">
-                    "Loading your daily dose of wisdom..."
-                </p>
-                <p id="daily-quote-author" class="text-lg text-emerald-400 font-semibold">— LEVI</p>
+                <h2 class="section-heading text-6xl mb-8">Begin Your <span class="gold-gradient italic">Journey.</span>
+                </h2>
+                <p class="text-slate-400 max-w-xl mx-auto mb-12 text-lg">Join a community of thinkers and creators
+                    exploring the frontiers of AI-driven wisdom.</p>
+                <div class="flex flex-wrap justify-center gap-6">
+                    <a href="auth.html"
+                        class="px-10 py-5 bg-gold text-space font-bold rounded-2xl hover:bg-gold-light transition-all shadow-xl shadow-gold/20">Create
+                        Free Account</a>
+                    <a href="feed.html"
+                        class="px-10 py-5 glass text-white font-bold rounded-2xl hover:bg-white/5 transition-all border border-white/10">Explore
+                        the Feed</a>
+                </div>
             </div>
-        </div>
-    </section>
-    
-    <!-- Feature Showcase Section -->
-    <section class="w-full max-w-7xl mx-auto mb-32 animate-fade-in delay-500">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div class="glass-card p-8 rounded-3xl border-white/5 hover:border-violet-500/30 transition-all">
-                <div class="text-3xl mb-4">🌍</div>
-                <h4 class="text-xl font-bold mb-3 text-main">Global Wisdom</h4>
-                <p class="text-sm text-muted">Connected to the world's largest open-source quote archives (ZenQuotes,
-                    Quotable) for fresh, daily inspiration.</p>
-            </div>
-            <div class="glass-card p-8 rounded-3xl border-white/5 hover:border-emerald-500/30 transition-all">
-                <div class="text-3xl mb-4">🎨</div>
-                <h4 class="text-xl font-bold mb-3 text-main">Artistic Engine</h4>
-                <p class="text-sm text-muted">Generating high-end visual art using open-source image providers (Unsplash,
-                    LoremFlickr) and LEVI's design logic.</p>
-            </div>
-            <div class="glass-card p-8 rounded-3xl border-white/5 hover:border-pink-500/30 transition-all">
-                <div class="text-3xl mb-4">🧠</div>
-                <h4 class="text-xl font-bold mb-3 text-main">Hybrid AI</h4>
-                <p class="text-sm text-muted">Seamlessly switching between high-performance local models and lightweight
-                    fallbacks for 100% reliability.</p>
-            </div>
-        </div>
-    </section>
-    
-    <!-- What's New Section -->
-    <section class="w-full max-w-7xl mx-auto mb-32 animate-fade-in delay-700">
-        <h2 class="text-4xl font-bold text-center text-white mb-12">What's New: The LEVI Evolution</h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div class="glass-card p-8 rounded-3xl border-white/5 hover:border-violet-500/30 transition-all">
-                <div class="text-3xl mb-4">🧠</div>
-                <h4 class="text-xl font-bold mb-3 text-main">Smarter Conversations</h4>
-                <p class="text-sm text-muted">LEVI's conversational AI has been upgraded. It now understands a wider range
-                    of prompts, allowing for more natural and meaningful interactions. Ask anything, and discover new depths
-                    of wisdom.</p>
-            </div>
-            <div class="glass-card p-8 rounded-3xl border-white/5 hover:border-emerald-500/30 transition-all">
-                <div class="text-3xl mb-4">🖼️</div>
-                <h4 class="text-xl font-bold mb-3 text-main">Enhanced Visuals</h4>
-                <p class="text-sm text-muted">The visual generation engine has been completely overhauled. Experience more
-                    artistic and inspiring images with improved typography, dynamic layouts, and stunning details. Your
-                    words have never looked so beautiful.</p>
-            </div>
-        </div>
-        <div class="text-center mt-12">
-            <a href="chat.html" class="btn-primary text-lg px-10 py-4">Experience the New LEVI</a>
         </div>
     </section>
 
-    <!-- Mood Selector Section -->
-    <section class="w-full max-w-4xl mx-auto text-center animate-fade-in delay-400 mb-20">
-        <h3 class="mood-selector-title text-2xl font-bold mb-8">How are you feeling today?</h3>
-        <div class="flex flex-wrap justify-center gap-4 mb-12">
-            <button onclick="generateFromMood('Inspiring')"
-                class="glass hover:border-violet-500 px-6 py-3 rounded-xl transition-all hover:-translate-y-1">🌟
-                Inspiring</button>
-            <button onclick="generateFromMood('Calm')"
-                class="glass hover:border-emerald-500 px-6 py-3 rounded-xl transition-all hover:-translate-y-1">🍃
-                Calm</button>
-            <button onclick="generateFromMood('Energetic')"
-                class="glass hover:border-pink-500 px-6 py-3 rounded-xl transition-all hover:-translate-y-1">⚡
-                Energetic</button>
-            <button onclick="generateFromMood('Stoic')"
-                class="glass hover:border-slate-500 px-6 py-3 rounded-xl transition-all hover:-translate-y-1">🏛️
-                Stoic</button>
-            <button onclick="generateFromMood('Cyberpunk')"
-                class="glass hover:border-fuchsia-500 px-6 py-3 rounded-xl transition-all hover:-translate-y-1">🌃
-                Cyberpunk</button>
-            <button onclick="generateFromMood('Zen')"
-                class="glass hover:border-green-500 px-6 py-3 rounded-xl transition-all hover:-translate-y-1">🧘
-                Zen</button>
-            <button onclick="generateFromMood('Philosophical')"
-                class="glass hover:border-amber-500 px-6 py-3 rounded-xl transition-all hover:-translate-y-1">📖
-                Philosophical</button>
+    <!-- Footer -->
+    <footer class="pt-20 pb-10 px-6 border-t border-white/5">
+        <div class="max-w-7xl mx-auto grid md:grid-cols-4 gap-12 mb-20">
+            <div class="col-span-1 md:col-span-1">
+                <a href="index.html"
+                    class="font-display text-3xl font-bold gold-gradient tracking-wider mb-6 block">LEVI</a>
+                <p class="text-slate-500 text-sm leading-relaxed">Synthesizing intelligence into artistic wisdom. Your
+                    personal muse for the digital age.</p>
+            </div>
+            <div>
+                <h4 class="text-xs font-bold tracking-widest uppercase text-slate-400 mb-6">Product</h4>
+                <ul class="space-y-4 text-sm text-slate-500">
+                    <li><a href="chat.html" class="hover:text-gold transition-colors">AI Chat</a></li>
+                    <li><a href="studio.html" class="hover:text-gold transition-colors">Studio</a></li>
+                    <li><a href="quotes.html" class="hover:text-gold transition-colors">Explore</a></li>
+                </ul>
+            </div>
+            <div>
+                <h4 class="text-xs font-bold tracking-widest uppercase text-slate-400 mb-6">Community</h4>
+                <ul class="space-y-4 text-sm text-slate-500">
+                    <li><a href="feed.html" class="hover:text-gold transition-colors">Public Feed</a></li>
+                    <li><a href="#" class="hover:text-gold transition-colors">Discord</a></li>
+                    <li><a href="#" class="hover:text-gold transition-colors">Twitter</a></li>
+                </ul>
+            </div>
+            <div>
+                <h4 class="text-xs font-bold tracking-widest uppercase text-slate-400 mb-6">Legal</h4>
+                <ul class="space-y-4 text-sm text-slate-500">
+                    <li><a href="privacy.html" class="hover:text-gold transition-colors">Privacy Policy</a></li>
+                    <li><a href="terms.html" class="hover:text-gold transition-colors">Terms of Service</a></li>
+                </ul>
+            </div>
         </div>
-    </section>
-
-    <!-- Footer with Analytics -->
-    <footer class="w-full max-w-7xl mx-auto border-t border-white/10 pt-12 pb-8 text-center">
-        <div class="flex flex-col md:flex-row justify-between items-center gap-6 text-muted text-sm">
-            <div>© 2026 LEVI AI. All artistic rights reserved.</div>
-            <div id="analytics-display" class="glass px-4 py-2 rounded-full">
-                Loading community stats...
-            </div>
-            <div class="flex gap-4">
-                <a href="privacy.html" class="hover:text-primary transition-colors">Privacy</a>
-                <a href="terms.html" class="hover:text-primary transition-colors">Terms</a>
-            </div>
+        <div
+            class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center text-[10px] font-bold tracking-[0.2em] uppercase text-slate-600">
+            <div>© 2026 LEVI AI Project</div>
+            <div class="mt-4 md:mt-0">Powered by Gemini-3-Flash & Render</div>
         </div>
     </footer>
-<script type="module">
-    import { getDailyQuote, generateQuote, getAnalytics } from './js/api.js';
 
-    async function init() {
-        loadDaily();
-        loadStats();
-    }
-
-    async function loadDaily() {
-        try {
-            const data = await getDailyQuote();
-            document.getElementById('daily-quote-text').innerText = `"${data.quote}"`;
-            document.getElementById('daily-quote-author').innerText = `— ${data.author}`;
-
-            // Set dynamic background from open source
-            const bgEl = document.getElementById('daily-bg');
-            if (bgEl) {
-                bgEl.style.backgroundImage = `url('https://loremflickr.com/1080/400/abstract,nature,art/all?lock=${Math.floor(Math.random() * 1000)}')`;
-            }
-        } catch (err) {
-            console.error(err);
-            document.getElementById('daily-quote-text').innerText = "Believe in yourself and all that you are.";
-        }
-    }
-
-    async function loadStats() {
-        try {
-            const stats = await getAnalytics();
-            document.getElementById('analytics-display').innerText = `Total Inspirations: ${stats.total_chats || 0} ✨`;
-        } catch (err) {
-            document.getElementById('analytics-display').style.display = 'none';
-        }
-    }
-
-    window.generateFromMood = async (mood) => {
-        const quoteText = document.getElementById('daily-quote-text');
-        const quoteAuthor = document.getElementById('daily-quote-author');
-        const card = document.getElementById('daily-quote-card');
-
-        quoteText.classList.add('opacity-50');
-        quoteAuthor.innerText = "LEVI is thinking...";
-
-        try {
-            const data = await generateQuote(mood, mood);
-            const quote = data.generated_quote || "The best way to predict the future is to create it.";
-
-            // Simple parsing for "Quote" - Author format
-            let finalQuote = quote;
-            let finalAuthor = "LEVI";
-            if (quote.includes(' - ')) {
-                [finalQuote, finalAuthor] = quote.split(' - ');
-            }
-
-            quoteText.innerText = finalQuote.replace(/"/g, '');
-            quoteAuthor.innerText = `— ${finalAuthor}`;
-
-            // Optional: Add a subtle animation to the card
-            card.classList.add('animate-pulse-once');
-            setTimeout(() => card.classList.remove('animate-pulse-once'), 1000);
-
-        } catch (err) {
-            console.error("Error generating quote from mood:", err);
-            quoteText.innerText = "The stars align for those who seek.";
-            quoteAuthor.innerText = "— LEVI";
-        } finally {
-            quoteText.classList.remove('opacity-50');
-        }
-    };
-
-    init();
-
-                                                                                                    if ('serviceWorker' in navigator) {
-                                                                                                        window.addEventListener('load', () => {
-                                                                                                            navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW failed:', err));
-                                                                                                        });
-                                                                                                    }
-                                                                                                </script>
+<script type="module" src="./js/index.js"></script>
 </body>
+
 </html>

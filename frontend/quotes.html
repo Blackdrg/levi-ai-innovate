@@ -3,53 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#8B5CF6">
-    <title>LEVI Gallery - AI Artistic Inspiration & Curated Wisdom</title>
+    <title>LEVI Gallery - AI Artistic Inspiration</title>
     
     <!-- SEO & PWA -->
-    <meta name="description"
-        content="Explore the LEVI Gallery. A curated collection of AI-enhanced wisdom, philosophical quotes, and stunning visual art.">
-    <meta name="keywords" content="quote gallery, AI art, wisdom collection, inspiration, LEVI gallery">
-    <link rel="canonical" href="https://levi-ai.example.com/quotes.html">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="description" content="Explore the LEVI Gallery. A curated collection of AI-enhanced wisdom and artistic quotes.">
+    <meta name="theme-color" content="#8B5CF6">
+    <meta name="msapplication-navbutton-color" content="#8B5CF6">
+    <meta name="apple-mobile-web-app-status-bar-style" content="#8B5CF6">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="https://img.icons8.com/fluency/192/000000/brain.png">
-    
-    <!-- OpenGraph / Social -->
-    <meta property="og:title" content="LEVI AI Gallery - Curated Wisdom & Art">
-    <meta property="og:description" content="Discover a world of inspiration. Explore AI-generated quotes and visuals.">
-    <meta property="og:url" content="https://levi-ai.example.com/quotes.html">
-    <meta property="og:type" content="website">
-    <meta property="og:image" content="https://img.icons8.com/fluency/512/000000/brain.png">
-    <meta name="twitter:card" content="summary_large_image">
 
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="css/styles.css">
     <link rel="stylesheet" href="css/animations.css">
     <script src="js/quotes.js" type="module" defer></script>
-    <script src="js/ui.js" type="module" defer></script>
-    <!-- Vercel Analytics & Speed Insights -->
-    <script defer src="/_vercel/insights/script.js"></script>
-    <script defer src="/_vercel/speed-insights/script.js"></script>
+    <script src="js/ui.js" defer></script>
 </head>
 <body class="bg-primary text-main min-h-screen p-6 md:p-12">
     <!-- Navigation -->
-    <nav class="w-full max-w-7xl mx-auto flex justify-between items-center mb-16 p-4">
-        <a href="index.html"
-            class="text-2xl font-black bg-gradient-to-r from-violet-400 to-emerald-400 bg-clip-text text-transparent hover:opacity-80 transition-opacity">LEVI</a>
-        <div class="flex flex-wrap gap-3 items-center justify-end">
-            <button onclick="window.toggleLanguage()" class="glass px-3 py-2 rounded-xl text-xs hover:bg-white/5 transition-all">🌐
-                EN/HI</button>
+    <nav class="max-w-7xl mx-auto mb-12 flex justify-between items-center">
+        <a href="index.html" class="flex items-center gap-2 group">
+            <span class="text-2xl font-black bg-gradient-to-r from-violet-400 to-emerald-400 bg-clip-text text-transparent group-hover:opacity-80 transition-opacity">LEVI</span>
+        </a>
+        <div class="flex gap-4 items-center">
+            <button onclick="window.toggleLanguage()" class="glass px-3 py-2 rounded-xl text-xs hover:bg-white/5 transition-all">🌐 EN/HI</button>
             <button id="dark-toggle" class="glass p-2 rounded-xl hover:bg-white/5 transition-all">☀️</button>
-            <a href="chat.html"
-                class="glass px-4 py-2 rounded-xl hover:bg-white/5 transition-all text-xs md:text-sm font-medium">Chat</a>
-            <a href="studio.html"
-                class="glass px-4 py-2 rounded-xl hover:bg-white/5 transition-all text-xs md:text-sm font-medium">Studio</a>
-            <a href="feed.html"
-                class="glass px-4 py-2 rounded-xl hover:bg-white/5 transition-all text-xs md:text-sm font-medium">Feed</a>
-            <a href="quotes.html"
-                class="glass px-4 py-2 rounded-xl hover:bg-white/5 transition-all text-xs md:text-sm font-medium">Explore</a>
+            <a href="chat.html" class="btn-primary px-6 py-2 rounded-xl text-sm font-medium">Chat Now</a>
         </div>
     </nav>
 
@@ -76,9 +55,7 @@
                     <button class="mood-btn glass hover:border-pink-500 px-4 py-2 rounded-xl text-xs transition-all" data-mood="energetic">⚡ Energetic</button>
                     <button class="mood-btn glass hover:border-slate-500 px-4 py-2 rounded-xl text-xs transition-all" data-mood="stoic">🏛️ Stoic</button>
                     <button class="mood-btn glass hover:border-fuchsia-500 px-4 py-2 rounded-xl text-xs transition-all" data-mood="cyberpunk">🌃 Cyberpunk</button>
-                    <button class="mood-btn glass hover:border-indigo-500 px-4 py-2 rounded-xl text-xs transition-all" data-mood="zen">🧘 Zen</button>
                     <button class="mood-btn glass hover:border-amber-500 px-4 py-2 rounded-xl text-xs transition-all" data-mood="philosophical">📖 Philosophical</button>
-                    <button onclick="window.loadQuotes()" class="glass px-4 py-2 rounded-xl text-xs hover:bg-white/10 ml-auto border-violet-500/50 transition-all" title="Shuffle Archives">🔄 Shuffle</button>
                 </div>
 
             </div>

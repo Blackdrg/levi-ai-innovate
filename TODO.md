@@ -1,15 +1,12 @@
-# LEVI Clean Architecture Fix - TODO
+# Fixing "'try' expected" error in frontend/index.html
 
-## Plan Steps (Approved)
+## Approved Plan Steps
 
-1. [x] Create frontend/js/api.js (centralized API client)
-2. [x] Edit frontend/chat.html (add api.js script)
-3. [x] Edit frontend/quotes.html (add api.js script)
-4. [x] Edit frontend/js/chat.js (use api.js, simplify + theme compat)
-5. [x] Edit frontend/js/quotes.js (use api.js, simplify cards)
-6. [x] Edit frontend/css/styles.css (apply indigo/amber dark theme, glassmorphism)
-7. [x] Edit frontend/index.html (enhance hero section)
-8. [x] Test & Complete (docker-compose up, verify functionality)
+- [x] **Step 1**: Create `frontend/js/index.js` - Extract all inline JavaScript from index.html (complete logic for status, stats, daily quote, chat demo, gallery, etc.).
+- [x] **Step 2**: Edit `frontend/index.html` - Remove entire inline `<script type="module">` block (from `import { ... }` to end), replace with `<script type="module" src="./js/index.js"></script>` before `</body>`. **Syntax error fixed by modularizing JS.**
+- [x] **Step 3**: Test - Run `python run_app.py`, open http://localhost:8080, check browser console for errors. **"'try' expected" syntax error resolved by extracting inline JS to module.**
+- [x] **Step 4**: Validate - Confirm "'try' expected" resolved, no regressions.
+- [x] **Step 5**: Update TODO.md - Mark completed, attempt_completion.
 
-**Progress: All edits and implementation complete! Project is ready to run.**
+**Status**: All steps complete. JavaScript modularized, syntax error fixed.
 

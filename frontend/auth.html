@@ -3,87 +3,126 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#8B5CF6">
-    <title>LEVI - Join the Wisdom Circle</title>
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="https://img.icons8.com/fluency/192/000000/brain.png">
-    <!-- OpenGraph / Social -->
-    <meta property="og:title" content="LEVI AI - Join the Community">
-    <meta property="og:description" content="Login to your LEVI account to save and share your creative inspirations.">
-    <meta property="og:url" content="https://levi-ai.example.com/auth.html">
-    <meta property="og:type" content="website">
-    <meta property="og:image" content="https://img.icons8.com/fluency/512/000000/brain.png">
-    <meta name="twitter:card" content="summary">
-
+    <meta name="theme-color" content="#09090f">
+    <title>LEVI Auth — Join the Wisdom Circle</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600;1,700&family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap"
+        rel="stylesheet">
+    <!-- Scripts -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="css/styles.css">
-    <link rel="stylesheet" href="css/animations.css">
-    <script src="js/ui.js" defer></script>
-    <!-- Vercel Analytics & Speed Insights -->
-    <script defer src="/_vercel/insights/script.js"></script>
-    <script defer src="/_vercel/speed-insights/script.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        space: '#09090f',
+                        indigo: {
+                            950: '#1e1b4b',
+                            900: '#312e81',
+                            800: '#3730a3',
+                        },
+                        gold: {
+                            DEFAULT: '#d4af37',
+                            light: '#f1e5ac',
+                            dark: '#996515',
+                        }
+                    },
+                    fontFamily: {
+                        display: ['Cormorant Garamond', 'serif'],
+                        sans: ['DM Sans', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        body {
+            background-color: #09090f;
+            color: #e2e8f0;
+            overflow-x: hidden;
+        }
+    
+        .noise-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('https://www.transparenttextures.com/patterns/stardust.png');
+            opacity: 0.05;
+            pointer-events: none;
+            z-index: 50;
+        }
+    
+        .glass {
+            background: rgba(255, 255, 255, 0.03);
+            -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+    
+        .gold-gradient {
+            background: linear-gradient(to right, #d4af37, #f1e5ac, #996515);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+    </style>
 </head>
-<body class="bg-primary text-main min-h-screen flex flex-col items-center justify-center p-6">
-    <!-- Navigation -->
-    <nav class="fixed top-0 w-full max-w-7xl mx-auto flex justify-between items-center p-6 z-50">
-        <a href="index.html" class="text-2xl font-black bg-gradient-to-r from-violet-400 to-emerald-400 bg-clip-text text-transparent">LEVI</a>
-        <div class="flex gap-4 items-center">
-            <button onclick="window.toggleLanguage()" class="glass px-3 py-2 rounded-xl text-xs hover:bg-white/5 transition-all">🌐 EN/HI</button>
-            <button id="dark-toggle" class="glass p-2 rounded-xl hover:bg-white/5 transition-all">☀️</button>
-        </div>
-    </nav>
+<body class="font-sans min-h-screen flex items-center justify-center px-6">
+    <div class="noise-overlay"></div>
+    <div class="max-w-md w-full relative">
+        <!-- Back link -->
+        <a href="index.html"
+            class="absolute -top-12 left-0 text-sm text-slate-500 hover:text-gold transition-colors flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Back to Home
+        </a>
 
-    <main class="w-full max-w-md animate-fade-in-up">
-        <div class="glass-card p-10 rounded-[2.5rem] relative overflow-hidden">
-            <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-violet-500 to-emerald-500"></div>
-            
-            <div id="auth-header" class="text-center mb-10">
-                <h1 id="auth-title" class="text-3xl font-black mb-2">Welcome Back</h1>
-                <p id="auth-subtitle" class="text-muted">Enter your details to continue your journey.</p>
+        <div class="glass p-10 rounded-[3rem] border border-white/10 shadow-2xl relative overflow-hidden">
+            <div class="text-center mb-10">
+                <a href="index.html" class="font-display text-4xl font-bold gold-gradient tracking-wider mb-6 block">LEVI</a>
+                <h2 id="auth-title" class="text-2xl font-bold mb-2">Welcome Back</h2>
+                <p id="auth-subtitle" class="text-slate-400 text-sm">Enter your details to continue your journey.</p>
             </div>
 
             <form id="auth-form" class="space-y-6">
                 <div>
-                    <label class="block text-sm font-bold text-muted mb-2 px-1 uppercase tracking-widest">Username</label>
-                    <input id="username" type="text" placeholder="your_name" required 
-                        class="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 outline-none focus:ring-2 ring-violet-500/50 transition-all">
+                    <label for="username"
+                        class="block text-[10px] font-bold tracking-widest uppercase text-slate-500 mb-2 ml-4">Username</label>
+                    <input type="text" id="username" required
+                        class="w-full bg-space/50 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:outline-none focus:border-gold/30 transition-all">
                 </div>
                 <div>
-                    <label class="block text-sm font-bold text-muted mb-2 px-1 uppercase tracking-widest">Password</label>
-                    <input id="password" type="password" placeholder="••••••••" required 
-                        class="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 outline-none focus:ring-2 ring-violet-500/50 transition-all">
+                    <label for="password"
+                        class="block text-[10px] font-bold tracking-widest uppercase text-slate-500 mb-2 ml-4">Password</label>
+                    <input type="password" id="password" required
+                        class="w-full bg-space/50 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:outline-none focus:border-gold/30 transition-all">
                 </div>
                 
-                <button type="submit" id="submit-btn" class="btn-primary w-full py-5 rounded-2xl text-lg font-bold">
+                <div id="auth-message" class="hidden text-xs py-3 px-4 rounded-xl text-center"></div>
+                
+                <button type="submit" id="submit-btn"
+                    class="w-full py-4 bg-gold text-space font-bold rounded-2xl hover:bg-gold-light transition-all shadow-xl shadow-gold/20 transform hover:-translate-y-1">
                     Login →
                 </button>
             </form>
 
-            <div class="mt-8 text-center text-sm">
-                <p id="toggle-text" class="text-muted">
-                    Don't have an account? 
-                    <button onclick="toggleAuthMode()" class="text-primary font-bold hover:underline">Create Account</button>
-                </p>
-            </div>
-            
-            <div id="auth-message" class="hidden mt-6 p-4 rounded-xl text-center text-sm bg-red-500/10 text-red-400 border border-red-500/20">
-                Invalid credentials.
+            <div class="mt-8 text-center text-sm text-slate-500">
+                <p id="toggle-text">Don't have an account? <button onclick="toggleAuthMode()"
+                        class="text-gold font-bold hover:underline">Create Account</button></p>
             </div>
         </div>
-    </main>
-
-    <!-- Background Decoration -->
-    <div class="fixed top-0 right-0 w-[600px] h-[600px] bg-violet-600/5 rounded-full blur-[120px] pointer-events-none -z-10"></div>
-    <div class="fixed bottom-0 left-0 w-[400px] h-[400px] bg-emerald-600/5 rounded-full blur-[100px] pointer-events-none -z-10"></div>
-
-    <footer class="fixed bottom-0 w-full border-t border-white/10 py-6 text-center">
-        <div class="flex justify-center gap-8 text-muted text-[10px] uppercase tracking-widest">
-            <a href="privacy.html" class="hover:text-primary transition-colors">Privacy</a>
-            <a href="terms.html" class="hover:text-primary transition-colors">Terms</a>
         </div>
-    </footer>
+
+    <script type="module" src="js/api.js"></script>
     <script type="module" src="js/auth.js"></script>
 </body>
 </html>

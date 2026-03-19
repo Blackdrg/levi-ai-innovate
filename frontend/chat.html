@@ -3,111 +3,209 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#8B5CF6">
-    <title>LEVI Chat - Artistic AI Companion & Wisdom Generator</title>
+    <meta name="theme-color" content="#09090f">
+    <title>LEVI Chat — Cosmic Wisdom</title>
     
-    <!-- SEO & PWA -->
-    <meta name="description"
-        content="Chat with LEVI, your artistic AI companion. Generate unique wisdom and visual art in real-time conversations.">
-    <meta name="keywords" content="AI chat, wisdom generator, artistic AI, LEVI, philosophical AI">
-    <link rel="canonical" href="https://levi-ai.example.com/chat.html">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="https://img.icons8.com/fluency/192/000000/brain.png">
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600;1,700&family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap"
+        rel="stylesheet">
     
-    <!-- OpenGraph / Social -->
-    <meta property="og:title" content="LEVI AI Chat - Real-time Wisdom & Art">
-    <meta property="og:description" content="Talk to LEVI, your AI Muse. Spark your creativity with every message.">
-    <meta property="og:url" content="https://levi-ai.example.com/chat.html">
-    <meta property="og:type" content="website">
-    <meta property="og:image" content="https://img.icons8.com/fluency/512/000000/brain.png">
-    <meta name="twitter:card" content="summary">
+    <!-- Scripts -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="css/styles.css">
-    <link rel="stylesheet" href="css/animations.css">
-    <script src="js/chat.js" type="module" defer></script>
-    <script src="js/ui.js" type="module" defer></script>
-    <!-- Vercel Analytics & Speed Insights -->
-    <script defer src="/_vercel/insights/script.js"></script>
-    <script defer src="/_vercel/speed-insights/script.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        space: '#09090f',
+                        indigo: {
+                            950: '#1e1b4b',
+                            900: '#312e81',
+                            800: '#3730a3',
+                        },
+                        gold: {
+                            DEFAULT: '#d4af37',
+                            light: '#f1e5ac',
+                            dark: '#996515',
+                        }
+                    },
+                    fontFamily: {
+                        display: ['Cormorant Garamond', 'serif'],
+                        sans: ['DM Sans', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        body {
+            background-color: #09090f;
+            color: #e2e8f0;
+            overflow-x: hidden;
+        }
+    
+        .noise-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('https://www.transparenttextures.com/patterns/stardust.png');
+            opacity: 0.05;
+            pointer-events: none;
+            z-index: 50;
+        }
+    
+        .glass {
+            background: rgba(255, 255, 255, 0.03);
+            -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+    
+        .nav-blur {
+            -webkit-backdrop-filter: blur(20px);
+            backdrop-filter: blur(20px);
+            background: rgba(9, 9, 15, 0.8);
+        }
+    
+        .gold-gradient {
+            background: linear-gradient(to right, #d4af37, #f1e5ac, #996515);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+    
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+    
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+    
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(212, 175, 55, 0.2);
+            border-radius: 10px;
+        }
+    
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: rgba(212, 175, 55, 0.4);
+        }
+    
+        .message-bubble {
+            animation: slideIn 0.3s ease-out forwards;
+        }
+    
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+    
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
 </head>
-<body class="bg-primary text-main min-h-screen flex flex-col overflow-hidden">
-    <!-- Navigation -->
-    <nav class="w-full max-w-7xl mx-auto flex justify-between items-center mb-16 p-4 glass border-b border-white/5 z-50">
-        <a href="index.html"
-            class="text-2xl font-black bg-gradient-to-r from-violet-400 to-emerald-400 bg-clip-text text-transparent hover:opacity-80 transition-opacity">LEVI</a>
-        <div class="flex flex-wrap gap-3 items-center justify-end">
-            <button onclick="window.toggleLanguage()" class="glass px-3 py-2 rounded-xl text-xs hover:bg-white/5 transition-all">🌐
-                EN/HI</button>
-            <button id="dark-toggle" class="glass p-2 rounded-xl hover:bg-white/5 transition-all">☀️</button>
-            <a href="chat.html"
-                class="glass px-4 py-2 rounded-xl hover:bg-white/5 transition-all text-xs md:text-sm font-medium">Chat</a>
-            <a href="studio.html"
-                class="glass px-4 py-2 rounded-xl hover:bg-white/5 transition-all text-xs md:text-sm font-medium">Studio</a>
-            <a href="feed.html"
-                class="glass px-4 py-2 rounded-xl hover:bg-white/5 transition-all text-xs md:text-sm font-medium">Feed</a>
-            <a href="quotes.html"
-                class="glass px-4 py-2 rounded-xl hover:bg-white/5 transition-all text-xs md:text-sm font-medium">Explore</a>
+<body class="font-sans min-h-screen flex flex-col">
+    <div class="noise-overlay"></div>
+
+    <!-- Navbar -->
+    <nav class="fixed top-0 left-0 w-full z-40 nav-blur border-b border-white/5">
+        <div class="max-w-7xl mx-auto px-6 h-20 flex justify-between items-center">
+            <a href="index.html" class="font-display text-3xl font-bold gold-gradient tracking-wider">LEVI</a>
+            <div class="hidden md:flex items-center space-x-8">
+                <a href="index.html" class="text-sm font-medium hover:text-gold transition-colors">Home</a>
+                <a href="chat.html" class="text-sm font-medium text-gold transition-colors">AI Chat</a>
+                <a href="studio.html" class="text-sm font-medium hover:text-gold transition-colors">Studio</a>
+                <a href="feed.html" class="text-sm font-medium hover:text-gold transition-colors">Feed</a>
+                <a href="quotes.html" class="text-sm font-medium hover:text-gold transition-colors">Explore</a>
+                <a href="auth.html" id="nav-auth-btn"
+                    class="px-5 py-2 glass rounded-full text-sm font-semibold border border-gold/20 text-gold hover:bg-gold hover:text-space transition-all duration-300">Sign
+                    In</a>
+            </div>
+            <button class="md:hidden text-white" aria-label="Toggle Menu">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+            </button>
         </div>
     </nav>
 
-    <!-- Chat Interface -->
-    <div id="chat-container" class="flex-1 max-w-5xl mx-auto w-full flex flex-col p-4 md:p-8 relative">
-        <!-- Messages Area -->
-        <div id="messages" class="flex-1 overflow-y-auto space-y-6 mb-6 pr-4 custom-scrollbar">
-            <!-- Welcome Message -->
-            <div class="bot-message message-bubble animate-fade-in">
-                <div class="text-xs font-bold uppercase tracking-widest text-emerald-400 mb-2">LEVI AI</div>
-                <div class="text-lg">Greetings, seeker of wisdom. I am LEVI, your artistic AI companion. How may I inspire you today?</div>
+    <main class="flex-grow pt-32 pb-12 px-6 flex flex-col items-center">
+        <div class="max-w-4xl w-full flex-grow flex flex-col">
+            <div class="text-center mb-8">
+                <h1 class="font-display text-5xl font-bold mb-4">Conversations with <span
+                        class="gold-gradient italic">LEVI</span></h1>
+                <p class="text-slate-400">Ask about life, stoicism, or generate artistic wisdom.</p>
             </div>
-        </div>
-
-        <!-- Input Area -->
-        <div class="glass p-6 rounded-[2rem] border-white/10 shadow-2xl relative">
-            <!-- Mood Quick Select -->
-            <div class="flex flex-wrap gap-2 mb-4">
-                <button class="mood-btn glass hover:border-violet-500 px-3 py-1 rounded-full text-xs transition-all" data-mood="inspiring">✨ Inspiring</button>
-                <button class="mood-btn glass hover:border-emerald-500 px-3 py-1 rounded-full text-xs transition-all" data-mood="calm">🍃 Calm</button>
-                <button class="mood-btn glass hover:border-pink-500 px-3 py-1 rounded-full text-xs transition-all" data-mood="energetic">⚡ Energetic</button>
-                <button class="mood-btn glass hover:border-slate-500 px-3 py-1 rounded-full text-xs transition-all" data-mood="stoic">🏛️ Stoic</button>
-                <button class="mood-btn glass hover:border-fuchsia-500 px-3 py-1 rounded-full text-xs transition-all" data-mood="cyberpunk">🌃 Cyberpunk</button>
-                <button class="mood-btn glass hover:border-amber-500 px-3 py-1 rounded-full text-xs transition-all" data-mood="philosophical">📖 Philosophical</button>
-            </div>
-
-
-            <div class="flex items-center gap-3">
-                <div class="relative flex-1">
-                    <input id="message-input" type="text" 
-                        placeholder="Type your message or ask for wisdom..." 
-                        class="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 focus:ring-2 ring-violet-500/50 outline-none transition-all pr-12">
-                    <button id="mic-btn" class="absolute right-4 top-1/2 -translate-y-1/2 text-muted hover:text-white transition-colors">
-                        🎤
-                    </button>
+    
+            <!-- Chat Window -->
+            <div
+                class="glass rounded-[2.5rem] border border-white/10 shadow-2xl flex-grow flex flex-col overflow-hidden min-h-[500px]">
+                <div id="messages" class="flex-grow overflow-y-auto p-8 space-y-6 custom-scrollbar">
+                    <!-- Messages will be injected here -->
+                    <div class="flex justify-start message-bubble">
+                        <div class="glass px-6 py-4 rounded-3xl rounded-tl-none max-w-[80%] text-sm border-white/5">
+                            Greetings, seeker. I am LEVI. What mysteries of existence shall we explore today?
+                        </div>
+                    </div>
                 </div>
-                <button id="send-btn" class="btn-primary p-4 rounded-2xl" aria-label="Send message" title="Send message">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                    </svg>
-                </button>
-            </div>
-        </div>
-    </div>
 
-    <!-- Background Decoration -->
-    <div class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-violet-600/10 rounded-full blur-[120px] pointer-events-none -z-10"></div>
-    <div class="fixed bottom-0 right-0 w-[500px] h-[500px] bg-emerald-600/10 rounded-full blur-[100px] pointer-events-none -z-10"></div>
-
-    <footer class="w-full max-w-7xl mx-auto border-t border-white/10 pt-8 pb-4 text-center mt-auto">
-        <div class="flex flex-col md:flex-row justify-between items-center gap-4 text-muted text-[10px] px-4">
-            <div>© 2026 LEVI AI.</div>
-            <div class="flex gap-4">
-                <a href="privacy.html" class="hover:text-primary transition-colors">Privacy</a>
-                <a href="terms.html" class="hover:text-primary transition-colors">Terms</a>
-            </div>
+                <!-- Input Area -->
+                <div class="p-6 border-t border-white/5 bg-space/30">
+                    <div class="flex flex-wrap gap-2 mb-4">
+                        <button
+                            class="mood-btn px-4 py-1.5 glass rounded-full text-[10px] font-bold tracking-widest uppercase text-gold/60 border-gold/10 hover:border-gold/30 hover:text-gold transition-all"
+                            data-mood="inspiring">✨ Inspiring</button>
+                        <button
+                            class="mood-btn px-4 py-1.5 glass rounded-full text-[10px] font-bold tracking-widest uppercase text-gold/60 border-gold/10 hover:border-gold/30 hover:text-gold transition-all"
+                            data-mood="stoic">🏛️ Stoic</button>
+                        <button
+                            class="mood-btn px-4 py-1.5 glass rounded-full text-[10px] font-bold tracking-widest uppercase text-gold/60 border-gold/10 hover:border-gold/30 hover:text-gold transition-all"
+                            data-mood="zen">🎋 Zen</button>
+                        <button
+                            class="mood-btn px-4 py-1.5 glass rounded-full text-[10px] font-bold tracking-widest uppercase text-gold/60 border-gold/10 hover:border-gold/30 hover:text-gold transition-all"
+                            data-mood="cyberpunk">🌃 Cyberpunk</button>
+                        </div>
+                    <div class="flex space-x-4">
+                        <div class="flex-grow relative">
+                            <input type="text" id="message-input" placeholder="Ask about life, stoicism, or art..."
+                                class="w-full bg-space/50 border border-white/5 rounded-2xl px-6 py-4 text-sm focus:outline-none focus:border-gold/30 transition-all">
+                            <button id="mic-btn"
+                                class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-gold transition-colors"
+                                aria-label="Voice Input">🎤</button>
+                        </div>
+                        <button id="send-btn"
+                            class="px-8 bg-gold text-space font-bold rounded-2xl hover:bg-gold-light transition-all shadow-lg shadow-gold/20"
+                            aria-label="Send Message">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                            </svg>
+                        </button>
+                        </div>
+                        </div>
+                        </div>
         </div>
-    </footer>
+    </main>
+    
+    <script type="module" src="js/api.js"></script>
+    <script type="module" src="js/chat.js"></script>
+    <script type="module">
+            import { getProfile } from './js/api.js';
+            const user = localStorage.getItem('levi_user');
+            if (user) {
+                document.getElementById('nav-auth-btn').innerText = user;
+                document.getElementById('nav-auth-btn').href = 'my-gallery.html';
+        }
+    </script>
 </body>
 </html>
-
-

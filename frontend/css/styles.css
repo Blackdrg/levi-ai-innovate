@@ -4,7 +4,6 @@
 @tailwind utilities;
 
 :root {
-  /* Dark Theme (Default) */
   --bg-primary: #050B14;
   --bg-secondary: #0D1624;
   --primary: #8B5CF6; /* Violet */
@@ -18,24 +17,25 @@
   --glass-hover: rgba(255, 255, 255, 0.08);
 }
 
-.light {
-  /* Light Theme */
-  --bg-primary: #F8FAFC;
-  --bg-secondary: #FFFFFF;
-  --primary: #6366F1; /* Indigo */
-  --primary-glow: rgba(99, 102, 241, 0.2);
-  --secondary: #059669; /* Emerald */
-  --accent: #DB2777; /* Pink */
-  --text-main: #0F172A;
-  --text-muted: #64748B;
-  --glass-bg: rgba(0, 0, 0, 0.03);
-  --glass-border: rgba(0, 0, 0, 0.08);
-  --glass-hover: rgba(0, 0, 0, 0.05);
-}
-
-
 * {
   box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary) transparent;
+}
+
+/* For better cross-browser scrollbar support */
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--primary);
+  border-radius: 20px;
 }
 
 body {
@@ -152,13 +152,6 @@ input:focus {
 .animate-fade-in {
   animation: fadeIn 0.5s ease-out;
 }
-
-/* Animation Delays */
-.delay-100 { animation-delay: 0.1s; }
-.delay-200 { animation-delay: 0.2s; }
-.delay-300 { animation-delay: 0.3s; }
-.delay-400 { animation-delay: 0.4s; }
-.delay-500 { animation-delay: 0.5s; }
 
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
