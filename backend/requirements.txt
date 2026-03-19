@@ -13,7 +13,9 @@ torchvision>=0.17.0
 torchaudio>=2.2.0
 pillow>=10.3.0
 python-jose[cryptography]>=3.3.0
+# bcrypt 5.x broke passlib 1.7.4 API — pin bcrypt to 4.x
 passlib[bcrypt]>=1.7.4
+bcrypt>=4.0.0,<5.0.0
 python-dotenv>=1.0.1
 pydantic>=2.7.0
 pgvector>=0.3.0
@@ -27,4 +29,3 @@ requests>=2.31.0
 mtranslate>=1.8
 waitress>=3.0.0
 python-multipart>=0.0.9
- 
