@@ -28,8 +28,6 @@ COPY backend/ .
 
 EXPOSE 10000
 
-# --timeout-keep-alive gives Render's port scanner time to detect the port
-# before background model threads finish loading
 CMD uvicorn main:app \
     --host 0.0.0.0 \
     --port ${PORT:-10000} \
