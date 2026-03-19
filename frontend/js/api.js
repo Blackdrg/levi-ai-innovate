@@ -1,86 +1,67 @@
-const API_BASE = "http://127.0.0.1:8000";
+if (window.location.protocol === 'file:') {
+  console.error('[LEVI] Website cannot run via file:// protocol. Please use a local server.');
+  alert('LEVI Error: Run "python run_app.py" and visit http://localhost:8080');
+}
 
-export async function chat(message, session="user1") {
-  const res = await fetch(`${API_BASE}/chat`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      session_id: session,
-      message: message
-    })
-  });
+let hostname = window.location.hostname;
+if (hostname === '0.0.0.0') hostname = '127.0.0.1';
 
-  if (!res.ok) {
-    throw new Error(`API error: ${res.status}`);
+const isLocalDev = window.location.port === '8080' || hostname === 'localhost' || hostname === '127.0.0.1';
+export const API_BASE = isLocalDev
+  ? `${window.location.protocol}//${hostname}:8000`
+  : window.location.origin + '/api';
+
+console.log(`[LEVI] API Base: ${API_BASE}`);
+
+async function apiFetch(endpoint, options = {}) {
+  const url = `${API_BASE}${endpoint}`;
+  const finalOptions = { headers: { 'Content-Type': 'application/json' }, ...options };
+  if (options.body && typeof options.body !== 'string') {
+    finalOptions.body = JSON.stringify(options.body);
   }
-
-  return await res.json();
-}
-
-export async function searchQuotes(text) {
-  const res = await fetch(`${API_BASE}/search_quotes`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      text: text,
-      top_k: 5
-    })
-  });
-
-  if (!res.ok) {
-    throw new Error(`API error: ${res.status}`);
+  try {
+    const res = await fetch(url, finalOptions);
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.detail || `API error: ${res.status}`);
+    }
+    return await res.json();
+  } catch (error) {
+    console.error(`[LEVI] Fetch error for ${endpoint}:`, error);
+    throw error;
   }
-
-  return await res.json();
 }
 
-export async function getDailyQuote() {
-  const res = await fetch(`${API_BASE}/daily_quote`);
-  if (!res.ok) throw new Error("Daily quote failed");
-  return await res.json();
+export async function chat(message, session = 'user1') {
+  const lang = localStorage.getItem('levi_lang') || 'en';
+  return apiFetch('/chat', { method: 'POST', body: { session_id: session, message, lang } });
 }
-
-export async function getAnalytics() {
-  const res = await fetch(`${API_BASE}/analytics`);
-  if (!res.ok) throw new Error("Analytics failed");
-  return await res.json();
+export async function login(username, password) {
+  const formData = new FormData();
+  formData.append('username', username);
+  formData.append('password', password);
+  const res = await fetch(`${API_BASE}/token`, { method: 'POST', body: formData });
+  if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.detail || `Login failed: ${res.status}`); }
+  return res.json();
 }
-
-export async function getHealth() {
-  const res = await fetch(`${API_BASE}/health`);
-  if (!res.ok) throw new Error("Health check failed");
-  return await res.json();
+export async function register(username, password) {
+  return apiFetch('/register', { method: 'POST', body: { username, password } });
 }
-
-export async function getFeed() {
-  // Placeholder for feed logic
-  return [];
+export async function getProfile(token) {
+  return apiFetch('/users/me', { headers: { Authorization: `Bearer ${token}` } });
 }
-
-export async function likeItem(id) {
-  // Placeholder for like logic
-  return { success: true };
+export async function searchQuotes(text, filters = {}) {
+  return apiFetch('/search_quotes', { method: 'POST', body: { text, ...filters, top_k: 5 } });
 }
-
-export async function generateQuote(topic) {
-  const res = await fetch(`${API_BASE}/generate`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      text: topic
-    })
-  });
-
-  if (!res.ok) {
-    throw new Error(`API error: ${res.status}`);
-  }
-
-  return await res.json();
+export async function generateQuote(topic, mood = '') {
+  return apiFetch('/generate', { method: 'POST', body: { text: topic, mood } });
 }
+export async function getDailyQuote() { return apiFetch('/daily_quote'); }
+export async function getAnalytics() { return apiFetch('/analytics'); }
+export async function generateQuoteImage(text, author = 'Unknown', mood = 'neutral', options = {}) {
+  return apiFetch('/generate_image', { method: 'POST', body: { text, author, mood, ...options } });
+}
+export async function getFeed(limit = 20) { return apiFetch(`/feed?limit=${limit}`); }
+export async function likeItem(type, id) { return apiFetch(`/like/${type}/${id}`, { method: 'POST' }); }
 
+window.api = { chat, login, register, getProfile, searchQuotes, generateQuote, getDailyQuote, generateQuoteImage, getAnalytics, getFeed, likeItem };
