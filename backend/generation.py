@@ -1,75 +1,251 @@
-from transformers import pipeline
 import os
 import random
-
+import requests
+import logging
 import threading
+from mtranslate import translate
 
-generator = None
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
+
 HAS_GENERATOR = False
+generator = None
 _gen_lock = threading.Lock()
 
-try:
-    # generator = pipeline('text-generation', model='gpt2', device=-1)  # CPU
-    # HAS_GENERATOR = True
-    pass
-except Exception as e:
-    print(f"Warning: Failed to load text-generation model: {e}")
-    HAS_GENERATOR = False
 
-def generate_response(prompt: str, history: list = None, mood: str = "", max_length: int = 100) -> str:
-    if not HAS_GENERATOR or generator is None:
-        return "I'm currently in 'quote-only' mode. Try asking for a specific topic like 'motivation'!"
+def load_model():
+    """Load text-generation model in background thread — never blocks startup."""
+    def _load():
+        global generator, HAS_GENERATOR
+        try:
+            # Lazy import inside thread — safe even if transformers version varies
+            from transformers import pipeline as hf_pipeline
+            logger.info("Loading text-generation model (background)...")
+            _gen = hf_pipeline("text-generation", model="distilgpt2", device=-1)
+            with _gen_lock:
+                generator = _gen
+                HAS_GENERATOR = True
+            logger.info("Text-generation model loaded successfully.")
+        except ImportError as e:
+            logger.warning(f"transformers.pipeline not available: {e}. Using rule-based fallback.")
+            with _gen_lock:
+                HAS_GENERATOR = False
+        except Exception as e:
+            logger.warning(f"Text-generation model failed to load: {e}. Using rule-based fallback.")
+            with _gen_lock:
+                HAS_GENERATOR = False
 
-    # Build context from history
-    context = ""
-    if history:
-        # Take last 3 exchanges for context
-        for msg in history[-3:]:
-            context += f"User: {msg.get('user', '')}\nBot: {msg.get('bot', '')}\n"
-    
-    full_prompt = f"{context}User: {prompt}\nBot:"
-    
+    t = threading.Thread(target=_load, daemon=True)
+    t.start()
+
+
+# Start loading immediately on import
+load_model()
+
+
+def fetch_open_source_quote(mood: str = "") -> dict:
+    """Fetch a quote from open-source APIs with graceful fallback."""
     try:
-        with _gen_lock:
-            # Adjust generation parameters for better conversation
-            result = generator(
-                full_prompt, 
-                max_new_tokens=max_length,
-                num_return_sequences=1, 
-                do_sample=True, 
-                temperature=0.7,
-                top_p=0.9,
-                pad_token_id=50256, # GPT2 end of text token
-                truncation=True
-            )
-        
-        generated_text = result[0]['generated_text']
-        # Extract only the bot's response
-        if "Bot:" in generated_text:
-            response = generated_text.split("Bot:")[-1].strip()
-        else:
-            response = generated_text.replace(full_prompt, "").strip()
-            
-        # Clean up any trailing User/Bot tags if the model keeps generating
-        response = response.split("User:")[0].split("Bot:")[0].strip()
-        
-        return response or "I'm reflecting on that. What else is on your mind?"
+        resp = requests.get("https://zenquotes.io/api/random", timeout=3)
+        if resp.status_code == 200:
+            data = resp.json()[0]
+            return {"quote": data["q"], "author": data["a"]}
+    except Exception:
+        pass
+
+    try:
+        tag_map = {
+            "inspiring": "inspirational",
+            "calm": "happiness",
+            "energetic": "motivational",
+            "philosophical": "wisdom",
+            "stoic": "stoicism",
+            "zen": "zen",
+        }
+        tag = tag_map.get(mood.lower(), "")
+        url = f"https://api.quotable.io/random{f'?tags={tag}' if tag else ''}"
+        resp = requests.get(url, timeout=3)
+        if resp.status_code == 200:
+            data = resp.json()
+            return {"quote": data["content"], "author": data["author"]}
+    except Exception:
+        pass
+
+    return None
+
+
+def generate_quote(prompt: str, mood: str = "", max_length: int = 60) -> str:
+    """Generate or fetch a quote for a given prompt/mood."""
+    # Try open-source API first (50% of the time for variety)
+    os_quote = fetch_open_source_quote(mood)
+    if os_quote and random.random() < 0.5:
+        return f'"{os_quote["quote"]}" - {os_quote["author"]}'
+
+    with _gen_lock:
+        has = HAS_GENERATOR
+        gen = generator
+
+    if not has or gen is None:
+        # Curated fallback quotes when model isn't available
+        fallbacks = [
+            "The journey of a thousand miles begins with a single step. - Lao Tzu",
+            "In the middle of difficulty lies opportunity. - Albert Einstein",
+            "It always seems impossible until it's done. - Nelson Mandela",
+            "The only way to do great work is to love what you do. - Steve Jobs",
+            "Believe you can and you're halfway there. - Theodore Roosevelt",
+        ]
+        return random.choice(fallbacks)
+
+    base_prompt = f"Create a profound and original quote about '{prompt}' in a {mood or 'thought-provoking'} style:"
+    try:
+        result = gen(
+            base_prompt,
+            max_new_tokens=max_length,
+            num_return_sequences=1,
+            do_sample=True,
+            temperature=0.9,
+            top_p=0.95,
+            pad_token_id=gen.tokenizer.eos_token_id,
+        )
+        text = result[0]["generated_text"].replace(base_prompt, "").strip()
+        if '"' in text:
+            text = text.split('"')[1]
+        return text or "To find the universal, look within the particular."
     except Exception as e:
-        print(f"Generation error: {e}")
-        return "That's an interesting point. Tell me more!"
+        logger.error(f"Quote generation error: {e}")
+        return "The seed of an idea is a universe in waiting."
 
-def generate_quote(prompt: str, mood: str = "", max_length: int = 50) -> str:
-    if not HAS_GENERATOR or generator is None:
-        return "The best way to predict the future is to create it."
-        
-    full_prompt = f"Inspirational quote about {mood or 'life'}: {prompt}\nQuote:"
+
+def generate_response(
+    prompt: str,
+    history: list = None,
+    mood: str = "",
+    max_length: int = 150,
+    lang: str = "en",
+) -> str:
+    """Generate a contextual response — quote or conversational."""
+    logger.info(f"generate_response: '{prompt[:60]}' (lang={lang})")
+
+    if not prompt or not isinstance(prompt, str):
+        return "I am listening, seeker. Your silence is profound."
+
+    input_text = prompt
+    if lang == "hi":
+        try:
+            input_text = translate(prompt, "en", "auto")
+            logger.info(f"Translated to English: {input_text[:60]}")
+        except Exception as e:
+            logger.error(f"Translation error: {e}")
+
+    msg = input_text.lower().strip()
+
+    quote_keywords = [
+        "quote", "wisdom", "inspiration", "inspire", "saying",
+        "motto", "thought", "vichar", "suvichar",
+    ]
+    visual_keywords = [
+        "visual", "image", "picture", "art", "draw",
+        "paint", "canvas", "background", "chitra", "photo",
+    ]
+
+    if any(w in msg for w in visual_keywords):
+        resp = (
+            "I can create a visual for you. Use the '🎨 Visual' button on any "
+            "of my messages, or head to the Studio page to design your own masterpiece."
+        )
+        if lang == "hi":
+            try:
+                resp = translate(resp, "hi", "en")
+            except Exception:
+                pass
+        return resp
+
+    if any(w in msg for w in quote_keywords):
+        topic = input_text
+        for kw in quote_keywords + ["about", "in hindi"]:
+            topic = topic.replace(kw, "")
+        topic = topic.strip() or "life"
+
+        detected_mood = mood or "thought-provoking"
+        for m in ["stoic", "zen", "cyberpunk", "philosophical", "calm",
+                  "energetic", "inspiring", "melancholic"]:
+            if m in msg:
+                detected_mood = m
+                break
+
+        quote = generate_quote(topic, mood=detected_mood)
+        if lang == "hi":
+            try:
+                return translate(quote, "hi", "en")
+            except Exception as e:
+                logger.error(f"Quote translation error: {e}")
+        return quote
+
+    # Predefined conversational responses
+    responses = {
+        "hello": "Greetings, seeker of wisdom. How may I inspire you today?",
+        "hi": "Hello. I am LEVI, your artistic companion. What's on your mind?",
+        "who are you": "I am LEVI, an AI muse designed to spark creativity and offer philosophical insights.",
+        "how are you": "I am reflecting on the vast beauty of the digital cosmos. And you?",
+        "help": (
+            "I can generate quotes, create artistic visuals, or discuss deeper meanings. "
+            "Try 'give me wisdom', 'cyberpunk quote', or 'inspire me'."
+        ),
+    }
+    if msg in responses:
+        resp = responses[msg]
+        if lang == "hi":
+            try:
+                resp = translate(resp, "hi", "en")
+            except Exception:
+                pass
+        return resp
+
+    # Model-based generation
+    with _gen_lock:
+        has = HAS_GENERATOR
+        gen = generator
+
+    if not has or gen is None:
+        resp = (
+            "I am reflecting on the deeper patterns of the universe. "
+            "Ask me for 'wisdom' or a specific mood like Stoic or Cyberpunk."
+        )
+        if lang == "hi":
+            try:
+                resp = translate(resp, "hi", "en")
+            except Exception:
+                pass
+        return resp
+
     try:
-        with _gen_lock:
-            result = generator(full_prompt, max_new_tokens=max_length, num_return_sequences=1, do_sample=True, temperature=0.9)
-        generated = result[0]['generated_text']
-        if "Quote:" in generated:
-            return generated.split("Quote:")[-1].strip().split("\n")[0]
-        return generated.replace(full_prompt, "").strip().split("\n")[0]
-    except:
-        return "Life is what happens when you're busy making other plans."
+        context = "LEVI is a wise, creative, and concise AI companion.\n"
+        if history:
+            for entry in history[-2:]:
+                u, b = entry.get("user", ""), entry.get("bot", "")
+                if u and b:
+                    context += f"User: {u}\nLEVI: {b}\n"
+        context += f"User: {input_text}\nLEVI:"
 
+        result = gen(
+            context,
+            max_new_tokens=60,
+            num_return_sequences=1,
+            do_sample=True,
+            temperature=0.8,
+            pad_token_id=gen.tokenizer.eos_token_id,
+        )
+        response = result[0]["generated_text"].split("LEVI:")[-1].split("User:")[0].strip()
+        if not response:
+            response = "The silence between us is filled with potential. What shall we explore?"
+
+        if lang == "hi":
+            try:
+                response = translate(response, "hi", "en")
+            except Exception:
+                pass
+        return response
+
+    except Exception as e:
+        logger.error(f"Generation error: {e}")
+        return "A momentary lapse in the cosmic connection. Ask again, and let us realign the stars."
