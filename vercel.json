@@ -2,10 +2,16 @@
   "version": 2,
   "public": true,
   "name": "levi-ai",
+  "builds": [
+    {
+      "src": "frontend/**/*",
+      "use": "@vercel/static"
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://levi-03v8.onrender.com/:path*"
+      "destination": "https://levi-3gcu.onrender.com/:path*"
     },
     {
       "source": "/(.*)",
