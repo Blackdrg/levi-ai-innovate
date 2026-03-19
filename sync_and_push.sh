@@ -1945,51 +1945,29 @@ done
 
 
 # ── Git add, commit, push ────────────────────────────────────────────────────
-
 echo ""
-
 echo "Pushing to GitHub..."
-
 git add \
-
+  main.py \
   backend/main.py \
-
   backend/models.py \
-
   backend/auth.py \
-
   backend/embeddings.py \
-
   backend/generation.py \
-
   backend/redis_client.py \
-
   backend/requirements.txt \
-
   frontend/js/api.js
-
-
 
 git commit -m "fix: complete backend overhaul — all files synced
 
-
-
-- models.py: add FeedItem, Analytics, UniqueConstraint (was missing FeedItem)
-
-- main.py: remove module-level pwd_context.hash, empty users_db={},
-
-  register RateLimitExceeded handler, async image gen via executor
-
+- main.py (root): add entrypoint proxy for Render/Vercel
+- models.py: add FeedItem, Analytics, UniqueConstraint
+- main.py (backend): remove module-level pwd_context.hash, async image gen
 - requirements.txt: pin transformers<5.0, bcrypt<5.0
-
-- generation.py: lazy pipeline import in thread, safe fallback
-
-- embeddings.py: thread-safe, deterministic fallback, export HAS_MODEL
-
+- generation.py: lazy pipeline import, safe fallback
+- embeddings.py: thread-safe, deterministic fallback
 - auth.py: remove broken @app decorator
-
-- redis_client.py: export HAS_REDIS, REDIS_URL at module level
-
+- redis_client.py: export HAS_REDIS, REDIS_URL
 - frontend/js/api.js: remove duplicate getAnalytics export"
 
 
