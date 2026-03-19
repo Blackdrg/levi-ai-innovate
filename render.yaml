@@ -5,7 +5,7 @@ services:
     dockerfilePath: backend/Dockerfile.prod
     dockerContext: .
     plan: free
-    healthCheckPath: /
+    healthCheckPath: /health
     preDeployCommand: python seed.py
     envVars:
       - key: RENDER
@@ -30,6 +30,8 @@ services:
         value: "1"
       - key: PORT
         value: "10000"
+      - key: RASA_URL
+        value: "http://rasa-server:5005"
 
   - type: web
     name: rasa-server
