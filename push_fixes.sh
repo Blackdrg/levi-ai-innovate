@@ -49,9 +49,8 @@
  - frontend/js/api.js: removed duplicate getAnalytics export"
   
  # 4. Push 
- CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
- git push origin "$CURRENT_BRANCH" 
+ git push origin main 
   
- echo ""
- echo "=== Done! ==="
+ echo "" 
+ echo "=== Done! ===" 
  echo "Render will auto-deploy. Watch logs at: https://dashboard.render.com "
