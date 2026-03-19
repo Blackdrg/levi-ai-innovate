@@ -56,3 +56,14 @@ class Analytics(Base):
     popular_topics = Column(JSON)
     likes_count = Column(Integer, default=0)
     daily_users = Column(Integer, default=0)
+
+class FeedItem(Base):
+    __tablename__ = "feed"
+
+    id = Column(Integer, primary_key=True, index=True)
+    text = Column(String, nullable=False)
+    author = Column(String)
+    mood = Column(String)
+    image_b64 = Column(String)
+    likes = Column(Integer, default=0)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())
