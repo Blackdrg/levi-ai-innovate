@@ -14,10 +14,15 @@ unified_integration_test.py
 test_api.py
 test_html.py
 test_server.py
+test_features.py
+test_fastapi.py
 check_db.py
 debug_gen.py
 run_app.py
 run_server.py
+main.py
+sync_and_push.sh
+push_fixes.sh
 start_local.ps1
 TODO.md
 TODO_README.md
