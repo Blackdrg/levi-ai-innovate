@@ -1,6 +1,6 @@
-# LEVI - AI Wisdom & Creative Muse 🌟
+# LEVI - AI Wisdom & Creative Muse 🌟 (Updated Oct 2024)
 
-LEVI is a full-stack AI app for philosophical quotes, contextual chat, and artistic image generation. **Status: Fully functional locally & production-ready.**
+LEVI is a full-stack AI app for philosophical quotes, contextual chat, and artistic image generation. **Status: Fully functional locally & production-ready. Repo updated: deps checked, docs refreshed.**
 
 ## 🏗️ Architecture
 
