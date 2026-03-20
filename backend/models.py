@@ -1,6 +1,5 @@
 
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Date, UniqueConstraint
-
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Date, UniqueConstraint, JSON
 from sqlalchemy.sql import func
 
 
@@ -141,8 +140,6 @@ class Analytics(Base):
 
     __tablename__ = "analytics"
 
-
-
     id = Column(Integer, primary_key=True, index=True)
 
     date = Column(Date, unique=True)
@@ -152,4 +149,14 @@ class Analytics(Base):
     likes_count = Column(Integer, default=0)
 
     daily_users = Column(Integer, default=0)
+
+
+class UserMemory(Base):
+    __tablename__ = "user_memory"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True)
+    mood_history = Column(JSON)      # ["stoic","zen","cyberpunk"]
+    liked_topics = Column(JSON)      # ["philosophy","success"]
+    interaction_count = Column(Integer, default=0)
+    last_active = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
