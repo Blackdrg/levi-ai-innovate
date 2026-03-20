@@ -541,21 +541,19 @@ def gen_quote(prompt: Query):
 
 
 @app.post("/generate_image")
-
-async def gen_image(req: Query, db: Session = Depends(get_db)):
-
+async def gen_image(req: Query, db: Session = Depends(get_db), current_user: Optional[Users] = Depends(get_current_user)):
     try:
-
+        user_tier = current_user.tier if current_user else "free"
         loop = asyncio.get_event_loop()
-
         bio = await loop.run_in_executor(
-
             _executor,
-
-            lambda: generate_quote_image(req.text, author=req.author or "Unknown",
-
-                                          mood=req.mood or "neutral", custom_bg=req.custom_bg),
-
+            lambda: generate_quote_image(
+                req.text, 
+                author=req.author or "Unknown",
+                mood=req.mood or "neutral", 
+                custom_bg=req.custom_bg,
+                user_tier=user_tier
+            ),
         )
 
         img_b64 = base64.b64encode(bio.getvalue()).decode()

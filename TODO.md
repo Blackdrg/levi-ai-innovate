@@ -7,6 +7,7 @@
 - [x] Refresh README.md - Updated March 2026, confirmed local startup works.
 - [x] Fix `run_server.py`: Use `uvicorn` instead of `waitress` for FastAPI app.
 - [x] Phase 2: Implementation of Viral Loops & Engagement features (Video cards, watermarking, email).
+- [x] Integrate Together AI (FLUX.1-schnell) for stunning quote backgrounds with fallback gradients.
 - [x] Validate: Backend tests pass (health, quotes, generation), git status clean.
 
 **Status**: Repo fully updated and maintained as of March 20, 2026. All systems healthy.
