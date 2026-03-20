@@ -9,90 +9,55 @@ import hashlib
 
 
 
+import os
+import random
+
 logger = logging.getLogger(__name__)
 
-
+# Environment check
+RENDER = os.getenv("RENDER") == "true"
 
 HAS_MODEL = False
-
 model = None
-
 _model_lock = threading.Lock()
 
-
-
-
-
-def load_embedding_model():
-
-    def _load():
-
-        global model, HAS_MODEL
-
-        try:
-
-            from sentence_transformers import SentenceTransformer
-
-            logger.info("Loading sentence-transformer model (background)...")
-
-            _model = SentenceTransformer("paraphrase-MiniLM-L6-v2", device="cpu")
-
-            with _model_lock:
-
-                model = _model
-
-                HAS_MODEL = True
-
-            logger.info("Sentence-transformer loaded — semantic search active.")
-
-        except Exception as e:
-
-            logger.warning(f"Sentence-transformer unavailable: {e}. Using deterministic fallback.")
-
-            with _model_lock:
-
-                HAS_MODEL = False
-
-
-
-    t = threading.Thread(target=_load, daemon=True)
-
-    t.start()
-
-
-
-
-
-load_embedding_model()
-
-
-
-
-
 def embed_text(text: str) -> list:
+    """
+    Returns a 384-dim vector for the given text.
+    On Render Free Tier, we skip the heavy model to save RAM.
+    """
+    global model, HAS_MODEL
 
-    with _model_lock:
+    # 1. Skip if on Render Free Tier
+    if RENDER:
+        # Deterministic hash-seeded random so the same text always gets the same vector
+        seed = int(hashlib.md5(text.encode()).hexdigest(), 16) % (2**32)
+        rng = np.random.default_rng(seed)
+        return rng.uniform(-1, 1, 384).tolist()
 
-        m = model
+    # 2. Lazy load model if not on Render
+    if model is None and not HAS_MODEL:
+        with _model_lock:
+            if model is None: # Double check pattern
+                try:
+                    from sentence_transformers import SentenceTransformer
+                    logger.info("Lazy-loading sentence-transformer model...")
+                    model = SentenceTransformer("paraphrase-MiniLM-L6-v2", device="cpu")
+                    HAS_MODEL = True
+                except Exception as e:
+                    logger.warning(f"Failed to load model: {e}")
+                    HAS_MODEL = False
 
-        has = HAS_MODEL
-
-    if has and m is not None:
-
+    # 3. Use model if available
+    if HAS_MODEL and model is not None:
         try:
-
-            return m.encode(text).tolist()
-
+            return model.encode(text).tolist()
         except Exception as e:
-
             logger.error(f"Embedding error: {e}")
 
-    # Deterministic fallback — same text always gets same vector
-
+    # 4. Deterministic fallback (same text = same vector)
     seed = int(hashlib.md5(text.encode()).hexdigest(), 16) % (2**32)
-
     rng = np.random.default_rng(seed)
-
     return rng.uniform(-1, 1, 384).tolist()
 
 

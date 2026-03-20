@@ -20,64 +20,11 @@ logger = logging.getLogger(__name__)
 
 
 HAS_GENERATOR = False
-
 generator = None
-
 _gen_lock = threading.Lock()
 
-
-
-
-
-def load_model():
-
-    def _load():
-
-        global generator, HAS_GENERATOR
-
-        try:
-
-            from transformers import pipeline as hf_pipeline
-
-            logger.info("Loading text-generation model (background)...")
-
-            _gen = hf_pipeline("text-generation", model="distilgpt2", device=-1)
-
-            with _gen_lock:
-
-                generator = _gen
-
-                HAS_GENERATOR = True
-
-            logger.info("Text-generation model loaded successfully.")
-
-        except ImportError as e:
-
-            logger.warning(f"transformers.pipeline not available: {e}. Using rule-based fallback.")
-
-            with _gen_lock:
-
-                HAS_GENERATOR = False
-
-        except Exception as e:
-
-            logger.warning(f"Text-generation model failed to load: {e}. Using rule-based fallback.")
-
-            with _gen_lock:
-
-                HAS_GENERATOR = False
-
-
-
-    t = threading.Thread(target=_load, daemon=True)
-
-    t.start()
-
-
-
-
-
-load_model()
+# Environment check
+RENDER = os.getenv("RENDER") == "true"
 
 
 
@@ -134,57 +81,53 @@ def fetch_open_source_quote(mood: str = "") -> dict:
 
 
 def generate_quote(prompt: str, mood: str = "", max_length: int = 60) -> str:
+    """Generate or fetch a quote for a given prompt/mood."""
+    # 1. On Render, always use open-source APIs to save RAM
+    if RENDER:
+        os_quote = fetch_open_source_quote(mood)
+        if os_quote:
+            return f'"{os_quote["quote"]}" - {os_quote["author"]}'
+        return "The journey of a thousand miles begins with a single step. - Lao Tzu"
 
+    # 2. Try open-source API first (50% of the time for variety)
     os_quote = fetch_open_source_quote(mood)
-
     if os_quote and random.random() < 0.5:
-
         return f'"{os_quote["quote"]}" - {os_quote["author"]}'
 
+    # 3. Lazy load local model if not on Render
+    global generator, HAS_GENERATOR
+    if generator is None and not HAS_GENERATOR:
+        with _gen_lock:
+            if generator is None:
+                try:
+                    from transformers import pipeline as hf_pipeline
+                    logger.info("Lazy-loading text-generation model...")
+                    generator = hf_pipeline("text-generation", model="distilgpt2", device=-1)
+                    HAS_GENERATOR = True
+                except Exception as e:
+                    logger.warning(f"Failed to load generator: {e}")
+                    HAS_GENERATOR = False
 
-
-    with _gen_lock:
-
-        has = HAS_GENERATOR
-
-        gen = generator
-
-
-
-    if not has or gen is None:
-
+    if not HAS_GENERATOR or generator is None:
         fallbacks = [
-
             "The journey of a thousand miles begins with a single step. - Lao Tzu",
-
             "In the middle of difficulty lies opportunity. - Albert Einstein",
-
             "It always seems impossible until it's done. - Nelson Mandela",
-
             "The only way to do great work is to love what you do. - Steve Jobs",
-
             "Believe you can and you're halfway there. - Theodore Roosevelt",
-
         ]
-
         return random.choice(fallbacks)
-
-
 
     base_prompt = f"Create a profound and original quote about '{prompt}' in a {mood or 'thought-provoking'} style:"
 
     try:
-
-        result = gen(
-
-            base_prompt, max_new_tokens=max_length, num_return_sequences=1,
-
-            do_sample=True, temperature=0.9, top_p=0.95,
-
-            pad_token_id=gen.tokenizer.eos_token_id,
-
-        )
-
+        with _gen_lock:
+            gen = generator
+            result = gen(
+                base_prompt, max_new_tokens=max_length, num_return_sequences=1,
+                do_sample=True, temperature=0.9, top_p=0.95,
+                pad_token_id=gen.tokenizer.eos_token_id,
+            )
         text = result[0]["generated_text"].replace(base_prompt, "").strip()
 
         if '"' in text:
@@ -296,61 +239,53 @@ def generate_response(prompt: str, history: list = None, mood: str = "", max_len
     }
 
     if msg in responses:
-
         resp = responses[msg]
-
         if lang == "hi":
-
             try: resp = translate(resp, "hi", "en")
-
             except Exception: pass
-
         return resp
 
-
-
-    with _gen_lock:
-
-        has = HAS_GENERATOR
-
-        gen = generator
-
-
-
-    if not has or gen is None:
-
+    # 1. Skip heavy model if on Render
+    if RENDER:
         resp = "I am reflecting on the deeper patterns of the universe. Ask me for 'wisdom' or a specific mood like Stoic or Cyberpunk."
-
         if lang == "hi":
-
             try: resp = translate(resp, "hi", "en")
-
             except Exception: pass
-
         return resp
 
+    # 2. Lazy load if not on Render
+    global generator, HAS_GENERATOR
+    if generator is None and not HAS_GENERATOR:
+        with _gen_lock:
+            if generator is None:
+                try:
+                    from transformers import pipeline as hf_pipeline
+                    logger.info("Lazy-loading text-generation model...")
+                    generator = hf_pipeline("text-generation", model="distilgpt2", device=-1)
+                    HAS_GENERATOR = True
+                except Exception as e:
+                    logger.warning(f"Failed to load generator: {e}")
+                    HAS_GENERATOR = False
 
+    if not HAS_GENERATOR or generator is None:
+        resp = "I am reflecting on the deeper patterns of the universe. Ask me for 'wisdom' or a specific mood like Stoic or Cyberpunk."
+        if lang == "hi":
+            try: resp = translate(resp, "hi", "en")
+            except Exception: pass
+        return resp
 
     try:
-
-        context = "LEVI is a wise, creative, and concise AI companion.\n"
-
-        if history:
-
-            for entry in history[-2:]:
-
-                u, b = entry.get("user", ""), entry.get("bot", "")
-
-                if u and b:
-
-                    context += f"User: {u}\nLEVI: {b}\n"
-
-        context += f"User: {input_text}\nLEVI:"
-
-        result = gen(context, max_new_tokens=60, num_return_sequences=1, do_sample=True,
-
-                     temperature=0.8, pad_token_id=gen.tokenizer.eos_token_id)
-
+        with _gen_lock:
+            gen = generator
+            context = "LEVI is a wise, creative, and concise AI companion.\n"
+            if history:
+                for entry in history[-2:]:
+                    u, b = entry.get("user", ""), entry.get("bot", "")
+                    if u and b:
+                        context += f"User: {u}\nLEVI: {b}\n"
+            context += f"User: {input_text}\nLEVI:"
+            result = gen(context, max_new_tokens=60, num_return_sequences=1, do_sample=True,
+                         temperature=0.8, pad_token_id=gen.tokenizer.eos_token_id)
         response = result[0]["generated_text"].split("LEVI:")[-1].split("User:")[0].strip()
 
         if not response:

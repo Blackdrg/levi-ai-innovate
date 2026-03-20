@@ -3,13 +3,24 @@ import requests
 from io import BytesIO
 import os
 
+import os
+
+# Environment check
+RENDER = os.getenv("RENDER") == "true"
+
 def generate_quote_image(quote: str, author: str = "", mood: str = "", size: tuple = (800, 400)) -> BytesIO:
     """
     Generates a stylized quote image using PIL.
     NOTE: This is a synchronous, CPU-bound blocking operation. 
     Always call this in a ThreadPoolExecutor if using inside an async FastAPI route.
+    On Render Free Tier, we keep it simple to save RAM.
     """
-    img = Image.new('RGB', size, color=(20, 30, 50))
+    # 1. Very simple base if on Render
+    if RENDER:
+        img = Image.new('RGB', size, color=(30, 30, 40))
+    else:
+        # Slightly more complex or dynamic background logic here
+        img = Image.new('RGB', size, color=(20, 30, 50))
     draw = ImageDraw.Draw(img)
     
     # Font (fallback)
