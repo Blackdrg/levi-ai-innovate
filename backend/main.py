@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 
 from sqlalchemy.orm import Session
 
@@ -54,20 +54,14 @@ if SENTRY_DSN:
 
 
 
-try:
-    from backend.db import SessionLocal, engine, get_db, DATABASE_URL
-    from backend.models import Quote, Analytics, FeedItem, Base, Users, UserMemory
-    from backend.embeddings import embed_text, cosine_sim, HAS_MODEL
-    from backend.redis_client import get_cached_search, cache_search, get_conversation, save_conversation, HAS_REDIS, REDIS_URL
-    from backend.generation import generate_quote, generate_response
-    from backend.image_gen import generate_quote_image
-except ImportError:
-    from db import SessionLocal, engine, get_db, DATABASE_URL
-    from models import Quote, Analytics, FeedItem, Base, Users, UserMemory
-    from embeddings import embed_text, cosine_sim, HAS_MODEL
-    from redis_client import get_cached_search, cache_search, get_conversation, save_conversation, HAS_REDIS, REDIS_URL
-    from generation import generate_quote, generate_response
-    from image_gen import generate_quote_image
+from backend.db import SessionLocal, engine, get_db, DATABASE_URL
+from backend.models import Quote, Analytics, FeedItem, Base, Users, UserMemory
+from backend.embeddings import embed_text, cosine_sim, HAS_MODEL
+from backend.redis_client import get_cached_search, cache_search, get_conversation, save_conversation, HAS_REDIS, REDIS_URL
+from backend.generation import generate_quote, generate_response
+from backend.image_gen import generate_quote_image
+from backend.video_gen import generate_quote_video
+from backend.email_service import send_daily_quote
 
 
 
@@ -721,6 +715,72 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     token = create_access_token(data={"sub": user.username},
                                 expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     return {"access_token": token, "token_type": "bearer"}
+
+# Phase 2: Viral Loops & Engagement
+
+@app.post("/track_share")
+async def track_share(db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
+    """
+    Track when a user shares content. Reward them after 5 shares.
+    """
+    current_user.share_count = (current_user.share_count or 0) + 1
+    rewarded = False
+    if current_user.share_count % 5 == 0:
+        current_user.bonus_credits = (current_user.bonus_credits or 0) + 10
+        rewarded = True
+    db.commit()
+    return {
+        "status": "success", 
+        "share_count": current_user.share_count, 
+        "rewarded": rewarded,
+        "bonus_credits": current_user.bonus_credits
+    }
+
+@app.post("/generate_video")
+async def generate_video(query: Query, db: Session = Depends(get_db), current_user: Optional[Users] = Depends(get_current_user)):
+    """
+    Generate an 8-second video card for a quote.
+    """
+    user_tier = current_user.tier if current_user else "free"
+    
+    # We use ThreadPoolExecutor because moviepy is blocking and CPU intensive
+    loop = asyncio.get_event_loop()
+    try:
+        video_bio = await loop.run_in_executor(
+            _executor, 
+            generate_quote_video, 
+            query.text, 
+            query.author or "LEVI Muse", 
+            query.mood or "philosophical", 
+            user_tier
+        )
+        return StreamingResponse(video_bio, media_type="video/mp4", headers={
+            "Content-Disposition": f"attachment; filename=levi_quote_{os.urandom(2).hex()}.mp4"
+        })
+    except Exception as e:
+        logger.error(f"Video generation error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate video")
+
+@app.post("/test_daily_email")
+async def test_daily_email(db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
+    """
+    Test sending a daily wisdom email to the current user.
+    """
+    user_mem = db.query(UserMemory).filter(UserMemory.user_id == current_user.id).first()
+    topics = user_mem.liked_topics if user_mem else ["wisdom"]
+    mood = user_mem.mood_history[-1] if user_mem and user_mem.mood_history else "philosophical"
+    
+    success = send_daily_quote(
+        user_email=current_user.username, # Assuming username is an email for now
+        user_name=current_user.username.split('@')[0],
+        liked_topics=topics,
+        last_mood=mood
+    )
+    
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to send email. Check API key.")
+    
+    return {"status": "success", "message": "Daily wisdom email sent!"}
 
 
 

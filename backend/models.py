@@ -81,11 +81,11 @@ class Users(Base):
 
 
     id = Column(Integer, primary_key=True, index=True)
-
     username = Column(String, unique=True, index=True, nullable=False)
-
     password_hash = Column(String, nullable=False)
-
+    tier = Column(String, default="free")
+    share_count = Column(Integer, default=0)
+    bonus_credits = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 

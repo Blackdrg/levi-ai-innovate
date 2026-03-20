@@ -68,4 +68,6 @@ sentry-sdk[fastapi]>=2.55.0
 itsdangerous>=2.1.2
 
 groq>=0.5.0
+moviepy>=1.0.3
+resend>=0.8.0
 
