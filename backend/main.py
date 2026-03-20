@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 
 from sqlalchemy.orm import Session
 
@@ -24,7 +24,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from slowapi import _rate_limit_exceeded_handler
-
+from authlib.integrations.starlette_client import OAuth
 import os
 
 import logging
@@ -35,9 +35,19 @@ from dotenv import load_dotenv
 
 
 
+import sentry_sdk
+
 load_dotenv()
 
-
+# Sentry Initialization
+SENTRY_DSN = os.getenv("SENTRY_DSN")
+if SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        traces_sample_rate=1.0,
+        profiles_sample_rate=1.0,
+    )
+    logger.info("Sentry initialized.")
 
 logging.basicConfig(level=logging.INFO)
 
@@ -46,31 +56,18 @@ logger = logging.getLogger(__name__)
 
 
 try:
-
     from backend.db import SessionLocal, engine, get_db, DATABASE_URL
-
-    from backend.models import Quote, Analytics, FeedItem, Base
-
+    from backend.models import Quote, Analytics, FeedItem, Base, Users
     from backend.embeddings import embed_text, cosine_sim, HAS_MODEL
-
     from backend.redis_client import get_cached_search, cache_search, get_conversation, save_conversation, HAS_REDIS, REDIS_URL
-
     from backend.generation import generate_quote, generate_response
-
     from backend.image_gen import generate_quote_image
-
 except ImportError:
-
     from db import SessionLocal, engine, get_db, DATABASE_URL
-
-    from models import Quote, Analytics, FeedItem, Base
-
+    from models import Quote, Analytics, FeedItem, Base, Users
     from embeddings import embed_text, cosine_sim, HAS_MODEL
-
     from redis_client import get_cached_search, cache_search, get_conversation, save_conversation, HAS_REDIS, REDIS_URL
-
     from generation import generate_quote, generate_response
-
     from image_gen import generate_quote_image
 
 
@@ -114,8 +111,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 
 # Empty in-memory user store — no hashing at module level
-
-users_db = {}
+# users_db = {}
 
 
 
@@ -254,22 +250,64 @@ allow_all = "*" in env_origins or os.getenv("CORS_ORIGINS") == "*"
 
 
 app.add_middleware(
-
     CORSMiddleware,
-
     allow_origins=["*"] if allow_all else origins,
-
     allow_credentials=not allow_all,
-
     allow_methods=["*"],
-
     allow_headers=["*"],
-
 )
 
+# OAuth Configuration
+oauth = OAuth()
+oauth.register(
+    name='google',
+    client_id=os.getenv("GOOGLE_CLIENT_ID", "your-google-client-id"),
+    client_secret=os.getenv("GOOGLE_CLIENT_SECRET", "your-google-client-secret"),
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+    client_kwargs={
+        'scope': 'openid email profile'
+    }
+)
 
+@app.get("/login/google")
+async def login_google(request: Request):
+    redirect_uri = request.url_for('auth_google')
+    return await oauth.google.authorize_redirect(request, redirect_uri)
 
-
+@app.get("/auth/google")
+async def auth_google(request: Request, db: Session = Depends(get_db)):
+    try:
+        token = await oauth.google.authorize_access_token(request)
+        user_info = token.get('userinfo')
+        if not user_info:
+            raise HTTPException(status_code=400, detail="Failed to fetch user info from Google")
+        
+        email = user_info.get('email')
+        username = email.split('@')[0] # Simple username generation
+        
+        # Check if user exists, if not create them
+        user = db.query(Users).filter(Users.username == username).first()
+        if not user:
+            user = Users(
+                username=username,
+                password_hash=get_password_hash(os.urandom(16).hex()) # Random password for OAuth users
+            )
+            db.add(user)
+            db.commit()
+            
+        # Generate JWT token
+        access_token = create_access_token(
+            data={"sub": user.username},
+            expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        )
+        
+        # Redirect to frontend with token (adjust URL as needed for your frontend)
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:8080")
+        return RedirectResponse(url=f"{frontend_url}?token={access_token}")
+        
+    except Exception as e:
+        logger.error(f"OAuth error: {e}")
+        raise HTTPException(status_code=400, detail="Authentication failed")
 
 @app.exception_handler(Exception)
 
@@ -626,45 +664,31 @@ async def chat(request: Request, msg: ChatMessage, db: Session = Depends(get_db)
 
 
 @app.post("/register", response_model=Token)
-
-async def register(user_in: UserIn):
-
-    if user_in.username in users_db:
-
+async def register(user_in: UserIn, db: Session = Depends(get_db)):
+    existing = db.query(Users).filter(Users.username == user_in.username).first()
+    if existing:
         raise HTTPException(status_code=400, detail="Username already registered")
-
-    users_db[user_in.username] = {
-
-        "username": user_in.username,
-
-        "hashed_password": get_password_hash(user_in.password),
-
-    }
-
-    token = create_access_token(data={"sub": user_in.username},
-
+    
+    user = Users(
+        username=user_in.username,
+        password_hash=get_password_hash(user_in.password)
+    )
+    db.add(user)
+    db.commit()
+    
+    token = create_access_token(data={"sub": user.username},
                                 expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-
     return {"access_token": token, "token_type": "bearer"}
 
 
-
-
-
 @app.post("/token", response_model=Token)
-
-async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
-
-    user = users_db.get(form_data.username)
-
-    if not user or not verify_password(form_data.password, user["hashed_password"]):
-
+async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    user = db.query(Users).filter(Users.username == form_data.username).first()
+    if not user or not verify_password(form_data.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect username or password")
-
-    token = create_access_token(data={"sub": user["username"]},
-
+    
+    token = create_access_token(data={"sub": user.username},
                                 expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-
     return {"access_token": token, "token_type": "bearer"}
 
 
