@@ -17,7 +17,7 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: CORS_ORIGINS
-        value: "https://your-app.vercel.app"
+        value: "https://levi-ai.vercel.app"
       - key: PYTHONUNBUFFERED
         value: "1"
       - key: TRANSFORMERS_CACHE
