@@ -232,6 +232,7 @@ origins = [
     "https://levi-k8iuadcvd-daksh-mehats-projects.vercel.app",
 
     "https://levi-ai.vercel.app",
+    "https://levi-ai-daksh-mehats-projects.vercel.app",
 
 ]
 
