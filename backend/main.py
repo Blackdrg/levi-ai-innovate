@@ -54,14 +54,29 @@ if SENTRY_DSN:
 
 
 
-from backend.db import SessionLocal, engine, get_db, DATABASE_URL
-from backend.models import Quote, Analytics, FeedItem, Base, Users, UserMemory
-from backend.embeddings import embed_text, cosine_sim, HAS_MODEL
-from backend.redis_client import get_cached_search, cache_search, get_conversation, save_conversation, HAS_REDIS, REDIS_URL
-from backend.generation import generate_quote, generate_response
-from backend.image_gen import generate_quote_image
-from backend.video_gen import generate_quote_video
-from backend.email_service import send_daily_quote
+try:
+    from backend.db import SessionLocal, engine, get_db, DATABASE_URL
+    from backend.models import Quote, Analytics, FeedItem, Base, Users, UserMemory
+    from backend.embeddings import embed_text, cosine_sim, HAS_MODEL
+    from backend.redis_client import get_cached_search, cache_search, get_conversation, save_conversation, HAS_REDIS, REDIS_URL
+    from backend.generation import generate_quote, generate_response
+    from backend.image_gen import generate_quote_image
+    from backend.video_gen import generate_quote_video
+    from backend.email_service import send_daily_quote
+    from backend.payments import router as payments_router, use_credits
+    from backend.tasks import generate_video_async
+except ImportError as e:
+    logger.warning(f"Could not import from backend.*: {e}. Falling back to local imports.")
+    from db import SessionLocal, engine, get_db, DATABASE_URL
+    from models import Quote, Analytics, FeedItem, Base, Users, UserMemory
+    from embeddings import embed_text, cosine_sim, HAS_MODEL
+    from redis_client import get_cached_search, cache_search, get_conversation, save_conversation, HAS_REDIS, REDIS_URL
+    from generation import generate_quote, generate_response
+    from image_gen import generate_quote_image
+    from video_gen import generate_quote_video
+    from email_service import send_daily_quote
+    from payments import router as payments_router, use_credits
+    from tasks import generate_video_async
 
 
 
@@ -222,6 +237,7 @@ class ChatMessage(BaseModel):
 limiter = Limiter(key_func=get_remote_address)
 
 app = FastAPI(title="LEVI Quotes API")
+app.include_router(payments_router)
 
 app.state.limiter = limiter
 
@@ -544,6 +560,11 @@ def gen_quote(prompt: Query):
 async def gen_image(req: Query, db: Session = Depends(get_db), current_user: Optional[Users] = Depends(get_current_user)):
     try:
         user_tier = current_user.tier if current_user else "free"
+        
+        # Credit System: Deduct 1 credit for generation
+        if current_user:
+            use_credits(current_user.id, amount=1, db=db)
+            
         loop = asyncio.get_event_loop()
         bio = await loop.run_in_executor(
             _executor,
@@ -739,9 +760,27 @@ async def generate_video(query: Query, db: Session = Depends(get_db), current_us
     """
     Generate an 8-second video card for a quote.
     """
+    user_id = current_user.id if current_user else None
     user_tier = current_user.tier if current_user else "free"
     
-    # We use ThreadPoolExecutor because moviepy is blocking and CPU intensive
+    # Credit System: Deduct 3 credits for video generation
+    if current_user:
+        use_credits(current_user.id, amount=3, db=db)
+    
+    # Check if we should use Celery for async processing (Scale Infrastructure)
+    USE_CELERY = os.getenv("USE_CELERY", "false").lower() == "true"
+    
+    if USE_CELERY:
+        task = generate_video_async.delay(
+            query.text, 
+            query.author or "LEVI Muse", 
+            query.mood or "philosophical", 
+            user_id,
+            user_tier
+        )
+        return {"task_id": task.id, "status": "processing", "message": "Video generation started in background."}
+
+    # Synchronous/ThreadPool fallback
     loop = asyncio.get_event_loop()
     try:
         video_bio = await loop.run_in_executor(
@@ -779,6 +818,34 @@ async def test_daily_email(db: Session = Depends(get_db), current_user: Users = 
         raise HTTPException(status_code=500, detail="Failed to send email. Check API key.")
     
     return {"status": "success", "message": "Daily wisdom email sent!"}
+
+@app.get("/users/me")
+async def get_me(current_user: Users = Depends(get_current_user)):
+    """
+    Get the current authenticated user's profile.
+    """
+    return {
+        "id": current_user.id,
+        "username": current_user.username,
+        "email": current_user.email,
+        "tier": current_user.tier,
+        "credits": current_user.credits,
+        "share_count": current_user.share_count,
+        "created_at": current_user.created_at.isoformat() if current_user.created_at else None
+    }
+
+# Phase 3: Monetization (Stripe)
+
+@app.get("/credits")
+async def get_user_credits(current_user: Users = Depends(get_current_user)):
+    """
+    Get current user's credits and tier.
+    """
+    return {
+        "credits": current_user.credits,
+        "tier": current_user.tier,
+        "share_count": current_user.share_count
+    }
 
 
 

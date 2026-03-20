@@ -1,10 +1,10 @@
 # LEVI - AI Wisdom & Creative Muse 🌟 (Updated March 2026)
 
-LEVI is a full-stack AI app for philosophical quotes, contextual chat, and artistic image generation. **Status: Fully functional locally & production-ready. Repo updated: server script fixed, deps verified, local SQLite environment configured.**
+LEVI is a full-stack AI app for philosophical quotes, contextual chat, and artistic image generation. **Status: Production-ready release (v2.1). Features: Together AI, Stripe Payments, Celery Async Video Gen, S3 Storage support, and Viral Loops.**
 
 ## 🏗️ Architecture
 
-```
+```text
 Frontend (Tailwind/Vanilla JS) ↔ FastAPI Backend ↔ AI Models + DB
 ├── Local: `python run_app.py` (localhost:8080)
 ├── Deploy: Render (backend) + Vercel (frontend)
@@ -14,7 +14,7 @@ Frontend (Tailwind/Vanilla JS) ↔ FastAPI Backend ↔ AI Models + DB
 ## ✅ Status (Diagnosed & Fixed)
 
 | Component | Status | Notes |
-|-----------|--------|-------|
+| :--- | :--- | :--- |
 | Frontend | 🟢 Fixed | JS syntax ("try expected") → Modularized `js/index.js` |
 | Backend API | 🟢 Fixed | Missing modules (`redis_client.py`, `db.py`) created |
 | DB | 🟢 Ready | SQLite local (`levi.db`), Postgres prod |
@@ -34,7 +34,7 @@ python run_app.py
 
 ## 📁 Key Files
 
-```
+```text
 backend/
 ├── main.py (FastAPI)
 ├── db.py (SQLAlchemy)
@@ -59,7 +59,7 @@ frontend/
 
 ## 📊 Health Check
 
-```
+```text
 ✅ Frontend loads (no JS errors)
 ✅ Backend responds /health
 ✅ DB tables created on startup

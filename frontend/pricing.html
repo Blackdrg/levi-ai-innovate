@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LEVI Pricing — Unleash Your Creative Muse</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,700;1,400&family=DM+Sans:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: { space: '#09090f', gold: '#d4af37' },
+                    fontFamily: { display: ['Cormorant Garamond', 'serif'], sans: ['DM Sans', 'sans-serif'] }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #09090f; color: #e2e8f0; }
+        .glass { background: rgba(255, 255, 255, 0.03); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
+        .gold-gradient { background: linear-gradient(to right, #d4af37, #f1e5ac, #996515); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+    </style>
+</head>
+<body class="font-sans min-h-screen pt-32">
+    <nav class="fixed top-0 left-0 w-full z-40 bg-space/80 backdrop-blur-md border-b border-white/5 h-20 flex items-center">
+        <div class="max-w-7xl mx-auto px-6 w-full flex justify-between items-center">
+            <a href="index.html" class="font-display text-3xl font-bold gold-gradient">LEVI</a>
+            <div id="user-credits" class="text-xs font-bold text-yellow-400 uppercase tracking-widest"></div>
+        </div>
+    </nav>
+
+    <div class="max-w-5xl mx-auto px-6">
+        <div class="text-center mb-16">
+            <h1 class="font-display text-6xl font-bold mb-6 italic gold-gradient">Elevate Your Wisdom</h1>
+            <p class="text-slate-400">Choose a plan that matches your creative journey.</p>
+        </div>
+
+        <div class="grid md:grid-cols-3 gap-8 mb-20">
+            <!-- Free Plan -->
+            <div class="glass p-8 rounded-[2rem] border border-white/5 flex flex-col">
+                <h3 class="text-xl font-bold mb-2">Seeker</h3>
+                <div class="text-4xl font-bold mb-6">₹0 <span class="text-sm font-normal text-slate-500">/forever</span></div>
+                <ul class="text-sm text-slate-400 space-y-4 mb-10 flex-1">
+                    <li class="flex items-center gap-2">✓ 10 Monthly Credits</li>
+                    <li class="flex items-center gap-2">✓ AI Quote Generation</li>
+                    <li class="flex items-center gap-2">✓ Community Feed</li>
+                    <li class="flex items-center gap-2">✗ Watermarked Images</li>
+                    <li class="flex items-center gap-2">✗ Standard Support</li>
+                </ul>
+                <button disabled class="w-full py-4 rounded-xl bg-white/5 text-slate-500 font-bold">Current Plan</button>
+            </div>
+
+            <!-- Pro Plan -->
+            <div class="glass p-8 rounded-[2rem] border-2 border-yellow-400/30 flex flex-col relative scale-105 shadow-2xl shadow-yellow-400/10">
+                <div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-yellow-400 text-black text-[10px] font-bold px-4 py-1 rounded-full uppercase tracking-widest">Most Popular</div>
+                <h3 class="text-xl font-bold mb-2">Pro</h3>
+                <div class="text-4xl font-bold mb-6">₹499 <span class="text-sm font-normal text-slate-500">/month</span></div>
+                <ul class="text-sm text-slate-300 space-y-4 mb-10 flex-1">
+                    <li class="flex items-center gap-2">✓ 100 Monthly Credits</li>
+                    <li class="flex items-center gap-2">✓ <b>No Watermarks</b></li>
+                    <li class="flex items-center gap-2">✓ Together AI (Flux) Backgrounds</li>
+                    <li class="flex items-center gap-2">✓ Video Card Generation</li>
+                    <li class="flex items-center gap-2">✓ Priority Synthesis</li>
+                </ul>
+                <button onclick="subscribe('pro')" class="w-full py-4 rounded-xl bg-yellow-400 text-black font-bold hover:bg-yellow-300 transition-all shadow-lg shadow-yellow-400/20">Upgrade to Pro</button>
+            </div>
+
+            <!-- Creator Plan -->
+            <div class="glass p-8 rounded-[2rem] border border-white/5 flex flex-col">
+                <h3 class="text-xl font-bold mb-2">Creator</h3>
+                <div class="text-4xl font-bold mb-6">₹1499 <span class="text-sm font-normal text-slate-500">/month</span></div>
+                <ul class="text-sm text-slate-400 space-y-4 mb-10 flex-1">
+                    <li class="flex items-center gap-2">✓ 500 Monthly Credits</li>
+                    <li class="flex items-center gap-2">✓ Everything in Pro</li>
+                    <li class="flex items-center gap-2">✓ Early Access to Features</li>
+                    <li class="flex items-center gap-2">✓ Commercial Usage Rights</li>
+                    <li class="flex items-center gap-2">✓ Direct Support</li>
+                </ul>
+                <button onclick="subscribe('creator')" class="w-full py-4 rounded-xl border border-white/10 hover:bg-white/5 transition-all font-bold">Get Creator</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { createCheckout, getCredits } from './js/api.js';
+        
+        const token = localStorage.getItem('levi_token');
+        if (!token) window.location.href = 'auth.html';
+
+        async function updateCredits() {
+            try {
+                const data = await getCredits(token);
+                document.getElementById('user-credits').innerText = `${data.credits} Credits (${data.tier})`;
+            } catch (err) { console.error(err); }
+        }
+        updateCredits();
+
+        window.subscribe = async (plan) => {
+            try {
+                const res = await createCheckout(plan, token);
+                if (res.url) window.location.href = res.url;
+            } catch (err) {
+                alert("Failed to start checkout. Please try again.");
+            }
+        };
+    </script>
+</body>
+</html>

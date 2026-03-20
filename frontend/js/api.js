@@ -98,6 +98,68 @@ export async function generateQuote(topic, mood = "") {
   });
 }
 
+export async function generateImage(topic, mood = "", custom_bg = null, token = null) {
+  const options = {
+    method: "POST",
+    body: { text: topic, mood, custom_bg }
+  };
+  if (token) {
+    options.headers = { "Authorization": `Bearer ${token}` };
+  }
+  return apiFetch("/generate_image", options);
+}
+
+export async function generateVideo(topic, mood = "", author = "LEVI Muse", token = null) {
+  const options = {
+    method: "POST",
+    body: { text: topic, mood, author }
+  };
+  if (token) {
+    options.headers = { "Authorization": `Bearer ${token}` };
+  }
+  
+  // Videos are returned as blobs
+  const url = `${API_BASE}/generate_video`;
+  const res = await fetch(url, {
+    ...options,
+    body: JSON.stringify(options.body),
+    headers: { ...options.headers, "Content-Type": "application/json" }
+  });
+  
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Video API error: ${res.status}`);
+  }
+  
+  // Handle Celery response if enabled
+  const contentType = res.headers.get("content-type");
+  if (contentType && contentType.includes("application/json")) {
+    return await res.json();
+  }
+  
+  return await res.blob();
+}
+
+export async function trackShare(token) {
+  return apiFetch("/track_share", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${token}` }
+  });
+}
+
+export async function getCredits(token) {
+  return apiFetch("/credits", {
+    headers: { "Authorization": `Bearer ${token}` }
+  });
+}
+
+export async function createCheckout(plan, token) {
+  return apiFetch(`/create_checkout?plan=${plan}`, {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${token}` }
+  });
+}
+
 export async function getDailyQuote() {
   return apiFetch("/daily_quote");
 }
