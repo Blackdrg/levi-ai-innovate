@@ -29,3 +29,5 @@ requests>=2.31.0
 mtranslate>=1.8
 waitress>=3.0.0
 python-multipart>=0.0.9
+moviepy>=1.0.3
+resend>=0.8.0
