@@ -11,11 +11,17 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 
 # Install system dependencies
+# ffmpeg and imagemagick are required for MoviePy video generation
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
     curl \
+    ffmpeg \
+    imagemagick \
     && rm -rf /var/lib/apt/lists/*
+
+# Fix ImageMagick policy to allow text rendering (important for MoviePy)
+RUN sed -i 's/domain="path" rights="none" pattern="@\*"/domain="path" rights="read|write" pattern="@\*"/g' /etc/ImageMagick-6/policy.xml
 
 # Create and use a virtual environment
 RUN python -m venv /opt/venv

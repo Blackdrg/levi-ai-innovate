@@ -1,5 +1,7 @@
 // Common UI utilities for LEVI - Dark mode, favorites, copy, mood
 
+import { trackShare } from './api.js';
+
 let favorites = JSON.parse(localStorage.getItem('levi_favorites')) || [];
 let token = localStorage.getItem('levi_token') || null;
 let currentMoods = [];
@@ -100,6 +102,33 @@ function selectMood(mood, targetBtn) {
   }
 }
 
+async function shareContent(title, text, url) {
+  const shareData = { title, text, url };
+  const token = localStorage.getItem('levi_token');
+
+  try {
+    if (navigator.share) {
+      await navigator.share(shareData);
+      window.ui.showToast("Shared successfully!");
+      if (token) await trackShare(token);
+    } else {
+      copyToClipboard(url || text);
+      window.ui.showToast("Link copied to clipboard!");
+      if (token) await trackShare(token);
+    }
+  } catch (err) {
+    console.error("Share failed:", err);
+  }
+}
+
+function showToast(message, type = "info") {
+  const toast = document.createElement('div');
+  toast.className = `fixed bottom-10 left-1/2 -translate-x-1/2 px-6 py-3 rounded-full glass border border-white/10 text-sm font-medium z-[100] animate-fade-up ${type === 'error' ? 'text-red-400' : 'text-yellow-400'}`;
+  toast.innerText = message;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3000);
+}
+
 // Attach to window for module access
 window.ui = {
   toggleDarkMode,
@@ -109,6 +138,8 @@ window.ui = {
   addTypingMessage,
   removeTypingMessage,
   selectMood,
+  shareContent,
+  showToast,
   currentMoods
 };
 

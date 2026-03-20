@@ -72,6 +72,10 @@
             background-clip: text;
             -webkit-text-fill-color: transparent;
         }
+
+        .studio-nav-active {
+            color: #d4af37;
+        }
     
         /* ── Mobile menu ── */
         #mobile-menu {
@@ -172,7 +176,7 @@
     <div id="mobile-menu">
         <a href="index.html">Home</a>
         <a href="chat.html">AI Chat</a>
-        <a href="studio.html" style="color:#d4af37">Studio</a>
+        <a href="studio.html" class="studio-nav-active">Studio</a>
         <a href="feed.html">Feed</a>
         <a href="quotes.html">Explore</a>
         <a href="auth.html">Sign In</a>
@@ -184,6 +188,12 @@
         <div class="text-center mb-16">
             <h1 class="font-display text-6xl font-bold mb-6 italic gold-gradient">Studio</h1>
             <p class="text-slate-400">Transform your thoughts into visual masterpieces.</p>
+            <!-- User Credits -->
+            <div id="user-credits-container"
+                class="mt-4 inline-flex items-center px-4 py-2 glass rounded-full border border-yellow-400/20">
+                <span class="text-xs font-bold text-yellow-400 uppercase tracking-widest mr-2">Balance:</span>
+                <span id="user-credits" class="text-sm font-medium text-slate-200">Loading...</span>
+            </div>
         </div>
 
         <!-- Grid -->
@@ -195,10 +205,10 @@
                 <!-- Quote input -->
                 <div class="mb-8">
                     <label class="block text-[10px] font-bold tracking-widest uppercase text-slate-500 mb-4 ml-4"
-                        for="studio-text">
+                        for="studio-quote">
                         The Wisdom
                     </label>
-                    <textarea id="studio-text" placeholder="Enter a quote or a philosophical thought..."
+                    <textarea id="studio-quote" placeholder="Enter a quote or a philosophical thought..."
                         class="w-full h-40 bg-black/30 border border-white/10 rounded-3xl px-6 py-6 text-sm focus:outline-none focus:border-yellow-400/30 transition-all resize-none text-slate-200 placeholder-slate-600"></textarea>
                     <!-- Character counter -->
                     <div class="text-right mt-2 mr-2">
@@ -209,20 +219,23 @@
                     <!-- Mood + Author -->
                     <div class="grid grid-cols-2 gap-6 mb-8">
                         <div>
-                            <label class="block text-[10px] font-bold tracking-widest uppercase text-slate-500 mb-4 ml-4" for="studio-mood">
-                                Mood
+                            <label class="block text-[10px] font-bold tracking-widest uppercase text-slate-500 mb-4 ml-4">
+                                Style & Mood
                             </label>
-                            <select id="studio-mood"
-                                class="w-full bg-black/30 border border-white/10 rounded-2xl px-6 py-4 text-sm text-slate-200 focus:outline-none focus:border-yellow-400/30 transition-all appearance-none cursor-pointer">
-                                <option value="philosophical">Philosophical</option>
-                                <option value="inspiring">Inspiring</option>
-                                <option value="stoic">Stoic</option>
-                                <option value="zen">Zen</option>
-                                <option value="artistic">Artistic</option>
-                                <option value="futuristic">Futuristic</option>
-                                <option value="melancholic">Melancholic</option>
-                                <option value="serene">Serene</option>
-                            </select>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button
+                                    class="style-btn text-[10px] py-2 glass rounded-xl border border-white/5 hover:border-yellow-400/30 transition-all"
+                                    data-mood="philosophical">Philosophical</button>
+                                <button
+                                    class="style-btn text-[10px] py-2 glass rounded-xl border border-white/5 hover:border-yellow-400/30 transition-all"
+                                    data-mood="zen">Zen</button>
+                                <button
+                                    class="style-btn text-[10px] py-2 glass rounded-xl border border-white/5 hover:border-yellow-400/30 transition-all"
+                                    data-mood="cyberpunk">Cyberpunk</button>
+                                <button
+                                    class="style-btn text-[10px] py-2 glass rounded-xl border border-white/5 hover:border-yellow-400/30 transition-all"
+                                    data-mood="futuristic">Futuristic</button>
+                            </div>
                         </div>
                         <div>
                             <label class="block text-[10px] font-bold tracking-widest uppercase text-slate-500 mb-4 ml-4"
@@ -234,15 +247,36 @@
                         </div>
                     </div>
 
+                    <div class="mb-8">
+                        <label class="block text-[10px] font-bold tracking-widest uppercase text-slate-500 mb-4 ml-4">
+                            Background (Optional)
+                        </label>
+                        <div class="flex gap-4">
+                            <input type="text" id="studio-bg-keywords" placeholder="Keywords (e.g. space, forest)"
+                                class="flex-1 bg-black/30 border border-white/10 rounded-2xl px-6 py-4 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-yellow-400/30 transition-all">
+                            <label
+                                class="cursor-pointer glass px-6 py-4 rounded-2xl border border-white/10 hover:border-yellow-400/30 transition-all flex items-center justify-center">
+                                <span class="text-xs text-slate-400">Upload</span>
+                                <input type="file" id="studio-bg-upload" class="hidden" accept="image/*">
+                            </label>
+                        </div>
+                    </div>
+
                     <!-- Error message -->
                     <div id="error-msg"
                         class="hidden mb-4 px-4 py-3 rounded-2xl bg-red-900/20 border border-red-500/20 text-red-400 text-sm"></div>
 
-                    <!-- Generate button -->
-                    <button id="generate-btn"
-                        class="w-full py-5 bg-yellow-400 text-black font-bold rounded-2xl hover:bg-yellow-300 transition-all shadow-xl shadow-yellow-400/20 transform hover:-translate-y-1 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none">
-                        Synthesize Visual →
-                    </button>
+                    <!-- Generate buttons -->
+                    <div class="flex flex-col gap-4">
+                        <button id="generate-studio"
+                            class="w-full py-5 bg-yellow-400 text-black font-bold rounded-2xl hover:bg-yellow-300 transition-all shadow-xl shadow-yellow-400/20 transform hover:-translate-y-1 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none">
+                            Synthesize Visual →
+                        </button>
+                        <button id="generate-video-studio" disabled
+                            class="w-full py-4 glass border border-yellow-400/30 text-yellow-400 font-bold rounded-2xl hover:bg-yellow-400/10 transition-all transform hover:-translate-y-1 active:translate-y-0 disabled:opacity-30 disabled:cursor-not-allowed">
+                            Create Video Card (3 Credits) 🎬
+                        </button>
+                        </div>
 
                     <!-- Recent hint -->
                     <p class="text-center text-xs text-slate-600 mt-4">Click a gallery quote below to pre-fill</p>
