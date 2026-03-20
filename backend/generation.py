@@ -1,23 +1,24 @@
 
 import os
-
 import random
-
 import requests
-
 import logging
-
 import threading
-
 from mtranslate import translate
-
-
+import groq
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-
 logger = logging.getLogger(__name__)
 
-
+# Groq client initialization
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+groq_client = None
+if GROQ_API_KEY:
+    try:
+        groq_client = groq.Groq(api_key=GROQ_API_KEY)
+        logger.info("Groq client initialized.")
+    except Exception as e:
+        logger.error(f"Failed to initialize Groq client: {e}")
 
 HAS_GENERATOR = False
 generator = None
@@ -82,6 +83,28 @@ def fetch_open_source_quote(mood: str = "") -> dict:
 
 def generate_quote(prompt: str, mood: str = "", max_length: int = 60) -> str:
     """Generate or fetch a quote for a given prompt/mood."""
+    # Try Groq first if available
+    if groq_client:
+        try:
+            system_prompt = f"You are LEVI, a philosophical AI companion. Mood: {mood or 'thought-provoking'}. Create a profound and original quote about '{prompt}'. Be deep, concise, poetic. Max 2 sentences."
+            response = groq_client.chat.completions.create(
+                model="llama3-8b-8192",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"Give me a quote about {prompt}"}
+                ],
+                max_tokens=max_length,
+                temperature=0.8
+            )
+            quote = response.choices[0].message.content.strip()
+            # Clean up potential quotes or author attribution if Llama adds it
+            if quote.startswith('"') and quote.endswith('"'):
+                quote = quote[1:-1]
+            return quote
+        except Exception as e:
+            logger.error(f"Groq quote generation error: {e}")
+
+    # Fallback to existing logic if Groq fails or is not configured
     # 1. On Render, always use open-source APIs to save RAM
     if RENDER:
         os_quote = fetch_open_source_quote(mood)
@@ -146,83 +169,89 @@ def generate_quote(prompt: str, mood: str = "", max_length: int = 60) -> str:
 
 
 
-def generate_response(prompt: str, history: list = None, mood: str = "", max_length: int = 150, lang: str = "en") -> str:
-
+def generate_response(prompt: str, history: list = None, mood: str = "", max_length: int = 150, lang: str = "en", user_memory: object = None) -> str:
     logger.info(f"generate_response: '{prompt[:60]}' (lang={lang})")
-
     if not prompt or not isinstance(prompt, str):
-
         return "I am listening, seeker. Your silence is profound."
 
-
-
     input_text = prompt
-
     if lang == "hi":
-
         try:
-
             input_text = translate(prompt, "en", "auto")
-
         except Exception as e:
-
             logger.error(f"Translation error: {e}")
 
-
-
     msg = input_text.lower().strip()
-
     quote_keywords = ["quote", "wisdom", "inspiration", "inspire", "saying", "motto", "thought", "vichar", "suvichar"]
-
     visual_keywords = ["visual", "image", "picture", "art", "draw", "paint", "canvas", "background", "chitra", "photo"]
 
-
-
     if any(w in msg for w in visual_keywords):
-
         resp = "I can create a visual for you. Use the '🎨 Visual' button on any of my messages, or head to the Studio page."
-
         if lang == "hi":
-
             try: resp = translate(resp, "hi", "en")
-
             except Exception: pass
-
         return resp
 
-
-
     if any(w in msg for w in quote_keywords):
-
         topic = input_text
-
         for kw in quote_keywords + ["about", "in hindi"]:
-
             topic = topic.replace(kw, "")
-
         topic = topic.strip() or "life"
-
         detected_mood = mood or "thought-provoking"
-
         for m in ["stoic", "zen", "cyberpunk", "philosophical", "calm", "energetic", "inspiring", "melancholic"]:
-
             if m in msg:
-
                 detected_mood = m
-
                 break
-
         quote = generate_quote(topic, mood=detected_mood)
-
         if lang == "hi":
-
             try: return translate(quote, "hi", "en")
-
             except Exception as e: logger.error(f"Quote translation error: {e}")
-
         return quote
 
+    # Groq-powered response logic
+    if groq_client:
+        try:
+            # Build system prompt with user memory context
+            memory_context = ""
+            if user_memory:
+                topics = ", ".join(user_memory.liked_topics) if user_memory.liked_topics else "general wisdom"
+                moods = ", ".join(user_memory.mood_history) if user_memory.mood_history else "thought-provoking"
+                memory_context = f" User usually likes {topics} and feels {moods}."
+            
+            system_prompt = f"You are LEVI, a philosophical AI companion. Mood: {mood or 'thought-provoking'}.{memory_context} Be deep, concise, poetic. Max 3 sentences."
+            
+            messages = [
+                {"role": "system", "content": system_prompt}
+            ]
+            if history:
+                for entry in history[-3:]:
+                    messages.append({"role": "user", "content": entry.get("user", "")})
+                    messages.append({"role": "assistant", "content": entry.get("bot", "")})
+            messages.append({"role": "user", "content": input_text})
 
+            response = groq_client.chat.completions.create(
+                model="llama3-8b-8192",
+                messages=messages,
+                max_tokens=max_length
+            )
+            bot_response = response.choices[0].message.content.strip()
+            
+            # Update user memory topics/moods if we have memory object
+            if user_memory:
+                # Basic mood tracking from current message
+                for m in ["stoic", "zen", "cyberpunk", "philosophical", "calm", "energetic", "inspiring", "melancholic"]:
+                    if m in msg:
+                        if not user_memory.mood_history: user_memory.mood_history = []
+                        if m not in user_memory.mood_history:
+                            user_memory.mood_history = user_memory.mood_history[-4:] + [m]
+                        break
+
+            if lang == "hi":
+                try: bot_response = translate(bot_response, "hi", "en")
+                except Exception: pass
+            return bot_response
+        except Exception as e:
+            logger.error(f"Groq response generation error: {e}")
 
     responses = {
 

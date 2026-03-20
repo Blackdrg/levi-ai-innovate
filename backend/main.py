@@ -39,6 +39,9 @@ import sentry_sdk
 
 load_dotenv()
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 # Sentry Initialization
 SENTRY_DSN = os.getenv("SENTRY_DSN")
 if SENTRY_DSN:
@@ -49,22 +52,18 @@ if SENTRY_DSN:
     )
     logger.info("Sentry initialized.")
 
-logging.basicConfig(level=logging.INFO)
-
-logger = logging.getLogger(__name__)
-
 
 
 try:
     from backend.db import SessionLocal, engine, get_db, DATABASE_URL
-    from backend.models import Quote, Analytics, FeedItem, Base, Users
+    from backend.models import Quote, Analytics, FeedItem, Base, Users, UserMemory
     from backend.embeddings import embed_text, cosine_sim, HAS_MODEL
     from backend.redis_client import get_cached_search, cache_search, get_conversation, save_conversation, HAS_REDIS, REDIS_URL
     from backend.generation import generate_quote, generate_response
     from backend.image_gen import generate_quote_image
 except ImportError:
     from db import SessionLocal, engine, get_db, DATABASE_URL
-    from models import Quote, Analytics, FeedItem, Base, Users
+    from models import Quote, Analytics, FeedItem, Base, Users, UserMemory
     from embeddings import embed_text, cosine_sim, HAS_MODEL
     from redis_client import get_cached_search, cache_search, get_conversation, save_conversation, HAS_REDIS, REDIS_URL
     from generation import generate_quote, generate_response
@@ -142,6 +141,25 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode.update({"exp": expire})
 
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
+async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+    user = db.query(Users).filter(Users.username == username).first()
+    if user is None:
+        raise credentials_exception
+    return user
 
 
 
@@ -233,7 +251,9 @@ origins = [
 
     "https://levi-ai.vercel.app",
     "https://levi-ai-daksh-mehats-projects.vercel.app",
-
+    "https://levi-ai.create.app",
+    "https://levi-aicreate.app",
+    "https://levi-ai-create.com",
 ]
 
 for o in env_origins:
@@ -627,37 +647,47 @@ def get_feed(db: Session = Depends(get_db), limit: int = 20):
 
 
 @app.post("/chat")
-
 @limiter.limit("10/minute")
-
-async def chat(request: Request, msg: ChatMessage, db: Session = Depends(get_db)):
-
-    logger.info(f"Chat [{msg.session_id}]: '{msg.message[:60]}'")
-
+async def chat(request: Request, msg: ChatMessage, db: Session = Depends(get_db), current_user: Optional[Users] = Depends(get_current_user)):
+    # Try to identify user if authenticated
+    user_id = current_user.id if current_user else None
+    
+    logger.info(f"Chat [{msg.session_id}] (User: {user_id}): '{msg.message[:60]}'")
     today = date.today()
-
     analytics = db.query(Analytics).filter(Analytics.date == today).first()
-
     if not analytics:
-
         analytics = Analytics(date=today, chats_count=1)
-
         db.add(analytics)
-
     else:
-
         analytics.chats_count = (analytics.chats_count or 0) + 1
-
+    
+    # Update user memory if authenticated
+    user_mem = None
+    if user_id:
+        user_mem = db.query(UserMemory).filter(UserMemory.user_id == user_id).first()
+        if not user_mem:
+            user_mem = UserMemory(user_id=user_id, mood_history=[], liked_topics=[], interaction_count=0)
+            db.add(user_mem)
+        user_mem.interaction_count += 1
+        # Simple heuristic for mood/topic extraction (can be improved with LLM later)
+        # For now, we'll let generate_response handle the logic if needed, 
+        # but we track the interaction here.
+    
     db.commit()
-
+    
     history = get_conversation(msg.session_id)
-
-    bot_response = generate_response(msg.message, history=history, mood="", lang=msg.lang or "en")
-
+    
+    # Pass user memory to generation if available
+    bot_response = generate_response(
+        msg.message, 
+        history=history, 
+        mood="", 
+        lang=msg.lang or "en",
+        user_memory=user_mem
+    )
+    
     history.append({"user": msg.message, "bot": bot_response})
-
     save_conversation(msg.session_id, history)
-
     return {"response": bot_response}
 
 
