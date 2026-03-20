@@ -1,11 +1,9 @@
 
 try:
-    from waitress import serve
+    import uvicorn
 except ImportError:
-    print("Waitress not found. Please install it with 'pip install waitress'.")
+    print("Uvicorn not found. Please install it with 'pip install uvicorn'.")
     exit(1)
 
-from backend.main import app
-
 if __name__ == "__main__":
-    serve(app, host="0.0.0.0", port=8000)
+    uvicorn.run("backend.main:app", host="0.0.0.0", port=8000, reload=False)
