@@ -1,0 +1,48 @@
+# Backend - Vercel should NEVER touch these
+backend/
+rasa/
+venv/
+.env
+.env.*
+
+# All Python files in root - this is what was triggering the FastAPI detection
+*.py
+*.pyc
+__pycache__/
+
+# Data files
+*.csv
+*.db
+*.sqlite
+*.sqlite3
+
+# Docker / infra
+docker-compose.yml
+Dockerfile
+Dockerfile.prod
+nginx.conf
+render.yaml
+
+# Test scripts
+full_test.py
+unified_integration_test.py
+test_api.py
+test_html.py
+test_server.py
+test_features.py
+check_db.py
+debug_gen.py
+
+# Runner scripts
+run_app.py
+run_server.py
+start_local.ps1
+
+# Docs
+TODO.md
+TODO_README.md
+README.md
+
+# Python deps
+requirements.txt
+pyproject.toml
