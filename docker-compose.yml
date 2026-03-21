@@ -54,29 +54,29 @@ services:
       - ./model_cache:/app/model_cache
     command: bash -c "python seed.py && uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2"
 
-  rasa-train:
-    build: ./rasa
-    volumes:
-      - ./rasa:/app
-    command: rasa train
-    profiles:
-      - train
-
-  rasa-server:
-    build: ./rasa
-    ports:
-      - "5005:5005"
-    volumes:
-      - ./rasa:/app
-    command: rasa run --enable-api --cors "*" -m models --port 5005 --debug
-
-  rasa-actions:
-    build: ./rasa
-    ports:
-      - "5055:5055"
-    volumes:
-      - ./rasa:/app
-    command: rasa run actions
+#   rasa-train:
+#     build: ./rasa
+#     volumes:
+#       - ./rasa:/app
+#     command: rasa train
+#     profiles:
+#       - train
+# 
+#   rasa-server:
+#     build: ./rasa
+#     ports:
+#       - "5005:5005"
+#     volumes:
+#       - ./rasa:/app
+#     command: rasa run --enable-api --cors "*" -m models --port 5005 --debug
+# 
+#   rasa-actions:
+#     build: ./rasa
+#     ports:
+#       - "5055:5055"
+#     volumes:
+#       - ./rasa:/app
+#     command: rasa run actions
 
   nginx:
     image: nginx:alpine
