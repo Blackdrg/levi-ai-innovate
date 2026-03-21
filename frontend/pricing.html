@@ -1,6 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <meta name="theme-color" content="#09090f">
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="icon-192.png">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LEVI Pricing — Unleash Your Creative Muse</title>
@@ -55,7 +60,7 @@
             <div class="glass p-8 rounded-[2rem] border-2 border-yellow-400/30 flex flex-col relative scale-105 shadow-2xl shadow-yellow-400/10">
                 <div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-yellow-400 text-black text-[10px] font-bold px-4 py-1 rounded-full uppercase tracking-widest">Most Popular</div>
                 <h3 class="text-xl font-bold mb-2">Pro</h3>
-                <div class="text-4xl font-bold mb-6">₹499 <span class="text-sm font-normal text-slate-500">/month</span></div>
+                <div class="text-4xl font-bold mb-6">₹299 <span class="text-sm font-normal text-slate-500">/month</span></div>
                 <ul class="text-sm text-slate-300 space-y-4 mb-10 flex-1">
                     <li class="flex items-center gap-2">✓ 100 Monthly Credits</li>
                     <li class="flex items-center gap-2">✓ <b>No Watermarks</b></li>
@@ -69,7 +74,7 @@
             <!-- Creator Plan -->
             <div class="glass p-8 rounded-[2rem] border border-white/5 flex flex-col">
                 <h3 class="text-xl font-bold mb-2">Creator</h3>
-                <div class="text-4xl font-bold mb-6">₹1499 <span class="text-sm font-normal text-slate-500">/month</span></div>
+                <div class="text-4xl font-bold mb-6">₹599 <span class="text-sm font-normal text-slate-500">/month</span></div>
                 <ul class="text-sm text-slate-400 space-y-4 mb-10 flex-1">
                     <li class="flex items-center gap-2">✓ 500 Monthly Credits</li>
                     <li class="flex items-center gap-2">✓ Everything in Pro</li>
@@ -82,8 +87,11 @@
         </div>
     </div>
 
+    <!-- Razorpay Checkout SDK -->
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+
     <script type="module">
-        import { createCheckout, getCredits } from './js/api.js';
+                    import { getCredits } from './js/api.js';
         
         const token = localStorage.getItem('levi_token');
         if (!token) window.location.href = 'auth.html';
@@ -98,10 +106,59 @@
 
         window.subscribe = async (plan) => {
             try {
-                const res = await createCheckout(plan, token);
-                if (res.url) window.location.href = res.url;
+                // 1. Create order on backend
+                const orderRes = await fetch(`${window.location.origin}/api/create_order`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ plan })
+                });
+                const orderData = await orderRes.json();
+
+                if (!orderRes.ok) throw new Error(orderData.detail || "Failed to create order");
+
+                // 2. Open Razorpay Checkout
+                const options = {
+                    "key": orderData.key,
+                    "amount": orderData.amount,
+                    "currency": orderData.currency,
+                    "name": "LEVI AI",
+                    "description": plan === 'pro' ? 'Pro Plan' : 'Creator Plan',
+                    "order_id": orderData.order_id,
+                    "handler": async function (response) {
+                        // 3. Verify payment on backend
+                        const verifyRes = await fetch(`${window.location.origin}/api/verify_payment`, {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                                "Authorization": `Bearer ${token}`
+                            },
+                            body: JSON.stringify({
+                                razorpay_order_id: response.razorpay_order_id,
+                                razorpay_payment_id: response.razorpay_payment_id,
+                                razorpay_signature: response.razorpay_signature,
+                                plan: plan // Pass plan to help backend upgrade correctly
+                            })
+                        });
+
+                        const result = await verifyRes.json();
+                        if (result.status === 'success') {
+                            alert('Payment successful! Welcome to ' + plan);
+                            window.location.reload();
+                        } else {
+                            alert("Payment verification failed. Please contact support.");
+                        }
+                    },
+                    "theme": { "color": "#8B5CF6" }
+                };
+                const rzp = new Razorpay(options);
+                rzp.open();
+
             } catch (err) {
-                alert("Failed to start checkout. Please try again.");
+                console.error(err);
+                alert(err.message || "Failed to start checkout. Please try again.");
             }
         };
     </script>

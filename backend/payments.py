@@ -1,5 +1,7 @@
-import stripe
+import razorpay
 import os
+import hmac
+import hashlib
 import logging
 from fastapi import APIRouter, HTTPException, Depends, Request
 from sqlalchemy.orm import Session
@@ -15,69 +17,53 @@ except ImportError:
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/payments", tags=["payments"])
 
-# Stripe configuration
-STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
-STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
-if STRIPE_SECRET_KEY:
-    stripe.api_key = STRIPE_SECRET_KEY
-    logger.info("Stripe initialized.")
+# Razorpay client initialization
+RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID")
+RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET")
 
-PLANS = {
-    "pro":     os.getenv("STRIPE_PRO_PRICE_ID", "price_xxxxxxxxxxxxx"),  # ₹499/month
-    "creator": os.getenv("STRIPE_CREATOR_PRICE_ID", "price_xxxxxxxxxxxxx"),  # ₹1499/month
-}
-
-@router.post("/create_checkout")
-async def create_checkout(plan: str, db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
-    """
-    Creates a Stripe Checkout Session for subscription.
-    """
-    if not STRIPE_SECRET_KEY:
-        raise HTTPException(status_code=500, detail="Stripe secret key not configured")
-        
-    if plan not in PLANS:
-        raise HTTPException(status_code=400, detail="Invalid plan selected")
-
-    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:8080")
+client = None
+if RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET:
     try:
-        session = stripe.checkout.Session.create(
-            payment_method_types=["card"],
-            line_items=[{"price": PLANS[plan], "quantity": 1}],
-            mode="subscription",
-            success_url=f"{frontend_url}/success?session_id={{CHECKOUT_SESSION_ID}}",
-            cancel_url=f"{frontend_url}/pricing",
-            metadata={"user_id": current_user.id, "plan": plan}
-        )
-        return {"url": session.url}
+        client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+        logger.info("Razorpay client initialized.")
     except Exception as e:
-        logger.error(f"Stripe checkout session creation failed: {e}")
+        logger.error(f"Failed to initialize Razorpay client: {e}")
+
+def create_order(amount: int, currency: str = "INR", receipt: str = "order_1", user_id: int = None, plan: str = "pro"):
+    """
+    Create a Razorpay order. Amount in paise (₹1 = 100 paise).
+    """
+    if not client:
+        raise HTTPException(status_code=500, detail="Razorpay client not configured")
+    try:
+        order_data = {
+            "amount": amount,
+            "currency": currency,
+            "receipt": receipt,
+            "payment_capture": 1
+        }
+        if user_id and plan:
+            order_data["notes"] = {
+                "user_id": user_id,
+                "plan": plan
+            }
+        
+        order = client.order.create(order_data)
+        return order
+    except Exception as e:
+        logger.error(f"Razorpay order creation failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/stripe_webhook")
-async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
+def verify_payment_signature(order_id: str, payment_id: str, signature: str) -> bool:
     """
-    Handle Stripe webhooks for successful payments.
+    Verify the payment signature from the frontend callback.
     """
-    payload = await request.body()
-    sig_header = request.headers.get("stripe-signature")
-
-    try:
-        event = stripe.Webhook.construct_event(
-            payload, sig_header, STRIPE_WEBHOOK_SECRET
-        )
-    except Exception as e:
-        logger.error(f"Webhook signature verification failed: {e}")
-        raise HTTPException(status_code=400, detail="Invalid webhook signature")
-
-    if event.type == "checkout.session.completed":
-        session = event.data.object
-        user_id = session.metadata.get("user_id")
-        plan = session.metadata.get("plan")
-        if user_id and plan:
-            upgrade_user_tier(int(user_id), plan, db)
-            logger.info(f"Payment successful: User {user_id} upgraded to {plan}")
-
-    return {"status": "success"}
+    if not RAZORPAY_KEY_SECRET:
+        return False
+    msg = f"{order_id}|{payment_id}"
+    secret = RAZORPAY_KEY_SECRET.encode()
+    expected = hmac.new(secret, msg.encode(), hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature)
 
 def upgrade_user_tier(user_id: int, plan: str, db: Session):
     """

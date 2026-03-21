@@ -34,6 +34,10 @@ function addMessage(text, role, className = '') {
 }
 
 function shareQuote(text) {
+  if (window.ui && window.ui.shareContent) {
+    window.ui.shareContent("LEVI Wisdom", text, window.location.href);
+    return;
+  }
   const shares = [
     `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`,
     `https://wa.me/?text=${encodeURIComponent(text)}`

@@ -1,1 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#09090f">
+    <title>My Gallery — LEVI AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,700;1,400&family=DM+Sans:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="manifest" href="manifest.json">
+</head>
+<body class="bg-space text-slate-200 font-sans min-h-screen">
+    <nav class="fixed top-0 left-0 w-full z-40 glass border-b border-white/5 h-20 flex items-center">
+        <div class="max-w-7xl mx-auto px-6 w-full flex justify-between items-center">
+            <a href="index.html" class="font-display text-3xl font-bold gold-gradient italic">LEVI</a>
+            <div class="hidden md:flex items-center gap-8 text-xs font-bold uppercase tracking-widest">
+                <a href="chat.html" class="hover:text-gold transition-colors">Chat</a>
+                <a href="studio.html" class="hover:text-gold transition-colors">Studio</a>
+                <a href="feed.html" class="hover:text-gold transition-colors">Feed</a>
+                <a href="my-gallery.html" class="text-gold">Gallery</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="pt-32 pb-20 px-6 max-w-7xl mx-auto">
+        <div class="mb-12">
+            <h1 class="font-display text-5xl font-bold gold-gradient italic mb-4">Your Creations</h1>
+            <p class="text-slate-400">A collection of your synthesized wisdom and art.</p>
+        </div>
+
+        <div id="gallery-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <!-- Items populated by js/my-gallery.js -->
+            <div class="col-span-full text-center py-20 glass rounded-[2rem] border border-white/5">
+                <p class="text-slate-500 italic">No masterpieces found yet. Start creating in the Studio!</p>
+                <a href="studio.html" class="inline-block mt-6 px-8 py-3 bg-gold text-space font-bold rounded-xl hover:scale-105 transition-transform">Go to Studio</a>
+            </div>
+        </div>
+    </main>
+
+    <script type="module" src="js/my-gallery.js"></script>
+</body>
 </html>

@@ -4,17 +4,14 @@ if (window.location.protocol === 'file:') {
   alert('LEVI Error: You cannot open index.html directly. Run "python run_app.py" and visit http://localhost:8080');
 }
 
-let hostname = window.location.hostname;
-if (hostname === '0.0.0.0') hostname = '127.0.0.1';
+const isLocalDev = (
+  window.location.hostname === 'localhost' ||
+  window.location.hostname === '127.0.0.1' ||
+  window.location.hostname === '0.0.0.0'
+);
 
-const isLocalDev = window.location.port === '8080' ||
-                   hostname === 'localhost' ||
-                   hostname === '127.0.0.1';
-
-// On Vercel: use /api prefix (rewritten by vercel.json to Render)
-// On local:  connect directly to uvicorn on port 8000
 const API_BASE = isLocalDev
-  ? `${window.location.protocol}//${hostname}:8000`
+  ? `http://127.0.0.1:8000`
   : `${window.location.origin}/api`;
 
 console.log(`[LEVI] API Base: ${API_BASE} | isLocalDev: ${isLocalDev}`);
@@ -98,10 +95,10 @@ export async function generateQuote(topic, mood = "") {
   });
 }
 
-export async function generateImage(topic, mood = "", custom_bg = null, token = null) {
+export async function generateImage(topic, author = "LEVI AI", mood = "", custom_bg = null, token = null) {
   const options = {
     method: "POST",
-    body: { text: topic, mood, custom_bg }
+    body: { text: topic, author, mood, custom_bg }
   };
   if (token) {
     options.headers = { "Authorization": `Bearer ${token}` };
@@ -161,7 +158,13 @@ export async function createCheckout(plan, token) {
 }
 
 export async function getDailyQuote() {
-  return apiFetch("/daily_quote");
+  const data = await apiFetch("/daily_quote");
+  // Normalize response for consistency
+  return {
+    text: data.quote || data.text,
+    author: data.author || "LEVI AI",
+    topic: data.topic || "Philosophical"
+  };
 }
 
 // ✅ Single definition — duplicate was causing module load failure
@@ -169,11 +172,8 @@ export async function getAnalytics() {
   return apiFetch("/analytics");
 }
 
-export async function generateQuoteImage(text, author = "Unknown", mood = "neutral", options = {}) {
-  return apiFetch("/generate_image", {
-    method: "POST",
-    body: { text, author, mood, ...options }
-  });
+export async function generateQuoteImage(text, author = "Unknown", mood = "neutral", custom_bg = null, token = null) {
+  return generateImage(text, author, mood, custom_bg, token);
 }
 
 export async function getFeed(limit = 20) {
@@ -194,6 +194,7 @@ window.api = {
   generateQuote,
   getDailyQuote,
   generateQuoteImage,
+  generateImage,
   getAnalytics,
   getFeed,
   likeItem

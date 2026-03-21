@@ -63,20 +63,24 @@ try:
     from backend.image_gen import generate_quote_image
     from backend.video_gen import generate_quote_video
     from backend.email_service import send_daily_quote
-    from backend.payments import router as payments_router, use_credits
-    from backend.tasks import generate_video_async
-except ImportError as e:
+    from backend.payments import router as payments_router, use_credits, verify_payment_signature
+    from backend.tasks import generate_video_task as generate_video_async
+except (ImportError, ModuleNotFoundError) as e:
     logger.warning(f"Could not import from backend.*: {e}. Falling back to local imports.")
-    from db import SessionLocal, engine, get_db, DATABASE_URL
-    from models import Quote, Analytics, FeedItem, Base, Users, UserMemory
-    from embeddings import embed_text, cosine_sim, HAS_MODEL
-    from redis_client import get_cached_search, cache_search, get_conversation, save_conversation, HAS_REDIS, REDIS_URL
-    from generation import generate_quote, generate_response
-    from image_gen import generate_quote_image
-    from video_gen import generate_quote_video
-    from email_service import send_daily_quote
-    from payments import router as payments_router, use_credits
-    from tasks import generate_video_async
+    try:
+        from db import SessionLocal, engine, get_db, DATABASE_URL
+        from models import Quote, Analytics, FeedItem, Base, Users, UserMemory
+        from embeddings import embed_text, cosine_sim, HAS_MODEL
+        from redis_client import get_cached_search, cache_search, get_conversation, save_conversation, HAS_REDIS, REDIS_URL
+        from generation import generate_quote, generate_response
+        from image_gen import generate_quote_image
+        from video_gen import generate_quote_video
+        from email_service import send_daily_quote
+        from payments import router as payments_router, use_credits, verify_payment_signature
+        from tasks import generate_video_task as generate_video_async
+    except (ImportError, ModuleNotFoundError) as e2:
+        logger.error(f"Fallback imports also failed: {e2}")
+        raise e2
 
 
 
@@ -223,12 +227,10 @@ class Query(BaseModel):
 
 
 class ChatMessage(BaseModel):
-
     session_id: str
-
     message: str
-
     lang: Optional[str] = "en"
+    mood: Optional[str] = ""
 
 
 
@@ -239,9 +241,13 @@ limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title="LEVI Quotes API")
 app.include_router(payments_router)
 
-app.state.limiter = limiter
-
+# Rate Limiter setup
+from slowapi.errors import RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Ensure database tables are created
+Base.metadata.create_all(bind=engine)
 
 
 
@@ -660,7 +666,7 @@ def get_feed(db: Session = Depends(get_db), limit: int = 20):
 
 
 @app.post("/chat")
-@limiter.limit("10/minute")
+@limiter.limit("20/minute")
 async def chat(request: Request, msg: ChatMessage, db: Session = Depends(get_db), current_user: Optional[Users] = Depends(get_current_user)):
     # Try to identify user if authenticated
     user_id = current_user.id if current_user else None
@@ -694,7 +700,7 @@ async def chat(request: Request, msg: ChatMessage, db: Session = Depends(get_db)
     bot_response = generate_response(
         msg.message, 
         history=history, 
-        mood="", 
+        mood=msg.mood or "", 
         lang=msg.lang or "en",
         user_memory=user_mem
     )
@@ -834,7 +840,89 @@ async def get_me(current_user: Users = Depends(get_current_user)):
         "created_at": current_user.created_at.isoformat() if current_user.created_at else None
     }
 
-# Phase 3: Monetization (Stripe)
+class OrderRequest(BaseModel):
+    plan: str  # "pro" or "creator"
+
+class PaymentVerify(BaseModel):
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
+    plan: Optional[str] = "pro"
+
+@app.post("/create_order")
+def new_order(req: OrderRequest, db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
+    from backend.payments import create_order
+    amounts = {
+        "pro": int(os.getenv("RAZORPAY_PRO_PLAN_AMOUNT", 29900)),
+        "creator": int(os.getenv("RAZORPAY_CREATOR_PLAN_AMOUNT", 59900))
+    }
+    amount = amounts.get(req.plan)
+    if not amount:
+        raise HTTPException(status_code=400, detail="Invalid plan")
+    order = create_order(amount, receipt=f"levi_{req.plan}_{current_user.id}", user_id=current_user.id, plan=req.plan)
+    return {"order_id": order["id"], "amount": amount, "currency": "INR", 
+            "key": os.getenv("RAZORPAY_KEY_ID")}
+
+@app.post("/verify_payment")
+def confirm_payment(data: PaymentVerify, db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
+    from backend.payments import upgrade_user_tier
+    valid = verify_payment_signature(
+        data.razorpay_order_id,
+        data.razorpay_payment_id,
+        data.razorpay_signature
+    )
+    if not valid:
+        raise HTTPException(status_code=400, detail="Payment verification failed")
+    
+    # Upgrade user tier in DB
+    upgrade_user_tier(current_user.id, data.plan, db) 
+    
+    return {"status": "success", "message": f"Payment confirmed and account upgraded to {data.plan}"}
+
+@app.post("/razorpay_webhook")
+async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
+    """
+    Handle Razorpay webhooks for payment.captured events.
+    """
+    payload = await request.body()
+    signature = request.headers.get("X-Razorpay-Signature")
+    secret = os.getenv("RAZORPAY_WEBHOOK_SECRET")
+
+    if not secret or not signature:
+        logger.warning("Razorpay webhook missing secret or signature")
+        return {"status": "ignored"}
+
+    # Verify webhook signature
+    expected_signature = hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected_signature, signature):
+        raise HTTPException(status_code=400, detail="Invalid webhook signature")
+
+    data = await request.json()
+    event = data.get("event")
+
+    if event == "payment.captured":
+        payment_entity = data["payload"]["payment"]["entity"]
+        notes = payment_entity.get("notes", {})
+        # If we store user_id and plan in notes during order creation
+        user_id = notes.get("user_id")
+        plan = notes.get("plan", "pro")
+        
+        # Alternatively, parse from receipt: levi_pro_123
+        receipt = payment_entity.get("receipt", "")
+        if receipt.startswith("levi_"):
+            parts = receipt.split("_")
+            if len(parts) >= 3:
+                plan = parts[1]
+                user_id = parts[2]
+
+        if user_id:
+            from backend.payments import upgrade_user_tier
+            upgrade_user_tier(int(user_id), plan, db)
+            logger.info(f"Webhook: User {user_id} upgraded to {plan} via payment.captured")
+
+    return {"status": "success"}
+
+# Phase 3: Monetization (Razorpay)
 
 @app.get("/credits")
 async def get_user_credits(current_user: Users = Depends(get_current_user)):
@@ -852,8 +940,6 @@ async def get_user_credits(current_user: Users = Depends(get_current_user)):
 
 
 if __name__ == "__main__":
-
     import uvicorn
-
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=False)
 

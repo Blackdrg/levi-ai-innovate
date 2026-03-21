@@ -27,9 +27,29 @@ _gen_lock = threading.Lock()
 # Environment check
 RENDER = os.getenv("RENDER") == "true"
 
-
-
-
+def _generate_via_groq(prompt: str) -> str:
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        return None
+    try:
+        import requests
+        resp = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}",
+                     "Content-Type": "application/json"},
+            json={
+                "model": "llama3-8b-8192",
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 120,
+                "temperature": 0.8
+            },
+            timeout=8
+        )
+        if resp.status_code == 200:
+            return resp.json()["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        logger.error(f"Groq error: {e}")
+    return None
 
 def fetch_open_source_quote(mood: str = "") -> dict:
 
@@ -83,7 +103,15 @@ def fetch_open_source_quote(mood: str = "") -> dict:
 
 def generate_quote(prompt: str, mood: str = "", max_length: int = 60) -> str:
     """Generate or fetch a quote for a given prompt/mood."""
-    # Try Groq first if available
+    # Try Groq first (fast, no RAM cost)
+    groq_quote = _generate_via_groq(
+        f"Generate one original philosophical quote about '{prompt}' in a {mood or 'thoughtful'} style. "
+        f"Output only the quote and attribution in format: \"Quote text\" - Author Name"
+    )
+    if groq_quote:
+        return groq_quote
+
+    # Try Groq SDK if available (backup)
     if groq_client:
         try:
             system_prompt = f"You are LEVI, a philosophical AI companion. Mood: {mood or 'thought-provoking'}. Create a profound and original quote about '{prompt}'. Be deep, concise, poetic. Max 2 sentences."
@@ -208,7 +236,15 @@ def generate_response(prompt: str, history: list = None, mood: str = "", max_len
             except Exception as e: logger.error(f"Quote translation error: {e}")
         return quote
 
-    # Groq-powered response logic
+    # Try Groq first (fast, no RAM cost)
+    groq_resp = _generate_via_groq(f"You are LEVI, a wise AI. Respond briefly to: {input_text}")
+    if groq_resp:
+        if lang == "hi":
+            try: groq_resp = translate(groq_resp, 'hi', 'en')
+            except: pass
+        return groq_resp
+
+    # Groq-powered response logic (SDK backup)
     if groq_client:
         try:
             # Build system prompt with user memory context

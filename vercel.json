@@ -10,8 +10,8 @@
   ],
   "rewrites": [
     {
-      "source": "/api/:path*",
-      "destination": "https://levi-048q.onrender.com/:path*"
+      "source": "/api/(.*)",
+      "destination": "https://YOUR-ACTUAL-RENDER-URL.onrender.com/$1"
     },
     {
       "source": "/(.*)",

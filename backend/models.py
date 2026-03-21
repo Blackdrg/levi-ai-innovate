@@ -14,6 +14,7 @@ from sqlalchemy.sql import func
 
 class Quote(Base):
     __tablename__ = "quotes"
+    __table_args__ = {'extend_existing': True}
 
     id         = Column(Integer, primary_key=True, index=True)
     text       = Column(String, nullable=False)
@@ -31,6 +32,7 @@ class Quote(Base):
 
 class Users(Base):
     __tablename__ = "users"
+    __table_args__ = {'extend_existing': True}
 
     id                 = Column(Integer, primary_key=True, index=True)
     username           = Column(String, unique=True, index=True, nullable=False)
@@ -52,6 +54,7 @@ class Users(Base):
 
 class ChatHistory(Base):
     __tablename__ = "chat_history"
+    __table_args__ = {'extend_existing': True}
 
     id        = Column(Integer, primary_key=True, index=True)
     user_id   = Column(Integer, ForeignKey("users.id"))
@@ -62,6 +65,7 @@ class ChatHistory(Base):
 
 class UserMemory(Base):
     __tablename__ = "user_memory"
+    __table_args__ = {'extend_existing': True}
 
     id               = Column(Integer, primary_key=True, index=True)
     user_id          = Column(Integer, ForeignKey("users.id"), unique=True)
@@ -73,6 +77,7 @@ class UserMemory(Base):
 
 class FeedItem(Base):
     __tablename__ = "feed_items"
+    __table_args__ = {'extend_existing': True}
 
     id         = Column(Integer, primary_key=True, index=True)
     text       = Column(String)
@@ -87,6 +92,7 @@ class FeedItem(Base):
 
 class Analytics(Base):
     __tablename__ = "analytics"
+    __table_args__ = {'extend_existing': True}
 
     id          = Column(Integer, primary_key=True, index=True)
     date        = Column(Date, unique=True)
