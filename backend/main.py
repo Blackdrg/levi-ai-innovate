@@ -113,7 +113,7 @@ CLIENT_KEY = os.getenv("CLIENT_KEY")
 
 ALGORITHM = "HS256"
 
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 10080  # 7 days for better user experience
 
 
 
@@ -714,6 +714,9 @@ async def chat(request: Request, msg: ChatMessage, db: Session = Depends(get_db)
 
 @app.post("/register", response_model=Token)
 async def register(user_in: UserIn, db: Session = Depends(get_db)):
+    if len(user_in.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    
     existing = db.query(Users).filter(Users.username == user_in.username).first()
     if existing:
         raise HTTPException(status_code=400, detail="Username already registered")
