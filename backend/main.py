@@ -1,5 +1,6 @@
 
 from fastapi import FastAPI, Depends, HTTPException, status, Request
+from starlette.routing import Route
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -394,10 +395,8 @@ async def startup_event():
 
 
 
-@app.get("/")
-
+@app.api_route("/", methods=["GET", "HEAD"])
 def root():
-
     return {"status": "ok", "message": "LEVI backend is running", "docs": "/docs", "health": "/health"}
 
 
