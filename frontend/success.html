@@ -1,24 +1,74 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#09090f">
-  <title>Payment Successful — LEVI</title>
-  <link rel="manifest" href="manifest.json">
-  <script src="https://cdn.tailwindcss.com"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#09090f">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <title>Payment Successful — LEVI</title>
+    <link rel="manifest" href="manifest.json">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      body {
+        background: #09090f;
+        color: #e2e8f0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: sans-serif;
+      }
+    
+      .container {
+        text-align: center;
+        padding: 2rem;
+      }
+    
+      .icon {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+        color: #d4af37;
+      }
+    
+      .title {
+        font-size: 2rem;
+        margin-bottom: 0.5rem;
+      }
+    
+      .subtitle {
+        color: #94a3b8;
+        margin-bottom: 2rem;
+      }
+    
+      .btn-primary {
+        background: #d4af37;
+        color: #09090f;
+        padding: 1rem 2rem;
+        border-radius: 1rem;
+        font-weight: bold;
+        text-decoration: none;
+        display: inline-block;
+        transition: opacity 0.2s;
+      }
+    
+      .btn-primary:hover {
+        opacity: 0.9;
+      }
+    </style>
 </head>
-<body style="background:#09090f;color:#e2e8f0;min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:sans-serif">
-  <div style="text-align:center;padding:2rem">
-    <div style="font-size:4rem;margin-bottom:1rem">✓</div>
-    <h1 style="font-size:2rem;margin-bottom:0.5rem">Payment successful!</h1>
-    <p style="color:#94a3b8;margin-bottom:2rem">Your account has been upgraded.</p>
-    <a href="studio.html" style="background:#d4af37;color:#09090f;padding:1rem 2rem;border-radius:1rem;font-weight:bold;text-decoration:none">Go to Studio</a>
+<body>
+  <div class="container">
+    <div class="icon">✓</div>
+    <h1 class="title">Payment successful!</h1>
+    <p class="subtitle">Your account has been upgraded.</p>
+    <a href="studio.html" class="btn-primary">Go to Studio</a>
   </div>
   <script>
-    // Clear old token and reload profile
-    const token = localStorage.getItem('levi_token');
-    if (!token) window.location.href = 'auth.html';
-  </script>
+          // Verify session and redirect if missing
+          const token = localStorage.getItem('levi_token');
+          if (!token) window.location.href = 'auth.html';
+        </script>
 </body>
 </html>
