@@ -92,9 +92,11 @@ micBtn.addEventListener('click', () => {
   micBtn.classList.toggle('animate-pulse', isListening);
 });
 
-voiceBtn.addEventListener('click', () => {
-  if (synth && synth.speaking) synth.cancel();
-});
+if (voiceBtn) {
+  voiceBtn.addEventListener('click', () => {
+    if (synth && synth.speaking) synth.cancel();
+  });
+}
 
 sendBtn.addEventListener('click', sendMessage);
 input.addEventListener('keypress', (e) => {

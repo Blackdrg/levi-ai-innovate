@@ -558,7 +558,7 @@
             try {
                 const user = localStorage.getItem('levi_user');
                 if (user) {
-                    const aun = t.getElementById('nav-auth-btn');
+                    const authBtn = document.getElementById('nav-auth-btn');
                     if (authBtn) {
                         authBtn.innerText = user;
                         authBtn.href = 'my-gallery.html';

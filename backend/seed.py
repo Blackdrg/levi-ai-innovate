@@ -1,8 +1,8 @@
 import pandas as pd
 from sqlalchemy.orm import Session
-from backend.db import SessionLocal, engine
-from backend.models import Quote, Base
-from backend.embeddings import embed_text
+from db import SessionLocal, engine
+from models import Quote, Base
+from embeddings import embed_text
 import numpy as np
 
 Base.metadata.create_all(engine)
@@ -10,7 +10,7 @@ Base.metadata.create_all(engine)
 db = SessionLocal()
 
 # Load CSV
-df = pd.read_csv("backend/data/quotes.csv")
+df = pd.read_csv("data/quotes.csv")
 
 for _, row in df.iterrows():
     # Existence-check upsert to avoid duplicates and redundant embedding calls

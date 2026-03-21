@@ -33,24 +33,24 @@ services:
       - key: RASA_URL
         value: "http://rasa-server:5005"
 
-  - type: web
-    name: rasa-server
-    runtime: docker
-    dockerfilePath: rasa/Dockerfile.server
-    dockerContext: .
-    plan: free
-    healthCheckPath: /
-    envVars:
-      - key: PORT
-        value: "5005"
-
-  - type: web
-    name: rasa-actions
-    runtime: docker
-    dockerfilePath: rasa/Dockerfile.actions
-    dockerContext: .
-    plan: free
-    healthCheckPath: /
-    envVars:
-      - key: PORT
-        value: "5055"
+#   - type: web
+#     name: rasa-server
+#     runtime: docker
+#     dockerfilePath: rasa/Dockerfile.server
+#     dockerContext: .
+#     plan: free
+#     healthCheckPath: /
+#     envVars:
+#       - key: PORT
+#         value: "5005"
+# 
+#   - type: web
+#     name: rasa-actions
+#     runtime: docker
+#     dockerfilePath: rasa/Dockerfile.actions
+#     dockerContext: .
+#     plan: free
+#     healthCheckPath: /
+#     envVars:
+#       - key: PORT
+#         value: "5055"
