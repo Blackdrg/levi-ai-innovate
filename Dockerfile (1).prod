@@ -1,0 +1,52 @@
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    TRANSFORMERS_CACHE=/app/model_cache \
+    PYTHONPATH=/app \
+    PATH="/opt/venv/bin:$PATH" \
+    # ImageMagick policy fix for MoviePy
+    MAGICK_MEMORY_LIMIT=256MB
+
+WORKDIR /app
+
+# ── System dependencies ─────────────────────
+# imagemagick + ffmpeg = required for MoviePy video generation
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    curl \
+    imagemagick \
+    ffmpeg \
+    libmagickwand-dev \
+    fonts-liberation \
+    fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
+
+# Fix ImageMagick policy to allow PDF/video operations
+RUN sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/' \
+    /etc/ImageMagick-6/policy.xml 2>/dev/null || true
+
+# ── Python venv ─────────────────────────────
+RUN python -m venv /opt/venv
+
+# ── Install dependencies ─────────────────────
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# ── Model cache directory ────────────────────
+RUN mkdir -p /app/model_cache && chmod 777 /app/model_cache
+
+# ── App code ─────────────────────────────────
+COPY backend/ .
+
+EXPOSE 10000
+
+# Runs DB seed then starts server
+CMD bash -c "python seed.py || true && \
+    uvicorn main:app \
+    --host 0.0.0.0 \
+    --port ${PORT:-10000} \
+    --workers 1 \
+    --log-level info"
