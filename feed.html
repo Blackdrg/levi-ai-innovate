@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&amp;family=Plus+Jakarta+Sans:wght@200..800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary-container": "#d4af37",
+              "surface-dim": "#131317",
+              "on-error": "#690005",
+              "tertiary-container": "#c1a3ff",
+              "surface-tint": "#e9c349",
+              "error-container": "#93000a",
+              "on-secondary-fixed-variant": "#3323cc",
+              "background": "#131317",
+              "surface-container-lowest": "#0e0e12",
+              "on-tertiary-fixed": "#25005a",
+              "secondary-fixed": "#e2dfff",
+              "inverse-primary": "#735c00",
+              "primary-fixed": "#ffe088",
+              "on-secondary-container": "#b3b1ff",
+              "on-surface": "#e5e1e7",
+              "surface-container-highest": "#353439",
+              "secondary": "#c3c0ff",
+              "on-secondary": "#1d00a5",
+              "inverse-on-surface": "#303034",
+              "tertiary-fixed": "#eaddff",
+              "outline-variant": "#4d4635",
+              "on-primary-fixed-variant": "#574500",
+              "surface": "#131317",
+              "surface-bright": "#39393d",
+              "inverse-surface": "#e5e1e7",
+              "on-tertiary-container": "#5800c1",
+              "primary-fixed-dim": "#e9c349",
+              "secondary-container": "#3626ce",
+              "primary": "#f2ca50",
+              "on-surface-variant": "#d0c5af",
+              "surface-container-high": "#2a292e",
+              "on-primary-container": "#554300",
+              "surface-variant": "#353439",
+              "on-secondary-fixed": "#0f0069",
+              "surface-container": "#1f1f23",
+              "on-primary": "#3c2f00",
+              "surface-container-low": "#1b1b1f",
+              "secondary-fixed-dim": "#c3c0ff",
+              "tertiary-fixed-dim": "#d2bbff",
+              "on-tertiary-fixed-variant": "#5a00c6",
+              "outline": "#99907c",
+              "on-background": "#e5e1e7",
+              "error": "#ffb4ab",
+              "on-error-container": "#ffdad6",
+              "on-tertiary": "#3f008e",
+              "on-primary-fixed": "#241a00",
+              "tertiary": "#d9c5ff"
+            },
+            fontFamily: {
+              "headline": ["Newsreader"],
+              "body": ["Plus Jakarta Sans"],
+              "label": ["Plus Jakarta Sans"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>body {
+    background-color: #131317;
+    background-image: radial-gradient(circle at 20% 30%, rgba(242, 202, 80, 0.03) 0%, transparent 40%), radial-gradient(circle at 80% 70%, rgba(195, 192, 255, 0.03) 0%, transparent 40%), url(https://lh3.googleusercontent.com/aida-public/AB6AXuAByP33V5p5X9rZ_fsYOUScF0cb60cizfMTTe0rikYAVGqqhcYUgY3_C13TQNQCl1bkZXG_2jnni_fpUIBElpmGdDUmwDOy3mKbqgtJJDQ8IZhIGiiKx9ImUwBprOM6Jmy9p8gDfcP-SuP-ooZu8twZmJhHnfbM4xFNKJuLHNcKwtDwdaCGtCzT3JuVG7vJW-t9fq3uxcdrwpzup5MgoXT-1yPkZlBDOc1m-kYRPHr3xjYy6CBKJ8Gv78pjVKBBGTKMINFxJ5g_stQ);
+    font-family: "Plus Jakarta Sans", sans-serif
+    }
+.masonry-grid {
+    columns: 1;
+    column-gap: 2rem
+    }
+@media (min-width: 768px) {
+    .masonry-grid {
+        columns: 2
+        }
+    }
+@media (min-width: 1280px) {
+    .masonry-grid {
+        columns: 3
+        }
+    }
+.glass-card {
+    background: rgba(27, 27, 31, 0.6);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px)
+    }</style>
+</head>
+<body class="bg-surface text-on-surface selection:bg-primary/30 selection:text-primary">
+<!-- TopNavBar Shell -->
+<nav class="fixed top-0 left-0 right-0 z-50 flex justify-between items-center px-8 py-3 bg-zinc-950/40 backdrop-blur-xl dark:bg-zinc-950/40 rounded-full mt-6 mx-auto w-[90%] max-w-5xl border-[0.5px] border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.3)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.6)]">
+<div class="flex items-center gap-2">
+<span class="text-2xl font-serif italic tracking-tighter bg-gradient-to-r from-[#f2ca50] to-[#d4af37] bg-clip-text text-transparent">LEVI</span>
+</div>
+<div class="hidden md:flex items-center gap-8">
+<a class="text-zinc-400 hover:text-zinc-100 transition-colors duration-300 font-sans text-sm" href="index.html">Home</a>
+<a class="text-zinc-400 hover:text-zinc-100 transition-colors duration-300 font-sans text-sm" href="chat.html">Chat</a>
+<a class="text-zinc-400 hover:text-zinc-100 transition-colors duration-300 font-sans text-sm" href="studio.html">Studio</a>
+<a class="text-[#f2ca50] font-semibold border-b border-[#f2ca50] pb-1 font-sans text-sm" href="feed.html">Feed</a>
+</div>
+<button onclick="toggleMobileMenu()" class="md:hidden mr-2 text-zinc-400"><span class="material-symbols-outlined">menu</span></button><button class="px-5 py-2 rounded-full bg-gradient-to-r from-primary to-primary-container text-on-primary font-label text-sm font-semibold hover:scale-105 transition-all duration-300 active:scale-95">
+            Seeker Account
+        </button>
+</nav>
+<!-- SideNavBar Shell -->
+<aside class="hidden lg:flex flex-col w-64 h-screen fixed left-0 top-0 z-40 bg-[#131317]/60 backdrop-blur-2xl border-r border-white/5">
+<div class="p-8 pt-32">
+<div class="flex items-center gap-3 mb-12">
+<div class="w-10 h-10 rounded-full bg-surface-container-highest overflow-hidden border border-primary/20">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="Portrait of an elegant woman" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAP_SX4k1mwm3g12RRW1pu8zwwukR4pZDvORBiT-kNtIDIal_JTFoGTWl0sFQ5a_1CGzY4cv5fW4XTF_ibuKzQMSdUVOE85rV3G1Lomj2u2NNwjcor8CHEXOU6UZhs4q9JNbyhyBIOFHwC7h5-0Et8hrHFgSJHlwcw88v6QZUl1kAAl-TdSC1-JMF2GwSiDUE0kfb18pS0SOHiu7EYilEbqRniNpxRShKZiwzG7kdXlltkCksclk01oXtPTn-QYD1dICIIQX0vWEto"/>
+</div>
+<div>
+<h3 class="font-serif text-[#D4AF37] italic text-lg leading-none">LEVI AI</h3>
+<p class="font-sans text-[10px] uppercase tracking-widest text-zinc-500 opacity-70 mt-1">Celestial Muse</p>
+</div>
+</div>
+<nav class="space-y-4">
+<a class="flex items-center gap-4 px-4 py-3 text-zinc-500 opacity-70 hover:bg-white/5 hover:opacity-100 transition-all group" href="#">
+<span class="material-symbols-outlined text-xl" data-icon="auto_awesome">auto_awesome</span>
+<span class="font-sans text-xs uppercase tracking-widest">Home</span>
+</a>
+<a class="flex items-center gap-4 px-4 py-3 text-zinc-500 opacity-70 hover:bg-white/5 hover:opacity-100 transition-all group" href="#">
+<span class="material-symbols-outlined text-xl" data-icon="philosophy">psychology</span>
+<span class="font-sans text-xs uppercase tracking-widest">Chat</span>
+</a>
+<a class="flex items-center gap-4 px-4 py-3 text-zinc-500 opacity-70 hover:bg-white/5 hover:opacity-100 transition-all group" href="#">
+<span class="material-symbols-outlined text-xl" data-icon="auto_fix_high">auto_fix_high</span>
+<span class="font-sans text-xs uppercase tracking-widest">Studio</span>
+</a>
+<a class="flex items-center gap-4 px-4 py-3 bg-gradient-to-r from-[#f2ca50]/20 to-transparent text-[#f2ca50] border-l-2 border-[#f2ca50] transition-all group shadow-[inset_0_0_20px_rgba(242,202,80,0.05)]" href="#">
+<span class="material-symbols-outlined text-xl" data-icon="public" style="font-variation-settings: 'FILL' 1;">public</span>
+<span class="font-sans text-xs uppercase tracking-widest font-bold">Feed</span>
+</a>
+</nav>
+</div>
+<div class="mt-auto p-8 border-t border-white/5">
+<div class="p-4 rounded-xl bg-primary/5 border border-primary/10">
+<p class="text-[10px] text-primary/60 uppercase tracking-tighter mb-2">Daily Inspiration</p>
+<p class="font-serif italic text-sm text-on-surface">"The stars are but witnesses to the soul's quiet architecture."</p>
+</div>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="lg:ml-64 pt-32 pb-24 px-6 md:px-12 lg:px-20 max-w-7xl mx-auto">
+<!-- Header Section -->
+<header class="mb-16 text-center lg:text-left">
+<h1 class="font-headline text-5xl md:text-7xl text-on-surface tracking-tight leading-none mb-4">
+                The <span class="italic text-primary">Celestial</span> Feed
+            </h1>
+<p class="font-body text-zinc-400 max-w-2xl text-lg">
+                Explore the collaborative consciousness. A sanctuary of AI-rendered wisdom and ethereal visualizations shared by the community.
+            </p>
+<!-- Filters -->
+<div class="flex flex-wrap gap-3 mt-10 justify-center lg:justify-start">
+<button class="px-6 py-2 rounded-full bg-primary text-on-primary font-label text-xs font-bold tracking-widest uppercase">Latest</button>
+<button class="px-6 py-2 rounded-full bg-surface-container-low border border-white/5 text-zinc-400 font-label text-xs tracking-widest uppercase hover:bg-white/5 hover:text-zinc-200 transition-all">Trending</button>
+<button class="px-6 py-2 rounded-full bg-surface-container-low border border-white/5 text-zinc-400 font-label text-xs tracking-widest uppercase hover:bg-white/5 hover:text-zinc-200 transition-all">Poetry</button>
+<button class="px-6 py-2 rounded-full bg-surface-container-low border border-white/5 text-zinc-400 font-label text-xs tracking-widest uppercase hover:bg-white/5 hover:text-zinc-200 transition-all">Philosophy</button>
+</div>
+</header>
+<!-- Masonry Gallery Grid -->
+<div class="masonry-grid">
+<!-- Quote Card 1 -->
+<article class="break-inside-avoid mb-8 group relative rounded-2xl overflow-hidden glass-card border border-white/5 hover:border-primary/30 transition-all duration-500">
+<div class="relative overflow-hidden aspect-[3/4]">
+<img alt="Nebula visualization" class="w-full h-full object-cover grayscale-[0.5] group-hover:grayscale-0 group-hover:scale-110 transition-all duration-700" data-alt="Deep blue and purple cosmic nebula clouds" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDD6AvohBhAF_b_9D1sVSkY59AeuEJv_OJPzOk9Xt5trSFAdoX06yZHPwqeU9rMKeKgyNUimO8cVW194AAOmSY1uq6Bq_ePhEu1Y5VfP1NJdqvjVYueB4e0kBH-GBzeETHbZGIjvpFO00UzNvZFXUYIYOnrkOnCAeKYnB-cyR9TiKFIQu3DIXv8T1OhkMplUqTaV1W4mK5smN20MARLWoQQc_FR-Bn3LBPRuYnbY36h4DhVks2KcTmDYkA1w92b4vtAoUwXJ-a5at8"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-60"></div>
+</div>
+<!-- Hover Overlay Content -->
+<div class="absolute inset-0 flex flex-col justify-end p-8 opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-black/60 backdrop-blur-sm">
+<span class="material-symbols-outlined text-primary text-4xl mb-4" data-icon="format_quote">format_quote</span>
+<blockquote class="font-headline text-2xl text-on-surface leading-tight italic mb-4">
+                        "Infinity is not a distance, it is a state of being where the mind meets the void and finds it full."
+                    </blockquote>
+<cite class="not-italic font-label text-[10px] uppercase tracking-widest text-primary font-bold mb-6">— Aethelgard AI</cite>
+<div class="flex items-center justify-between border-t border-white/10 pt-6">
+<div class="flex items-center gap-4">
+<button class="flex items-center gap-1.5 text-zinc-300 hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg" data-icon="favorite">favorite</span>
+<span class="text-xs font-bold">1.2k</span>
+</button>
+<button class="flex items-center gap-1.5 text-zinc-300 hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg" data-icon="share">share</span>
+</button>
+</div>
+<button class="text-xs font-bold text-zinc-400 hover:text-white flex items-center gap-1">
+                            Details <span class="material-symbols-outlined text-sm" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+</div>
+</article>
+<!-- Quote Card 2 (Landscape) -->
+<article class="break-inside-avoid mb-8 group relative rounded-2xl overflow-hidden glass-card border border-white/5 hover:border-primary/30 transition-all duration-500">
+<div class="relative overflow-hidden aspect-square">
+<img alt="Starry night" class="w-full h-full object-cover grayscale-[0.8] group-hover:grayscale-0 group-hover:scale-110 transition-all duration-700" data-alt="Dark silhouette of mountains under a starry sky" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCyjqjHVkbiaZOLDAFjB92QL9mJpUiTPFFTiAfhp53SKOFlZ0_K5sO2qpo_scxOa_Sy-ZckHyE5ZcEprZPaanECPQaKIMa45U7InAzTQF_PNUfxil3Y7ss2IAomaMh7KTHnU_QJ8LefC0ci1hPhWj2r3C6QgraDNNrHlrs35Fuvf5hv9J_8Gl5kajvzoBR2y4dZYo1BAsZ8Dh_BsbeWawaWhIZZ5_WWRq3dCPFzgGxcJ2PYbvgEsknrjf3voUohlLI8vY9RmLIozoQ"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-60"></div>
+</div>
+<div class="absolute inset-0 flex flex-col justify-end p-8 opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-black/60 backdrop-blur-sm">
+<blockquote class="font-headline text-2xl text-on-surface leading-tight italic mb-4">
+                        "Silence is the gold dust of the universe, settling on those who dare to listen."
+                    </blockquote>
+<cite class="not-italic font-label text-[10px] uppercase tracking-widest text-primary font-bold mb-6">— Solara_9</cite>
+<div class="flex items-center justify-between border-t border-white/10 pt-6">
+<div class="flex items-center gap-4">
+<button class="flex items-center gap-1.5 text-zinc-300 hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg" data-icon="favorite" style="font-variation-settings: 'FILL' 1;">favorite</span>
+<span class="text-xs font-bold">842</span>
+</button>
+<button class="flex items-center gap-1.5 text-zinc-300 hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg" data-icon="share">share</span>
+</button>
+</div>
+<button class="text-xs font-bold text-zinc-400 hover:text-white flex items-center gap-1">
+                            Details <span class="material-symbols-outlined text-sm" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+</div>
+</article>
+<!-- Quote Card 3 (Vertical) -->
+<article class="break-inside-avoid mb-8 group relative rounded-2xl overflow-hidden glass-card border border-white/5 hover:border-primary/30 transition-all duration-500">
+<div class="relative overflow-hidden aspect-[4/5]">
+<img alt="Obsidian peaks" class="w-full h-full object-cover grayscale-[0.6] group-hover:grayscale-0 group-hover:scale-110 transition-all duration-700" data-alt="Dark dramatic mountains under milky way galaxy" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB9VERGDU7r2ig91t503U3XPHJgtIUh0AagQ4Xk1xbbS8oyTZiMHJSd7t54mpJVwMS3rsiRlPCUr9rG4jl3_0UcKNNFOkBHlxBY-_hbV5OiNqc_r7MpgNg-dbuOabxAag-tL-260HkN5rqSwoDne6laZgwFi_H0pxYLV69flGKeBkhq5sHn2yiCixPrQtH84zHgq4mOURrygJB2XXf5OhJk_JbrBKGPHEWUIwytLg-MtGSPnyPwooyN5hGbeq7R_1T7TXEkzS3CfeQ"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-60"></div>
+</div>
+<div class="absolute inset-0 flex flex-col justify-end p-8 opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-black/60 backdrop-blur-sm">
+<blockquote class="font-headline text-xl text-on-surface leading-snug italic mb-4">
+                        "We are not just inhabitants of time; we are the ink with which time writes its most secret chronicles."
+                    </blockquote>
+<cite class="not-italic font-label text-[10px] uppercase tracking-widest text-primary font-bold mb-6">— The Chronicler</cite>
+<div class="flex items-center justify-between border-t border-white/10 pt-6">
+<div class="flex items-center gap-4">
+<button class="flex items-center gap-1.5 text-zinc-300 hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg" data-icon="favorite">favorite</span>
+<span class="text-xs font-bold">2.4k</span>
+</button>
+<button class="flex items-center gap-1.5 text-zinc-300 hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg" data-icon="share">share</span>
+</button>
+</div>
+<button class="text-xs font-bold text-zinc-400 hover:text-white flex items-center gap-1">
+                            Details <span class="material-symbols-outlined text-sm" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+</div>
+</article>
+<!-- Quote Card 4 -->
+<article class="break-inside-avoid mb-8 group relative rounded-2xl overflow-hidden glass-card border border-white/5 hover:border-primary/30 transition-all duration-500">
+<div class="relative overflow-hidden aspect-square">
+<img alt="Ethereal glow" class="w-full h-full object-cover grayscale-[0.3] group-hover:grayscale-0 group-hover:scale-110 transition-all duration-700" data-alt="Glowing spherical lights in a dark forest" src="https://lh3.googleusercontent.com/aida-public/AB6AXuATrAfY1vHXIVYf5tslmeNgmui6hw2_VaxzgQhup9aVCMSNB5kOdPJwONAmdx0XEvg95Vl944bXJMb5_Q0C5Ps-pbVboS6tfnDCZv7j181mm12C7iuQ2u6RcCIfivc0UU6Y4KQpyGazWK0kPncoYr6ro3_6PlWuGq4lENQNOr8OkPgZ-41_CBJkCEX9ndQLwvoztRX1D3p9L12kq69Y54hCZb40qCbKfGh4R3rt3egMj_yF9qfQjEMA52PsQzDJYway9gD0HVYJOMk"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-60"></div>
+</div>
+<div class="absolute inset-0 flex flex-col justify-end p-8 opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-black/60 backdrop-blur-sm">
+<blockquote class="font-headline text-2xl text-on-surface leading-tight italic mb-4">
+                        "Your thoughts are the seeds of constellations yet to be named."
+                    </blockquote>
+<cite class="not-italic font-label text-[10px] uppercase tracking-widest text-primary font-bold mb-6">— Lyra Vane</cite>
+<div class="flex items-center justify-between border-t border-white/10 pt-6">
+<div class="flex items-center gap-4">
+<button class="flex items-center gap-1.5 text-zinc-300 hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg" data-icon="favorite">favorite</span>
+<span class="text-xs font-bold">3.1k</span>
+</button>
+<button class="flex items-center gap-1.5 text-zinc-300 hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg" data-icon="share">share</span>
+</button>
+</div>
+<button class="text-xs font-bold text-zinc-400 hover:text-white flex items-center gap-1">
+                            Details <span class="material-symbols-outlined text-sm" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+</div>
+</article>
+<!-- Quote Card 5 -->
+<article class="break-inside-avoid mb-8 group relative rounded-2xl overflow-hidden glass-card border border-white/5 hover:border-primary/30 transition-all duration-500">
+<div class="relative overflow-hidden aspect-[3/2]">
+<img alt="Cosmic eye" class="w-full h-full object-cover grayscale-[0.9] group-hover:grayscale-0 group-hover:scale-110 transition-all duration-700" data-alt="Detailed close up of a cosmic spiral galaxy" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBZ5EW8j6IP4sBX8XXnEzLXbrCRFtqrBVfWiMq8z3kFyIjaPj5s4RfU92jthyNMexdU1ql6kszUOw9Ei4x8nOlhAG98nqETrPgi8P7NPMXZX8JilGLwxFEWd4dJfLOfaQ25ZY_wAoqgkTErEBuUmIMi8ERYlaaKUVSFn9Nyg-9XrRUQuljNneDckIGY7_o4l3guSMMJxwKVQvti-sR8kX6m62wBqJZUA7ZH39RC6FA9XKcjTrTInvWU3sbqFwnbhjz_WS9fnXhYqy8"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-60"></div>
+</div>
+<div class="absolute inset-0 flex flex-col justify-end p-8 opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-black/60 backdrop-blur-sm">
+<blockquote class="font-headline text-2xl text-on-surface leading-tight italic mb-4">
+                        "To be seen is to be born again in the eyes of another."
+                    </blockquote>
+<cite class="not-italic font-label text-[10px] uppercase tracking-widest text-primary font-bold mb-6">— The Oracle</cite>
+<div class="flex items-center justify-between border-t border-white/10 pt-6">
+<div class="flex items-center gap-4">
+<button class="flex items-center gap-1.5 text-zinc-300 hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg" data-icon="favorite">favorite</span>
+<span class="text-xs font-bold">1.5k</span>
+</button>
+<button class="flex items-center gap-1.5 text-zinc-300 hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg" data-icon="share">share</span>
+</button>
+</div>
+<button class="text-xs font-bold text-zinc-400 hover:text-white flex items-center gap-1">
+                            Details <span class="material-symbols-outlined text-sm" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+</div>
+</article>
+<!-- Quote Card 6 -->
+<article class="break-inside-avoid mb-8 group relative rounded-2xl overflow-hidden glass-card border border-white/5 hover:border-primary/30 transition-all duration-500">
+<div class="relative overflow-hidden aspect-[3/5]">
+<img alt="Digital stardust" class="w-full h-full object-cover grayscale group-hover:grayscale-0 group-hover:scale-110 transition-all duration-700" data-alt="Ethereal blue digital earth grid and space particles" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCcy67LPYmnm6ry0UPBS2eLbKVlOb0cnuONfjqJmw6PTfGKfM6MV8x5ZJtuU01KzRqTAC5xkZjxM31xJSeTAxbNlZyIXWhhaUXVl07Vy421geQZ9vCO5-d1RNo1PEgy_s3qEe9jvOhtOxenlZn_AoZRfOWbOcJMCv9QAB6yWMdivWEBqqtZaM5ECT6zMlyKtSChByVVS_NR_E3tSKq6cHgPF6GIwsUDDA3akOHCza8HdTaviS1IQ9KoJP4IiEbTxigh2MR56WG-qUw"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-60"></div>
+</div>
+<div class="absolute inset-0 flex flex-col justify-end p-8 opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-black/60 backdrop-blur-sm">
+<blockquote class="font-headline text-2xl text-on-surface leading-tight italic mb-4">
+                        "Knowledge is the light that casts the most beautiful shadows."
+                    </blockquote>
+<cite class="not-italic font-label text-[10px] uppercase tracking-widest text-primary font-bold mb-6">— Noctis AI</cite>
+<div class="flex items-center justify-between border-t border-white/10 pt-6">
+<div class="flex items-center gap-4">
+<button class="flex items-center gap-1.5 text-zinc-300 hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg" data-icon="favorite">favorite</span>
+<span class="text-xs font-bold">920</span>
+</button>
+<button class="flex items-center gap-1.5 text-zinc-300 hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg" data-icon="share">share</span>
+</button>
+</div>
+<button class="text-xs font-bold text-zinc-400 hover:text-white flex items-center gap-1">
+                            Details <span class="material-symbols-outlined text-sm" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+</div>
+</article>
+</div>
+<!-- Load More Section -->
+<div class="flex flex-col items-center mt-20">
+<div class="w-px h-24 bg-gradient-to-b from-primary/50 to-transparent mb-8"></div>
+<button class="group flex flex-col items-center gap-4">
+<span class="font-label text-xs uppercase tracking-[0.3em] text-zinc-500 group-hover:text-primary transition-colors">Venture Deeper</span>
+<div class="w-12 h-12 rounded-full border border-primary/20 flex items-center justify-center group-hover:bg-primary group-hover:text-on-primary transition-all duration-300">
+<span class="material-symbols-outlined" data-icon="expand_more">expand_more</span>
+</div>
+</button>
+</div>
+</main>
+<!-- Contextual FAB (Only for Home/Feed as per instructions) -->
+<button class="fixed bottom-10 right-10 z-50 w-16 h-16 rounded-full bg-gradient-to-tr from-[#f2ca50] to-[#d4af37] text-on-primary shadow-[0_15px_30px_rgba(212,175,55,0.3)] flex items-center justify-center hover:scale-110 active:scale-90 transition-all duration-300">
+<span class="material-symbols-outlined text-3xl" data-icon="add">add</span>
+</button>
+
+<!-- Mobile menu overlay -->
+<div id="mobile-menu" class="hidden fixed inset-0 z-[60]" style="background:rgba(13,13,18,.95);backdrop-filter:blur(24px);padding-top:6rem">
+  <button onclick="toggleMobileMenu()" class="absolute top-8 right-6 text-zinc-400"><span class="material-symbols-outlined" style="font-size:28px;font-family:Material Symbols Outlined;font-variation-settings:FILL 0,wght 300">close</span></button>
+  <nav class="flex flex-col gap-2 px-8 pt-4">
+    <a onclick="toggleMobileMenu()" href="index.html" style="font-family:Newsreader,serif;font-style:italic;font-size:1.25rem;color:#e5e1e7;padding:12px 0;border-bottom:0.5px solid rgba(255,255,255,.06);display:block">Home</a>
+    <a onclick="toggleMobileMenu()" href="chat.html" style="font-family:Newsreader,serif;font-style:italic;font-size:1.25rem;color:#e5e1e7;padding:12px 0;border-bottom:0.5px solid rgba(255,255,255,.06);display:block">AI Chat</a>
+    <a onclick="toggleMobileMenu()" href="studio.html" style="font-family:Newsreader,serif;font-style:italic;font-size:1.25rem;color:#e5e1e7;padding:12px 0;border-bottom:0.5px solid rgba(255,255,255,.06);display:block">Studio</a>
+    <a onclick="toggleMobileMenu()" href="feed.html" style="font-family:Newsreader,serif;font-style:italic;font-size:1.25rem;color:#f2ca50;padding:12px 0;border-bottom:0.5px solid rgba(255,255,255,.06);display:block">Feed</a>
+  </nav>
+</div>
+<div id="levi-toast" style="position:fixed;bottom:5rem;left:50%;transform:translateX(-50%) translateY(12px);opacity:0;transition:all .3s;z-index:999;pointer-events:none"></div>
+<script>
+function toggleMobileMenu(){const m=document.getElementById('mobile-menu');if(!m)return;m.classList.toggle('hidden')}
+function showToast(msg,type){const t=document.getElementById('levi-toast');t.innerHTML='<div style="background:rgba(19,19,23,.92);border:.5px solid rgba(242,202,80,.35);backdrop-filter:blur(20px);display:flex;align-items:center;gap:10px;padding:10px 20px;border-radius:9999px;box-shadow:0 8px 32px rgba(0,0,0,.5)"><span style="color:#f2ca50;font-size:12px;font-family:Plus Jakarta Sans,sans-serif;font-weight:600;letter-spacing:.04em">'+msg+'</span></div>';t.style.opacity='1';t.style.transform='translateX(-50%) translateY(0)';clearTimeout(t._timer);t._timer=setTimeout(()=>{t.style.opacity='0';t.style.transform='translateX(-50%) translateY(12px)'},3000)}
+function toggleLanguage(){showToast('Hindi translation coming soon')}
+const API_BASE=(location.hostname==='localhost'||location.hostname==='127.0.0.1')?'http://127.0.0.1:8000':location.origin;
+// Auth nav update
+const _u=localStorage.getItem('levi_user');if(_u){try{const o=JSON.parse(_u);const btn=document.querySelector('nav > button');if(btn)btn.textContent=o.username||'Account'}catch{}}
+</script>
+
+</body></html>

@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+<title>LEVI — My Gallery</title>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script>tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#f2ca50","primary-container":"#d4af37","on-primary":"#3c2f00","secondary":"#c3c0ff","surface":"#131317","surface-container-lowest":"#0e0e12","surface-container-low":"#1b1b1f","surface-container":"#1f1f23","surface-container-high":"#2a292e","surface-container-highest":"#353439","on-surface":"#e5e1e7","on-surface-variant":"#d0c5af","outline":"#99907c","outline-variant":"#4d4635"},fontFamily:{headline:["Newsreader","serif"],body:["Plus Jakarta Sans","sans-serif"],label:["Plus Jakarta Sans","sans-serif"],sans:["Plus Jakarta Sans","sans-serif"]},borderRadius:{DEFAULT:"0.25rem",lg:"0.5rem",xl:"0.75rem","2xl":"1rem","3xl":"1.5rem",full:"9999px"}}}}</script>
+<style>
+.material-symbols-outlined{font-family:'Material Symbols Outlined';font-size:22px;line-height:1;font-variation-settings:'FILL' 0,'wght' 300,'GRAD' 0,'opsz' 24;user-select:none}
+.icon-fill{font-variation-settings:'FILL' 1,'wght' 300,'GRAD' 0,'opsz' 24}.icon-sm{font-size:18px}
+.glass{background:rgba(19,19,23,.72);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
+.glass-card{background:rgba(27,27,31,.6);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+.gold-gradient-text{background:linear-gradient(to right,#f2ca50,#d4af37);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.btn-gold{background:linear-gradient(135deg,#f2ca50,#d4af37);color:#3c2f00;transition:all .25s}
+.btn-gold:hover{background:linear-gradient(135deg,#fde68a,#f2ca50);box-shadow:0 0 24px rgba(242,202,80,.3)}
+.ghost-border{border:.5px solid rgba(255,255,255,.08)}
+.nav-active{background:linear-gradient(90deg,rgba(242,202,80,.15),rgba(242,202,80,.02));border-left:2px solid #f2ca50;color:#f2ca50}
+.nav-inactive{border-left:2px solid transparent;color:#69666e;transition:all .2s}
+.nav-inactive:hover{background:rgba(255,255,255,.04);color:#e5e1e7}
+.gallery-card{transition:all .4s;cursor:pointer}
+.gallery-card .reveal{opacity:0;transition:opacity .35s}
+.gallery-card:hover .reveal{opacity:1}
+.gallery-card:hover .card-img{transform:scale(1.06)}
+.card-img{transition:transform .7s}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.animate-fade-up{animation:fadeUp .5s ease forwards;opacity:0}
+#toast{position:fixed;bottom:5rem;left:50%;transform:translateX(-50%) translateY(12px);opacity:0;transition:all .3s;z-index:999;pointer-events:none}
+#toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+</style>
+</head>
+<body class="bg-background text-on-surface font-body min-h-screen">
+
+<!-- Orbs -->
+<div class="fixed inset-0 pointer-events-none overflow-hidden" style="z-index:0">
+  <div class="absolute rounded-full" style="width:55vw;height:55vw;max-width:700px;top:-18%;left:-14%;background:radial-gradient(circle,rgba(242,202,80,.05) 0%,transparent 68%);filter:blur(100px)"></div>
+  <div class="absolute rounded-full" style="width:40vw;height:40vw;max-width:520px;bottom:-12%;right:-8%;background:radial-gradient(circle,rgba(195,192,255,.04) 0%,transparent 68%);filter:blur(80px)"></div>
+</div>
+
+<!-- TOP NAV -->
+<nav class="fixed top-0 left-0 right-0 z-50 pt-6">
+  <div class="mx-auto w-[90%] max-w-5xl glass rounded-full ghost-border px-6 py-3 flex justify-between items-center shadow-[0_20px_60px_rgba(0,0,0,0.4)]">
+    <a href="index.html" class="text-2xl font-headline italic tracking-[-0.03em] gold-gradient-text">LEVI</a>
+    <div class="hidden md:flex items-center gap-8">
+      <a href="index.html"      class="text-zinc-400 hover:text-zinc-100 transition-colors text-sm">Home</a>
+      <a href="chat.html"       class="text-zinc-400 hover:text-zinc-100 transition-colors text-sm">Chat</a>
+      <a href="studio.html"     class="text-zinc-400 hover:text-zinc-100 transition-colors text-sm">Studio</a>
+      <a href="my-gallery.html" class="text-primary font-semibold border-b border-primary pb-0.5 text-sm">Gallery</a>
+    </div>
+    <div class="flex items-center gap-3">
+      <span class="hidden md:flex items-center gap-1.5 text-[10px] text-zinc-500"><span data-credits>-- credits</span></span>
+      <a href="studio.html" class="btn-gold text-xs font-semibold tracking-wider uppercase px-5 py-2 rounded-full flex items-center gap-1.5">
+        <span class="material-symbols-outlined icon-sm icon-fill">add</span>Create
+      </a>
+      <button onclick="toggleMobileMenu()" class="md:hidden text-zinc-400"><span class="material-symbols-outlined">menu</span></button>
+    </div>
+  </div>
+</nav>
+
+<!-- MOBILE MENU -->
+<div id="mobile-menu" class="hidden fixed inset-0 z-40 glass" style="padding-top:6rem">
+  <button onclick="toggleMobileMenu()" class="absolute top-8 right-6 text-zinc-400"><span class="material-symbols-outlined" style="font-size:28px">close</span></button>
+  <nav class="flex flex-col gap-2 px-8 pt-4">
+    <a onclick="toggleMobileMenu()" href="index.html"      class="text-xl font-headline italic text-on-surface py-3 border-b border-white/5">Home</a>
+    <a onclick="toggleMobileMenu()" href="chat.html"       class="text-xl font-headline italic text-on-surface py-3 border-b border-white/5">Chat</a>
+    <a onclick="toggleMobileMenu()" href="studio.html"     class="text-xl font-headline italic text-on-surface py-3 border-b border-white/5">Studio</a>
+    <a onclick="toggleMobileMenu()" href="my-gallery.html" class="text-xl font-headline italic gold-gradient-text py-3">My Gallery</a>
+  </nav>
+</div>
+
+<!-- SIDEBAR -->
+<aside class="hidden lg:flex flex-col w-64 h-screen fixed left-0 top-0 z-40 border-r border-white/5 pt-32 pb-8 px-6" style="background:rgba(13,13,18,.65);backdrop-filter:blur(24px)">
+  <div class="mb-10 px-4"><h2 class="font-headline italic gold-gradient-text text-xl">LEVI AI</h2><p class="text-[10px] uppercase tracking-[0.2em] text-zinc-500 mt-1">Celestial Muse</p></div>
+  <nav class="flex flex-col gap-1 flex-1">
+    <a href="index.html"      class="nav-inactive flex items-center gap-4 px-4 py-3 rounded-r-xl text-xs uppercase tracking-widest"><span class="material-symbols-outlined icon-sm">auto_awesome</span>Home</a>
+    <a href="chat.html"       class="nav-inactive flex items-center gap-4 px-4 py-3 rounded-r-xl text-xs uppercase tracking-widest"><span class="material-symbols-outlined icon-sm">psychology</span>Chat</a>
+    <a href="studio.html"     class="nav-inactive flex items-center gap-4 px-4 py-3 rounded-r-xl text-xs uppercase tracking-widest"><span class="material-symbols-outlined icon-sm">auto_fix_high</span>Studio</a>
+    <a href="feed.html"       class="nav-inactive flex items-center gap-4 px-4 py-3 rounded-r-xl text-xs uppercase tracking-widest"><span class="material-symbols-outlined icon-sm">public</span>Feed</a>
+    <a href="quotes.html"     class="nav-inactive flex items-center gap-4 px-4 py-3 rounded-r-xl text-xs uppercase tracking-widest"><span class="material-symbols-outlined icon-sm">search</span>Explore</a>
+    <a href="my-gallery.html" class="nav-active flex items-center gap-4 px-4 py-3 rounded-r-xl text-xs uppercase tracking-widest font-bold"><span class="material-symbols-outlined icon-sm icon-fill">photo_library</span>My Gallery</a>
+    <a href="pricing.html"    class="nav-inactive flex items-center gap-4 px-4 py-3 rounded-r-xl text-xs uppercase tracking-widest"><span class="material-symbols-outlined icon-sm">workspace_premium</span>Pricing</a>
+  </nav>
+  <div class="mt-auto px-3 py-3 rounded-xl ghost-border" style="background:rgba(255,255,255,.03)">
+    <p class="text-xs font-semibold text-on-surface" id="sidebar-user">Seeker</p>
+    <p class="text-[10px] text-zinc-500 mt-0.5" data-credits>-- credits</p>
+    <button onclick="logout()" class="mt-2 text-[10px] text-zinc-500 hover:text-red-400 transition-colors uppercase tracking-wider">Sign Out</button>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="lg:ml-64 pt-28 px-5 lg:px-12 pb-24" style="position:relative;z-index:1">
+  <div class="max-w-6xl mx-auto">
+
+    <!-- Header -->
+    <div class="flex items-end justify-between mb-12">
+      <div>
+        <h1 class="font-headline text-5xl lg:text-6xl font-light tracking-tight">Your <span class="gold-gradient-text italic">Creations</span></h1>
+        <p class="text-on-surface-variant text-sm font-light mt-2" id="gallery-count">Loading your gallery…</p>
+      </div>
+      <a href="studio.html" class="btn-gold text-xs font-semibold tracking-wider uppercase px-6 py-3 rounded-full flex items-center gap-2 hidden md:flex">
+        <span class="material-symbols-outlined icon-sm icon-fill">add</span>New Creation
+      </a>
+    </div>
+
+    <!-- Gallery grid -->
+    <div id="gallery-grid" class="grid grid-cols-2 md:grid-cols-3 gap-5">
+      <!-- Populated by JS -->
+    </div>
+
+    <!-- Loading state -->
+    <div id="loading-state" class="flex flex-col items-center py-24 gap-4">
+      <div style="width:40px;height:40px;border:2px solid rgba(242,202,80,.2);border-top-color:#f2ca50;border-radius:50%;animation:spin .85s linear infinite"></div>
+      <p class="text-zinc-500 text-sm uppercase tracking-widest">Loading gallery…</p>
+    </div>
+
+    <!-- Empty state -->
+    <div id="empty-state" class="hidden text-center py-24">
+      <div class="w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-6" style="background:rgba(242,202,80,.08)">
+        <span class="material-symbols-outlined" style="font-size:36px;color:rgba(242,202,80,.4)">photo_library</span>
+      </div>
+      <h3 class="font-headline text-3xl italic font-light mb-3">No Creations Yet</h3>
+      <p class="text-on-surface-variant text-sm mb-8 max-w-sm mx-auto font-light">Your gallery is empty. Head to Studio and synthesize your first visual masterpiece.</p>
+      <a href="studio.html" class="btn-gold font-semibold tracking-wider uppercase px-8 py-3.5 rounded-full text-sm inline-flex items-center gap-2">
+        <span class="material-symbols-outlined icon-sm icon-fill">auto_fix_high</span>Open Studio
+      </a>
+    </div>
+  </div>
+</main>
+
+<!-- Mobile bottom nav -->
+<nav class="md:hidden fixed bottom-5 left-1/2 -translate-x-1/2 w-[88%] z-50">
+  <div class="glass ghost-border rounded-full px-8 py-3 flex justify-around items-center shadow-2xl">
+    <a href="index.html"><span class="material-symbols-outlined" style="color:#69666e">auto_awesome</span></a>
+    <a href="chat.html"><span class="material-symbols-outlined" style="color:#69666e">psychology</span></a>
+    <a href="studio.html"><span class="material-symbols-outlined" style="color:#69666e">auto_fix_high</span></a>
+    <a href="my-gallery.html"><span class="material-symbols-outlined icon-fill" style="color:#f2ca50">photo_library</span></a>
+  </div>
+</nav>
+
+<div id="toast"></div>
+
+<style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+<script>
+function toggleMobileMenu(){const m=document.getElementById('mobile-menu');if(!m)return;m.classList.toggle('hidden')}
+function showToast(msg,type='success'){const t=document.getElementById('toast');const bg=type==='error'?'rgba(147,0,10,.85)':'rgba(19,19,23,.92)';const border=type==='error'?'rgba(255,180,171,.3)':'rgba(242,202,80,.35)';t.innerHTML=`<div style="background:${bg};border:.5px solid ${border};backdrop-filter:blur(20px)" class="flex items-center gap-2.5 px-5 py-3 rounded-full shadow-2xl"><span style="font-size:12px;color:#e5e1e7;font-family:'Plus Jakarta Sans',sans-serif;font-weight:600;letter-spacing:.04em">${msg}</span></div>`;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),3000)}
+function logout(){localStorage.removeItem('levi_token');localStorage.removeItem('levi_user');window.location.href='index.html'}
+
+const API_BASE=(location.hostname==='localhost'||location.hostname==='127.0.0.1')?'http://127.0.0.1:8000':location.origin;
+
+function cardHTML(item,i){
+  const src=item.image_url||item.image_b64||item.url||'';
+  const text=(item.text||'').replace(/'/g,"'");
+  const author=item.author||'LEVI AI';
+  const isVideo=item.type==='video'||item.video_url;
+  const mediaSrc=isVideo?(item.video_url||''):(item.image_url||item.image_b64||'');
+  return `<div class="gallery-card animate-fade-up glass-card ghost-border rounded-2xl overflow-hidden relative" style="animation-delay:${i*60}ms">
+    <div class="relative overflow-hidden" style="aspect-ratio:9/16">
+      ${isVideo?`<video src="${mediaSrc}" class="card-img w-full h-full object-cover" muted playsinline loop onmouseenter="this.play()" onmouseleave="this.pause()"></video>`:`<div class="card-img w-full h-full" style="background:linear-gradient(135deg,#0a0a18,#1a1040);display:flex;align-items:center;justify-content:center">${src?`<img src="${src}" class="w-full h-full object-cover" alt=""/>`:''}</div>`}
+      <div class="absolute inset-0" style="background:linear-gradient(to top,rgba(0,0,0,.8) 0%,transparent 55%)"></div>
+      <!-- Quote text -->
+      <div class="absolute inset-x-0 bottom-0 p-4">
+        <p class="font-headline italic text-xs text-on-surface leading-snug mb-1 line-clamp-3">"${text}"</p>
+        <p class="text-[9px] font-label text-primary uppercase tracking-widest font-semibold">— ${author}</p>
+      </div>
+      <!-- Hover actions -->
+      <div class="reveal absolute inset-0 flex flex-col items-center justify-center gap-3" style="background:rgba(0,0,0,.6);backdrop-filter:blur(4px)">
+        <button onclick="downloadItem('${src}','${text}')" class="flex items-center gap-2 btn-gold px-5 py-2.5 rounded-full text-xs font-semibold uppercase tracking-wider">
+          <span class="material-symbols-outlined icon-sm">download</span>Download
+        </button>
+        <button onclick="shareItem('${text}','${author}')" class="flex items-center gap-2 ghost-border text-on-surface px-5 py-2.5 rounded-full text-xs font-semibold uppercase tracking-wider hover:bg-white/8 transition-all">
+          <span class="material-symbols-outlined icon-sm">share</span>Share
+        </button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function downloadItem(src,text){
+  if(!src){showToast('No image to download','error');return}
+  const a=document.createElement('a');a.href=src;a.download='levi-creation-'+Date.now()+'.png';a.click();showToast('Downloading…')
+}
+function shareItem(text,author){
+  const str=`"${text}" — ${author}`;
+  if(navigator.share)navigator.share({title:'LEVI AI Wisdom',text:str,url:location.href});
+  else{navigator.clipboard.writeText(str);showToast('Copied to clipboard')}
+}
+
+async function loadGallery(){
+  const token=localStorage.getItem('levi_token');
+  if(!token){document.getElementById('loading-state').classList.add('hidden');document.getElementById('empty-state').classList.remove('hidden');document.getElementById('gallery-count').textContent='Please sign in to view your gallery';return}
+  try{
+    const r=await fetch(API_BASE+'/my_gallery',{headers:{'Authorization':'Bearer '+token}});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const items=await r.json();
+    document.getElementById('loading-state').classList.add('hidden');
+    if(!items||!items.length){document.getElementById('empty-state').classList.remove('hidden');document.getElementById('gallery-count').textContent='0 creations';return}
+    document.getElementById('gallery-count').textContent=items.length+' creation'+(items.length!==1?'s':'');
+    document.getElementById('gallery-grid').innerHTML=items.map((item,i)=>cardHTML(item,i)).join('');
+  }catch(e){
+    document.getElementById('loading-state').classList.add('hidden');
+    document.getElementById('empty-state').classList.remove('hidden');
+    document.getElementById('gallery-count').textContent='Could not load gallery';
+  }
+}
+
+// Auth
+const u=localStorage.getItem('levi_user');
+if(u){try{const o=JSON.parse(u);document.getElementById('sidebar-user').textContent=o.username||'Seeker';document.querySelectorAll('[data-credits]').forEach(el=>el.textContent=(o.credits||0)+' credits')}catch{}}
+
+loadGallery();
+</script>
+</body>
+</html>
