@@ -98,7 +98,7 @@ try:
     from backend.image_gen import generate_quote_image
     from backend.video_gen import generate_quote_video
     from backend.email_service import send_daily_quote, send_payment_receipt
-    from backend.payments import router as payments_router, use_credits, verify_payment_signature
+    from backend.payments import router as payments_router, use_credits, verify_payment_signature, verify_razorpay_signature, upgrade_user_tier
     from backend.tasks import generate_video_task as generate_video_async
 except (ImportError, ModuleNotFoundError) as e:
     logger.warning(f"Could not import from backend.*: {e}. Falling back to local imports.")
@@ -114,7 +114,7 @@ except (ImportError, ModuleNotFoundError) as e:
         from image_gen import generate_quote_image
         from video_gen import generate_quote_video
         from email_service import send_daily_quote, send_payment_receipt
-        from payments import router as payments_router, use_credits, verify_payment_signature
+        from payments import router as payments_router, use_credits, verify_payment_signature, verify_razorpay_signature, upgrade_user_tier
         from tasks import generate_video_task as generate_video_async
     except (ImportError, ModuleNotFoundError) as e2:
         logger.error(f"Fallback imports also failed: {e2}")
@@ -998,8 +998,8 @@ def new_order(req: OrderRequest, db: Session = Depends(get_db), current_user: Us
 
 @app.post("/verify_payment")
 def confirm_payment(data: PaymentVerify, db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
-    from backend.payments import upgrade_user_tier
-    valid = verify_payment_signature(
+    from backend import payments
+    valid = payments.verify_razorpay_signature(
         data.razorpay_order_id,
         data.razorpay_payment_id,
         data.razorpay_signature
@@ -1008,7 +1008,7 @@ def confirm_payment(data: PaymentVerify, db: Session = Depends(get_db), current_
         raise HTTPException(status_code=400, detail="Payment verification failed")
     
     # Upgrade user tier in DB
-    upgrade_user_tier(current_user.id, data.plan, db) 
+    payments.upgrade_user_tier(current_user.id, data.plan, db) 
     
     return {"status": "success", "message": f"Payment confirmed and account upgraded to {data.plan}"}
 

@@ -54,7 +54,7 @@ def create_order(amount: int, currency: str = "INR", receipt: str = "order_1", u
         logger.error(f"Razorpay order creation failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-def verify_payment_signature(order_id: str, payment_id: str, signature: str) -> bool:
+def verify_razorpay_signature(order_id: str, payment_id: str, signature: str) -> bool:
     """
     Verify the payment signature from the frontend callback.
     """
@@ -81,6 +81,12 @@ def upgrade_user_tier(user_id: int, plan: str, db: Session):
         logger.info(f"User {user_id} upgraded to {plan}")
         return True
     return False
+
+def verify_payment_signature(order_id: str, payment_id: str, signature: str) -> bool:
+    """
+    Alias for verify_razorpay_signature.
+    """
+    return verify_razorpay_signature(order_id, payment_id, signature)
 
 def use_credits(user_id: int, amount: int, db: Session):
     """
