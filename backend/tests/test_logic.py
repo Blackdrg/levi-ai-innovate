@@ -14,10 +14,11 @@ def test_password_hashing():
     assert not verify_password("wrongpassword", hashed)
 
 def test_credit_deduction(db_session, test_user):
-    # Initial credits = 10 (from conftest)
+    # Initial credits = dynamic (due to test interference)
     user_id = int(test_user.id)
+    initial = int(test_user.credits)
     new_credits = use_credits(user_id, 5, db_session)
-    assert int(new_credits) == 5
+    assert int(new_credits) == initial - 5
     
     # Try to deduct more than available
     with pytest.raises(HTTPException) as exc:
@@ -34,9 +35,9 @@ def test_hmac_verification():
     order_id = "order_1"
     payment_id = "pay_1"
     msg = f"{order_id}|{payment_id}"
-    signature = hmac.new(secret.encode(), msg.encode(), hashlib.sha256).hexdigest()
+    signature = hmac.HMAC(secret.encode(), msg.encode(), hashlib.sha256).hexdigest()
     
     with pytest.MonkeyPatch().context() as m:
-        m.setenv("RAZORPAY_KEY_SECRET", secret)
+        m.setattr("backend.payments.RAZORPAY_KEY_SECRET", secret)
         assert verify_razorpay_signature(order_id, payment_id, signature)
         assert not verify_razorpay_signature(order_id, payment_id, "wrong_sig")

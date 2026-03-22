@@ -1,6 +1,6 @@
 # LEVI - AI Wisdom & Creative Muse 🌟 (Synced to https://github.com/Blackdrg/LEVI-AI - October 2024)
 
-LEVI is a full-stack AI app for philosophical quotes, contextual chat, and artistic image generation. **Status: Production-ready release (v2.2). Synced latest from repo. Features: Celestial Design System (Newsreader/Gold), Together AI, Stripe Payments, Celery Worker, S3 Storage, and Web Push Notifications.**
+LEVI is a full-stack AI app for philosophical quotes, contextual chat, and artistic image generation. **Status: Production-ready release (v2.2). Synced latest from repo. Features: Celestial Design System (Newsreader/Gold), Together AI, Razorpay Payments, Celery Worker, S3 Storage, and Web Push Notifications.**
 
 ## 🏗️ Architecture
 

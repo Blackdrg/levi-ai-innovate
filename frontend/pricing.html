@@ -264,5 +264,7 @@ async function subscribe(plan){
 const u=localStorage.getItem('levi_user');
 if(u){try{const o=JSON.parse(u);document.getElementById('nav-auth-btn').textContent=o.username||'Account';document.getElementById('nav-auth-btn').href='my-gallery.html';if(o.credits!==undefined)document.getElementById('credits-display').textContent=o.credits+' credits'}catch{}}
 </script>
+<script src="js/animations.js" type="module"></script>
+<script src="js/feedback.js" type="module"></script>
 </body>
 </html>

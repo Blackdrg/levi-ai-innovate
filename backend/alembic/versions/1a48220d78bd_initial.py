@@ -51,7 +51,7 @@ def upgrade() -> None:
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=True),
     sa.Column('tier', sa.String(), nullable=True),
     sa.Column('credits', sa.Integer(), nullable=True),
-    sa.Column('stripe_customer_id', sa.String(), nullable=True),
+    sa.Column('razorpay_customer_id', sa.String(), nullable=True),
     sa.Column('liked_topics', sa.JSON(), nullable=True),
     sa.Column('mood_history', sa.JSON(), nullable=True),
     sa.Column('share_count', sa.Integer(), nullable=True),

@@ -10,6 +10,11 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Skip heavy model loading in tests
 os.environ["RENDER"] = "true"
 os.environ["SECRET_KEY"] = "test-secret-key-123"
+os.environ["DATABASE_URL"] = "sqlite:///./test.db"
+os.environ["RAZORPAY_KEY_ID"] = "test"
+os.environ["RAZORPAY_KEY_SECRET"] = "test"
+os.environ["RAZORPAY_WEBHOOK_SECRET"] = "test"
+os.environ["ADMIN_KEY"] = "test"
 
 try:
     from main import app, get_current_user, create_access_token
@@ -49,7 +54,8 @@ def test_user(db_session):
             username="testuser",
             password_hash="fakehash",
             tier="free",
-            credits=10
+            credits=10,
+            is_verified=1
         )
         db_session.add(user)
         db_session.commit()

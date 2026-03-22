@@ -278,9 +278,9 @@ def _create_quote_video(quote: str, author: str, mood: str) -> bytes:
 
         return video_bytes
 
-    except (ImportError, RuntimeError) as e:
-        logger.error(f"Video generation failed due to missing dependencies: {e}")
-        raise RuntimeError("moviepy not installed. Run: pip install moviepy")
+    except Exception as e:
+        logger.error(f"Video generation failed: {e}")
+        raise RuntimeError(f"Video generation failed: {e}") from e
     finally:
         # Cleanup temp files
         for path in [img_path, output_path]:
@@ -347,6 +347,12 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(hour=8, minute=0),
     },
 }
+
+try:
+    from backend.trainer import TRAINING_BEAT_SCHEDULE
+    celery_app.conf.beat_schedule.update(TRAINING_BEAT_SCHEDULE)
+except ImportError:
+    pass
 
 
 @celery_app.task

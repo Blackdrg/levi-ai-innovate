@@ -12,7 +12,7 @@ const ASSETS = [
   'auth.html',
   'terms.html',
   'privacy.html',
-  'css/styles.css',
+  'css/output.css',
   'css/animations.css',
   'js/ui.js',
   'js/api.js',

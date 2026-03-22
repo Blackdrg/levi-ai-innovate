@@ -9,8 +9,10 @@ Base.metadata.create_all(engine)
 
 db = SessionLocal()
 
-# Load CSV
-df = pd.read_csv("backend/data/quotes.csv")
+import os
+base_dir = os.path.dirname(os.path.abspath(__file__))
+csv_path = os.path.join(base_dir, "data", "quotes.csv")
+df = pd.read_csv(csv_path)
 
 for _, row in df.iterrows():
     # Existence-check upsert to avoid duplicates and redundant embedding calls

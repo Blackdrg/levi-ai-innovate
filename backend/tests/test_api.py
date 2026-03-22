@@ -18,12 +18,13 @@ def test_health(app_client):
     assert resp.json()['status'] == 'ok'
 
 @patch('backend.main.get_db')
-@patch('backend.main.requests.post')
-def test_chat(mock_req, mock_db, app_client, test_user, auth_headers):
+@patch('backend.main.generate_with_active_model')
+@patch('backend.main.generate_response')
+def test_chat(mock_gen_resp, mock_gen_active, mock_db, app_client, test_user, auth_headers):
     """Test chat."""
     mock_db.return_value = [MagicMock()]
-    mock_req.return_value.status_code = 200
-    mock_req.return_value.json.return_value = [{'text': 'hi'}]
+    mock_gen_active.return_value = 'hi'
+    mock_gen_resp.return_value = 'hi'
     resp = app_client.post('/chat', json={'session_id': '1', 'message': 'hi'}, headers=auth_headers)
     assert resp.status_code == 200
 
