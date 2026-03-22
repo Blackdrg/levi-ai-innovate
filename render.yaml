@@ -33,6 +33,22 @@ services:
       - key: RASA_URL
         value: "http://rasa-server:5005"
 
+  - type: cron
+    name: daily-wisdom-email
+    runtime: python
+    plan: free
+    schedule: "0 9 * * *" # Every day at 9 AM UTC
+    buildCommand: "pip install -r backend/requirements.txt"
+    startCommand: "cd backend && python cron_daily_wisdom.py"
+    envVars:
+      - key: DATABASE_URL
+        fromService:
+          type: dpg
+          name: levi-db
+          property: connectionString
+      - key: RESEND_API_KEY
+        sync: false
+
 #   - type: web
 #     name: rasa-server
 #     runtime: docker

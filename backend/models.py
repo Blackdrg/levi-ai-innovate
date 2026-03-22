@@ -48,7 +48,7 @@ class Users(Base):
     # ── Personalization ─────────────────────────
     liked_topics       = Column(JSON, default=list)          # ["philosophy","success"]
     mood_history       = Column(JSON, default=list)          # ["zen","stoic"]
-    share_count        = Column(Integer, default=0)
+    share_count        = Column(Integer, default=0)          # Viral reward loop progress
     bonus_credits      = Column(Integer, default=0)
 
 
@@ -80,6 +80,7 @@ class FeedItem(Base):
     __table_args__ = {'extend_existing': True}
 
     id         = Column(Integer, primary_key=True, index=True)
+    user_id    = Column(Integer, ForeignKey("users.id"), nullable=True) # Associated creator
     text       = Column(String)
     author     = Column(String)
     mood       = Column(String)

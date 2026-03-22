@@ -1,4 +1,9 @@
-from moviepy import ImageClip, TextClip, CompositeVideoClip, AudioFileClip
+try:
+    from moviepy import ImageClip, TextClip, CompositeVideoClip, AudioFileClip
+    HAS_MOVIEPY = True
+except ImportError:
+    HAS_MOVIEPY = False
+
 try:
     from backend.image_gen import generate_quote_image
 except ImportError:
@@ -12,8 +17,11 @@ logger = logging.getLogger(__name__)
 def generate_quote_video(quote: str, author: str, mood: str, user_tier: str = "free", bg_music: str = None):
     """
     Generates an 8-second MP4 video for the quote.
-    NOTE: This requires ImageMagick installed for TextClip to work.
     """
+    if not HAS_MOVIEPY:
+        logger.error("MoviePy is not installed. Video generation is unavailable.")
+        raise ImportError("MoviePy not installed. Please install moviepy and ImageMagick.")
+
     try:
         # 1. Generate the image
         img_pil = generate_quote_image(quote, author, mood, user_tier=user_tier, return_pil=True)

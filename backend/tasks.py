@@ -81,19 +81,45 @@ def generate_image_task(self, quote: str, author: str, mood: str, user_id: int):
     """
     try:
         from backend.image_gen import generate_quote_image
+        from backend.models import FeedItem
+        from backend.db import SessionLocal
         logger.info(f"[Task] Generating image for user {user_id}")
 
         bio = generate_quote_image(quote, author, mood)
         img_bytes = bio.getvalue()
 
         # Store in S3 if configured, otherwise return base64
+        image_url = None
+        image_b64 = None
+        
         if os.getenv("AWS_S3_BUCKET"):
-            url = upload_image_to_s3(img_bytes, user_id)
-            return {"status": "done", "url": url, "type": "s3"}
+            image_url = upload_image_to_s3(img_bytes, user_id)
         else:
             import base64
-            b64 = "data:image/png;base64," + base64.b64encode(img_bytes).decode()
-            return {"status": "done", "url": b64, "type": "base64"}
+            image_b64 = "data:image/png;base64," + base64.b64encode(img_bytes).decode()
+
+        # Save to FeedItem for persistence
+        db = SessionLocal()
+        try:
+            new_item = FeedItem(
+                user_id=user_id,
+                text=quote,
+                author=author,
+                mood=mood,
+                image_url=image_url,
+                image_b64=image_b64
+            )
+            db.add(new_item)
+            db.commit()
+            db.refresh(new_item)
+            return {
+                "status": "done", 
+                "url": image_url or image_b64, 
+                "id": new_item.id,
+                "type": "s3" if image_url else "base64"
+            }
+        finally:
+            db.close()
 
     except Exception as e:
         logger.error(f"[Task] Image generation failed: {e}")
@@ -107,21 +133,38 @@ def generate_image_task(self, quote: str, author: str, mood: str, user_id: int):
 def generate_video_task(self, quote: str, author: str, mood: str, user_id: int):
     """
     Generate a Reels-ready MP4 video and upload to S3.
-    Requires: pip install moviepy
     """
     try:
+        from backend.models import FeedItem
+        from backend.db import SessionLocal
         logger.info(f"[Task] Generating video for user {user_id}")
         video_bytes = _create_quote_video(quote, author, mood)
 
+        video_url = None
         if os.getenv("AWS_S3_BUCKET"):
-            url = upload_video_to_s3(video_bytes, user_id)
-            return {"status": "done", "url": url, "type": "s3"}
-        else:
-            # Store locally as temp file if no S3
-            tmp_path = f"/tmp/levi_video_{uuid.uuid4().hex}.mp4"
-            with open(tmp_path, "wb") as f:
-                f.write(video_bytes)
-            return {"status": "done", "url": tmp_path, "type": "local"}
+            video_url = upload_video_to_s3(video_bytes, user_id)
+        
+        # Save to FeedItem for persistence
+        db = SessionLocal()
+        try:
+            new_item = FeedItem(
+                user_id=user_id,
+                text=quote,
+                author=author,
+                mood=mood,
+                video_url=video_url
+            )
+            db.add(new_item)
+            db.commit()
+            db.refresh(new_item)
+            return {
+                "status": "done", 
+                "url": video_url, 
+                "id": new_item.id,
+                "type": "s3" if video_url else "local"
+            }
+        finally:
+            db.close()
 
     except Exception as e:
         logger.error(f"[Task] Video generation failed: {e}")

@@ -1,12 +1,17 @@
 // Common UI utilities for LEVI - Dark mode, favorites, copy, mood
 
-import { trackShare } from './api.js';
+import { trackShare, getHealth } from './api.js';
 
 let favorites = JSON.parse(localStorage.getItem('levi_favorites')) || [];
 let token = localStorage.getItem('levi_token') || null;
 let currentMoods = [];
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Init offline banner
+  injectOfflineBanner();
+  checkSystemStatus();
+  setInterval(checkSystemStatus, 30000);
+
   // Init dark mode
   if (localStorage.getItem('darkMode') === 'true') {
     document.documentElement.classList.add('dark');
@@ -110,11 +115,16 @@ async function shareContent(title, text, url) {
     if (navigator.share) {
       await navigator.share(shareData);
       window.ui.showToast("Shared successfully!");
-      if (token) await trackShare(token);
     } else {
       copyToClipboard(url || text);
       window.ui.showToast("Link copied to clipboard!");
-      if (token) await trackShare(token);
+    }
+
+    if (token) {
+      const reward = await trackShare(token);
+      if (reward && reward.rewarded) {
+        window.ui.showToast("Bonus credits unlocked! 🎁 +10 Credits", "success");
+      }
     }
   } catch (err) {
     console.error("Share failed:", err);
@@ -129,6 +139,69 @@ function showToast(message, type = "info") {
   setTimeout(() => toast.remove(), 3000);
 }
 
+function injectOfflineBanner() {
+  if (document.getElementById('offline-banner')) return;
+
+  // Inject CSS
+  if (!document.getElementById('offline-banner-style')) {
+    const style = document.createElement('style');
+    style.id = 'offline-banner-style';
+    style.innerHTML = `
+      .backend-offline {
+        display: none;
+        background: #ef4444;
+        color: white;
+        text-align: center;
+        padding: 8px;
+        font-size: 12px;
+        font-weight: bold;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        position: fixed;
+        top: 80px;
+        left: 0;
+        width: 100%;
+        z-index: 1000;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  const banner = document.createElement('div');
+  banner.id = 'offline-banner';
+  banner.className = 'backend-offline';
+  banner.innerText = 'System Offline — Connecting to Cosmic Archive...';
+  document.body.prepend(banner);
+}
+
+async function checkSystemStatus() {
+  const statusIndicator = document.getElementById('status-indicator');
+  const offlineBanner = document.getElementById('offline-banner');
+
+  try {
+    const data = await getHealth();
+    const isHealthy = data && (data.status === 'ok' || data.status === 'healthy');
+
+    if (statusIndicator) {
+      statusIndicator.classList.toggle('bg-red-500', !isHealthy);
+      statusIndicator.classList.toggle('bg-emerald-500', isHealthy);
+      statusIndicator.title = isHealthy ? "System Online" : "System Offline";
+    }
+
+    if (offlineBanner) {
+      offlineBanner.style.display = isHealthy ? 'none' : 'block';
+    }
+  } catch (err) {
+    if (statusIndicator) {
+      statusIndicator.classList.add('bg-red-500');
+      statusIndicator.classList.remove('bg-emerald-500');
+    }
+    if (offlineBanner) {
+      offlineBanner.style.display = 'block';
+    }
+  }
+}
+
 // Attach to window for module access
 window.ui = {
   toggleDarkMode,
@@ -140,6 +213,9 @@ window.ui = {
   selectMood,
   shareContent,
   showToast,
+  showError: (msg) => showToast(msg, "error"),
+  injectOfflineBanner,
+  checkSystemStatus,
   currentMoods
 };
 

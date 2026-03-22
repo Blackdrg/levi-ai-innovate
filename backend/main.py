@@ -1,5 +1,5 @@
 
-from fastapi import FastAPI, Depends, HTTPException, status, Request
+from fastapi import FastAPI, Depends, HTTPException, status, Request, Response
 from starlette.routing import Route
 
 from fastapi.middleware.cors import CORSMiddleware
@@ -48,16 +48,48 @@ SENTRY_DSN = os.getenv("SENTRY_DSN")
 if SENTRY_DSN:
     sentry_sdk.init(
         dsn=SENTRY_DSN,
+        # Set traces_sample_rate to 1.0 to capture 100%
+        # of transactions for performance monitoring.
         traces_sample_rate=1.0,
+        # Set profiles_sample_rate to 1.0 to profile 100%
+        # of transactions.
         profiles_sample_rate=1.0,
+        enable_tracing=True,
+        environment=os.getenv("ENVIRONMENT", "production"),
+        send_default_pii=True, # Optional: include user data
     )
-    logger.info("Sentry initialized.")
+    logger.info("Sentry initialized with performance monitoring.")
 
+# ─────────────────────────────────────────────────────────────
+# Environment Validation
+# ─────────────────────────────────────────────────────────────
+REQUIRED_ENV_VARS = [
+    "SECRET_KEY",
+    "DATABASE_URL",
+    "RAZORPAY_KEY_ID",
+    "RAZORPAY_KEY_SECRET",
+    "RAZORPAY_WEBHOOK_SECRET",
+    "TOGETHER_API_KEY"
+]
 
+def validate_env():
+    missing = [var for var in REQUIRED_ENV_VARS if not os.getenv(var)]
+    is_prod = os.getenv("RENDER") or os.getenv("DIGITALOCEAN") or os.getenv("ENVIRONMENT") == "production"
+    
+    if missing:
+        error_msg = f"CRITICAL: Missing required environment variables: {', '.join(missing)}"
+        logger.error(error_msg)
+        if is_prod:
+             raise RuntimeError(error_msg)
+        else:
+             print(f"\n⚠️  WARNING: {error_msg}\n")
+
+validate_env()
+# ─────────────────────────────────────────────────────────────
 
 try:
     from backend.db import SessionLocal, engine, get_db, DATABASE_URL
-    from backend.models import Quote, Analytics, FeedItem, Base, Users, UserMemory
+    from backend.models import Quote, Analytics, FeedItem, Base, Users, UserMemory, ChatHistory
     from backend.embeddings import embed_text, cosine_sim, HAS_MODEL
     from backend.redis_client import get_cached_search, cache_search, get_conversation, save_conversation, HAS_REDIS, REDIS_URL
     from backend.generation import generate_quote, generate_response
@@ -70,7 +102,7 @@ except (ImportError, ModuleNotFoundError) as e:
     logger.warning(f"Could not import from backend.*: {e}. Falling back to local imports.")
     try:
         from db import SessionLocal, engine, get_db, DATABASE_URL
-        from models import Quote, Analytics, FeedItem, Base, Users, UserMemory
+        from models import Quote, Analytics, FeedItem, Base, Users, UserMemory, ChatHistory
         from embeddings import embed_text, cosine_sim, HAS_MODEL
         from redis_client import get_cached_search, cache_search, get_conversation, save_conversation, HAS_REDIS, REDIS_URL
         from generation import generate_quote, generate_response
@@ -83,80 +115,37 @@ except (ImportError, ModuleNotFoundError) as e:
         logger.error(f"Fallback imports also failed: {e2}")
         raise e2
 
-
-
 import numpy as np
-
 import hashlib
-
 import base64
-
 from io import BytesIO
-
 from typing import List, Optional
-
 from sqlalchemy import func
-
 import asyncio
 import hmac
-
 from concurrent.futures import ThreadPoolExecutor
-
-
 
 _executor = ThreadPoolExecutor(max_workers=4)
 
-
-
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-prod")
-
 CLIENT_KEY = os.getenv("CLIENT_KEY")
-
 ALGORITHM = "HS256"
-
 ACCESS_TOKEN_EXPIRE_MINUTES = 10080  # 7 days for better user experience
 
-
-
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-
-
-# Empty in-memory user store — no hashing at module level
-# users_db = {}
-
-
-
-
-
 def verify_password(plain_password, hashed_password):
-
     return pwd_context.verify(plain_password, hashed_password)
 
-
-
-
-
 def get_password_hash(password):
-
     return pwd_context.hash(password)
 
-
-
-
-
 def create_access_token(data: dict, expires_delta: timedelta = None):
-
     to_encode = data.copy()
-
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=15))
-
     to_encode.update({"exp": expire})
-
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
@@ -166,67 +155,35 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
-            raise credentials_exception
     except JWTError:
+        raise credentials_exception
+    username: str = payload.get("sub")
+    if username is None:
         raise credentials_exception
     user = db.query(Users).filter(Users.username == username).first()
     if user is None:
         raise credentials_exception
     return user
 
-
-
-
-
 class User(BaseModel):
-
     username: str
-
-
-
-
 
 class UserIn(BaseModel):
-
     username: str
-
     password: str
 
-
-
-
-
 class Token(BaseModel):
-
     access_token: str
-
     token_type: str
 
-
-
-
-
 class Query(BaseModel):
-
     text: str
-
     author: Optional[str] = None
-
     mood: Optional[str] = None
-
     topic: Optional[str] = None
-
     lang: Optional[str] = "en"
-
     custom_bg: Optional[str] = None
-
     top_k: int = 5
-
-
-
-
 
 class ChatMessage(BaseModel):
     session_id: str
@@ -234,13 +191,27 @@ class ChatMessage(BaseModel):
     lang: Optional[str] = "en"
     mood: Optional[str] = ""
 
+# Helper for per-user rate limiting
+def get_user_or_ip(request: Request):
+    # Try to get user from state (if set by some middleware or dependency)
+    # But since dependencies run after rate limiting usually, we might need a custom key_func
+    # For now, we'll use a simpler approach or stick to IP if user not yet identified
+    # Alternatively, we can use the Authorization header as a key if present
+    auth = request.headers.get("Authorization")
+    if auth:
+        return auth
+    return get_remote_address(request)
 
+limiter = Limiter(key_func=get_user_or_ip)
 
+is_prod = os.getenv("RENDER") or os.getenv("DIGITALOCEAN") or os.getenv("ENVIRONMENT") == "production"
 
-
-limiter = Limiter(key_func=get_remote_address)
-
-app = FastAPI(title="LEVI Quotes API")
+app = FastAPI(
+    title="LEVI Quotes API",
+    docs_url=None if is_prod else "/docs",
+    redoc_url=None if is_prod else "/redoc",
+    openapi_url=None if is_prod else "/openapi.json"
+)
 app.include_router(payments_router)
 
 # Rate Limiter setup
@@ -291,7 +262,7 @@ allow_all = "*" in env_origins or os.getenv("CORS_ORIGINS") == "*"
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"] if allow_all else origins,
-    allow_credentials=not allow_all,
+    allow_credentials=False if allow_all else True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -563,14 +534,40 @@ def gen_quote(prompt: Query):
 
 
 @app.post("/generate_image")
-async def gen_image(req: Query, db: Session = Depends(get_db), current_user: Optional[Users] = Depends(get_current_user)):
+@limiter.limit("5/minute")
+async def gen_image(request: Request, req: Query, db: Session = Depends(get_db), current_user: Optional[Users] = Depends(get_current_user)):
     try:
+        user_id = current_user.id if current_user else None
         user_tier = current_user.tier if current_user else "free"
+        
+        # Security: Validate custom_bg if provided
+        if req.custom_bg:
+            # Check size (approximate for base64)
+            if len(req.custom_bg) > 7 * 1024 * 1024: # ~5MB after decoding
+                raise HTTPException(status_code=400, detail="Custom background exceeds 5MB limit")
+            
+            # Basic type check
+            if not req.custom_bg.startswith("data:image/"):
+                raise HTTPException(status_code=400, detail="Invalid image format. Must be a data URI.")
         
         # Credit System: Deduct 1 credit for generation
         if current_user:
             use_credits(current_user.id, amount=1, db=db)
             
+        # Check if we should use Celery for async processing (Scale Infrastructure)
+        # Default to True in production (Render/DigitalOcean)
+        USE_CELERY = os.getenv("USE_CELERY", "true").lower() == "true"
+        
+        if USE_CELERY:
+            from backend.tasks import generate_image_task
+            task = generate_image_task.delay(
+                req.text, 
+                req.author or "Unknown",
+                req.mood or "neutral",
+                user_id
+            )
+            return {"task_id": task.id, "status": "processing", "message": "Image generation started in background."}
+
         loop = asyncio.get_event_loop()
         bio = await loop.run_in_executor(
             _executor,
@@ -587,9 +584,14 @@ async def gen_image(req: Query, db: Session = Depends(get_db), current_user: Opt
 
         img_data = f"data:image/png;base64,{img_b64}"
 
-        new_feed = FeedItem(text=req.text, author=req.author or "Unknown",
-
-                            mood=req.mood or "neutral", image_b64=img_data, likes=0)
+        new_feed = FeedItem(
+            user_id=user_id,
+            text=req.text, 
+            author=req.author or "Unknown",
+            mood=req.mood or "neutral", 
+            image_b64=img_data, 
+            likes=0
+        )
 
         db.add(new_feed)
 
@@ -657,7 +659,7 @@ def get_feed(db: Session = Depends(get_db), limit: int = 20):
 
     return [{"id": i.id, "text": i.text, "author": i.author, "mood": i.mood,
 
-             "image": i.image_b64, "likes": i.likes or 0, "time": i.timestamp.isoformat()}
+            "image": i.image_b64, "likes": i.likes or 0, "time": i.timestamp.isoformat()}
 
             for i in items]
 
@@ -666,7 +668,7 @@ def get_feed(db: Session = Depends(get_db), limit: int = 20):
 
 
 @app.post("/chat")
-@limiter.limit("20/minute")
+@limiter.limit("10/minute")
 async def chat(request: Request, msg: ChatMessage, db: Session = Depends(get_db), current_user: Optional[Users] = Depends(get_current_user)):
     # Try to identify user if authenticated
     user_id = current_user.id if current_user else None
@@ -713,6 +715,44 @@ async def chat(request: Request, msg: ChatMessage, db: Session = Depends(get_db)
 
 
 
+@app.delete("/delete_account")
+async def delete_account(db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
+    """
+    GDPR/Legal Compliance: Delete user account and all associated data.
+    """
+    try:
+        # Delete related records first (cascade should handle some but being explicit is safer)
+        db.query(ChatHistory).filter(ChatHistory.user_id == current_user.id).delete()
+        db.query(UserMemory).filter(UserMemory.user_id == current_user.id).delete()
+        
+        # Keep FeedItems but anonymize them (or delete them if preferred)
+        # For now, we'll keep the art but remove the link to the user
+        db.query(FeedItem).filter(FeedItem.user_id == current_user.id).update({"user_id": None})
+        
+        # Finally delete the user
+        db.delete(current_user)
+        db.commit()
+        
+        logger.info(f"Account deleted for user: {current_user.username}")
+        return {"status": "success", "message": "Account and all personal data deleted."}
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Account deletion failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete account.")
+
+@app.get("/profile")
+async def get_profile(current_user: Users = Depends(get_current_user)):
+    return {
+        "id": current_user.id,
+        "username": current_user.username,
+        "email": current_user.email,
+        "tier": current_user.tier,
+        "credits": current_user.credits,
+        "share_count": current_user.share_count or 0,
+        "bonus_credits": current_user.bonus_credits or 0,
+        "created_at": current_user.created_at.isoformat()
+    }
+
 @app.post("/register", response_model=Token)
 async def register(user_in: UserIn, db: Session = Depends(get_db)):
     if len(user_in.password) < 8:
@@ -746,6 +786,23 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 
 # Phase 2: Viral Loops & Engagement
 
+@app.get("/task_status/{task_id}")
+async def get_task_status(task_id: str):
+    """
+    Check the status of a Celery background task.
+    """
+    from backend.tasks import celery_app
+    from celery.result import AsyncResult
+    
+    res = AsyncResult(task_id, app=celery_app)
+    if res.ready():
+        result = res.result
+        return {
+            "status": "completed",
+            "result": result
+        }
+    return {"status": "pending"}
+
 @app.post("/track_share")
 async def track_share(db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
     """
@@ -765,47 +822,64 @@ async def track_share(db: Session = Depends(get_db), current_user: Users = Depen
     }
 
 @app.post("/generate_video")
-async def generate_video(query: Query, db: Session = Depends(get_db), current_user: Optional[Users] = Depends(get_current_user)):
-    """
-    Generate an 8-second video card for a quote.
-    """
-    user_id = current_user.id if current_user else None
-    user_tier = current_user.tier if current_user else "free"
-    
-    # Credit System: Deduct 3 credits for video generation
-    if current_user:
-        use_credits(current_user.id, amount=3, db=db)
-    
-    # Check if we should use Celery for async processing (Scale Infrastructure)
-    USE_CELERY = os.getenv("USE_CELERY", "false").lower() == "true"
-    
-    if USE_CELERY:
-        task = generate_video_async.delay(
-            query.text, 
-            query.author or "LEVI Muse", 
-            query.mood or "philosophical", 
-            user_id,
-            user_tier
-        )
-        return {"task_id": task.id, "status": "processing", "message": "Video generation started in background."}
-
-    # Synchronous/ThreadPool fallback
-    loop = asyncio.get_event_loop()
+async def gen_video(req: Query, db: Session = Depends(get_db), current_user: Optional[Users] = Depends(get_current_user)):
     try:
-        video_bio = await loop.run_in_executor(
-            _executor, 
-            generate_quote_video, 
-            query.text, 
-            query.author or "LEVI Muse", 
-            query.mood or "philosophical", 
-            user_tier
+        user_id = current_user.id if current_user else None
+        
+        # Default to True in production
+        USE_CELERY = os.getenv("USE_CELERY", "true").lower() == "true"
+        
+        if USE_CELERY:
+            from backend.tasks import generate_video_task
+            task = generate_video_task.delay(
+                req.text, 
+                req.author or "Unknown",
+                req.mood or "neutral",
+                user_id
+            )
+            return {"task_id": task.id, "status": "processing", "message": "Video generation started in background."}
+
+        from backend.video_gen import generate_quote_video
+        video_bytes = generate_quote_video(
+            req.text, 
+            author=req.author or "Unknown",
+            mood=req.mood or "neutral"
         )
-        return StreamingResponse(video_bio, media_type="video/mp4", headers={
-            "Content-Disposition": f"attachment; filename=levi_quote_{os.urandom(2).hex()}.mp4"
-        })
+        
+        # Persistence for sync video (if used)
+        new_item = FeedItem(
+            user_id=user_id,
+            text=req.text,
+            author=req.author or "Unknown",
+            mood=req.mood or "neutral",
+            # We don't have an easy way to store raw video bytes in DB, 
+            # so sync video without S3 is less persistent than async.
+        )
+        db.add(new_item)
+        db.commit()
+
+        return Response(content=video_bytes, media_type="video/mp4")
     except Exception as e:
         logger.error(f"Video generation error: {e}")
-        raise HTTPException(status_code=500, detail="Failed to generate video")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/my_gallery")
+async def get_my_gallery(db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
+    """Fetch all generated items for the current user."""
+    items = db.query(FeedItem).filter(FeedItem.user_id == current_user.id).order_by(FeedItem.timestamp.desc()).all()
+    return [
+        {
+            "id": i.id,
+            "text": i.text,
+            "author": i.author,
+            "mood": i.mood,
+            "image": getattr(i, 'image_url', None) or i.image_b64,
+            "video": getattr(i, 'video_url', None),
+            "likes": i.likes or 0,
+            "time": i.timestamp.isoformat()
+        }
+        for i in items
+    ]
 
 @app.post("/test_daily_email")
 async def test_daily_email(db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
@@ -900,17 +974,26 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
     if not hmac.compare_digest(expected_signature, signature):
         raise HTTPException(status_code=400, detail="Invalid webhook signature")
 
-    data = await request.json()
+    import json
+    try:
+        data = json.loads(payload)
+    except json.JSONDecodeError:
+        logger.error("Failed to parse Razorpay webhook payload as JSON")
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+
     event = data.get("event")
 
     if event == "payment.captured":
         payment_entity = data["payload"]["payment"]["entity"]
+        order_id = payment_entity.get("order_id")
+        payment_id = payment_entity.get("id")
+        amount = payment_entity.get("amount", 0) / 100 # Convert paise to INR
         notes = payment_entity.get("notes", {})
-        # If we store user_id and plan in notes during order creation
+        
+        # Security: Re-derive user and plan from notes/receipt (verified by signature)
         user_id = notes.get("user_id")
         plan = notes.get("plan", "pro")
         
-        # Alternatively, parse from receipt: levi_pro_123
         receipt = payment_entity.get("receipt", "")
         if receipt.startswith("levi_"):
             parts = receipt.split("_")
@@ -921,7 +1004,11 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
         if user_id:
             from backend.payments import upgrade_user_tier
             upgrade_user_tier(int(user_id), plan, db)
-            logger.info(f"Webhook: User {user_id} upgraded to {plan} via payment.captured")
+            
+            # Audit Trail: Log payment success
+            logger.info(f"[PAYMENT_SUCCESS] User: {user_id} | Amount: {amount} INR | Plan: {plan} | Order: {order_id} | Payment: {payment_id}")
+        else:
+            logger.warning(f"[PAYMENT_ORPHAN] Received payment but could not identify user. Payment ID: {payment_id}")
 
     return {"status": "success"}
 
