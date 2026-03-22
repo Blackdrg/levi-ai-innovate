@@ -1,5 +1,6 @@
 
 from fastapi import FastAPI, Depends, HTTPException, status, Request, Response
+from starlette.middleware.sessions import SessionMiddleware
 from starlette.routing import Route
 
 from fastapi.middleware.cors import CORSMiddleware
@@ -270,6 +271,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Essential Session Middleware for OAuth
+app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 
 # OAuth Configuration
 oauth = OAuth()
@@ -789,6 +793,20 @@ async def register(user_in: UserIn, db: Session = Depends(get_db)):
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(Users).filter(Users.username == form_data.username).first()
     if not user or not verify_password(form_data.password, user.password_hash):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect username or password")
+    
+    token = create_access_token(data={"sub": user.username},
+                                expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    return {"access_token": token, "token_type": "bearer"}
+
+@app.post("/login", response_model=Token)
+async def login_json(user_in: UserIn, db: Session = Depends(get_db)):
+    """
+    Alternative login route that accepts JSON body instead of form-data.
+    Fixes 404/compatibility issues in some production environments.
+    """
+    user = db.query(Users).filter(Users.username == user_in.username).first()
+    if not user or not verify_password(user_in.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect username or password")
     
     token = create_access_token(data={"sub": user.username},

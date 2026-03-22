@@ -3,58 +3,75 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#09090f">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="apple-touch-icon" href="icon-192.png">
-    <title>Payment Successful — LEVI</title>
-    <link rel="manifest" href="manifest.json">
-    <link rel="stylesheet" href="css/output.css">
+    <title>Ascension Successful — LEVI</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Plus+Jakarta+Sans:wght@200..800&display=swap"
+      rel="stylesheet" />
     <style>
       body {
-        background: #09090f;
-        color: #e2e8f0;
+        background: #131317;
+        color: #e5e1e7;
         min-height: 100vh;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-family: sans-serif;
+        font-family: 'Plus Jakarta Sans', sans-serif;
       }
     
       .container {
         text-align: center;
-        padding: 2rem;
+        padding: 3rem;
+        background: rgba(27, 27, 31, 0.6);
+        backdrop-filter: blur(20px);
+        border: 0.5px solid rgba(255, 255, 255, 0.08);
+        border-radius: 2rem;
+        max-width: 400px;
+        width: 90%;
       }
     
       .icon {
-        font-size: 4rem;
-        margin-bottom: 1rem;
-        color: #d4af37;
+        font-size: 3rem;
+        margin-bottom: 1.5rem;
+        color: #f2ca50;
+        font-family: serif;
+        font-style: italic;
       }
     
       .title {
-        font-size: 2rem;
-        margin-bottom: 0.5rem;
+        font-family: 'Newsreader', serif;
+        font-style: italic;
+        font-size: 2.5rem;
+        margin-bottom: 1rem;
+        background: linear-gradient(to right, #f2ca50, #d4af37);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
       }
     
       .subtitle {
         color: #94a3b8;
-        margin-bottom: 2rem;
+        margin-bottom: 2.5rem;
+        font-weight: 300;
+        line-height: 1.6;
       }
     
       .btn-primary {
-        background: #d4af37;
-        color: #09090f;
-        padding: 1rem 2rem;
-        border-radius: 1rem;
+        background: linear-gradient(135deg, #f2ca50, #d4af37);
+        color: #3c2f00;
+        padding: 1rem 2.5rem;
+        border-radius: 9999px;
         font-weight: bold;
         text-decoration: none;
         display: inline-block;
-        transition: opacity 0.2s;
+        transition: all 0.3s;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        font-size: 0.75rem;
       }
     
       .btn-primary:hover {
-        opacity: 0.9;
+        transform: translateY(-2px);
+        box-shadow: 0 10px 30px rgba(242, 202, 80, 0.2);
       }
     </style>
 </head>

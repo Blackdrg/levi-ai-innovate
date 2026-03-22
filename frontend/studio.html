@@ -1,384 +1,418 @@
 <!DOCTYPE html>
-<html lang="en">
+<html class="dark" lang="en">
 <head>
-    <link rel="manifest" href="manifest.json">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="apple-touch-icon" href="icon-192.png">
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#09090f">
-    <title>LEVI Studio — Visual Synthesis</title>
-
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600;1,700&family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap"
-        rel="stylesheet">
-
-    <link rel="stylesheet" href="css/output.css">
-    <script type="module" src="js/ui.js"></script>
-    <script type="module" src="js/api.js"></script>
-    <script type="module">
-        import { generateQuoteImage } from './js/api.js';
-
-        // Expose to legacy inline script if needed
-        window.apiPost = async (path, body) => {
-            if (path === '/generate_image') {
-                return await generateQuoteImage(body.text, body.author, body.mood);
-            }
-            // fallback
-            const res = await fetch(`http://localhost:8000${path}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
-            });
-            return await res.json();
-        };
-</script>
-    
-    <style>
-        body {
-            background-color: #09090f;
-            color: #e2e8f0;
-            overflow-x: hidden;
-        }
-    
-        .noise-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: url('https://www.transparenttextures.com/patterns/stardust.png');
-            opacity: 0.05;
-            pointer-events: none;
-            z-index: 50;
-        }
-    
-        .glass {
-            background: rgba(255, 255, 255, 0.03);
-            -webkit-backdrop-filter: blur(12px);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-    
-        .nav-blur {
-            -webkit-backdrop-filter: blur(20px);
-            backdrop-filter: blur(20px);
-            background: rgba(9, 9, 15, 0.8);
-        }
-    
-        .gold-gradient {
-            background: linear-gradient(to right, #d4af37, #f1e5ac, #996515);
-            -webkit-background-clip: text;
-            background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .studio-nav-active {
-            color: #d4af37;
-        }
-    
-        /* ── Mobile menu ── */
-        #mobile-menu {
-            display: none;
-            position: fixed;
-            top: 80px;
-            left: 0;
-            right: 0;
-            z-index: 39;
-            background: rgba(9, 9, 15, 0.97);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            padding: 20px 24px;
-        }
-    
-        #mobile-menu.open {
-            display: block;
-        }
-    
-        #mobile-menu a {
-            display: block;
-            padding: 12px 0;
-            font-size: 14px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            color: #94a3b8;
-            text-decoration: none;
-            transition: color 0.2s;
-        }
-    
-        #mobile-menu a:hover {
-            color: #d4af37;
-        }
-    
-        #mobile-menu a:last-child {
-            border-bottom: none;
-        }
-    
-        /* ── Toast ── */
-        #toast {
-            position: fixed;
-            bottom: 24px;
-            right: 24px;
-            z-index: 200;
-            padding: 12px 20px;
-            border-radius: 12px;
-            background: rgba(26, 26, 46, 0.95);
-            border: 1px solid rgba(212, 175, 55, 0.3);
-            color: #e2e8f0;
-            font-size: 13px;
-            font-weight: 500;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-            transform: translateY(20px);
-            opacity: 0;
-            transition: all 0.3s;
-            pointer-events: none;
-        }
-    
-        #toast.show {
-            transform: translateY(0);
-            opacity: 1;
-        }
-    </style>
+<title>LEVI Studio | Celestial AI Synthesis</title>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script>tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#f2ca50","primary-container":"#d4af37","on-primary":"#3c2f00","secondary":"#c3c0ff","secondary-container":"#3626ce","tertiary":"#d9c5ff","surface":"#131317","surface-container-lowest":"#0e0e12","surface-container-low":"#1b1b1f","surface-container":"#1f1f23","surface-container-high":"#2a292e","surface-container-highest":"#353439","on-surface":"#e5e1e7","on-surface-variant":"#d0c5af","outline":"#99907c","outline-variant":"#4d4635"},fontFamily:{headline:["Newsreader","serif"],body:["Plus Jakarta Sans","sans-serif"],label:["Plus Jakarta Sans","sans-serif"],sans:["Plus Jakarta Sans","sans-serif"]},borderRadius:{DEFAULT:"0.25rem",lg:"0.5rem",xl:"0.75rem","2xl":"1rem","3xl":"1.5rem",full:"9999px"}}}}</script>
+<style>
+.material-symbols-outlined{font-family:'Material Symbols Outlined';font-size:22px;line-height:1;font-variation-settings:'FILL' 0,'wght' 300,'GRAD' 0,'opsz' 24;user-select:none}
+.icon-fill{font-variation-settings:'FILL' 1,'wght' 300,'GRAD' 0,'opsz' 24}.icon-sm{font-size:18px}.icon-lg{font-size:28px}
+.glass-panel{background:rgba(27,27,31,.6);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+.glass{background:rgba(19,19,23,.72);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
+.gold-gradient-text{background:linear-gradient(to right,#f2ca50,#d4af37);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.btn-gold{background:linear-gradient(135deg,#f2ca50,#d4af37);color:#3c2f00;transition:all .25s}
+.btn-gold:hover{background:linear-gradient(135deg,#fde68a,#f2ca50);box-shadow:0 0 30px rgba(242,202,80,.3);transform:translateY(-1px)}
+.btn-gold:active{transform:scale(.97)}
+.ghost-border{border:.5px solid rgba(255,255,255,.08)}
+.nav-active{background:linear-gradient(90deg,rgba(242,202,80,.15),rgba(242,202,80,.02));border-left:2px solid #f2ca50;color:#f2ca50}
+.nav-inactive{border-left:2px solid transparent;color:#69666e;transition:all .2s}
+.nav-inactive:hover{background:rgba(255,255,255,.04);color:#e5e1e7}
+.style-btn{border:.5px solid rgba(255,255,255,.07);color:#69666e;transition:all .2s;cursor:pointer}
+.style-btn.active{background:rgba(242,202,80,.12);border-color:rgba(242,202,80,.45);color:#f2ca50}
+.style-btn:not(.active):hover{background:rgba(255,255,255,.05);color:#e5e1e7}
+.levi-textarea{background:transparent;border:none;border-bottom:.5px solid rgba(255,255,255,.12);outline:none;resize:none;color:#e5e1e7;width:100%;transition:border-color .3s}
+.levi-textarea:focus{border-bottom-color:#f2ca50}
+.levi-textarea::placeholder{color:rgba(105,102,110,.5)}
+.levi-input{background:transparent;border:none;border-bottom:.5px solid rgba(255,255,255,.12);outline:none;color:#e5e1e7;width:100%;transition:border-color .3s;padding-bottom:8px}
+.levi-input:focus{border-bottom-color:#f2ca50}
+.levi-input::placeholder{color:rgba(105,102,110,.45)}
+.thumb{transition:all .3s;cursor:pointer;opacity:.5}
+.thumb:hover{opacity:1;border-color:rgba(255,255,255,.25)}
+.thumb.selected{opacity:1;border-color:#f2ca50;box-shadow:0 0 0 3px rgba(242,202,80,.2)}
+::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-thumb{background:rgba(242,202,80,.2);border-radius:2px}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.fade-in{animation:fadeUp .4s ease forwards}
+#toast{position:fixed;bottom:5rem;left:50%;transform:translateX(-50%) translateY(12px);opacity:0;transition:all .3s;z-index:999;pointer-events:none}
+#toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+@keyframes goldPulse{0%,100%{box-shadow:0 0 0 0 rgba(242,202,80,.35)}50%{box-shadow:0 0 0 8px rgba(242,202,80,0)}}
+.pulse-gold{animation:goldPulse 2s infinite}
+</style>
 </head>
-<body class="font-sans min-h-screen">
-    <div class="noise-overlay"></div>
-    <div id="toast"></div>
+<body class="bg-background text-on-surface font-body selection:bg-primary/30 min-h-screen">
 
-    <!-- Navbar -->
-    <nav class="fixed top-0 left-0 w-full z-40 nav-blur border-b border-white/5">
-        <div class="max-w-7xl mx-auto px-6 h-20 flex justify-between items-center">
-            <a href="index.html" class="font-display text-3xl font-bold gold-gradient tracking-wider">LEVI</a>
-            <div class="hidden md:flex items-center space-x-8">
-                <a href="index.html"
-                    class="text-sm font-medium hover:text-yellow-400 transition-colors text-slate-300">Home</a>
-                <a href="chat.html"
-                    class="text-sm font-medium hover:text-yellow-400 transition-colors text-slate-300">AI Chat</a>
-                <a href="studio.html" class="text-sm font-medium text-yellow-400">Studio</a>
-                <a href="feed.html"
-                    class="text-sm font-medium hover:text-yellow-400 transition-colors text-slate-300">Feed</a>
-                <a href="quotes.html"
-                    class="text-sm font-medium hover:text-yellow-400 transition-colors text-slate-300">Explore</a>
-                <a href="auth.html" id="nav-auth-btn"
-                    class="px-5 py-2 glass rounded-full text-sm font-semibold border border-yellow-400/20 text-yellow-400 hover:bg-yellow-400 hover:text-black transition-all duration-300">
-                    Sign In
-                </a>
-            </div>
-            <!-- Hamburger -->
-            <button id="hamburger-btn" class="md:hidden text-white p-1" aria-label="Toggle Menu"
-                onclick="toggleMobileMenu()">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
-                    stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-            </button>
-        </div>
-    </nav>
+<!-- Orbs -->
+<div class="fixed inset-0 overflow-hidden pointer-events-none" style="z-index:0">
+  <div class="absolute rounded-full" style="width:55vw;height:55vw;max-width:700px;max-height:700px;top:-15%;left:-12%;background:radial-gradient(circle,rgba(242,202,80,.055) 0%,transparent 68%);filter:blur(100px)"></div>
+  <div class="absolute rounded-full" style="width:45vw;height:45vw;max-width:580px;max-height:580px;bottom:-12%;right:-10%;background:radial-gradient(circle,rgba(195,192,255,.045) 0%,transparent 68%);filter:blur(80px)"></div>
+</div>
 
-    <!-- Mobile menu -->
-    <div id="mobile-menu">
-        <a href="index.html">Home</a>
-        <a href="chat.html">AI Chat</a>
-        <a href="studio.html" class="studio-nav-active">Studio</a>
-        <a href="feed.html">Feed</a>
-        <a href="quotes.html">Explore</a>
-        <a href="auth.html">Sign In</a>
+<!-- TOP NAV ISLAND -->
+<nav class="fixed top-0 left-0 right-0 z-50 pt-6">
+  <div class="mx-auto w-[90%] max-w-5xl glass rounded-full ghost-border px-6 py-3 flex justify-between items-center shadow-[0_20px_60px_rgba(0,0,0,0.4)]">
+    <a href="index.html" class="text-2xl font-headline italic tracking-[-0.03em] gold-gradient-text">LEVI</a>
+    <div class="hidden md:flex gap-8 items-center">
+      <a href="index.html"  class="text-zinc-400 hover:text-zinc-100 transition-colors duration-300 text-sm">Home</a>
+      <a href="chat.html"   class="text-zinc-400 hover:text-zinc-100 transition-colors duration-300 text-sm">Chat</a>
+      <a href="studio.html" class="text-primary font-semibold border-b border-primary pb-0.5 text-sm">Studio</a>
+      <a href="feed.html"   class="text-zinc-400 hover:text-zinc-100 transition-colors duration-300 text-sm">Feed</a>
+      <a href="quotes.html" class="text-zinc-400 hover:text-zinc-100 transition-colors duration-300 text-sm">Explore</a>
     </div>
-<main class="pt-40 pb-20 px-6">
-    <div class="max-w-5xl mx-auto">
+    <div class="flex items-center gap-3">
+      <span class="hidden md:flex items-center gap-1.5 text-[10px] text-zinc-500"><span class="w-1.5 h-1.5 rounded-full bg-primary pulse-gold"></span><span data-credits>-- credits</span></span>
+      <button id="nav-auth-btn" onclick="window.location.href='auth.html'" class="btn-gold text-xs font-semibold tracking-wider uppercase px-5 py-2 rounded-full">Sign In</button>
+      <button onclick="toggleMobileMenu()" class="md:hidden text-zinc-400"><span class="material-symbols-outlined">menu</span></button>
+    </div>
+  </div>
+</nav>
 
-        <!-- Header -->
-        <div class="text-center mb-16">
-            <h1 class="font-display text-6xl font-bold mb-6 italic gold-gradient">Studio</h1>
-            <p class="text-slate-400">Transform your thoughts into visual masterpieces.</p>
-            <!-- User Credits -->
-            <div id="user-credits-container"
-                class="mt-4 inline-flex items-center px-4 py-2 glass rounded-full border border-yellow-400/20">
-                <span class="text-xs font-bold text-yellow-400 uppercase tracking-widest mr-2">Balance:</span>
-                <span id="user-credits" class="text-sm font-medium text-slate-200">Loading...</span>
-            </div>
+<!-- MOBILE MENU -->
+<div id="mobile-menu" class="hidden fixed inset-0 z-40 glass" style="padding-top:6rem">
+  <button onclick="toggleMobileMenu()" class="absolute top-8 right-6 text-zinc-400"><span class="material-symbols-outlined icon-lg">close</span></button>
+  <nav class="flex flex-col gap-2 px-8 pt-4">
+    <a onclick="toggleMobileMenu()" href="index.html"  class="text-xl font-headline italic text-on-surface py-3 border-b border-white/5">Home</a>
+    <a onclick="toggleMobileMenu()" href="chat.html"   class="text-xl font-headline italic text-on-surface py-3 border-b border-white/5">Chat</a>
+    <a onclick="toggleMobileMenu()" href="studio.html" class="text-xl font-headline italic gold-gradient-text py-3 border-b border-white/5">Studio</a>
+    <a onclick="toggleMobileMenu()" href="feed.html"   class="text-xl font-headline italic text-on-surface py-3 border-b border-white/5">Feed</a>
+  </nav>
+</div>
+
+<!-- SIDEBAR (desktop) -->
+<aside class="hidden lg:flex flex-col w-64 h-screen fixed left-0 top-0 z-40 border-r border-white/5 pt-32 pb-8 px-6" style="background:rgba(13,13,18,.65);backdrop-filter:blur(24px)">
+  <div class="mb-12 px-4">
+    <h2 class="font-headline italic text-primary text-xl">LEVI AI</h2>
+    <p class="text-[10px] uppercase tracking-[0.2em] text-zinc-500 mt-1">Celestial Muse</p>
+  </div>
+  <div class="flex flex-col gap-2 flex-1">
+    <a href="index.html"   class="nav-inactive flex items-center gap-4 px-4 py-3 rounded-r-xl text-xs uppercase tracking-widest"><span class="material-symbols-outlined icon-sm">auto_awesome</span>Home</a>
+    <a href="chat.html"    class="nav-inactive flex items-center gap-4 px-4 py-3 rounded-r-xl text-xs uppercase tracking-widest"><span class="material-symbols-outlined icon-sm">psychology</span>Chat</a>
+    <a href="studio.html"  class="nav-active flex items-center gap-4 px-4 py-3 rounded-r-xl text-xs uppercase tracking-widest font-bold"><span class="material-symbols-outlined icon-sm icon-fill">auto_fix_high</span>Studio</a>
+    <a href="feed.html"    class="nav-inactive flex items-center gap-4 px-4 py-3 rounded-r-xl text-xs uppercase tracking-widest"><span class="material-symbols-outlined icon-sm">public</span>Feed</a>
+    <a href="quotes.html"  class="nav-inactive flex items-center gap-4 px-4 py-3 rounded-r-xl text-xs uppercase tracking-widest"><span class="material-symbols-outlined icon-sm">search</span>Explore</a>
+    <a href="my-gallery.html" class="nav-inactive flex items-center gap-4 px-4 py-3 rounded-r-xl text-xs uppercase tracking-widest"><span class="material-symbols-outlined icon-sm">photo_library</span>Gallery</a>
+    <a href="pricing.html" class="nav-inactive flex items-center gap-4 px-4 py-3 rounded-r-xl text-xs uppercase tracking-widest"><span class="material-symbols-outlined icon-sm">workspace_premium</span>Pricing</a>
+  </div>
+  <div class="mt-auto px-4">
+    <div class="flex items-center gap-3 p-3 rounded-xl ghost-border" style="background:rgba(255,255,255,.03)">
+      <div class="w-9 h-9 rounded-full btn-gold flex items-center justify-center text-sm font-bold flex-shrink-0" id="user-avatar">?</div>
+      <div>
+        <p class="text-xs font-semibold text-on-surface" id="user-name">Seeker</p>
+        <p class="text-[10px] text-zinc-500" data-credits>-- credits</p>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<!-- MAIN WORKSPACE -->
+<main class="lg:ml-64 pt-32 px-6 lg:px-12 pb-12" style="position:relative;z-index:1">
+  <header class="mb-12 max-w-4xl">
+    <h1 class="font-headline text-5xl lg:text-7xl font-light tracking-tight mb-4">The <span class="gold-gradient-text italic font-normal">Synthesis</span> Lab</h1>
+    <p class="text-on-surface-variant text-lg lg:text-xl font-light max-w-2xl leading-relaxed">Transform your whispers of wisdom into celestial visions. Distill your thoughts through the LEVI lens.</p>
+  </header>
+
+  <div class="grid lg:grid-cols-12 gap-10 items-start">
+    <!-- LEFT: Controls -->
+    <section class="lg:col-span-5 space-y-8">
+
+      <!-- Wisdom input -->
+      <div class="glass-panel p-8 rounded-3xl ghost-border shadow-2xl">
+        <label class="block mb-6">
+          <span class="font-label text-xs uppercase tracking-[0.2em] text-primary block mb-4">Input Wisdom</span>
+          <div class="relative">
+            <textarea id="wisdom-input" class="levi-textarea py-4 text-xl font-headline italic h-48 placeholder:text-zinc-700" maxlength="300" placeholder="What truth seeks visualization tonight?" oninput="updateChar(this)"></textarea>
+            <div class="absolute bottom-2 right-0 text-[10px] font-label tracking-widest text-zinc-600"><span id="char-count">0</span> / 300</div>
+          </div>
+        </label>
+        <div class="mt-4">
+          <span class="font-label text-xs uppercase tracking-[0.2em] text-primary block mb-3">Author</span>
+          <input id="author-input" type="text" placeholder="Attributed to…" class="levi-input text-sm"/>
+        </div>
+        <div class="mt-6">
+          <span class="font-label text-xs uppercase tracking-[0.2em] text-primary block mb-4">Curation Style</span>
+          <div class="grid grid-cols-2 gap-3">
+            <button onclick="setStyle(this,'philosophical')" class="style-btn active flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-label text-xs uppercase tracking-widest"><span class="material-symbols-outlined icon-sm">auto_stories</span>Philosophical</button>
+            <button onclick="setStyle(this,'zen')"            class="style-btn flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-label text-xs uppercase tracking-widest"><span class="material-symbols-outlined icon-sm">spa</span>Zen</button>
+            <button onclick="setStyle(this,'cyberpunk')"      class="style-btn flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-label text-xs uppercase tracking-widest"><span class="material-symbols-outlined icon-sm">memory</span>Cyberpunk</button>
+            <button onclick="setStyle(this,'futuristic')"     class="style-btn flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-label text-xs uppercase tracking-widest"><span class="material-symbols-outlined icon-sm">rocket_launch</span>Futuristic</button>
+            <button onclick="setStyle(this,'stoic')"          class="style-btn flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-label text-xs uppercase tracking-widest"><span class="material-symbols-outlined icon-sm">account_balance</span>Stoic</button>
+            <button onclick="setStyle(this,'melancholic')"    class="style-btn flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-label text-xs uppercase tracking-widest"><span class="material-symbols-outlined icon-sm">water_drop</span>Melancholic</button>
+          </div>
+        </div>
+        <div class="mt-8">
+          <span class="font-label text-xs uppercase tracking-[0.2em] text-primary block mb-3">Background</span>
+          <div class="flex gap-3">
+            <input id="bg-input" type="text" placeholder="cosmos, nebula, forest…" class="levi-input text-sm flex-1"/>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick-fill chips -->
+      <div>
+        <p class="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 font-semibold">Quick fill</p>
+        <div class="flex flex-wrap gap-2">
+          <button onclick="prefill('The only true wisdom is in knowing you know nothing.','Socrates','philosophical')" class="text-[11px] px-3 py-1.5 rounded-full ghost-border text-zinc-400 hover:text-primary hover:border-primary/40 transition-all">Socrates</button>
+          <button onclick="prefill('What you seek is seeking you.','Rumi','zen')" class="text-[11px] px-3 py-1.5 rounded-full ghost-border text-zinc-400 hover:text-primary hover:border-primary/40 transition-all">Rumi</button>
+          <button onclick="prefill('In the middle of difficulty lies opportunity.','Albert Einstein','philosophical')" class="text-[11px] px-3 py-1.5 rounded-full ghost-border text-zinc-400 hover:text-primary hover:border-primary/40 transition-all">Einstein</button>
+          <button onclick="prefill('The obstacle is the path.','Zen Proverb','zen')" class="text-[11px] px-3 py-1.5 rounded-full ghost-border text-zinc-400 hover:text-primary hover:border-primary/40 transition-all">Zen</button>
+        </div>
+      </div>
+
+      <!-- Lab insights -->
+      <div class="p-8 rounded-3xl ghost-border" style="background:rgba(27,27,31,.4)">
+        <h4 class="font-headline text-2xl mb-4">Laboratory Insights</h4>
+        <p class="text-on-surface-variant text-sm leading-relaxed mb-6 font-light" id="insight-text">Synthesizing with <span class="text-primary italic" id="insight-style">Philosophical</span> style will prioritize ethereal lighting, high-contrast obsidian shadows, and golden particle dispersion.</p>
+        <div class="h-1 w-full rounded-full overflow-hidden" style="background:rgba(255,255,255,.06)">
+          <div class="h-full bg-primary transition-all duration-500" id="stability-bar" style="width:67%"></div>
+        </div>
+        <div class="mt-2 flex justify-between text-[10px] uppercase tracking-widest text-zinc-500">
+          <span>Model Stability</span><span id="stability-val">67%</span>
+        </div>
+      </div>
+
+      <!-- CTAs -->
+      <div class="space-y-3">
+        <button id="synth-btn" onclick="synthesize()" class="btn-gold w-full py-5 rounded-full font-bold uppercase tracking-[0.3em] flex items-center justify-center gap-3 shadow-[0_0_0px_rgba(242,202,80,0)] hover:shadow-[0_0_30px_rgba(242,202,80,.3)] transition-all active:scale-[0.98]">
+          <span class="material-symbols-outlined icon-sm icon-fill" id="synth-icon">bolt</span>
+          <span id="synth-label">Initiate Synthesis</span>
+          <div id="synth-spinner" class="hidden" style="width:18px;height:18px;border:2px solid rgba(60,47,0,.2);border-top-color:rgba(60,47,0,.85);border-radius:50%;animation:spin .75s linear infinite"></div>
+        </button>
+        <button id="video-btn" onclick="makeVideo()" disabled class="w-full py-4 rounded-full ghost-border font-semibold text-xs uppercase tracking-widest text-primary flex items-center justify-center gap-2 hover:bg-primary/8 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
+          <span class="material-symbols-outlined icon-sm">videocam</span>
+          Create Video Card — 3 Credits
+        </button>
+      </div>
+    </section>
+
+    <!-- RIGHT: Preview -->
+    <section class="lg:col-span-7 sticky top-32">
+      <div id="preview-wrap" class="relative group aspect-square overflow-hidden rounded-[2rem] ghost-border shadow-[0_32px_80px_rgba(0,0,0,0.6)]" style="background:#0e0e12">
+
+        <!-- Placeholder -->
+        <div id="preview-placeholder" class="absolute inset-0 flex flex-col items-center justify-center gap-4">
+          <div class="w-16 h-16 rounded-2xl flex items-center justify-center" style="background:rgba(242,202,80,.08)">
+            <span class="material-symbols-outlined icon-lg" style="color:rgba(242,202,80,.5)">image</span>
+          </div>
+          <p class="text-zinc-600 text-sm text-center tracking-wider uppercase">Visual Preview</p>
+          <p class="text-zinc-700 text-xs text-center">Enter wisdom and click synthesize</p>
         </div>
 
-        <!-- Grid -->
-        <div class="grid lg:grid-cols-2 gap-12 items-start">
-
-            <!-- ── Creator Panel ── -->
-            <div class="glass p-10 rounded-[3rem] border border-white/10 shadow-2xl">
-
-                <!-- Quote input -->
-                <div class="mb-8">
-                    <label class="block text-[10px] font-bold tracking-widest uppercase text-slate-500 mb-4 ml-4"
-                        for="studio-quote">
-                        The Wisdom
-                    </label>
-                    <textarea id="studio-quote" placeholder="Enter a quote or a philosophical thought..."
-                        class="w-full h-40 bg-black/30 border border-white/10 rounded-3xl px-6 py-6 text-sm focus:outline-none focus:border-yellow-400/30 transition-all resize-none text-slate-200 placeholder-slate-600"></textarea>
-                    <!-- Character counter -->
-                    <div class="text-right mt-2 mr-2">
-                        <span id="char-count" class="text-xs text-slate-600">0 / 300</span>
-                    </div>
-                </div>
-
-                    <!-- Mood + Author -->
-                    <div class="grid grid-cols-2 gap-6 mb-8">
-                        <div>
-                            <label class="block text-[10px] font-bold tracking-widest uppercase text-slate-500 mb-4 ml-4">
-                                Style & Mood
-                            </label>
-                            <div class="grid grid-cols-2 gap-2">
-                                <button
-                                    class="style-btn text-[10px] py-2 glass rounded-xl border border-white/5 hover:border-yellow-400/30 transition-all"
-                                    data-mood="philosophical">Philosophical</button>
-                                <button
-                                    class="style-btn text-[10px] py-2 glass rounded-xl border border-white/5 hover:border-yellow-400/30 transition-all"
-                                    data-mood="zen">Zen</button>
-                                <button
-                                    class="style-btn text-[10px] py-2 glass rounded-xl border border-white/5 hover:border-yellow-400/30 transition-all"
-                                    data-mood="cyberpunk">Cyberpunk</button>
-                                <button
-                                    class="style-btn text-[10px] py-2 glass rounded-xl border border-white/5 hover:border-yellow-400/30 transition-all"
-                                    data-mood="futuristic">Futuristic</button>
-                            </div>
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-bold tracking-widest uppercase text-slate-500 mb-4 ml-4"
-                                for="studio-author">
-                                Author
-                            </label>
-                            <input type="text" id="studio-author" placeholder="Optional"
-                                class="w-full bg-black/30 border border-white/10 rounded-2xl px-6 py-4 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-yellow-400/30 transition-all">
-                        </div>
-                    </div>
-
-                    <div class="mb-8">
-                        <label class="block text-[10px] font-bold tracking-widest uppercase text-slate-500 mb-4 ml-4">
-                            Background (Optional)
-                        </label>
-                        <div class="flex gap-4">
-                            <input type="text" id="studio-bg-keywords" placeholder="Keywords (e.g. space, forest)"
-                                class="flex-1 bg-black/30 border border-white/10 rounded-2xl px-6 py-4 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-yellow-400/30 transition-all">
-                            <label
-                                class="cursor-pointer glass px-6 py-4 rounded-2xl border border-white/10 hover:border-yellow-400/30 transition-all flex items-center justify-center">
-                                <span class="text-xs text-slate-400">Upload</span>
-                                <input type="file" id="studio-bg-upload" class="hidden" accept="image/*">
-                            </label>
-                        </div>
-                    </div>
-
-                    <!-- Error message -->
-                    <div id="error-msg"
-                        class="hidden mb-4 px-4 py-3 rounded-2xl bg-red-900/20 border border-red-500/20 text-red-400 text-sm"></div>
-
-                    <!-- Generate buttons -->
-                    <div class="flex flex-col gap-4">
-                        <button id="generate-studio"
-                            class="w-full py-5 bg-yellow-400 text-black font-bold rounded-2xl hover:bg-yellow-300 transition-all shadow-xl shadow-yellow-400/20 transform hover:-translate-y-1 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none">
-                            Synthesize Visual →
-                        </button>
-                        <button id="generate-video-studio" disabled
-                            class="w-full py-4 glass border border-yellow-400/30 text-yellow-400 font-bold rounded-2xl hover:bg-yellow-400/10 transition-all transform hover:-translate-y-1 active:translate-y-0 disabled:opacity-30 disabled:cursor-not-allowed">
-                            Create Video Card (3 Credits) 🎬
-                        </button>
-                        <button id="push-subscribe-btn"
-                            class="w-full py-3 glass border border-white/10 text-slate-400 text-xs font-medium rounded-2xl hover:bg-white/5 transition-all">
-                            Get Daily Wisdom Notifications 🔔
-                        </button>
-                        </div>
-
-                    <!-- Recent hint -->
-                    <p class="text-center text-xs text-slate-600 mt-4">Click a gallery quote below to pre-fill</p>
-
-                    <!-- Quick-fill chips -->
-                    <div class="flex flex-wrap gap-2 mt-3" id="quick-chips">
-                        <button onclick="prefill('The only true wisdom is in knowing you know nothing.','Socrates','philosophical')"
-                            class="px-3 py-1 rounded-full text-xs border border-white/10 text-slate-500 hover:border-yellow-400/30 hover:text-yellow-400 transition-all bg-black/20">
-                            Socrates
-                        </button>
-                        <button onclick="prefill('What you seek is seeking you.','Rumi','serene')"
-                            class="px-3 py-1 rounded-full text-xs border border-white/10 text-slate-500 hover:border-yellow-400/30 hover:text-yellow-400 transition-all bg-black/20">
-                            Rumi
-                        </button>
-                        <button onclick="prefill('In the middle of difficulty lies opportunity.','Albert Einstein','inspiring')"
-                            class="px-3 py-1 rounded-full text-xs border border-white/10 text-slate-500 hover:border-yellow-400/30 hover:text-yellow-400 transition-all bg-black/20">
-                            Einstein
-                        </button>
-                        <button onclick="prefill('Not all those who wander are lost.','J.R.R. Tolkien','artistic')"
-                            class="px-3 py-1 rounded-full text-xs border border-white/10 text-slate-500 hover:border-yellow-400/30 hover:text-yellow-400 transition-all bg-black/20">
-                            Tolkien
-                        </button>
-                    </div>
-                </div>
-
-                <!-- ── Preview Panel ── -->
-                <div
-                    class="glass rounded-[3rem] border border-white/10 shadow-2xl aspect-square flex flex-col items-center justify-center relative group overflow-hidden">
-                
-                    <!-- Placeholder -->
-                    <div id="preview-placeholder" class="text-center p-6">
-                        <div class="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-slate-700" fill="none" viewBox="0 0 24 24"
-                                stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 002-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                        </div>
-                        <p class="text-slate-600 text-sm font-medium tracking-widest uppercase">Visual Preview</p>
-                        <p class="text-slate-700 text-xs mt-2">Enter wisdom and click Synthesize</p>
-                    </div>
-
-                    <!-- Generated image -->
-                    <div id="preview-container" class="hidden w-full h-full relative">
-                        <img id="preview-img" src="" alt="Generated Visual" class="w-full h-full object-cover rounded-[2.8rem]">
-                    
-                        <!-- Hover overlay with actions -->
-                        <div
-                            class="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity gap-4 rounded-[2.8rem]">
-                            <button id="download-btn" class="p-4 bg-white/10 backdrop-blur-md rounded-2xl hover:bg-white/20 transition-all"
-                                aria-label="Download Image" title="Download PNG">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
-                                    stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                </svg>
-                            </button>
-                            <button id="share-btn" class="p-4 bg-white/10 backdrop-blur-md rounded-2xl hover:bg-white/20 transition-all"
-                                aria-label="Share Image" title="Share">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
-                                    stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                                </svg>
-                            </button>
-                            <button id="regenerate-btn"
-                                class="p-4 bg-white/10 backdrop-blur-md rounded-2xl hover:bg-white/20 transition-all"
-                                aria-label="Regenerate" title="Regenerate">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
-                                    stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                </svg>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Loading overlay -->
-                    <div id="studio-loading"
-                        class="hidden absolute inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center z-20 rounded-[2.8rem]">
-                        <div class="animate-spin w-12 h-12 border-4 border-yellow-400 border-t-transparent rounded-full mb-6"></div>
-                        <p class="text-yellow-400 font-bold tracking-[0.3em] uppercase text-xs">Synthesizing…</p>
-                        <p class="text-slate-500 text-xs mt-2">This may take a few seconds</p>
-                    </div>
-                    </div>
-            </div>
+        <!-- Generated image -->
+        <div id="preview-container" class="hidden absolute inset-0">
+          <img id="preview-img" src="" alt="Generated visual" class="w-full h-full object-cover opacity-90 group-hover:scale-105 transition-transform duration-1000"/>
+          <div class="absolute inset-0" style="background:linear-gradient(to top,rgba(0,0,0,.65) 0%,transparent 50%)"></div>
         </div>
-    </main>
-    
-    <script>
-        function toggleMobileMenu() {
-            const m = document.getElementById('mobile-menu');
-            m.classList.toggle('open');
-        } 
-    </script>
-    <script type="module" src="js/studio.js"></script>
+
+        <!-- Loading overlay -->
+        <div id="loading-overlay" class="hidden absolute inset-0 flex flex-col items-center justify-center gap-4" style="background:rgba(10,10,15,.85);backdrop-filter:blur(8px)">
+          <div style="width:48px;height:48px;border:2px solid rgba(242,202,80,.2);border-top-color:#f2ca50;border-radius:50%;animation:spin .85s linear infinite"></div>
+          <p class="text-primary text-[10px] uppercase tracking-[0.3em] font-semibold">Synthesizing…</p>
+          <p class="text-zinc-500 text-xs">Together FLUX · 4-step diffusion</p>
+        </div>
+
+        <!-- Top HUD -->
+        <div class="absolute top-6 left-6 flex gap-2 z-10">
+          <div class="glass-panel px-4 py-2 rounded-full ghost-border flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-primary" id="live-dot"></span>
+            <span class="text-[10px] uppercase tracking-widest font-semibold text-primary" id="hud-label">Awaiting</span>
+          </div>
+        </div>
+        <div class="absolute top-6 right-6 flex gap-2 z-10">
+          <button id="regen-btn" onclick="regenerate()" class="w-10 h-10 rounded-full glass-panel ghost-border flex items-center justify-center text-zinc-400 hover:text-primary hover:bg-primary/10 transition-all">
+            <span class="material-symbols-outlined icon-sm">refresh</span>
+          </button>
+        </div>
+
+        <!-- Bottom overlay — hover reveal -->
+        <div class="absolute inset-x-0 bottom-0 p-8 opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-10" id="preview-bottom-overlay">
+          <div class="glass-panel p-6 rounded-3xl ghost-border shadow-2xl">
+            <div class="flex flex-col md:flex-row justify-between items-center gap-6">
+              <div>
+                <h3 class="font-headline text-xl italic" id="preview-title">Your Synthesis</h3>
+                <p class="text-[10px] uppercase tracking-[0.2em] text-zinc-400 mt-1" id="preview-sub">1024 × 1024 · Together FLUX</p>
+              </div>
+              <div class="flex items-center gap-3 w-full md:w-auto">
+                <button id="download-btn" onclick="downloadImg()" class="flex-1 md:flex-none flex items-center justify-center gap-2 py-3 px-6 rounded-full border border-primary text-primary hover:bg-primary/10 transition-all font-label text-xs uppercase tracking-widest">
+                  <span class="material-symbols-outlined icon-sm">download</span>Download
+                </button>
+                <button id="share-btn" onclick="shareImg()" class="flex-1 md:flex-none flex items-center justify-center gap-2 py-3 px-6 rounded-full ghost-border text-on-surface hover:bg-white/8 transition-all font-label text-xs uppercase tracking-widest">
+                  <span class="material-symbols-outlined icon-sm">share</span>Share
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Ambient flare -->
+        <div class="absolute -bottom-24 -right-24 w-64 h-64 rounded-full pointer-events-none" style="background:rgba(242,202,80,.18);filter:blur(100px)"></div>
+      </div>
+
+      <!-- Thumbnail strip -->
+      <div class="mt-6 flex gap-4 overflow-x-auto pb-2 no-scrollbar" id="thumb-strip">
+        <button onclick="newCanvas()" class="flex-shrink-0 w-24 h-24 rounded-2xl ghost-border border-dashed flex flex-col items-center justify-center text-zinc-600 hover:text-zinc-400 hover:border-zinc-400 transition-all">
+          <span class="material-symbols-outlined icon-sm">add</span>
+          <span class="text-[8px] uppercase tracking-tighter mt-1">New</span>
+        </button>
+      </div>
+    </section>
+  </div>
+</main>
+
+<!-- Mobile bottom nav -->
+<nav class="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] ghost-border rounded-full py-4 px-8 flex justify-between items-center z-50 shadow-2xl" style="background:rgba(13,13,18,.85);backdrop-filter:blur(20px)">
+  <a href="index.html"><span class="material-symbols-outlined" style="color:#69666e">auto_awesome</span></a>
+  <a href="chat.html"><span class="material-symbols-outlined" style="color:#69666e">psychology</span></a>
+  <a href="studio.html"><span class="material-symbols-outlined icon-fill" style="color:#f2ca50">auto_fix_high</span></a>
+  <a href="feed.html"><span class="material-symbols-outlined" style="color:#69666e">public</span></a>
+</nav>
+
+<div id="toast"></div>
+
+<script>
+function toggleMobileMenu(){const m=document.getElementById('mobile-menu');if(!m)return;m.classList.toggle('hidden');document.body.style.overflow=m.classList.contains('hidden')?'':'hidden'}
+function showToast(msg,type='success'){const t=document.getElementById('toast');const bg=type==='error'?'rgba(147,0,10,.85)':type==='warning'?'rgba(120,90,0,.85)':'rgba(19,19,23,.9)';const border=type==='error'?'rgba(255,180,171,.3)':type==='warning'?'rgba(242,202,80,.4)':'rgba(242,202,80,.35)';const icon=type==='error'?'error':type==='warning'?'warning':'check_circle';t.innerHTML=`<div style="background:${bg};border:.5px solid ${border};backdrop-filter:blur(20px)" class="flex items-center gap-2.5 px-5 py-3 rounded-full shadow-2xl"><span class="material-symbols-outlined icon-fill" style="font-size:16px;color:#f2ca50">${icon}</span><span style="font-size:12px;color:#e5e1e7;font-family:'Plus Jakarta Sans',sans-serif;font-weight:600;letter-spacing:.04em">${msg}</span></div>`;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),3200)}
+
+const API_BASE=(location.hostname==='localhost'||location.hostname==='127.0.0.1')?'http://127.0.0.1:8000':location.origin;
+let currentStyle='philosophical';let currentImage=null;
+const insights={philosophical:{text:'prioritize ethereal lighting, high-contrast obsidian shadows, and golden particle dispersion.',stability:67},zen:{text:'evoke bamboo mist, still water reflections, and morning light through ancient forests.',stability:82},cyberpunk:{text:'generate neon-soaked cityscapes, rain-slicked streets, and holographic overlays.',stability:74},futuristic:{text:'render clean white surfaces, cosmic voids, and geometric precision with bioluminescent accents.',stability:91},stoic:{text:'depict marble columns, dawn light, classical architecture — austere and powerful.',stability:88},melancholic:{text:'create rain-washed cobblestones, blue hour, soft bokeh with poetic melancholy.',stability:79}};
+
+function updateChar(el){const n=el.value.length;document.getElementById('char-count').textContent=n;const cc=document.getElementById('char-count');cc.style.color=n>260?'#f87171':n>200?'#f2ca50':''}
+
+function setStyle(btn,style){
+  document.querySelectorAll('.style-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');currentStyle=style;
+  const info=insights[style]||insights.philosophical;
+  const styleName=style.charAt(0).toUpperCase()+style.slice(1);
+  document.getElementById('insight-style').textContent=styleName;
+  document.getElementById('insight-text').innerHTML=`Synthesizing with <span class="text-primary italic" id="insight-style">${styleName}</span> style will ${info.text}`;
+  document.getElementById('stability-bar').style.width=info.stability+'%';
+  document.getElementById('stability-val').textContent=info.stability+'%';
+}
+
+function prefill(text,author,style){
+  document.getElementById('wisdom-input').value=text;updateChar(document.getElementById('wisdom-input'));
+  document.getElementById('author-input').value=author;
+  const btn=document.querySelector(`.style-btn[onclick*="${style}"]`);
+  if(btn)setStyle(btn,style);
+  showToast('Prefilled: '+author);
+}
+
+window.prefill=prefill;
+
+async function synthesize(){
+  const text=document.getElementById('wisdom-input').value.trim();
+  if(!text){showToast('Enter some wisdom first','error');return}
+  setLoading(true);
+  try{
+    const token=localStorage.getItem('levi_token');
+    const headers={'Content-Type':'application/json'};if(token)headers['Authorization']='Bearer '+token;
+    const body={text,author:document.getElementById('author-input').value||'LEVI AI',mood:currentStyle,background:document.getElementById('bg-input').value};
+    const r=await fetch(API_BASE+'/generate_image',{method:'POST',headers,body:JSON.stringify(body)});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const d=await r.json();
+    if(d.task_id){setLoading(false);showToast('Synthesis queued — generating…');pollTask(d.task_id,text);return}
+    if(d.image_url||d.image_b64){displayImage(d.image_url||d.image_b64,text)}
+    else throw new Error('No image in response');
+  }catch(e){
+    showToast('Showing demo preview (backend offline)','warning');
+    displayDemo(document.getElementById('wisdom-input').value.trim());
+  }finally{setLoading(false)}
+}
+
+function setLoading(on){
+  document.getElementById('synth-icon').classList.toggle('hidden',on);
+  document.getElementById('synth-spinner').classList.toggle('hidden',!on);
+  document.getElementById('synth-btn').disabled=on;
+  document.getElementById('loading-overlay').classList.toggle('hidden',!on);
+  document.getElementById('preview-placeholder').classList.toggle('hidden',on);
+  document.getElementById('hud-label').textContent=on?'Synthesizing':'Ready';
+}
+
+async function pollTask(id,text){
+  let tries=0;
+  const poll=async()=>{
+    if(tries++>40){showToast('Task timeout','error');return}
+    try{
+      const r=await fetch(API_BASE+'/task_status/'+id);
+      const d=await r.json();
+      if(d.status==='completed'&&d.result){displayImage(d.result.url||d.result.image_b64||d.result,text);document.getElementById('loading-overlay').classList.add('hidden')}
+      else if(d.status==='failed'){showToast('Synthesis failed','error');document.getElementById('loading-overlay').classList.add('hidden')}
+      else setTimeout(poll,2000);
+    }catch{setTimeout(poll,2500)}
+  };
+  document.getElementById('loading-overlay').classList.remove('hidden');
+  poll();
+}
+
+function displayImage(src,text){
+  currentImage=src;
+  const img=document.getElementById('preview-img');
+  img.src=src;img.onload=()=>{img.classList.remove('opacity-0')};
+  document.getElementById('preview-container').classList.remove('hidden');
+  document.getElementById('preview-placeholder').classList.add('hidden');
+  document.getElementById('preview-title').textContent=text.length>42?text.slice(0,42)+'…':text;
+  document.getElementById('preview-bottom-overlay').style.opacity='1';
+  document.getElementById('video-btn').disabled=false;
+  addThumb(src);showToast('Masterpiece rendered ✦');
+}
+
+function displayDemo(text){
+  const cv=document.createElement('canvas');cv.width=512;cv.height=512;
+  const ctx=cv.getContext('2d');
+  const palettes={philosophical:['#0a0a18','#1a1040'],zen:['#081210','#0f2820'],cyberpunk:['#0a0018','#200040'],futuristic:['#080c18','#0c1e38'],stoic:['#0e0c0a','#20201a'],melancholic:['#080c14','#0c1828']};
+  const p=palettes[currentStyle]||palettes.philosophical;
+  const g=ctx.createLinearGradient(0,0,512,512);g.addColorStop(0,p[0]);g.addColorStop(1,p[1]);
+  ctx.fillStyle=g;ctx.fillRect(0,0,512,512);
+  ctx.fillStyle='rgba(242,202,80,.06)';ctx.fillRect(0,0,512,512);
+  ctx.strokeStyle='rgba(242,202,80,.15)';ctx.lineWidth=1;ctx.strokeRect(16,16,480,480);
+  ctx.fillStyle='rgba(242,202,80,.6)';ctx.font='italic 18px Newsreader,serif';ctx.textAlign='center';
+  const words=text.split(' ');let lines=[],line='';
+  for(const w of words){const t=line+(line?' ':'')+w;if(ctx.measureText(t).width>420){lines.push(line);line=w}else line=t}
+  lines.push(line);
+  const startY=256-(lines.length*28)/2;
+  lines.forEach((l,i)=>ctx.fillText(l,256,startY+i*28));
+  displayImage(cv.toDataURL(),text);
+}
+
+function addThumb(src){
+  const strip=document.getElementById('thumb-strip');
+  const newBtn=strip.querySelector('button');
+  const div=document.createElement('div');
+  div.className='thumb selected flex-shrink-0 w-24 h-24 rounded-2xl overflow-hidden border-2';
+  div.onclick=()=>{document.getElementById('preview-img').src=src;document.getElementById('preview-container').classList.remove('hidden');document.querySelectorAll('.thumb').forEach(t=>t.classList.remove('selected'));div.classList.add('selected')};
+  div.innerHTML=`<img src="${src}" class="w-full h-full object-cover"/>`;
+  strip.insertBefore(div,newBtn);
+  document.querySelectorAll('.thumb').forEach(t=>t.classList.remove('selected'));
+  div.classList.add('selected');
+}
+
+function downloadImg(){
+  if(!currentImage)return;
+  const a=document.createElement('a');a.href=currentImage;a.download='levi-synthesis-'+Date.now()+'.png';a.click();showToast('Downloading…');
+}
+function shareImg(){
+  const t=document.getElementById('wisdom-input').value;
+  if(navigator.share)navigator.share({title:'LEVI AI Wisdom',text:t,url:location.href});
+  else{navigator.clipboard.writeText(t);showToast('Quote copied to clipboard')}
+}
+function regenerate(){if(document.getElementById('wisdom-input').value.trim())synthesize()}
+function makeVideo(){showToast('Video generation queued — check My Gallery')}
+function newCanvas(){
+  currentImage=null;
+  document.getElementById('preview-container').classList.add('hidden');
+  document.getElementById('preview-placeholder').classList.remove('hidden');
+  document.getElementById('preview-bottom-overlay').style.opacity='';
+  document.getElementById('wisdom-input').value='';document.getElementById('author-input').value='';
+  updateChar(document.getElementById('wisdom-input'));
+  document.getElementById('video-btn').disabled=true;
+  document.getElementById('hud-label').textContent='Awaiting';
+}
+
+// Auth
+const u=localStorage.getItem('levi_user');
+if(u){try{const o=JSON.parse(u);document.getElementById('user-name').textContent=o.username||'Seeker';document.getElementById('user-avatar').textContent=(o.username||'S').charAt(0).toUpperCase();document.getElementById('nav-auth-btn').textContent=o.username||'Account';document.getElementById('nav-auth-btn').onclick=()=>{window.location.href='my-gallery.html'};document.querySelectorAll('[data-credits]').forEach(el=>el.textContent=(o.credits||0)+' credits')}catch{}}
+</script>
 </body>
 </html>

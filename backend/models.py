@@ -98,6 +98,8 @@ class Analytics(Base):
     id          = Column(Integer, primary_key=True, index=True)
     date        = Column(Date, unique=True)
     chats_count = Column(Integer, default=0)
+    likes_count = Column(Integer, default=0)
+    daily_users = Column(Integer, default=0)
 
 
 class PushSubscription(Base):
@@ -109,5 +111,3 @@ class PushSubscription(Base):
     endpoint = Column(String, nullable=False)
     p256dh   = Column(String, nullable=False)
     auth     = Column(String, nullable=False)
-    likes_count = Column(Integer, default=0)
-    daily_users = Column(Integer, default=0)

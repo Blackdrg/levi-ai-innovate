@@ -1,26 +1,27 @@
-# LEVI - AI Wisdom & Creative Muse 🌟 (Updated March 2026)
+# LEVI - AI Wisdom & Creative Muse 🌟 (Updated March 22, 2026)
 
-LEVI is a full-stack AI app for philosophical quotes, contextual chat, and artistic image generation. **Status: Production-ready release (v2.1). Features: Together AI, Stripe Payments, Celery Async Video Gen, S3 Storage support, and Viral Loops.**
+LEVI is a full-stack AI app for philosophical quotes, contextual chat, and artistic image generation. **Status: Production-ready release (v2.2). Features: Celestial Design System (Newsreader/Gold), Together AI, Stripe Payments, Celery Worker, S3 Storage, and Web Push Notifications.**
 
 ## 🏗️ Architecture
 
 ```text
 Frontend (Tailwind/Vanilla JS) ↔ FastAPI Backend ↔ AI Models + DB
-├── Local: `python run_app.py` (localhost:8080)
-├── Deploy: Render (backend) + Vercel (frontend)
-└── Stack: FastAPI, SQLAlchemy (SQLite/Postgres), Redis (optional), DistilGPT2, SentenceTransformers, PIL
+├── Theme: Celestial (Newsreader font, Gold/Dark palette)
+├── Worker: Celery (background task processing)
+├── Deploy: Render (backend/worker) + Vercel (frontend)
+└── Stack: FastAPI, SQLAlchemy, Alembic, Redis, DistilGPT2, SentenceTransformers
 ```
 
 ## ✅ Status (Diagnosed & Fixed)
 
 | Component | Status | Notes |
 | :--- | :--- | :--- |
-| Frontend | 🟢 Fixed | JS syntax ("try expected") → Modularized `js/index.js` |
-| Backend API | 🟢 Fixed | Missing modules (`redis_client.py`, `db.py`) created |
-| DB | 🟢 Ready | SQLite local (`levi.db`), Postgres prod |
+| Frontend | 🟢 Fixed | Migrated to **Celestial Design System** (Newsreader/Gold) |
+| Auth | 🟢 Fixed | Added **SessionMiddleware** + `POST /login` JSON support |
+| Backend API | 🟢 Fixed | All imports resolved, modular backend structure |
+| DB | 🟢 Ready | Alembic migrations synced (Analytics/PushSubscription) |
+| Worker | 🟢 Ready | Dedicated **Celery worker** service in `render.yaml` |
 | ML Models | 🟡 Graceful Fallback | CPU models load async, mock if fail |
-| Redis | 🟡 Optional | In-memory fallback works |
-| Rasa NLU | 🔴 Optional | DistilGPT2 fallback active |
 
 **Startup Chain Fixed**: All imports resolve, `uvicorn main:app` runs cleanly.
 
