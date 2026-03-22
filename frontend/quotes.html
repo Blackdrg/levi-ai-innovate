@@ -30,9 +30,25 @@
         <div class="flex gap-4 items-center">
             <button onclick="window.toggleLanguage()" class="glass px-3 py-2 rounded-xl text-xs hover:bg-white/5 transition-all">🌐 EN/HI</button>
             <button id="dark-toggle" class="glass p-2 rounded-xl hover:bg-white/5 transition-all">☀️</button>
-            <a href="chat.html" class="btn-primary px-6 py-2 rounded-xl text-sm font-medium">Chat Now</a>
+            <a href="chat.html" class="btn-primary px-6 py-2 rounded-xl text-sm font-medium hidden md:block">Chat Now</a>
+            <button class="md:hidden text-white glass p-2 rounded-xl" aria-label="Toggle Menu" id="hamburger-btn">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+            </button>
         </div>
     </nav>
+
+    <!-- Mobile Menu -->
+    <div id="mobile-menu"
+        class="hidden md:hidden fixed top-24 left-6 right-6 z-50 glass rounded-3xl p-8 space-y-6 shadow-2xl border border-white/10 animate-fade-in">
+        <a href="index.html" class="block text-lg font-medium hover:text-violet-400 transition-colors">Home</a>
+        <a href="chat.html" class="block text-lg font-medium hover:text-violet-400 transition-colors">AI Chat</a>
+        <a href="studio.html" class="block text-lg font-medium hover:text-violet-400 transition-colors">Studio</a>
+        <a href="feed.html" class="block text-lg font-medium hover:text-violet-400 transition-colors">Feed</a>
+        <a href="quotes.html" class="block text-lg font-medium text-violet-400 transition-colors">Explore</a>
+        <a href="auth.html" id="mobile-auth-btn" class="block text-lg font-medium text-violet-400">Sign In</a>
+    </div>
 
     <main class="max-w-7xl mx-auto">
         <header class="text-center mb-16 animate-fade-in">
@@ -86,6 +102,23 @@
             </div>
         </div>
     </footer>
+    <script type="module">
+        const user = localStorage.getItem('levi_user');
+        if (user) {
+            const mobileAuth = document.getElementById('mobile-auth-btn');
+            if (mobileAuth) {
+                mobileAuth.innerText = user;
+                mobileAuth.href = 'my-gallery.html';
+            }
+        }
+        const hamburger = document.getElementById('hamburger-btn');
+        const mobileMenu = document.getElementById('mobile-menu');
+        if (hamburger && mobileMenu) {
+            hamburger.addEventListener('click', () => {
+                mobileMenu.classList.toggle('hidden');
+            });
+        }
+    </script>
 </body>
 </html>
 

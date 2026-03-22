@@ -49,3 +49,38 @@ def send_daily_quote(user_email: str, user_name: str, liked_topics: list = None,
     except Exception as e:
         logger.error(f"Failed to send email to {user_email}: {e}")
         return False
+
+def send_payment_receipt(user_email: str, plan: str, amount_inr: float):
+    """
+    Sends a payment confirmation receipt via email using Resend.
+    """
+    if not RESEND_API_KEY:
+        logger.warning("Resend API key missing. Payment receipt not sent.")
+        return False
+
+    try:
+        params = {
+            "from": "LEVI <noreply@resend.dev>",
+            "to": [user_email],
+            "subject": f"Payment confirmed — LEVI {plan.title()} plan ✨",
+            "html": f"""
+                <div style="font-family: sans-serif; padding: 20px; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; border-radius: 12px;">
+                    <h2 style="color: #6366f1; text-align: center;">Payment Confirmed</h2>
+                    <p>Greetings seeker,</p>
+                    <p>Your payment of <b>₹{amount_inr}</b> has been received and confirmed.</p>
+                    <p>Your account has been successfully upgraded to the <b>{plan.title()}</b> plan. You now have full access to premium artistic synthesis and expanded wisdom generation.</p>
+                    <div style="text-align: center; margin-top: 30px;">
+                        <a href="https://levi-ai.create.app/studio.html" style="background: #6366f1; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold;">Enter the Studio</a>
+                    </div>
+                    <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0;">
+                    <small style="color: #999;">Transaction processed via Razorpay Secure. If you have any questions, simply reply to this email.</small>
+                </div>
+            """
+        }
+        
+        response = resend.Emails.send(params)
+        logger.info(f"Payment receipt sent to {user_email}. ID: {response['id']}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send payment receipt to {user_email}: {e}")
+        return False
