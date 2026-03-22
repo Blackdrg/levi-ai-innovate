@@ -32,14 +32,17 @@ def generate_quote_video(quote: str, author: str, mood: str, user_tier: str = "f
         img_array = np.array(img_pil)
         
         # 2. Create the base clip
-        clip = ImageClip(img_array).set_duration(8)
+        # MoviePy v2.x uses with_duration, with_position, etc.
+        # If linter still complains, we cast to Any or ignore as types might be outdated
+        clip = ImageClip(img_array).with_duration(8) # type: ignore
         
         # 3. Add text animation (MoviePy requires ImageMagick for TextClip)
         try:
-            txt = TextClip(quote, fontsize=40, color='white', method='caption', size=(img_pil.size[0]*0.8, None)) \
-                .set_position('center') \
-                .set_duration(8) \
-                .crossfadein(1)
+            # MoviePy v2.x: font_size instead of fontsize
+            txt = TextClip(text=quote, font_size=40, color='white', method='caption', size=(img_pil.size[0]*0.8, None)) \
+                .with_position('center') \
+                .with_duration(8) \
+                .crossfadein(1) # type: ignore
             final_clip = CompositeVideoClip([clip, txt])
         except Exception as e:
             logger.warning(f"TextClip failed (likely ImageMagick missing): {e}. Using static image clip.")
@@ -48,8 +51,9 @@ def generate_quote_video(quote: str, author: str, mood: str, user_tier: str = "f
         # 4. Add ambient music (royalty-free)
         if bg_music and os.path.exists(bg_music):
             try:
-                audio = AudioFileClip(bg_music).subclip(0, 8)
-                final_clip = final_clip.set_audio(audio)
+                # MoviePy v2.x: subclipped instead of subclip, with_audio instead of set_audio
+                audio = AudioFileClip(bg_music).subclipped(0, 8) # type: ignore
+                final_clip = final_clip.with_audio(audio) # type: ignore
             except Exception as e:
                 logger.error(f"Failed to add audio: {e}")
         

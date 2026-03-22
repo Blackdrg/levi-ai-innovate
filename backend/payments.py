@@ -30,6 +30,8 @@ if RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET:
     except Exception as e:
         logger.error(f"Failed to initialize Razorpay client: {e}")
 
+from typing import Optional, Any
+
 def create_order(amount: int, currency: str = "INR", receipt: str = "order_1", user_id: Optional[int] = None, plan: str = "pro"):
     """
     Create a Razorpay order. Amount in paise (₹1 = 100 paise).
@@ -49,7 +51,8 @@ def create_order(amount: int, currency: str = "INR", receipt: str = "order_1", u
                 "plan": plan
             }
         
-        order = client.order.create(order_data)
+        # Use getattr to avoid Pylance error with dynamic attributes in razorpay-python
+        order = getattr(client, "order").create(order_data)
         return order
     except Exception as e:
         logger.error(f"Razorpay order creation failed: {e}")
@@ -62,8 +65,8 @@ def verify_razorpay_signature(order_id: str, payment_id: str, signature: str) ->
     if not RAZORPAY_KEY_SECRET:
         return False
     msg = f"{order_id}|{payment_id}"
-    secret = RAZORPAY_KEY_SECRET.encode()
-    expected = hmac.new(secret, msg.encode(), hashlib.sha256).hexdigest()
+    secret_bytes = RAZORPAY_KEY_SECRET.encode()
+    expected = hmac.new(secret_bytes, msg.encode(), hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected, signature)
 
 def upgrade_user_tier(user_id: int, plan: str, db: Session):
@@ -93,13 +96,14 @@ def use_credits(user_id: int, amount: int, db: Session):
     """
     Deducts credits from a user's account.
     """
-    user = db.query(Users).filter(Users.id == user_id).first()
+    user: Optional[Users] = db.query(Users).filter(Users.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
         
-    if user.tier == "free" and (user.credits or 0) < amount:
+    current_credits = int(user.credits or 0)
+    if user.tier == "free" and current_credits < amount:
         raise HTTPException(status_code=402, detail="Insufficient credits. Upgrade to Pro for more generations.")
     
-    user.credits = (user.credits or 0) - amount
+    user.credits = current_credits - amount
     db.commit()
-    return user.credits
+    return int(user.credits)

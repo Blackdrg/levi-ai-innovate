@@ -27,8 +27,12 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 target_metadata = Base.metadata
 
-def get_url():
-    return os.getenv("DATABASE_URL")
+def get_url() -> str:
+    url = os.getenv("DATABASE_URL")
+    if not url:
+        # Fallback for local development if not set
+        return "sqlite:///./levi.db"
+    return url
 
 def run_migrations_offline() -> None:
     url = get_url()

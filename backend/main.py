@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 
 from sqlalchemy.orm import Session
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, validator
 
 from jose import JWTError, jwt # type: ignore
 
@@ -28,21 +28,33 @@ from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
 from authlib.integrations.starlette_client import OAuth # type: ignore
 import os
-
-import logging
-
-import requests # type: ignore
-
-from dotenv import load_dotenv
-
-
-
 import sentry_sdk
 
-load_dotenv()
+import logging
+import json
+from pythonjsonlogger.json import JsonFormatter
+import time
+import uuid
 
-logging.basicConfig(level=logging.INFO)
+# Structured JSON logging
+class CustomJsonFormatter(JsonFormatter):
+    def add_fields(self, log_record, record, message_dict):
+        super(CustomJsonFormatter, self).add_fields(log_record, record, message_dict)
+        if not log_record.get('timestamp'):
+            now = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+            log_record['timestamp'] = now
+        if log_record.get('level'):
+            log_record['level'] = log_record['level'].upper()
+        else:
+            log_record['level'] = record.levelname
+
 logger = logging.getLogger(__name__)
+logHandler = logging.StreamHandler()
+formatter = CustomJsonFormatter('%(timestamp)s %(level)s %(name)s %(message)s')
+logHandler.setFormatter(formatter)
+logger.addHandler(logHandler)
+logger.setLevel(logging.INFO)
+logger.propagate = False # Prevent double logging
 
 # Sentry Initialization
 SENTRY_DSN = os.getenv("SENTRY_DSN")
@@ -69,7 +81,8 @@ REQUIRED_ENV_VARS = [
     "DATABASE_URL",
     "RAZORPAY_KEY_ID",
     "RAZORPAY_KEY_SECRET",
-    "RAZORPAY_WEBHOOK_SECRET"
+    "RAZORPAY_WEBHOOK_SECRET",
+    "ADMIN_KEY"
 ]
 
 def validate_env():
@@ -133,7 +146,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 _executor = ThreadPoolExecutor(max_workers=4)
 
-SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-prod")
+SECRET_KEY = os.environ["SECRET_KEY"]
 CLIENT_KEY = os.getenv("CLIENT_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 10080  # 7 days for better user experience
@@ -147,10 +160,21 @@ def verify_password(plain_password, hashed_password):
 def get_password_hash(password):
     return pwd_context.hash(password)
 
+import uuid
+
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=15))
-    to_encode.update({"exp": expire})
+    jti = str(uuid.uuid4())
+    to_encode.update({"exp": expire, "jti": jti})
+    
+    # Store JTI in Redis (whitelist)
+    from backend.redis_client import store_jti
+    # Convert timedelta to seconds for Redis EX
+    delta = expires_delta or timedelta(minutes=15)
+    seconds = int(delta.total_seconds())
+    store_jti(jti, seconds)
+    
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM) # type: ignore
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
@@ -161,6 +185,15 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM]) # type: ignore
+        jti = payload.get("jti")
+        if not jti:
+             raise credentials_exception
+        
+        # Check JTI in Redis (whitelist)
+        from backend.redis_client import is_jti_blacklisted
+        if is_jti_blacklisted(jti):
+             raise credentials_exception
+             
     except JWTError:
         raise credentials_exception
     username_val = payload.get("sub")
@@ -177,6 +210,14 @@ async def get_current_user_optional(token: Optional[str] = Depends(OAuth2Passwor
         return None
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM]) # type: ignore
+        jti = payload.get("jti")
+        if not jti:
+            return None
+            
+        from backend.redis_client import is_jti_blacklisted
+        if is_jti_blacklisted(jti):
+            return None
+            
         username_val = payload.get("sub")
         if username_val is None:
             return None
@@ -185,31 +226,63 @@ async def get_current_user_optional(token: Optional[str] = Depends(OAuth2Passwor
     except JWTError:
         return None
 
+async def verify_admin(request: Request):
+    admin_key = os.getenv("ADMIN_KEY")
+    provided_key = request.headers.get("X-Admin-Key")
+    if not admin_key or provided_key != admin_key:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Unauthorized admin access")
+    return True
+
+class AdminAdjustCredits(BaseModel):
+    user_id: int
+    amount: int
+
 class User(BaseModel):
-    username: str
+    username: str = Field(..., max_length=100)
 
 class UserIn(BaseModel):
-    username: str
-    password: str
+    username: str = Field(..., max_length=100)
+    password: str = Field(..., min_length=8, max_length=100)
 
 class Token(BaseModel):
     access_token: str
     token_type: str
 
 class Query(BaseModel):
-    text: str
-    author: Optional[str] = None
-    mood: Optional[str] = None
-    topic: Optional[str] = None
-    lang: Optional[str] = "en"
+    text: str = Field(..., max_length=500)
+    author: Optional[str] = Field(None, max_length=100)
+    mood: Optional[str] = Field(None, max_length=50)
+    topic: Optional[str] = Field(None, max_length=50)
+    lang: Optional[str] = Field("en", max_length=10)
     custom_bg: Optional[str] = None
-    top_k: int = 5
+    top_k: int = Field(5, ge=1, le=20)
+
+    @validator("text", "author", "mood", "topic")
+    def sanitize_text(cls, v):
+        if v is None:
+            return v
+        # Basic prompt injection detection
+        forbidden = ["ignore previous", "system:", "assistant:", "user:"]
+        v_lower = v.lower()
+        for f in forbidden:
+            if f in v_lower:
+                raise ValueError(f"Potential prompt injection detected: {f}")
+        return v
 
 class ChatMessage(BaseModel):
-    session_id: str
-    message: str
-    lang: Optional[str] = "en"
-    mood: Optional[str] = ""
+    session_id: str = Field(..., max_length=100)
+    message: str = Field(..., max_length=1000)
+    lang: Optional[str] = Field("en", max_length=10)
+    mood: Optional[str] = Field("", max_length=50)
+
+    @validator("message")
+    def sanitize_message(cls, v):
+        forbidden = ["ignore previous", "system:", "assistant:", "user:"]
+        v_lower = v.lower()
+        for f in forbidden:
+            if f in v_lower:
+                raise ValueError(f"Potential prompt injection detected: {f}")
+        return v
 
 # Helper for per-user rate limiting
 def get_user_or_ip(request: Request):
@@ -232,12 +305,43 @@ app = FastAPI(
     redoc_url=None if is_prod else "/redoc",
     openapi_url=None if is_prod else "/openapi.json"
 )
+
+@app.middleware("http")
+async def add_request_id(request: Request, call_next):
+    request_id = str(uuid.uuid4())
+    request.state.request_id = request_id
+    start_time = time.time()
+    
+    response = await call_next(request)
+    
+    duration = (time.time() - start_time) * 1000
+    response.headers["X-Request-ID"] = request_id
+    
+    logger.info("request_completed", extra={
+        "request_id": request_id,
+        "method": request.method,
+        "path": request.url.path,
+        "status_code": response.status_code,
+        "duration_ms": round(duration, 2)
+    })
+    
+    return response
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
+
 app.include_router(payments_router)
 
 # Rate Limiter setup
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+from typing import Any, cast
+app.add_exception_handler(RateLimitExceeded, cast(Any, _rate_limit_exceeded_handler))
 
 # Ensure database tables are created
 Base.metadata.create_all(bind=engine)
@@ -322,9 +426,15 @@ async def auth_google(request: Request, db: Session = Depends(get_db)):
         if not user:
             user = Users(
                 username=username,
-                password_hash=get_password_hash(os.urandom(16).hex()) # Random password for OAuth users
+                email=email,
+                password_hash=get_password_hash(os.urandom(16).hex()), # Random password for OAuth users
+                is_verified=1 # OAuth users are verified by Google
             )
             db.add(user)
+            db.commit()
+        elif not user.is_verified:
+            # If user exists but wasn't verified, Google login verifies them
+            user.is_verified = 1
             db.commit()
             
         # Generate JWT token
@@ -355,10 +465,26 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 
 
+@app.post("/logout")
+async def logout(token: str = Depends(oauth2_scheme)):
+    """
+    Logout by revoking the current JWT's JTI.
+    """
+    try:
+        # Decode without verification to get JTI if possible, 
+        # but better to use verified payload if we have it.
+        # Since Depends(oauth2_scheme) gives us the token, we decode it.
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM]) # type: ignore
+        jti = payload.get("jti")
+        if jti:
+            from backend.redis_client import delete_jti
+            delete_jti(jti)
+        return {"status": "success", "message": "Logged out successfully"}
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
 @app.on_event("startup")
-
 async def startup_event():
-
     logger.info("Starting LEVI backend...")
 
     if not HAS_REDIS:
@@ -576,8 +702,9 @@ async def gen_image(request: Request, req: Query, db: Session = Depends(get_db),
                 raise HTTPException(status_code=400, detail="Custom background exceeds 5MB limit")
             
             # Basic type check
-            if not req.custom_bg.startswith("data:image/"):
-                raise HTTPException(status_code=400, detail="Invalid image format. Must be a data URI.")
+            allowed_types = ["data:image/jpeg", "data:image/png", "data:image/webp"]
+            if not any(req.custom_bg.startswith(t) for t in allowed_types):
+                raise HTTPException(status_code=400, detail="Invalid image format. Only JPEG, PNG and WEBP are allowed.")
         
         # Credit System: Deduct 1 credit for generation
         if current_user:
@@ -681,15 +808,10 @@ def like_item(item_type: str, item_id: int, db: Session = Depends(get_db)):
 
 
 @app.get("/feed", response_model=List[dict])
-
-def get_feed(db: Session = Depends(get_db), limit: int = 20):
-
-    items = db.query(FeedItem).order_by(FeedItem.timestamp.desc()).limit(limit).all()
-
+def get_feed(db: Session = Depends(get_db), limit: int = 20, offset: int = 0):
+    items = db.query(FeedItem).order_by(FeedItem.timestamp.desc()).offset(offset).limit(limit).all()
     return [{"id": i.id, "text": i.text, "author": i.author, "mood": i.mood,
-
-            "image": i.image_b64, "likes": i.likes or 0, "time": i.timestamp.isoformat()}
-
+            "image": i.image_url or i.image_b64, "likes": i.likes or 0, "time": i.timestamp.isoformat()}
             for i in items]
 
 
@@ -744,6 +866,55 @@ async def chat(request: Request, msg: ChatMessage, db: Session = Depends(get_db)
 
 
 
+@app.get("/export_my_data")
+async def export_my_data(db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
+    """
+    GDPR Compliance: Export all data associated with the current user.
+    """
+    try:
+        # Fetch user profile
+        profile = {
+            "id": current_user.id,
+            "username": current_user.username,
+            "email": current_user.email,
+            "tier": current_user.tier,
+            "credits": current_user.credits,
+            "created_at": current_user.created_at.isoformat() if current_user.created_at else None
+        }
+        
+        # Fetch chat history
+        chats = db.query(ChatHistory).filter(ChatHistory.user_id == current_user.id).all()
+        chat_data = [
+            {"message": c.message, "response": c.response, "timestamp": c.timestamp.isoformat()}
+            for c in chats
+        ]
+        
+        # Fetch feed items (generations)
+        items = db.query(FeedItem).filter(FeedItem.user_id == current_user.id).all()
+        item_data = [
+            {
+                "text": i.text,
+                "author": i.author,
+                "mood": i.mood,
+                "image_url": i.image_url,
+                "video_url": i.video_url,
+                "timestamp": i.timestamp.isoformat()
+            }
+            for i in items
+        ]
+        
+        export = {
+            "profile": profile,
+            "chats": chat_data,
+            "generations": item_data,
+            "exported_at": datetime.utcnow().isoformat()
+        }
+        
+        return export
+    except Exception as e:
+        logger.error(f"Data export failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to export data.")
+
 @app.delete("/delete_account")
 async def delete_account(db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
     """
@@ -782,47 +953,84 @@ async def get_profile(current_user: Users = Depends(get_current_user)):
         "created_at": current_user.created_at.isoformat()
     }
 
-@app.post("/register", response_model=Token)
-async def register(user_in: UserIn, db: Session = Depends(get_db)):
+@app.post("/register")
+@limiter.limit("5/minute")
+async def register(request: Request, user_in: UserIn, db: Session = Depends(get_db)):
     if len(user_in.password) < 8:
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
     
+    # Check if username looks like an email
+    if "@" not in user_in.username or "." not in user_in.username:
+         raise HTTPException(status_code=400, detail="Username must be a valid email address")
+
     existing = db.query(Users).filter(Users.username == user_in.username).first()
     if existing:
-        raise HTTPException(status_code=400, detail="Username already registered")
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    # Generate verification token
+    verification_token = str(uuid.uuid4())
     
     user = Users(
         username=user_in.username,
-        password_hash=get_password_hash(user_in.password)
+        email=user_in.username,
+        password_hash=get_password_hash(user_in.password),
+        is_verified=0,
+        verification_token=verification_token
     )
     db.add(user)
     db.commit()
     
-    token = create_access_token(data={"sub": user.username},
-                                expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-    return {"access_token": token, "token_type": "bearer"}
+    # Send verification email
+    from backend.email_service import send_verification_email
+    send_verification_email(user.username, verification_token)
+    
+    return JSONResponse(
+        status_code=201,
+        content={"message": "Registration successful. Please check your email to verify your account."}
+    )
 
+@app.get("/verify")
+async def verify_email(token: str, db: Session = Depends(get_db)):
+    user = db.query(Users).filter(Users.verification_token == token).first()
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid or expired verification token")
+    
+    user.is_verified = 1
+    user.verification_token = None
+    db.commit()
+    
+    # Redirect to login or success page
+    frontend_url = os.getenv("FRONTEND_URL", "https://levi-ai.create.app")
+    return RedirectResponse(url=f"{frontend_url}/auth.html?verified=true")
 
 @app.post("/token", response_model=Token)
-async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+async def login_for_access_token(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(Users).filter(Users.username == form_data.username).first()
     if not user or not verify_password(form_data.password, user.password_hash):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect username or password")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
+    
+    if not user.is_verified:
+        raise HTTPException(status_code=403, detail="Please verify your email address before logging in.")
     
     token = create_access_token(data={"sub": user.username},
                                 expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     return {"access_token": token, "token_type": "bearer"}
 
 @app.post("/login", response_model=Token)
-async def login_json(user_in: UserIn, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+async def login_json(request: Request, user_in: UserIn, db: Session = Depends(get_db)):
     """
     Alternative login route that accepts JSON body instead of form-data.
     Fixes 404/compatibility issues in some production environments.
     """
     user = db.query(Users).filter(Users.username == user_in.username).first()
     if not user or not verify_password(user_in.password, user.password_hash):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect username or password")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
     
+    if not user.is_verified:
+        raise HTTPException(status_code=403, detail="Please verify your email address before logging in.")
+        
     token = create_access_token(data={"sub": user.username},
                                 expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     return {"access_token": token, "token_type": "bearer"}
@@ -840,10 +1048,25 @@ async def get_task_status(task_id: str):
     res = AsyncResult(task_id, app=celery_app)
     if res.ready():
         result = res.result
+        # If result is a dict with status='failed', surface it
+        if isinstance(result, dict) and result.get("status") == "failed":
+            return {
+                "status": "failed",
+                "error": result.get("error")
+            }
+        
         return {
             "status": "completed",
             "result": result
         }
+    
+    # Check if task failed at celery level
+    if res.status == 'FAILURE':
+        return {
+            "status": "failed",
+            "error": str(res.result)
+        }
+        
     return {"status": "pending"}
 
 @app.post("/track_share")
@@ -907,9 +1130,9 @@ async def gen_video(req: Query, db: Session = Depends(get_db), current_user: Opt
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/my_gallery")
-async def get_my_gallery(db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
+async def get_my_gallery(db: Session = Depends(get_db), current_user: Users = Depends(get_current_user), limit: int = 20, offset: int = 0):
     """Fetch all generated items for the current user."""
-    items = db.query(FeedItem).filter(FeedItem.user_id == current_user.id).order_by(FeedItem.timestamp.desc()).all()
+    items = db.query(FeedItem).filter(FeedItem.user_id == current_user.id).order_by(FeedItem.timestamp.desc()).offset(offset).limit(limit).all()
     return [
         {
             "id": i.id,
@@ -923,6 +1146,67 @@ async def get_my_gallery(db: Session = Depends(get_db), current_user: Users = De
         }
         for i in items
     ]
+
+# ─────────────────────────────────────────────────────────────
+# Admin Endpoints
+# ─────────────────────────────────────────────────────────────
+
+@app.get("/admin/users")
+async def admin_list_users(db: Session = Depends(get_db), _admin: bool = Depends(verify_admin)):
+    users = db.query(Users).order_by(Users.created_at.desc()).all()
+    return [{
+        "id": u.id,
+        "username": u.username,
+        "email": u.email,
+        "tier": u.tier,
+        "credits": u.credits,
+        "is_verified": u.is_verified,
+        "created_at": u.created_at.isoformat() if u.created_at else None
+    } for u in users]
+
+@app.get("/admin/feed")
+async def admin_list_feed(db: Session = Depends(get_db), limit: int = 50, offset: int = 0, _admin: bool = Depends(verify_admin)):
+    items = db.query(FeedItem).order_by(FeedItem.timestamp.desc()).offset(offset).limit(limit).all()
+    return [{
+        "id": i.id,
+        "user_id": i.user_id,
+        "text": i.text,
+        "author": i.author,
+        "mood": i.mood,
+        "image_url": i.image_url,
+        "video_url": i.video_url,
+        "likes": i.likes,
+        "timestamp": i.timestamp.isoformat()
+    } for i in items]
+
+@app.delete("/admin/feed/{item_id}")
+async def admin_delete_feed_item(item_id: int, db: Session = Depends(get_db), _admin: bool = Depends(verify_admin)):
+    item = db.query(FeedItem).filter(FeedItem.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    db.delete(item)
+    db.commit()
+    return {"status": "success", "message": f"Item {item_id} deleted"}
+
+@app.post("/admin/adjust_credits")
+async def admin_adjust_credits(adj: AdminAdjustCredits, db: Session = Depends(get_db), _admin: bool = Depends(verify_admin)):
+    user = db.query(Users).filter(Users.id == adj.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.credits = (user.credits or 0) + adj.amount
+    db.commit()
+    return {"status": "success", "new_credits": user.credits}
+
+@app.get("/admin/payments")
+async def admin_list_payments(_admin: bool = Depends(verify_admin)):
+    """
+    In a real app, you might query a Payments table. 
+    For now, we can check recent success logs or Redis idempotency keys.
+    """
+    # For now, return a placeholder or implement if a Payments table existed.
+    return {"message": "Payment history can be viewed in Razorpay Dashboard for now."}
+
+# ─────────────────────────────────────────────────────────────
 
 @app.post("/test_daily_email")
 async def test_daily_email(db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
@@ -981,16 +1265,23 @@ async def get_vapid_public_key():
 async def subscribe_push(sub: PushSubscriptionSchema, db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
     # Check if subscription already exists for this endpoint
     existing = db.query(PushSubscription).filter(PushSubscription.endpoint == sub.endpoint).first()
+    
+    p256dh = str(sub.keys.get("p256dh", ""))
+    auth = str(sub.keys.get("auth", ""))
+    
+    if not p256dh or not auth:
+        raise HTTPException(status_code=400, detail="Invalid push subscription keys")
+
     if existing:
         existing.user_id = current_user.id
-        existing.p256dh = sub.keys.get("p256dh")
-        existing.auth = sub.keys.get("auth")
+        existing.p256dh = p256dh
+        existing.auth = auth
     else:
         new_sub = PushSubscription(
             user_id=current_user.id,
             endpoint=sub.endpoint,
-            p256dh=sub.keys.get("p256dh"),
-            auth=sub.keys.get("auth")
+            p256dh=p256dh,
+            auth=auth
         )
         db.add(new_sub)
     
@@ -1006,6 +1297,7 @@ async def send_test_push(current_user: Users = Depends(get_current_user), db: Se
     
     for s in subs:
         send_push_notification_task.delay(
+            s.id,
             s.endpoint,
             s.p256dh,
             s.auth,
@@ -1051,15 +1343,19 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
     """
     payload = await request.body()
     signature = request.headers.get("X-Razorpay-Signature")
-    secret = os.getenv("RAZORPAY_WEBHOOK_SECRET")
 
-    if not secret or not signature:
+    # Verify webhook signature
+    webhook_secret = os.getenv("RAZORPAY_WEBHOOK_SECRET")
+    if not webhook_secret or not signature:
         logger.warning("Razorpay webhook missing secret or signature")
         return {"status": "ignored"}
 
-    # Verify webhook signature
-    expected_signature = hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(expected_signature, signature):
+    expected_signature = hmac.new(webhook_secret.encode(), payload, hashlib.sha256).hexdigest()
+    
+    # Ensure signature is a string for comparison
+    actual_signature = signature.decode() if isinstance(signature, bytes) else signature
+    
+    if not hmac.compare_digest(expected_signature, actual_signature):
         raise HTTPException(status_code=400, detail="Invalid webhook signature")
 
     import json
@@ -1073,8 +1369,23 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
 
     if event == "payment.captured":
         payment_entity = data["payload"]["payment"]["entity"]
-        order_id = payment_entity.get("order_id")
         payment_id = payment_entity.get("id")
+
+        if not payment_id:
+            logger.error("Razorpay webhook missing payment_id")
+            return {"status": "error", "message": "Missing payment_id"}
+
+        # Idempotency check: prevent double-crediting
+        from backend.redis_client import _get, _set, HAS_REDIS
+        processed_key = f"payment_processed:{payment_id}"
+        if _get(processed_key):
+            logger.info(f"Payment {payment_id} already processed. Skipping.")
+            return {"status": "success", "message": "Already processed"}
+        
+        # Mark as processed in Redis (24h TTL)
+        _set(processed_key, "1", ex=86400)
+
+        order_id = payment_entity.get("order_id")
         amount = payment_entity.get("amount", 0) / 100 # Convert paise to INR
         notes = payment_entity.get("notes", {})
         
@@ -1121,6 +1432,19 @@ async def get_user_credits(current_user: Users = Depends(get_current_user)):
 
 
 
+
+@app.post("/downgrade")
+async def downgrade_tier(db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
+    """
+    Allow users to downgrade to the free tier.
+    Note: Credits remain as they were, but the tier changes.
+    """
+    if current_user.tier == "free":
+        return {"status": "ignored", "message": "Already on free tier"}
+    
+    current_user.tier = "free"
+    db.commit()
+    return {"status": "success", "message": "Subscription cancelled. Downgraded to free tier."}
 
 if __name__ == "__main__":
     import uvicorn

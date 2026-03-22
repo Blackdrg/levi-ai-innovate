@@ -20,6 +20,24 @@ Follow these phases in order to launch LEVI with real payments, AI generation, a
 2. **IAM User**: Create an IAM user with `AmazonS3FullAccess`.
 3. **Get Credentials**: Save the `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`.
 4. **Set Region**: Note your region (e.g., `us-east-1`).
+5. **Public Access**:
+    * Ensure "Block all public access" is **OFF** for the bucket.
+    * Add a Bucket Policy to allow public reads (or use the code's `ACL='public-read'`):
+
+    ```json
+    {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Sid": "PublicRead",
+                "Effect": "Allow",
+                "Principal": "*",
+                "Action": "s3:GetObject",
+                "Resource": "arn:aws:s3:::your-bucket-name/*"
+            }
+        ]
+    }
+    ```
 
 ## Phase C: Together.AI & Groq (5 min)
 
@@ -50,6 +68,8 @@ Add these to your Render/Production environment:
 * `VAPID_PUBLIC_KEY`: Your public VAPID key.
 * `VAPID_PRIVATE_KEY`: Your private VAPID key.
 * `VAPID_ADMIN_EMAIL`: Your admin email (e.g., `admin@yourdomain.com`).
+* `ADMIN_KEY`: A secret key for accessing `/admin` endpoints.
+* `CLOUDFRONT_DOMAIN`: (Optional) Your CloudFront domain (e.g., `d123.cloudfront.net`) for faster image delivery.
 
 ## Phase E: Web Push Notifications (5 min)
 
@@ -61,8 +81,8 @@ Add these to your Render/Production environment:
 
 1. **Frontend Build**: Run `cd frontend && npm run build` to generate the production CSS.
 2. **Push Code**: `git push origin main`.
-2. **Verify**: Check Render logs for "Database tables ready" and "Uvicorn running".
-3. **Test**: Perform a test purchase and verify credits in the Studio.
+3. **Verify**: Check Render logs for "Database tables ready" and "Uvicorn running".
+4. **Test**: Perform a test purchase and verify credits in the Studio.
 
 ---
 

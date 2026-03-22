@@ -1,6 +1,9 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Date, JSON, PickleType
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+import datetime
+from datetime import datetime as dt_datetime, date as dt_date
 try:
-    from sqlalchemy.dialects.postgresql import VECTOR
+    from pgvector.sqlalchemy import Vector as VECTOR
     HAS_PGVECTOR = True
 except ImportError:
     HAS_PGVECTOR = False
@@ -10,104 +13,109 @@ try:
 except ImportError:
     from db import Base, DATABASE_URL
 from sqlalchemy.sql import func
+from typing import List, Optional
 
 
 class Quote(Base):
     __tablename__ = "quotes"
     __table_args__ = {'extend_existing': True}
 
-    id         = Column(Integer, primary_key=True, index=True)
-    text       = Column(String, nullable=False)
-    author     = Column(String)
-    topic      = Column(String)
-    mood       = Column(String)
-    likes      = Column(Integer, default=0)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    id: Mapped[int]         = mapped_column(primary_key=True, index=True)
+    text: Mapped[str]       = mapped_column(nullable=False)
+    author: Mapped[Optional[str]]     = mapped_column()
+    topic: Mapped[Optional[str]]      = mapped_column()
+    mood: Mapped[Optional[str]]       = mapped_column()
+    likes: Mapped[int]      = mapped_column(default=0)
+    created_at: Mapped[dt_datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     if HAS_PGVECTOR and "postgresql" in DATABASE_URL:
-        embedding = Column(VECTOR(384))
+        embedding = mapped_column(VECTOR(384))
     else:
-        embedding = Column(PickleType)
+        embedding = mapped_column(PickleType)
 
 
 class Users(Base):
     __tablename__ = "users"
     __table_args__ = {'extend_existing': True}
 
-    id                 = Column(Integer, primary_key=True, index=True)
-    username           = Column(String, unique=True, index=True, nullable=False)
-    email              = Column(String, unique=True, index=True, nullable=True)
-    password_hash      = Column(String, nullable=False)
-    created_at         = Column(DateTime(timezone=True), server_default=func.now())
+    id: Mapped[int]                 = mapped_column(primary_key=True, index=True)
+    username: Mapped[str]           = mapped_column(unique=True, index=True, nullable=False)
+    email: Mapped[Optional[str]]    = mapped_column(unique=True, index=True, nullable=True)
+    password_hash: Mapped[str]      = mapped_column(nullable=False)
+    created_at: Mapped[dt_datetime]    = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    # ── Auth & Verification ──────────────────
+    is_verified: Mapped[int]        = mapped_column(default=0)          # 0=false, 1=true (using Integer for SQLite compatibility if needed, or Boolean)
+    verification_token: Mapped[Optional[str]] = mapped_column(nullable=True)
 
     # ── Subscription & Credits ──────────────────
-    tier               = Column(String, default="free")      # free / pro / creator
-    credits            = Column(Integer, default=10)         # Free tier starts with 10
-    stripe_customer_id = Column(String, nullable=True)       # Set after first Stripe payment
+    tier: Mapped[str]               = mapped_column(default="free")      # free / pro / creator
+    credits: Mapped[int]            = mapped_column(default=10)         # Free tier starts with 10
+    razorpay_customer_id: Mapped[Optional[str]] = mapped_column(nullable=True)       # Set after first payment
 
     # ── Personalization ─────────────────────────
-    liked_topics       = Column(JSON, default=list)          # ["philosophy","success"]
-    mood_history       = Column(JSON, default=list)          # ["zen","stoic"]
-    share_count        = Column(Integer, default=0)          # Viral reward loop progress
-    bonus_credits      = Column(Integer, default=0)
+    liked_topics: Mapped[list]      = mapped_column(JSON, default=list)          # ["philosophy","success"]
+    mood_history: Mapped[list]      = mapped_column(JSON, default=list)          # ["zen","stoic"]
+    share_count: Mapped[int]        = mapped_column(default=0)          # Viral reward loop progress
+    bonus_credits: Mapped[int]      = mapped_column(default=0)
 
 
 class ChatHistory(Base):
     __tablename__ = "chat_history"
     __table_args__ = {'extend_existing': True}
 
-    id        = Column(Integer, primary_key=True, index=True)
-    user_id   = Column(Integer, ForeignKey("users.id"))
-    message   = Column(String, nullable=False)
-    response  = Column(String, nullable=False)
-    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+    id: Mapped[int]        = mapped_column(primary_key=True, index=True)
+    user_id: Mapped[int]   = mapped_column(ForeignKey("users.id"))
+    message: Mapped[str]   = mapped_column(nullable=False)
+    response: Mapped[str]  = mapped_column(nullable=False)
+    timestamp: Mapped[dt_datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class UserMemory(Base):
     __tablename__ = "user_memory"
     __table_args__ = {'extend_existing': True}
 
-    id               = Column(Integer, primary_key=True, index=True)
-    user_id          = Column(Integer, ForeignKey("users.id"), unique=True)
-    mood_history     = Column(JSON, default=list)
-    liked_topics     = Column(JSON, default=list)
-    interaction_count = Column(Integer, default=0)
-    last_active      = Column(DateTime(timezone=True), server_default=func.now())
+    id: Mapped[int]               = mapped_column(primary_key=True, index=True)
+    user_id: Mapped[int]          = mapped_column(ForeignKey("users.id"), unique=True)
+    mood_history: Mapped[list]    = mapped_column(JSON, default=list)
+    liked_topics: Mapped[list]    = mapped_column(JSON, default=list)
+    interaction_count: Mapped[int] = mapped_column(default=0)
+    last_active: Mapped[dt_datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class FeedItem(Base):
     __tablename__ = "feed_items"
     __table_args__ = {'extend_existing': True}
 
-    id         = Column(Integer, primary_key=True, index=True)
-    user_id    = Column(Integer, ForeignKey("users.id"), nullable=True) # Associated creator
-    text       = Column(String)
-    author     = Column(String)
-    mood       = Column(String)
-    image_b64  = Column(String)
-    image_url  = Column(String, nullable=True)   # S3 URL when available
-    video_url  = Column(String, nullable=True)   # S3 video URL
-    likes      = Column(Integer, default=0)
-    timestamp  = Column(DateTime, default=func.now())
+    id: Mapped[int]         = mapped_column(primary_key=True, index=True)
+    user_id: Mapped[Optional[int]]    = mapped_column(ForeignKey("users.id"), nullable=True) # Associated creator
+    text: Mapped[Optional[str]]       = mapped_column()
+    author: Mapped[Optional[str]]     = mapped_column()
+    mood: Mapped[Optional[str]]       = mapped_column()
+    image_b64: Mapped[Optional[str]]  = mapped_column()
+    image_url: Mapped[Optional[str]]  = mapped_column(nullable=True)   # S3 URL when available
+    video_url: Mapped[Optional[str]]  = mapped_column(nullable=True)   # S3 video URL
+    likes: Mapped[int]      = mapped_column(default=0)
+    timestamp: Mapped[dt_datetime]  = mapped_column(DateTime, default=func.now())
 
 
 class Analytics(Base):
     __tablename__ = "analytics"
     __table_args__ = {'extend_existing': True}
 
-    id          = Column(Integer, primary_key=True, index=True)
-    date        = Column(Date, unique=True)
-    chats_count = Column(Integer, default=0)
-    likes_count = Column(Integer, default=0)
-    daily_users = Column(Integer, default=0)
+    id: Mapped[int]          = mapped_column(primary_key=True, index=True)
+    date: Mapped[dt_date]    = mapped_column(Date, unique=True)
+    chats_count: Mapped[int] = mapped_column(default=0)
+    likes_count: Mapped[int] = mapped_column(default=0)
+    daily_users: Mapped[int] = mapped_column(default=0)
 
 
 class PushSubscription(Base):
     __tablename__ = "push_subscriptions"
     __table_args__ = {'extend_existing': True}
 
-    id       = Column(Integer, primary_key=True, index=True)
-    user_id  = Column(Integer, ForeignKey("users.id"))
-    endpoint = Column(String, nullable=False)
-    p256dh   = Column(String, nullable=False)
-    auth     = Column(String, nullable=False)
+    id: Mapped[int]       = mapped_column(primary_key=True, index=True)
+    user_id: Mapped[int]  = mapped_column(ForeignKey("users.id"))
+    endpoint: Mapped[str] = mapped_column(nullable=False)
+    p256dh: Mapped[str]   = mapped_column(nullable=False)
+    auth: Mapped[str]     = mapped_column(nullable=False)

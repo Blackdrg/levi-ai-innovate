@@ -50,6 +50,24 @@ async function apiFetch(endpoint, options = {}) {
   try {
     const res = await fetch(url, finalOptions);
     if (!res.ok) {
+      if (res.status === 401) {
+        console.warn("[LEVI] Unauthorized - redirecting to auth");
+        localStorage.removeItem('levi_token');
+        if (!window.location.pathname.includes('auth.html')) {
+          window.location.href = 'auth.html?expired=true';
+        }
+      }
+      
+      if (res.status === 402) {
+        console.warn("[LEVI] Payment Required - opening pricing");
+        if (window.ui && window.ui.showToast) {
+          window.ui.showToast("Credits exhausted. Upgrade to continue.", "warning");
+        }
+        setTimeout(() => {
+          window.location.href = 'pricing.html?exhausted=true';
+        }, 2000);
+      }
+
       const errorData = await res.json().catch(() => ({}));
       throw new Error(errorData.detail || `API error: ${res.status}`);
     }

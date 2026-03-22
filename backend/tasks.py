@@ -3,6 +3,7 @@ import uuid
 import logging
 import boto3
 from io import BytesIO
+from typing import Any, List, Optional
 from celery import Celery
 from botocore.exceptions import BotoCoreError, ClientError
 from pywebpush import webpush, WebPushException
@@ -50,9 +51,17 @@ def upload_to_s3(file_bytes: bytes, filename: str, content_type: str = "video/mp
             Key         = filename,
             Body        = file_bytes,
             ContentType = content_type,
+            ACL         = "public-read" # Simplest way to make it public as requested
         )
         region = os.getenv("AWS_REGION", "us-east-1")
-        url = f"https://{bucket}.s3.{region}.amazonaws.com/{filename}"
+        
+        # Use CloudFront CDN if configured, otherwise direct S3 URL
+        cloudfront = os.getenv("CLOUDFRONT_DOMAIN")
+        if cloudfront:
+            url = f"https://{cloudfront}/{filename}"
+        else:
+            url = f"https://{bucket}.s3.{region}.amazonaws.com/{filename}"
+            
         logger.info(f"Uploaded to S3: {url}")
         return url
 
@@ -133,6 +142,9 @@ def generate_image_task(self, quote: str, author: str, mood: str, user_id: int):
 
     except Exception as e:
         logger.error(f"[Task] Image generation failed: {e}")
+        # If we've exhausted retries, we should return a "failed" status
+        if self.request.retries >= self.max_retries:
+            return {"status": "failed", "error": str(e)}
         raise self.retry(exc=e, countdown=5)
 
 
@@ -178,6 +190,8 @@ def generate_video_task(self, quote: str, author: str, mood: str, user_id: int):
 
     except Exception as e:
         logger.error(f"[Task] Video generation failed: {e}")
+        if self.request.retries >= self.max_retries:
+            return {"status": "failed", "error": str(e)}
         raise self.retry(exc=e, countdown=10)
 
 
@@ -185,13 +199,13 @@ def generate_video_task(self, quote: str, author: str, mood: str, user_id: int):
 # Task 3: Send Push Notification
 # ─────────────────────────────────────────────
 @celery_app.task(bind=True, max_retries=3)
-def send_push_notification_task(self, endpoint, p256dh, auth, title, body):
+def send_push_notification_task(self, subscription_id, endpoint, p256dh, auth, title, body):
     """
     Sends a Web Push notification to a specific subscription.
     """
     try:
         private_key = os.getenv("VAPID_PRIVATE_KEY")
-        claims = {"sub": "mailto:" + os.getenv("VAPID_ADMIN_EMAIL", "admin@levi-ai.create.app")}
+        claims: Any = {"sub": "mailto:" + os.getenv("VAPID_ADMIN_EMAIL", "admin@levi-ai.create.app")}
         
         if not private_key:
             logger.error("VAPID_PRIVATE_KEY not set. Cannot send push notification.")
@@ -211,10 +225,17 @@ def send_push_notification_task(self, endpoint, p256dh, auth, title, body):
 
     except WebPushException as ex:
         logger.error(f"WebPush error: {ex}")
-        # If subscription is no longer valid (410 Gone), we should ideally remove it from DB
-        # But we don't have user_id here. A more robust implementation would pass subscription ID.
+        # If subscription is no longer valid (410 Gone), delete from DB
         if ex.response and ex.response.status_code == 410:
-            logger.warning("Subscription expired/gone. Should be removed.")
+            logger.warning(f"Subscription {subscription_id} expired/gone. Deleting.")
+            from backend.db import SessionLocal
+            from backend.models import PushSubscription
+            db = SessionLocal()
+            try:
+                db.query(PushSubscription).filter(PushSubscription.id == subscription_id).delete()
+                db.commit()
+            finally:
+                db.close()
         raise self.retry(exc=ex, countdown=60)
     except Exception as e:
         logger.error(f"Push notification failed: {e}")
@@ -223,6 +244,8 @@ def send_push_notification_task(self, endpoint, p256dh, auth, title, body):
 
 def _create_quote_video(quote: str, author: str, mood: str) -> bytes:
     """Creates an 9:16 vertical video (Instagram Reel format)."""
+    img_path = f"/tmp/bg_{uuid.uuid4().hex}.png"
+    output_path = f"/tmp/video_{uuid.uuid4().hex}.mp4"
     try:
         try:
             from moviepy import ImageClip, TextClip, CompositeVideoClip, AudioFileClip
@@ -233,16 +256,15 @@ def _create_quote_video(quote: str, author: str, mood: str) -> bytes:
 
         # Generate background image
         bio = generate_quote_image(quote, author, mood, size=(1080, 1920))
-        img_path = f"/tmp/bg_{uuid.uuid4().hex}.png"
         with open(img_path, "wb") as f:
             f.write(bio.getvalue())
 
         duration = 8  # seconds
-        clip = ImageClip(img_path).set_duration(duration)
+        # MoviePy v2.x: with_duration
+        clip = ImageClip(img_path).with_duration(duration)
 
         # Compose final video
         final = CompositeVideoClip([clip])
-        output_path = f"/tmp/video_{uuid.uuid4().hex}.mp4"
         final.write_videofile(
             output_path,
             fps=24,
@@ -254,14 +276,16 @@ def _create_quote_video(quote: str, author: str, mood: str) -> bytes:
         with open(output_path, "rb") as f:
             video_bytes = f.read()
 
-        # Cleanup temp files
-        os.remove(img_path)
-        os.remove(output_path)
-
         return video_bytes
 
-    except ImportError:
+    except (ImportError, RuntimeError) as e:
+        logger.error(f"Video generation failed due to missing dependencies: {e}")
         raise RuntimeError("moviepy not installed. Run: pip install moviepy")
+    finally:
+        # Cleanup temp files
+        for path in [img_path, output_path]:
+            if os.path.exists(path):
+                os.remove(path)
 
 
 # ─────────────────────────────────────────────
@@ -348,7 +372,7 @@ def dispatch_daily_emails():
                 quote = generate_quote(topics[0] if topics else "life")
                 for s in subs:
                     send_push_notification_task.delay(
-                        s.endpoint, s.p256dh, s.auth, 
+                        s.id, s.endpoint, s.p256dh, s.auth, 
                         "Your Daily Wisdom ✨", quote
                     )
                     

@@ -6,6 +6,7 @@ import logging
 import threading
 from mtranslate import translate # type: ignore
 import groq # type: ignore
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type # type: ignore
 
 from typing import Optional, Any, List
 
@@ -29,6 +30,12 @@ _gen_lock = threading.Lock()
 # Environment check
 RENDER = os.getenv("RENDER") == "true"
 
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception_type((requests.exceptions.RequestException, Exception)),
+    reraise=False
+)
 def _generate_via_groq(prompt: str) -> Optional[str]:
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
@@ -47,10 +54,15 @@ def _generate_via_groq(prompt: str) -> Optional[str]:
             },
             timeout=8
         )
+        if resp.status_code == 429:
+            # Explicitly raise for tenacity to catch and retry
+            raise Exception("Groq Rate Limit Hit (429)")
+        resp.raise_for_status()
         if resp.status_code == 200:
             return resp.json()["choices"][0]["message"]["content"].strip()
     except Exception as e:
         logger.error(f"Groq error: {e}")
+        raise e # Let tenacity handle retry
     return None
 
 def fetch_open_source_quote(mood: str = "") -> Optional[dict]:

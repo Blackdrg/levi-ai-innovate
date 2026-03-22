@@ -81,21 +81,21 @@ def cache_quote_embedding(quote_id: int, embedding: list):
 
 
 
+from typing import Any, cast
+
 def get_cached_embedding(quote_id: int):
-
     raw = _get(f"quote:{quote_id}:emb")
-
-    return json.loads(raw) if raw else None
-
-
-
+    if not raw:
+        return None
+    # Redis might return bytes, json.loads expects str/bytes
+    return json.loads(cast(Any, raw))
 
 
 def get_conversation(session_id: str) -> list:
-
     raw = _get(f"conv:{session_id}")
-
-    return json.loads(raw) if raw else []
+    if not raw:
+        return []
+    return json.loads(cast(Any, raw))
 
 
 
@@ -118,10 +118,10 @@ def cache_search(query_hash: str, results: list, ttl: int = 3600):
 
 
 def get_cached_search(query_hash: str):
-
     raw = _get(f"search:{query_hash}")
-
-    return json.loads(raw) if raw else None
+    if not raw:
+        return None
+    return json.loads(cast(Any, raw))
 
 
 
@@ -170,4 +170,22 @@ def get_popular_quotes(top_k: int = 5):
         return r.zrevrange("popular_quotes", 0, top_k - 1, withscores=True)
 
     return []
+
+def store_jti(jti: str, expires_in: int):
+    """Store JTI in Redis with expiration."""
+    _set(f"jti:{jti}", "1", ex=expires_in)
+
+def is_jti_blacklisted(jti: str) -> bool:
+    """Check if JTI is NOT in Redis (we use whitelist pattern for active tokens).
+    Wait, the user said 'Add a jti stored in Redis on issue. On every authenticated request, check the jti exists in Redis.'
+    So it's a whitelist.
+    """
+    return _get(f"jti:{jti}") is None
+
+def delete_jti(jti: str):
+    """Remove JTI from Redis (revocation)."""
+    if HAS_REDIS:
+        r.delete(f"jti:{jti}")
+    elif f"jti:{jti}" in _memory_cache:
+        del _memory_cache[f"jti:{jti}"]
 

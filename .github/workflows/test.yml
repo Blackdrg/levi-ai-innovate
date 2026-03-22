@@ -9,9 +9,10 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
+          cache: 'pip'
       - name: Install dependencies
         run: |
           pip install -r backend/requirements.txt 
-          pip install pytest-asyncio httpx
+          pip install pytest-asyncio httpx python-json-logger tenacity
       - name: Run tests
         run: pytest backend/tests/ --tb=short

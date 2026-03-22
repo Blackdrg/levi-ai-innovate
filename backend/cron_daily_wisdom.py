@@ -8,6 +8,8 @@ from backend.email_service import send_daily_quote
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
+from typing import List, Optional
+
 def run_daily_wisdom():
     """
     Iterates through all users and sends them their personalized daily wisdom email.
@@ -15,25 +17,25 @@ def run_daily_wisdom():
     """
     db = SessionLocal()
     try:
-        users = db.query(Users).all()
-        logger.info(f"Starting daily wisdom run for {len(users)} users...")
+        users: List[Users] = db.query(Users).filter(Users.is_verified == 1).all()
+        logger.info(f"Starting daily wisdom run for {len(users)} verified users...")
         
         for user in users:
             # Simple heuristic: user.username must be an email for this to work
-            if "@" not in user.username:
+            if not user.username or "@" not in user.username:
                 logger.warning(f"Skipping user {user.username}: Username not an email.")
                 continue
                 
-            user_mem = db.query(UserMemory).filter(UserMemory.user_id == user.id).first()
+            user_mem: Optional[UserMemory] = db.query(UserMemory).filter(UserMemory.user_id == user.id).first()
             topics = user_mem.liked_topics if user_mem else ["wisdom"]
             mood = user_mem.mood_history[-1] if user_mem and user_mem.mood_history else "philosophical"
             
             logger.info(f"Sending daily wisdom to {user.username} (Mood: {mood}, Topic: {topics[0] if topics else 'N/A'})")
             success = send_daily_quote(
-                user_email=user.username,
-                user_name=user.username.split('@')[0],
-                liked_topics=topics,
-                last_mood=mood
+                user_email=str(user.username),
+                user_name=str(user.username).split('@')[0],
+                liked_topics=list(topics),
+                last_mood=str(mood)
             )
             
             if not success:

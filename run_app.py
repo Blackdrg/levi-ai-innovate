@@ -5,6 +5,13 @@ import os
 import time
 import signal
 import socket
+from dotenv import load_dotenv
+
+# Load local environment variables
+if os.path.exists(".env.local"):
+    load_dotenv(".env.local")
+else:
+    load_dotenv()
 
 def is_port_in_use(port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:

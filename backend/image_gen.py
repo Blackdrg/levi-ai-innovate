@@ -5,11 +5,18 @@ import base64
 import random
 import textwrap
 import math
+import logging
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance # type: ignore
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type, wait_fixed # type: ignore
+
+logger = logging.getLogger(__name__)
 
 TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY")
 TOGETHER_API_URL = "https://api.together.xyz/v1/images/generations"
+
+# PIL Decompression Bomb protection
+Image.MAX_IMAGE_PIXELS = 50_000_000
 
 # ─────────────────────────────────────────────
 # 1. Generate background image via Together.AI
@@ -37,7 +44,25 @@ def build_prompt(quote: str, mood: str) -> str:
     keywords = " ".join(words[:2]) if words else ""
     return f"{base}, {keywords}, no text, no words, wallpaper quality, ultra detailed"
 
+def together_retry_logic(retry_state):
+    """Custom retry logic for Together AI 429 Retry-After header."""
+    if retry_state.outcome.failed:
+        exc = retry_state.outcome.exception()
+        if isinstance(exc, requests.exceptions.HTTPError) and exc.response.status_code == 429:
+            retry_after = exc.response.headers.get("Retry-After")
+            if retry_after:
+                try:
+                    return float(retry_after)
+                except ValueError:
+                    pass
+    return wait_exponential(multiplier=1, min=2, max=10)(retry_state)
 
+@retry(
+    stop=stop_after_attempt(3),
+    wait=together_retry_logic,
+    retry=retry_if_exception_type((requests.exceptions.RequestException, Exception)),
+    reraise=True
+)
 def generate_background_together(prompt: str, size: tuple = (1024, 1024)) -> Image.Image:
     """Call Together.AI FLUX API to generate background image."""
     if not TOGETHER_API_KEY:
@@ -74,8 +99,8 @@ def generate_background_together(prompt: str, size: tuple = (1024, 1024)) -> Ima
         return img
 
     except Exception as e:
-        print(f"[Together.AI] Image generation failed: {e}")
-        return None
+        logger.error(f"[Together.AI] Image generation failed: {e}")
+        raise e
 
 
 # ─────────────────────────────────────────────

@@ -7,6 +7,10 @@ from fastapi.testclient import TestClient
 # Ensure the backend is in the path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Skip heavy model loading in tests
+os.environ["RENDER"] = "true"
+os.environ["SECRET_KEY"] = "test-secret-key-123"
+
 try:
     from main import app, get_current_user, create_access_token
     from models import Users, Base

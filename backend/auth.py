@@ -40,7 +40,7 @@ load_dotenv()
 
 
 
-SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-prod")
+SECRET_KEY = os.environ["SECRET_KEY"]
 
 ALGORITHM = "HS256"
 
@@ -90,14 +90,24 @@ def get_password_hash(password: str) -> str:
 
 
 
+import uuid
+
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-
     to_encode = data.copy()
-
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=15))
-
-    to_encode.update({"exp": expire})
-
+    jti = str(uuid.uuid4())
+    to_encode.update({"exp": expire, "jti": jti})
+    
+    # Store JTI in Redis (whitelist)
+    try:
+        from backend.redis_client import store_jti
+    except ImportError:
+        from redis_client import store_jti
+        
+    delta = expires_delta or timedelta(minutes=15)
+    seconds = int(delta.total_seconds())
+    store_jti(jti, seconds)
+    
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM) # type: ignore
 
 
@@ -109,6 +119,18 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM]) # type: ignore
+        jti = payload.get("jti")
+        if not jti:
+             raise credentials_exception
+             
+        try:
+            from backend.redis_client import is_jti_blacklisted
+        except ImportError:
+            from redis_client import is_jti_blacklisted
+            
+        if is_jti_blacklisted(jti):
+             raise credentials_exception
+
         username_val: Any = payload.get("sub")
         if username_val is None:
             raise credentials_exception

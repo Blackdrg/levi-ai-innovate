@@ -219,6 +219,15 @@ async function handleAuth(){
 // If already logged in, redirect
 if(localStorage.getItem('levi_token'))window.location.href='studio.html';
 
+  // Check for query params
+  const params = new URLSearchParams(window.location.search);
+  if (params.has('verified')) {
+    showMsg("Email verified successfully! Please sign in.", true);
+  }
+  if (params.has('expired')) {
+    showMsg("Your session has expired. Please sign in again.", false);
+  }
+
 // Enter key
 document.addEventListener('keydown',e=>{if(e.key==='Enter')handleAuth()});
 </script>
