@@ -26,6 +26,13 @@ import os
 from dotenv import load_dotenv
 
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
+try:
+    from backend.db import get_db
+    from backend.models import Users
+except (ImportError, ModuleNotFoundError):
+    from db import get_db
+    from models import Users
 
 
 
@@ -94,34 +101,22 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
-
-
-
-async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
-
+async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
-
         status_code=status.HTTP_401_UNAUTHORIZED,
-
         detail="Could not validate credentials",
-
         headers={"WWW-Authenticate": "Bearer"},
-
     )
-
     try:
-
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-
         username: str = payload.get("sub")
-
         if username is None:
-
             raise credentials_exception
-
     except JWTError:
-
         raise credentials_exception
-
-    return User(username=username)
+    
+    user = db.query(Users).filter(Users.username == username).first()
+    if user is None:
+        raise credentials_exception
+    return user
 
