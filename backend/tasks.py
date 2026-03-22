@@ -81,11 +81,20 @@ def generate_image_task(self, quote: str, author: str, mood: str, user_id: int):
     """
     try:
         from backend.image_gen import generate_quote_image
-        from backend.models import FeedItem
+        from backend.models import FeedItem, Users
         from backend.db import SessionLocal
         logger.info(f"[Task] Generating image for user {user_id}")
 
-        bio = generate_quote_image(quote, author, mood)
+        db = SessionLocal()
+        user_tier = "free"
+        try:
+            user = db.query(Users).filter(Users.id == user_id).first()
+            if user:
+                user_tier = user.tier
+        finally:
+            db.close()
+
+        bio = generate_quote_image(quote, author, mood, user_tier=user_tier)
         img_bytes = bio.getvalue()
 
         # Store in S3 if configured, otherwise return base64

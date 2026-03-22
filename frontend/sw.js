@@ -57,6 +57,11 @@ self.addEventListener('fetch', event => {
   }
 });
 
+/* 
+  ── Push Notifications ──
+  NOTE: This is a placeholder. Server-side subscription management 
+  is not yet implemented in the backend.
+*/
 self.addEventListener('push', event => {
   const options = {
     body: event.data ? event.data.text() : 'New wisdom awaits...',

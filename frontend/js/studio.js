@@ -1,14 +1,14 @@
 import { generateImage, generateVideo, getCredits, getTaskStatus } from './api.js';
 
-const studioPreview = document.getElementById('studio-preview');
+// Elements
+const previewImg = document.getElementById('preview-img');
 const studioLoading = document.getElementById('studio-loading');
-const emptyPreview = document.getElementById('empty-preview');
+const previewPlaceholder = document.getElementById('preview-placeholder');
+const previewContainer = document.getElementById('preview-container');
 const generateBtn = document.getElementById('generate-studio');
-const downloadBtn = document.getElementById('download-studio');
-const saveBtn = document.getElementById('save-studio');
+const downloadBtn = document.getElementById('download-btn');
 const generateVideoBtn = document.getElementById('generate-video-studio'); 
 const creditsDisplay = document.getElementById('user-credits'); 
-
 const quoteInput = document.getElementById('studio-quote');
 const authorInput = document.getElementById('studio-author');
 const keywordInput = document.getElementById('studio-bg-keywords');
@@ -18,6 +18,7 @@ const styleButtons = document.querySelectorAll('.style-btn');
 let currentMood = 'philosophical';
 let customBgBase64 = null;
 
+// Helper: Poll Task Status
 async function pollTask(taskId, onSuccess, onError) {
     const poll = async () => {
         try {
@@ -53,8 +54,8 @@ updateCredits();
 // Style Selection
 styleButtons.forEach(btn => {
     btn.addEventListener('click', () => {
-        styleButtons.forEach(b => b.classList.remove('border-violet-500', 'bg-white/10'));
-        btn.classList.add('border-violet-500', 'bg-white/10');
+        styleButtons.forEach(b => b.classList.remove('border-yellow-400', 'bg-white/10'));
+        btn.classList.add('border-yellow-400', 'bg-white/10');
         currentMood = btn.dataset.mood;
     });
 });
@@ -84,8 +85,9 @@ generateBtn.addEventListener('click', async () => {
     }
 
     studioLoading.classList.remove('hidden');
-    emptyPreview.classList.add('hidden');
-    studioPreview.classList.add('opacity-20');
+    previewPlaceholder.classList.add('hidden');
+    previewContainer.classList.remove('hidden');
+    previewImg.classList.add('opacity-20');
     generateBtn.disabled = true;
 
     try {
@@ -96,12 +98,10 @@ generateBtn.addEventListener('click', async () => {
         if (data.task_id) {
             window.ui.showToast("Synthesis started in cosmic background... 🌌");
             pollTask(data.task_id, (result) => {
-                studioPreview.src = result.url;
-                studioPreview.classList.remove('opacity-20', 'hidden');
+                previewImg.src = result.url || result.image_b64;
+                previewImg.classList.remove('opacity-20');
                 studioLoading.classList.add('hidden');
                 generateBtn.disabled = false;
-                downloadBtn.disabled = false;
-                saveBtn.disabled = false;
                 if (generateVideoBtn) generateVideoBtn.disabled = false;
                 updateCredits();
                 window.ui.showToast("Masterpiece rendered! ✨");
@@ -111,22 +111,23 @@ generateBtn.addEventListener('click', async () => {
                 studioLoading.classList.add('hidden');
                 generateBtn.disabled = false;
             });
-            return; // Don't proceed to sync handling
+            return;
         }
 
-        studioPreview.src = data.image_b64;
-        studioPreview.dataset.id = data.id;
-        studioPreview.classList.remove('opacity-20', 'hidden');
+        previewImg.src = data.image_b64;
+        previewImg.dataset.id = data.id;
+        previewImg.classList.remove('opacity-20');
         
-        downloadBtn.disabled = false;
-        saveBtn.disabled = false;
         if (generateVideoBtn) generateVideoBtn.disabled = false;
         
-        updateCredits(); // Refresh credits
+        updateCredits();
         window.ui.showToast("Masterpiece rendered! ✨");
     } catch (err) {
         console.error(err);
         window.ui.showToast(err.message || "Synthesis failed.", "error");
+        studioLoading.classList.add('hidden');
+        previewPlaceholder.classList.remove('hidden');
+        previewContainer.classList.add('hidden');
     } finally {
         studioLoading.classList.add('hidden');
         generateBtn.disabled = false;
@@ -155,7 +156,7 @@ if (generateVideoBtn) {
                     a.download = `levi-wisdom-${Date.now()}.mp4`;
                     document.body.appendChild(a);
                     a.click();
-                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
                     window.ui.showToast("Video ready! Check your downloads. 🎥");
                     generateVideoBtn.disabled = false;
                     updateCredits();
@@ -174,6 +175,7 @@ if (generateVideoBtn) {
                 a.download = `levi-wisdom-${Date.now()}.mp4`;
                 document.body.appendChild(a);
                 a.click();
+                document.body.removeChild(a);
                 window.URL.revokeObjectURL(url);
                 window.ui.showToast("Video ready! Check your downloads. 🎥");
                 updateCredits();
@@ -188,29 +190,31 @@ if (generateVideoBtn) {
 }
 
 // Action Buttons
-downloadBtn.addEventListener('click', () => {
-    const link = document.createElement('a');
-    link.href = studioPreview.src;
-    link.download = `levi-studio-${Date.now()}.png`;
-    link.click();
-});
-
-saveBtn.addEventListener('click', () => {
-    const user = localStorage.getItem('levi_user');
-    if (!user) {
-        window.ui.showToast("Please login to save your art!", "error");
-        return;
-    }
-
-    const gallery = JSON.parse(localStorage.getItem(`levi_gallery_${user}`)) || [];
-    gallery.unshift({
-        id: studioPreview.dataset.id || Date.now(),
-        image: studioPreview.src,
-        text: quoteInput.value,
-        timestamp: new Date().toISOString()
+if (downloadBtn) {
+    downloadBtn.addEventListener('click', () => {
+        const link = document.createElement('a');
+        link.href = previewImg.src;
+        link.download = `levi-studio-${Date.now()}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     });
-    localStorage.setItem(`levi_gallery_${user}`, JSON.stringify(gallery));
+}
+
+// Prefill Helper (Exposed to window for onclick handlers)
+window.prefill = (text, author, mood) => {
+    quoteInput.value = text;
+    authorInput.value = author;
+    currentMood = mood;
     
-    saveBtn.innerText = 'Saved! ✨';
-    saveBtn.disabled = true;
-});
+    // Update style button UI
+    styleButtons.forEach(btn => {
+        if (btn.dataset.mood === mood) {
+            btn.classList.add('border-yellow-400', 'bg-white/10');
+        } else {
+            btn.classList.remove('border-yellow-400', 'bg-white/10');
+        }
+    });
+    
+    window.ui.showToast(`Prefilled ${author}'s wisdom`);
+};

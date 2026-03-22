@@ -240,7 +240,6 @@ origins = [
     "https://levi-ai.vercel.app",
     "https://levi-ai-daksh-mehats-projects.vercel.app",
     "https://levi-ai.create.app",
-    "https://levi-aicreate.app",
     "https://levi-ai-create.com",
 ]
 
@@ -467,11 +466,17 @@ def search_quotes(query: Query, db: Session = Depends(get_db)):
         return cached
 
     if not query.text:
-
         results = db.query(Quote).order_by(func.random()).limit(query.top_k).all()
-
+    elif not HAS_MODEL:
+        # Keyword fallback for Render free tier
+        base_q = db.query(Quote)
+        if query.mood:
+            base_q = base_q.filter(Quote.mood == query.mood)
+        results = base_q.filter(Quote.text.ilike(f"%{query.text}%")).limit(query.top_k).all()
+        # If no keyword matches, fallback to random
+        if not results:
+            results = base_q.order_by(func.random()).limit(query.top_k).all()
     else:
-
         query_embedding = embed_text(query.text)
 
         if "postgresql" in DATABASE_URL:
@@ -503,13 +508,10 @@ def search_quotes(query: Query, db: Session = Depends(get_db)):
             results = [s[0] for s in scored[:query.top_k]]
 
     formatted = [
-
         {"quote": q.text, "author": q.author, "topic": q.topic, "mood": q.mood,
-
-         "similarity": 0.9, "search_mode": "semantic" if HAS_MODEL else "random_fallback"}
-
+         "similarity": 1.0 if not HAS_MODEL and query.text and query.text.lower() in q.text.lower() else 0.9,
+         "search_mode": "semantic" if HAS_MODEL else ("keyword" if query.text and results else "random_fallback")}
         for q in results
-
     ]
 
     cache_search(query_hash, formatted)
