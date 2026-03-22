@@ -59,7 +59,8 @@ Add these to your Render/Production environment:
 
 ## Phase F: Deploy
 
-1. **Push Code**: `git push origin main`.
+1. **Frontend Build**: Run `cd frontend && npm run build` to generate the production CSS.
+2. **Push Code**: `git push origin main`.
 2. **Verify**: Check Render logs for "Database tables ready" and "Uvicorn running".
 3. **Test**: Perform a test purchase and verify credits in the Studio.
 
