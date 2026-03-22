@@ -65,10 +65,30 @@
     <p class="subtitle">Your account has been upgraded.</p>
     <a href="studio.html" class="btn-primary">Go to Studio</a>
   </div>
-  <script>
-          // Verify session and redirect if missing
-          const token = localStorage.getItem('levi_token');
-          if (!token) window.location.href = 'auth.html';
-        </script>
+  <script type="module">
+    import { getProfile } from './js/api.js';
+    import './js/ui.js';
+
+    async function init() {
+      const token = localStorage.getItem('levi_token');
+                    if (!token) {
+                      window.location.href = 'auth.html';
+                      return;
+                    }
+
+                    try {
+                      // Refresh profile to update credits in local state
+                      const profile = await getProfile(token);
+                      localStorage.setItem('levi_user', profile.username);
+                      localStorage.setItem('levi_credits', profile.credits);
+                      localStorage.setItem('levi_tier', profile.tier);
+
+                      window.ui.showToast("Account upgraded successfully! ✨");
+                    } catch (err) {
+                      console.error("Profile refresh failed:", err);
+                    }
+                  }
+                  init();
+                </script>
 </body>
 </html>

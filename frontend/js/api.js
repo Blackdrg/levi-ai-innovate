@@ -202,6 +202,16 @@ export async function likeItem(type, id) {
   return apiFetch(`/like/${type}/${id}`, { method: "POST" });
 }
 
+export async function getTaskStatus(taskId) {
+  return apiFetch(`/task_status/${taskId}`);
+}
+
+export async function getMyGallery(token) {
+  return apiFetch("/my_gallery", {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+}
+
 // Attach to window for non-module scripts
 window.api = {
   chat,
@@ -216,5 +226,9 @@ window.api = {
   getAnalytics,
   getFeed,
   likeItem,
-  getHealth
+  getHealth,
+  getTaskStatus,
+  getMyGallery,
+  trackShare,
+  getCredits
 };

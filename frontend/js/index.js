@@ -1,32 +1,7 @@
 import { getDailyQuote, getAnalytics, getHealth, chat, getFeed, likeItem, searchQuotes } from './api.js';
+import './ui.js';
 
-// 1. System Health Status
-async function checkStatus() {
-    const statusIndicator = document.getElementById('status-indicator');
-    const offlineBanner = document.getElementById('offline-banner');
-    try {
-        const data = await getHealth();
-        if (data && (data.status === 'ok' || data.status === 'healthy')) {
-            statusIndicator.classList.remove('bg-red-500');
-            statusIndicator.classList.add('bg-emerald-500');
-            statusIndicator.title = "System Online";
-            offlineBanner.style.display = 'none';
-        } else {
-            statusIndicator.classList.add('bg-red-500');
-            statusIndicator.classList.remove('bg-emerald-500');
-            statusIndicator.title = "System Offline";
-            offlineBanner.style.display = 'block';
-        }
-    } catch (err) {
-        statusIndicator.classList.add('bg-red-500');
-        statusIndicator.classList.remove('bg-emerald-500');
-        offlineBanner.style.display = 'block';
-    }
-}
-checkStatus();
-setInterval(checkStatus, 30000); // Check every 30s
-
-// 2. Stats Animation
+// 1. Stats Animation
 async function loadStats() {
     try {
         const data = await getAnalytics();
