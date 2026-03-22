@@ -97,7 +97,7 @@ try:
     from backend.generation import generate_quote, generate_response
     from backend.image_gen import generate_quote_image
     from backend.video_gen import generate_quote_video
-    from backend.email_service import send_daily_quote
+    from backend.email_service import send_daily_quote, send_payment_receipt
     from backend.payments import router as payments_router, use_credits, verify_payment_signature
     from backend.tasks import generate_video_task as generate_video_async
 except (ImportError, ModuleNotFoundError) as e:
@@ -113,7 +113,7 @@ except (ImportError, ModuleNotFoundError) as e:
         from generation import generate_quote, generate_response
         from image_gen import generate_quote_image
         from video_gen import generate_quote_video
-        from email_service import send_daily_quote
+        from email_service import send_daily_quote, send_payment_receipt
         from payments import router as payments_router, use_credits, verify_payment_signature
         from tasks import generate_video_task as generate_video_async
     except (ImportError, ModuleNotFoundError) as e2:
@@ -1063,6 +1063,11 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
             
             # Audit Trail: Log payment success
             logger.info(f"[PAYMENT_SUCCESS] User: {user_id} | Amount: {amount} INR | Plan: {plan} | Order: {order_id} | Payment: {payment_id}")
+
+            # Send Receipt Email
+            user = db.query(Users).filter(Users.id == int(user_id)).first()
+            if user and user.email:
+                send_payment_receipt(user.email, plan, amount)
         else:
             logger.warning(f"[PAYMENT_ORPHAN] Received payment but could not identify user. Payment ID: {payment_id}")
 
