@@ -56,7 +56,7 @@ if SENTRY_DSN:
         profiles_sample_rate=1.0,
         enable_tracing=True,
         environment=os.getenv("ENVIRONMENT", "production"),
-        send_default_pii=True, # Optional: include user data
+        send_default_pii=False, # Optional: include user data
     )
     logger.info("Sentry initialized with performance monitoring.")
 
@@ -68,8 +68,7 @@ REQUIRED_ENV_VARS = [
     "DATABASE_URL",
     "RAZORPAY_KEY_ID",
     "RAZORPAY_KEY_SECRET",
-    "RAZORPAY_WEBHOOK_SECRET",
-    "TOGETHER_API_KEY"
+    "RAZORPAY_WEBHOOK_SECRET"
 ]
 
 def validate_env():
