@@ -98,5 +98,16 @@ class Analytics(Base):
     id          = Column(Integer, primary_key=True, index=True)
     date        = Column(Date, unique=True)
     chats_count = Column(Integer, default=0)
+
+
+class PushSubscription(Base):
+    __tablename__ = "push_subscriptions"
+    __table_args__ = {'extend_existing': True}
+
+    id       = Column(Integer, primary_key=True, index=True)
+    user_id  = Column(Integer, ForeignKey("users.id"))
+    endpoint = Column(String, nullable=False)
+    p256dh   = Column(String, nullable=False)
+    auth     = Column(String, nullable=False)
     likes_count = Column(Integer, default=0)
     daily_users = Column(Integer, default=0)

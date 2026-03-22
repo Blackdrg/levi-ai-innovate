@@ -5,6 +5,7 @@ import boto3
 from io import BytesIO
 from celery import Celery
 from botocore.exceptions import BotoCoreError, ClientError
+from pywebpush import webpush, WebPushException
 
 logger = logging.getLogger(__name__)
 
@@ -180,6 +181,46 @@ def generate_video_task(self, quote: str, author: str, mood: str, user_id: int):
         raise self.retry(exc=e, countdown=10)
 
 
+# ─────────────────────────────────────────────
+# Task 3: Send Push Notification
+# ─────────────────────────────────────────────
+@celery_app.task(bind=True, max_retries=3)
+def send_push_notification_task(self, endpoint, p256dh, auth, title, body):
+    """
+    Sends a Web Push notification to a specific subscription.
+    """
+    try:
+        private_key = os.getenv("VAPID_PRIVATE_KEY")
+        claims = {"sub": "mailto:" + os.getenv("VAPID_ADMIN_EMAIL", "admin@levi-ai.create.app")}
+        
+        if not private_key:
+            logger.error("VAPID_PRIVATE_KEY not set. Cannot send push notification.")
+            return False
+
+        webpush(
+            subscription_info={
+                "endpoint": endpoint,
+                "keys": {"p256dh": p256dh, "auth": auth}
+            },
+            data=body, # You can also send JSON here if sw.js handles it
+            vapid_private_key=private_key,
+            vapid_claims=claims
+        )
+        logger.info(f"Push notification sent to {endpoint}")
+        return True
+
+    except WebPushException as ex:
+        logger.error(f"WebPush error: {ex}")
+        # If subscription is no longer valid (410 Gone), we should ideally remove it from DB
+        # But we don't have user_id here. A more robust implementation would pass subscription ID.
+        if ex.response and ex.response.status_code == 410:
+            logger.warning("Subscription expired/gone. Should be removed.")
+        raise self.retry(exc=ex, countdown=60)
+    except Exception as e:
+        logger.error(f"Push notification failed: {e}")
+        raise self.retry(exc=e, countdown=60)
+
+
 def _create_quote_video(quote: str, author: str, mood: str) -> bytes:
     """Creates an 9:16 vertical video (Instagram Reel format)."""
     try:
@@ -286,16 +327,32 @@ celery_app.conf.beat_schedule = {
 
 @celery_app.task
 def dispatch_daily_emails():
-    """Fetch all users with email and dispatch daily quote tasks."""
+    """Fetch all users and dispatch daily quote tasks (Email + Push)."""
     try:
         from backend.db import SessionLocal
-        from backend.models import Users
+        from backend.models import Users, PushSubscription
+        from backend.generation import generate_quote
         db = SessionLocal()
-        users = db.query(Users).filter(Users.email.isnot(None)).all()
+        
+        users = db.query(Users).all()
         for user in users:
             topics = getattr(user, "liked_topics", []) or ["life"]
-            send_daily_quote_email.delay(user.email, user.id, topics)
+            
+            # 1. Dispatch Email if available
+            if user.email:
+                send_daily_quote_email.delay(user.email, user.id, topics)
+            
+            # 2. Dispatch Push Notifications if subscribed
+            subs = db.query(PushSubscription).filter(PushSubscription.user_id == user.id).all()
+            if subs:
+                quote = generate_quote(topics[0] if topics else "life")
+                for s in subs:
+                    send_push_notification_task.delay(
+                        s.endpoint, s.p256dh, s.auth, 
+                        "Your Daily Wisdom ✨", quote
+                    )
+                    
         db.close()
-        logger.info(f"Dispatched daily emails to {len(users)} users")
+        logger.info(f"Dispatched daily wisdom to {len(users)} users")
     except Exception as e:
         logger.error(f"dispatch_daily_emails failed: {e}")
