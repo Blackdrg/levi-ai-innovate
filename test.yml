@@ -1,0 +1,33 @@
+name: Tests
+
+on: [push]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r backend/requirements.txt
+          pip install pytest-asyncio httpx
+
+      - name: Set up test environment variables
+        run: |
+          echo "SECRET_KEY=test-secret-key-for-ci-only" >> $GITHUB_ENV
+          echo "DATABASE_URL=sqlite:///./test.db" >> $GITHUB_ENV
+          echo "RAZORPAY_KEY_ID=rzp_test_fake" >> $GITHUB_ENV
+          echo "RAZORPAY_KEY_SECRET=fake_secret" >> $GITHUB_ENV
+          echo "RAZORPAY_WEBHOOK_SECRET=fake_webhook_secret" >> $GITHUB_ENV
+          echo "TOGETHER_API_KEY=fake_together_key" >> $GITHUB_ENV
+          echo "GROQ_API_KEY=fake_groq_key" >> $GITHUB_ENV
+          echo "REDIS_URL=redis://localhost:6379" >> $GITHUB_ENV
+
+      - name: Run tests
+        run: pytest backend/tests/ --tb=short -v
