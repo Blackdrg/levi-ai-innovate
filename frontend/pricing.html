@@ -1,158 +1,247 @@
 <!DOCTYPE html>
-<html lang="en">
+<html class="dark" lang="en">
 <head>
-    <meta name="theme-color" content="#09090f">
-    <link rel="manifest" href="manifest.json">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="apple-touch-icon" href="icon-192.png">
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LEVI Pricing — Unleash Your Creative Muse</title>
-    <link rel="stylesheet" href="css/output.css">
-    <link
-        href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,700;1,400&family=DM+Sans:wght@300;400;500;700&display=swap"
-        rel="stylesheet">
-    <style>
-        body { background-color: #09090f; color: #e2e8f0; }
-        .glass { background: rgba(255, 255, 255, 0.03); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
-        .gold-gradient { background: linear-gradient(to right, #d4af37, #f1e5ac, #996515); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
-    </style>
+<title>LEVI — Pricing & Plans</title>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script>tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#f2ca50","primary-container":"#d4af37","on-primary":"#3c2f00","secondary":"#c3c0ff","surface":"#131317","surface-container-lowest":"#0e0e12","surface-container-low":"#1b1b1f","surface-container":"#1f1f23","surface-container-high":"#2a292e","surface-container-highest":"#353439","on-surface":"#e5e1e7","on-surface-variant":"#d0c5af","outline":"#99907c","outline-variant":"#4d4635"},fontFamily:{headline:["Newsreader","serif"],body:["Plus Jakarta Sans","sans-serif"],label:["Plus Jakarta Sans","sans-serif"],sans:["Plus Jakarta Sans","sans-serif"]},borderRadius:{DEFAULT:"0.25rem",lg:"0.5rem",xl:"0.75rem","2xl":"1rem","3xl":"1.5rem",full:"9999px"}}}}</script>
+<style>
+.material-symbols-outlined{font-family:'Material Symbols Outlined';font-size:22px;line-height:1;font-variation-settings:'FILL' 0,'wght' 300,'GRAD' 0,'opsz' 24;user-select:none}
+.icon-fill{font-variation-settings:'FILL' 1,'wght' 300,'GRAD' 0,'opsz' 24}.icon-sm{font-size:18px}
+.glass{background:rgba(19,19,23,.72);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
+.glass-card{background:rgba(27,27,31,.6);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+.gold-gradient-text{background:linear-gradient(to right,#f2ca50,#d4af37);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.btn-gold{background:linear-gradient(135deg,#f2ca50,#d4af37);color:#3c2f00;transition:all .25s}
+.btn-gold:hover{background:linear-gradient(135deg,#fde68a,#f2ca50);box-shadow:0 0 30px rgba(242,202,80,.3);transform:translateY(-1px)}
+.btn-gold:active{transform:scale(.97)}
+.ghost-border{border:.5px solid rgba(255,255,255,.08)}
+.nav-active{background:linear-gradient(90deg,rgba(242,202,80,.15),rgba(242,202,80,.02));border-left:2px solid #f2ca50;color:#f2ca50}
+.nav-inactive{border-left:2px solid transparent;color:#69666e;transition:all .2s}
+.nav-inactive:hover{background:rgba(255,255,255,.04);color:#e5e1e7}
+.plan-card{border:.5px solid rgba(255,255,255,.08);transition:all .3s}
+.plan-card:hover{border-color:rgba(255,255,255,.15)}
+.plan-card.featured{border:.5px solid rgba(242,202,80,.4);box-shadow:0 0 40px rgba(242,202,80,.08)}
+.plan-card.featured:hover{box-shadow:0 0 60px rgba(242,202,80,.14)}
+.check{color:#f2ca50}.cross{color:#353439}
+@keyframes spin{to{transform:rotate(360deg)}}
+#toast{position:fixed;bottom:5rem;left:50%;transform:translateX(-50%) translateY(12px);opacity:0;transition:all .3s;z-index:999;pointer-events:none}
+#toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+</style>
 </head>
-<body class="font-sans min-h-screen pt-32">
-    <nav class="fixed top-0 left-0 w-full z-40 bg-space/80 backdrop-blur-md border-b border-white/5 h-20 flex items-center">
-        <div class="max-w-7xl mx-auto px-6 w-full flex justify-between items-center">
-            <a href="index.html" class="font-display text-3xl font-bold gold-gradient">LEVI</a>
-            <div id="user-credits" class="text-xs font-bold text-yellow-400 uppercase tracking-widest"></div>
-        </div>
-    </nav>
+<body class="bg-background text-on-surface font-body min-h-screen">
 
-    <div class="max-w-5xl mx-auto px-6">
-        <div class="text-center mb-16">
-            <h1 class="font-display text-6xl font-bold mb-6 italic gold-gradient">Elevate Your Wisdom</h1>
-            <p class="text-slate-400">Choose a plan that matches your creative journey.</p>
-        </div>
+<!-- Orbs -->
+<div class="fixed inset-0 pointer-events-none overflow-hidden" style="z-index:0">
+  <div class="absolute rounded-full" style="width:55vw;height:55vw;max-width:700px;top:-18%;left:-14%;background:radial-gradient(circle,rgba(242,202,80,.055) 0%,transparent 68%);filter:blur(100px)"></div>
+  <div class="absolute rounded-full" style="width:45vw;height:45vw;max-width:580px;bottom:-12%;right:-10%;background:radial-gradient(circle,rgba(195,192,255,.045) 0%,transparent 68%);filter:blur(80px)"></div>
+</div>
 
-        <div class="grid md:grid-cols-3 gap-8 mb-20">
-            <!-- Free Plan -->
-            <div class="glass p-8 rounded-[2rem] border border-white/5 flex flex-col">
-                <h3 class="text-xl font-bold mb-2">Seeker</h3>
-                <div class="text-4xl font-bold mb-6">₹0 <span class="text-sm font-normal text-slate-500">/forever</span></div>
-                <ul class="text-sm text-slate-400 space-y-4 mb-10 flex-1">
-                    <li class="flex items-center gap-2">✓ 10 Monthly Credits</li>
-                    <li class="flex items-center gap-2">✓ AI Quote Generation</li>
-                    <li class="flex items-center gap-2">✓ Community Feed</li>
-                    <li class="flex items-center gap-2">✗ Watermarked Images</li>
-                    <li class="flex items-center gap-2">✗ Standard Support</li>
-                </ul>
-                <button disabled class="w-full py-4 rounded-xl bg-white/5 text-slate-500 font-bold">Current Plan</button>
-            </div>
+<!-- TOP NAV -->
+<nav class="fixed top-0 left-0 right-0 z-50 pt-6">
+  <div class="mx-auto w-[90%] max-w-5xl glass rounded-full ghost-border px-6 py-3 flex justify-between items-center shadow-[0_20px_60px_rgba(0,0,0,0.4)]">
+    <a href="index.html" class="text-2xl font-headline italic tracking-[-0.03em] gold-gradient-text">LEVI</a>
+    <div class="hidden md:flex items-center gap-8">
+      <a href="index.html"   class="text-zinc-400 hover:text-zinc-100 transition-colors text-sm">Home</a>
+      <a href="chat.html"    class="text-zinc-400 hover:text-zinc-100 transition-colors text-sm">Chat</a>
+      <a href="studio.html"  class="text-zinc-400 hover:text-zinc-100 transition-colors text-sm">Studio</a>
+      <a href="pricing.html" class="text-primary font-semibold border-b border-primary pb-0.5 text-sm">Pricing</a>
+    </div>
+    <div class="flex items-center gap-3">
+      <span class="hidden md:flex items-center gap-1.5 text-[10px] text-zinc-500" id="credits-display"></span>
+      <a href="auth.html" id="nav-auth-btn" class="btn-gold text-xs font-semibold tracking-wider uppercase px-5 py-2 rounded-full">Sign In</a>
+      <button onclick="toggleMobileMenu()" class="md:hidden text-zinc-400"><span class="material-symbols-outlined">menu</span></button>
+    </div>
+  </div>
+</nav>
 
-            <!-- Pro Plan -->
-            <div class="glass p-8 rounded-[2rem] border-2 border-yellow-400/30 flex flex-col relative scale-105 shadow-2xl shadow-yellow-400/10">
-                <div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-yellow-400 text-black text-[10px] font-bold px-4 py-1 rounded-full uppercase tracking-widest">Most Popular</div>
-                <h3 class="text-xl font-bold mb-2">Pro</h3>
-                <div class="text-4xl font-bold mb-6">₹299 <span class="text-sm font-normal text-slate-500">/month</span></div>
-                <ul class="text-sm text-slate-300 space-y-4 mb-10 flex-1">
-                    <li class="flex items-center gap-2">✓ 100 Monthly Credits</li>
-                    <li class="flex items-center gap-2">✓ <b>No Watermarks</b></li>
-                    <li class="flex items-center gap-2">✓ Together AI (Flux) Backgrounds</li>
-                    <li class="flex items-center gap-2">✓ Video Card Generation</li>
-                    <li class="flex items-center gap-2">✓ Priority Synthesis</li>
-                </ul>
-                <button onclick="subscribe('pro')" class="w-full py-4 rounded-xl bg-yellow-400 text-black font-bold hover:bg-yellow-300 transition-all shadow-lg shadow-yellow-400/20">Upgrade to Pro</button>
-            </div>
+<!-- MOBILE MENU -->
+<div id="mobile-menu" class="hidden fixed inset-0 z-40 glass" style="padding-top:6rem">
+  <button onclick="toggleMobileMenu()" class="absolute top-8 right-6 text-zinc-400"><span class="material-symbols-outlined" style="font-size:28px">close</span></button>
+  <nav class="flex flex-col gap-2 px-8 pt-4">
+    <a onclick="toggleMobileMenu()" href="index.html"   class="text-xl font-headline italic text-on-surface py-3 border-b border-white/5">Home</a>
+    <a onclick="toggleMobileMenu()" href="chat.html"    class="text-xl font-headline italic text-on-surface py-3 border-b border-white/5">AI Chat</a>
+    <a onclick="toggleMobileMenu()" href="studio.html"  class="text-xl font-headline italic text-on-surface py-3 border-b border-white/5">Studio</a>
+    <a onclick="toggleMobileMenu()" href="pricing.html" class="text-xl font-headline italic gold-gradient-text py-3">Pricing</a>
+  </nav>
+</div>
 
-            <!-- Creator Plan -->
-            <div class="glass p-8 rounded-[2rem] border border-white/5 flex flex-col">
-                <h3 class="text-xl font-bold mb-2">Creator</h3>
-                <div class="text-4xl font-bold mb-6">₹599 <span class="text-sm font-normal text-slate-500">/month</span></div>
-                <ul class="text-sm text-slate-400 space-y-4 mb-10 flex-1">
-                    <li class="flex items-center gap-2">✓ 500 Monthly Credits</li>
-                    <li class="flex items-center gap-2">✓ Everything in Pro</li>
-                    <li class="flex items-center gap-2">✓ Early Access to Features</li>
-                    <li class="flex items-center gap-2">✓ Commercial Usage Rights</li>
-                    <li class="flex items-center gap-2">✓ Direct Support</li>
-                </ul>
-                <button onclick="subscribe('creator')" class="w-full py-4 rounded-xl border border-white/10 hover:bg-white/5 transition-all font-bold">Get Creator</button>
-            </div>
-        </div>
+<!-- SIDEBAR -->
+<aside class="hidden lg:flex flex-col w-64 h-screen fixed left-0 top-0 z-40 border-r border-white/5 pt-32 pb-8 px-6" style="background:rgba(13,13,18,.65);backdrop-filter:blur(24px)">
+  <div class="mb-10 px-4"><h2 class="font-headline italic gold-gradient-text text-xl">LEVI AI</h2><p class="text-[10px] uppercase tracking-[0.2em] text-zinc-500 mt-1">Celestial Muse</p></div>
+  <nav class="flex flex-col gap-1 flex-1">
+    <a href="index.html"   class="nav-inactive flex items-center gap-4 px-4 py-3 rounded-r-xl text-xs uppercase tracking-widest"><span class="material-symbols-outlined icon-sm">auto_awesome</span>Home</a>
+    <a href="chat.html"    class="nav-inactive flex items-center gap-4 px-4 py-3 rounded-r-xl text-xs uppercase tracking-widest"><span class="material-symbols-outlined icon-sm">psychology</span>Chat</a>
+    <a href="studio.html"  class="nav-inactive flex items-center gap-4 px-4 py-3 rounded-r-xl text-xs uppercase tracking-widest"><span class="material-symbols-outlined icon-sm">auto_fix_high</span>Studio</a>
+    <a href="feed.html"    class="nav-inactive flex items-center gap-4 px-4 py-3 rounded-r-xl text-xs uppercase tracking-widest"><span class="material-symbols-outlined icon-sm">public</span>Feed</a>
+    <a href="pricing.html" class="nav-active flex items-center gap-4 px-4 py-3 rounded-r-xl text-xs uppercase tracking-widest font-bold"><span class="material-symbols-outlined icon-sm icon-fill">workspace_premium</span>Pricing</a>
+    <a href="my-gallery.html" class="nav-inactive flex items-center gap-4 px-4 py-3 rounded-r-xl text-xs uppercase tracking-widest"><span class="material-symbols-outlined icon-sm">photo_library</span>Gallery</a>
+  </nav>
+</aside>
+
+<!-- MAIN -->
+<main class="lg:ml-64 pt-28 px-5 lg:px-12 pb-24" style="position:relative;z-index:1">
+  <div class="max-w-5xl mx-auto">
+
+    <!-- Header -->
+    <div class="text-center mb-16">
+      <p class="text-[10px] text-primary uppercase tracking-[0.22em] font-semibold mb-4">Choose Your Path</p>
+      <h1 class="font-headline text-5xl lg:text-6xl font-light tracking-tight mb-4">Elevate Your <span class="gold-gradient-text italic">Wisdom</span></h1>
+      <p class="text-on-surface-variant text-base lg:text-lg font-light max-w-xl mx-auto">Unlock the full power of LEVI AI. Generate art, explore philosophy, and share your creations with the world.</p>
     </div>
 
-    <!-- Razorpay Checkout SDK -->
-    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <!-- Plans grid -->
+    <div class="grid md:grid-cols-3 gap-6 items-center">
 
-    <script type="module">
-                    import { getCredits } from './js/api.js';
-        
-        const token = localStorage.getItem('levi_token');
-        if (!token) window.location.href = 'auth.html';
+      <!-- Seeker (Free) -->
+      <div class="plan-card glass-card rounded-3xl p-8">
+        <div class="mb-8">
+          <p class="text-[10px] text-zinc-500 uppercase tracking-widest font-semibold mb-2">Seeker</p>
+          <div class="font-headline text-4xl font-light text-on-surface mb-1">₹0</div>
+          <p class="text-xs text-zinc-500">Free forever</p>
+        </div>
+        <ul class="space-y-3 mb-8">
+          <li class="flex items-center gap-3 text-sm"><span class="material-symbols-outlined icon-sm icon-fill check">check_circle</span><span>10 credits / month</span></li>
+          <li class="flex items-center gap-3 text-sm"><span class="material-symbols-outlined icon-sm icon-fill check">check_circle</span><span>AI Chat (unlimited)</span></li>
+          <li class="flex items-center gap-3 text-sm"><span class="material-symbols-outlined icon-sm icon-fill check">check_circle</span><span>Explore & Browse</span></li>
+          <li class="flex items-center gap-3 text-sm text-zinc-600"><span class="material-symbols-outlined icon-sm cross">cancel</span><span>Watermark-free images</span></li>
+          <li class="flex items-center gap-3 text-sm text-zinc-600"><span class="material-symbols-outlined icon-sm cross">cancel</span><span>Video card generation</span></li>
+          <li class="flex items-center gap-3 text-sm text-zinc-600"><span class="material-symbols-outlined icon-sm cross">cancel</span><span>Priority processing</span></li>
+        </ul>
+        <a href="auth.html" class="block w-full py-3.5 rounded-full ghost-border text-center text-sm font-label font-semibold uppercase tracking-widest text-zinc-400 hover:text-on-surface hover:border-white/15 transition-all">Get Started Free</a>
+      </div>
 
-        async function updateCredits() {
-            try {
-                const data = await getCredits(token);
-                document.getElementById('user-credits').innerText = `${data.credits} Credits (${data.tier})`;
-            } catch (err) { console.error(err); }
-        }
-        updateCredits();
+      <!-- Pro (Featured) -->
+      <div class="plan-card featured glass-card rounded-3xl p-8 relative" style="transform:scale(1.04)">
+        <div class="absolute -top-3 left-1/2 -translate-x-1/2">
+          <span class="btn-gold text-[10px] font-label font-bold uppercase tracking-widest px-4 py-1.5 rounded-full shadow-lg">★ Most Popular</span>
+        </div>
+        <div class="mb-8">
+          <p class="text-[10px] text-primary uppercase tracking-widest font-semibold mb-2">Pro</p>
+          <div class="font-headline text-4xl font-light gold-gradient-text mb-1">₹299<span class="text-lg text-zinc-500 font-sans font-normal">/mo</span></div>
+          <p class="text-xs text-zinc-500">Billed monthly</p>
+        </div>
+        <ul class="space-y-3 mb-8">
+          <li class="flex items-center gap-3 text-sm"><span class="material-symbols-outlined icon-sm icon-fill check">check_circle</span><span>100 credits / month</span></li>
+          <li class="flex items-center gap-3 text-sm"><span class="material-symbols-outlined icon-sm icon-fill check">check_circle</span><span>AI Chat (unlimited)</span></li>
+          <li class="flex items-center gap-3 text-sm"><span class="material-symbols-outlined icon-sm icon-fill check">check_circle</span><span>Watermark-free images</span></li>
+          <li class="flex items-center gap-3 text-sm"><span class="material-symbols-outlined icon-sm icon-fill check">check_circle</span><span>Video card generation</span></li>
+          <li class="flex items-center gap-3 text-sm"><span class="material-symbols-outlined icon-sm icon-fill check">check_circle</span><span>Priority processing</span></li>
+          <li class="flex items-center gap-3 text-sm text-zinc-600"><span class="material-symbols-outlined icon-sm cross">cancel</span><span>Commercial license</span></li>
+        </ul>
+        <button onclick="subscribe('pro')" id="pro-btn" class="btn-gold w-full py-4 rounded-full font-label font-bold uppercase tracking-[0.2em] text-sm flex items-center justify-center gap-2">
+          <span class="material-symbols-outlined icon-sm icon-fill">bolt</span>
+          Upgrade to Pro
+        </button>
+      </div>
 
-        window.subscribe = async (plan) => {
-            try {
-                // 1. Create order on backend
-                const orderRes = await fetch(`${window.location.origin}/api/create_order`, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "Authorization": `Bearer ${token}`
-                    },
-                    body: JSON.stringify({ plan })
-                });
-                const orderData = await orderRes.json();
+      <!-- Creator -->
+      <div class="plan-card glass-card rounded-3xl p-8">
+        <div class="mb-8">
+          <p class="text-[10px] text-zinc-500 uppercase tracking-widest font-semibold mb-2">Creator</p>
+          <div class="font-headline text-4xl font-light text-on-surface mb-1">₹599<span class="text-lg text-zinc-500 font-sans font-normal">/mo</span></div>
+          <p class="text-xs text-zinc-500">Billed monthly</p>
+        </div>
+        <ul class="space-y-3 mb-8">
+          <li class="flex items-center gap-3 text-sm"><span class="material-symbols-outlined icon-sm icon-fill check">check_circle</span><span>500 credits / month</span></li>
+          <li class="flex items-center gap-3 text-sm"><span class="material-symbols-outlined icon-sm icon-fill check">check_circle</span><span>Everything in Pro</span></li>
+          <li class="flex items-center gap-3 text-sm"><span class="material-symbols-outlined icon-sm icon-fill check">check_circle</span><span>Commercial license</span></li>
+          <li class="flex items-center gap-3 text-sm"><span class="material-symbols-outlined icon-sm icon-fill check">check_circle</span><span>API access</span></li>
+          <li class="flex items-center gap-3 text-sm"><span class="material-symbols-outlined icon-sm icon-fill check">check_circle</span><span>Early feature access</span></li>
+          <li class="flex items-center gap-3 text-sm"><span class="material-symbols-outlined icon-sm icon-fill check">check_circle</span><span>Priority support</span></li>
+        </ul>
+        <button onclick="subscribe('creator')" id="creator-btn" class="block w-full py-3.5 rounded-full text-center text-sm font-label font-semibold uppercase tracking-widest transition-all hover:bg-primary/8" style="border:.5px solid rgba(242,202,80,.35);color:#f2ca50">
+          Become Creator
+        </button>
+      </div>
+    </div>
 
-                if (!orderRes.ok) throw new Error(orderData.detail || "Failed to create order");
+    <!-- FAQ -->
+    <div class="mt-24 max-w-2xl mx-auto">
+      <h2 class="font-headline text-3xl italic font-light text-center mb-10">Frequently Asked</h2>
+      <div class="space-y-4">
+        <div class="ghost-border rounded-2xl p-5" style="background:rgba(27,27,31,.4)">
+          <p class="text-sm font-semibold text-on-surface mb-2">What is a credit?</p>
+          <p class="text-xs text-on-surface-variant font-light leading-relaxed">1 credit generates one AI image (1024×1024). Video card generation costs 3 credits. AI chat does not consume credits.</p>
+        </div>
+        <div class="ghost-border rounded-2xl p-5" style="background:rgba(27,27,31,.4)">
+          <p class="text-sm font-semibold text-on-surface mb-2">When do credits reset?</p>
+          <p class="text-xs text-on-surface-variant font-light leading-relaxed">Credits reset on the 1st of each month. Unused credits do not roll over to the next month.</p>
+        </div>
+        <div class="ghost-border rounded-2xl p-5" style="background:rgba(27,27,31,.4)">
+          <p class="text-sm font-semibold text-on-surface mb-2">Can I cancel anytime?</p>
+          <p class="text-xs text-on-surface-variant font-light leading-relaxed">Yes. Cancel your subscription anytime. You retain access until the end of your billing period.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
 
-                // 2. Open Razorpay Checkout
-                const options = {
-                    "key": orderData.key,
-                    "amount": orderData.amount,
-                    "currency": orderData.currency,
-                    "name": "LEVI AI",
-                    "description": plan === 'pro' ? 'Pro Plan' : 'Creator Plan',
-                    "order_id": orderData.order_id,
-                    "handler": async function (response) {
-                        // 3. Verify payment on backend
-                        const verifyRes = await fetch(`${window.location.origin}/api/verify_payment`, {
-                            method: "POST",
-                            headers: {
-                                "Content-Type": "application/json",
-                                "Authorization": `Bearer ${token}`
-                            },
-                            body: JSON.stringify({
-                                razorpay_order_id: response.razorpay_order_id,
-                                razorpay_payment_id: response.razorpay_payment_id,
-                                razorpay_signature: response.razorpay_signature,
-                                plan: plan // Pass plan to help backend upgrade correctly
-                            })
-                        });
+<!-- Mobile bottom nav -->
+<nav class="md:hidden fixed bottom-5 left-1/2 -translate-x-1/2 w-[88%] z-50">
+  <div class="glass ghost-border rounded-full px-8 py-3 flex justify-around items-center shadow-2xl">
+    <a href="index.html"><span class="material-symbols-outlined" style="color:#69666e">auto_awesome</span></a>
+    <a href="chat.html"><span class="material-symbols-outlined" style="color:#69666e">psychology</span></a>
+    <a href="studio.html"><span class="material-symbols-outlined" style="color:#69666e">auto_fix_high</span></a>
+    <a href="pricing.html"><span class="material-symbols-outlined icon-fill" style="color:#f2ca50">workspace_premium</span></a>
+  </div>
+</nav>
 
-                        const result = await verifyRes.json();
-                        if (result.status === 'success') {
-                            alert('Payment successful! Welcome to ' + plan);
-                            window.location.reload();
-                        } else {
-                            alert("Payment verification failed. Please contact support.");
-                        }
-                    },
-                    "theme": { "color": "#8B5CF6" }
-                };
-                const rzp = new Razorpay(options);
-                rzp.open();
+<div id="toast"></div>
 
-            } catch (err) {
-                console.error(err);
-                alert(err.message || "Failed to start checkout. Please try again.");
-            }
-        };
-    </script>
+<script>
+function toggleMobileMenu(){const m=document.getElementById('mobile-menu');if(!m)return;m.classList.toggle('hidden')}
+function showToast(msg,type='success'){const t=document.getElementById('toast');const border=type==='error'?'rgba(255,180,171,.3)':'rgba(242,202,80,.35)';const bg=type==='error'?'rgba(147,0,10,.85)':'rgba(19,19,23,.92)';t.innerHTML=`<div style="background:${bg};border:.5px solid ${border};backdrop-filter:blur(20px)" class="flex items-center gap-2.5 px-5 py-3 rounded-full shadow-2xl"><span style="font-size:12px;color:#e5e1e7;font-family:'Plus Jakarta Sans',sans-serif;font-weight:600;letter-spacing:.04em">${msg}</span></div>`;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),3500)}
+
+const API_BASE=(location.hostname==='localhost'||location.hostname==='127.0.0.1')?'http://127.0.0.1:8000':location.origin;
+const PLANS={pro:{amount:29900,name:'LEVI Pro',description:'100 credits per month'},creator:{amount:59900,name:'LEVI Creator',description:'500 credits per month'}};
+
+async function subscribe(plan){
+  const token=localStorage.getItem('levi_token');
+  if(!token){showToast('Please sign in to subscribe','warning');setTimeout(()=>window.location.href='auth.html',1400);return}
+  const user=JSON.parse(localStorage.getItem('levi_user')||'{}');
+  const btnId=plan+'-btn';
+  document.getElementById(btnId).disabled=true;
+  document.getElementById(btnId).textContent='Loading…';
+  try{
+    const r=await fetch(API_BASE+'/create_order',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({plan})});
+    if(!r.ok)throw new Error(await r.text());
+    const d=await r.json();
+    const options={
+      key:d.key_id||'rzp_test_placeholder',
+      amount:PLANS[plan].amount,
+      currency:'INR',
+      name:'LEVI AI',
+      description:PLANS[plan].description,
+      order_id:d.order_id,
+      prefill:{name:user.username||'',email:user.email||''},
+      theme:{color:'#f2ca50'},
+      handler:async function(response){
+        try{
+          const vr=await fetch(API_BASE+'/verify_payment',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify(response)});
+          const vd=await vr.json();
+          if(vd.success||vr.ok){showToast('Payment successful! Your plan is now active.');if(vd.user)localStorage.setItem('levi_user',JSON.stringify(vd.user))}
+          else showToast('Payment verification failed — contact support','error');
+        }catch{showToast('Payment received — please refresh','warning')}
+      }
+    };
+    const rzp=new Razorpay(options);
+    rzp.on('payment.failed',e=>{showToast('Payment failed: '+e.error.description,'error')});
+    rzp.open();
+  }catch(e){
+    showToast(e.message||'Failed to create order. Please try again.','error');
+  }finally{
+    const btn=document.getElementById(btnId);
+    btn.disabled=false;
+    btn.textContent=plan==='pro'?'Upgrade to Pro':'Become Creator';
+  }
+}
+
+// Auth
+const u=localStorage.getItem('levi_user');
+if(u){try{const o=JSON.parse(u);document.getElementById('nav-auth-btn').textContent=o.username||'Account';document.getElementById('nav-auth-btn').href='my-gallery.html';if(o.credits!==undefined)document.getElementById('credits-display').textContent=o.credits+' credits'}catch{}}
+</script>
 </body>
 </html>
