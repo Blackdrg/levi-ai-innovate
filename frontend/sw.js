@@ -20,7 +20,6 @@ const ASSETS = [
   'js/quotes.js',
   'js/studio.js',
   'js/my-gallery.js',
-  'js/auth.js',
   'manifest.json'
 ];
 

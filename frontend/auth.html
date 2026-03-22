@@ -8,9 +8,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 <script>tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#f2ca50","primary-container":"#d4af37","on-primary":"#3c2f00","secondary":"#c3c0ff","surface":"#131317","surface-container-lowest":"#0e0e12","surface-container-low":"#1b1b1f","surface-container":"#1f1f23","surface-container-highest":"#353439","on-surface":"#e5e1e7","on-surface-variant":"#d0c5af","outline":"#99907c","outline-variant":"#4d4635"},fontFamily:{headline:["Newsreader","serif"],body:["Plus Jakarta Sans","sans-serif"],label:["Plus Jakarta Sans","sans-serif"],sans:["Plus Jakarta Sans","sans-serif"]},borderRadius:{DEFAULT:"0.25rem",lg:"0.5rem",xl:"0.75rem","2xl":"1rem","3xl":"1.5rem",full:"9999px"}}}}</script>
 <style>
-.material-symbols-outlined{font-family:'Material Symbols Outlined';font-size:22px;line-height:1;font-variation-settings:'FILL' 0,'wght' 300,'GRAD' 0,'opsz' 24;user-select:none}
+.material-symbols-outlined{font-family:'Material Symbols Outlined';font-size:22px;line-height:1;font-variation-settings:'FILL' 0,'wght' 300,'GRAD' 0,'opsz' 24;-webkit-user-select:none;user-select:none}
 .icon-fill{font-variation-settings:'FILL' 1,'wght' 300,'GRAD' 0,'opsz' 24}.icon-sm{font-size:18px}
-.glass-panel{background:rgba(27,27,31,.65);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
+.glass-panel{background:rgba(27,27,31,.65);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px)}
 .gold-gradient-text{background:linear-gradient(to right,#f2ca50,#d4af37);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
 .btn-gold{background:linear-gradient(135deg,#f2ca50,#d4af37);color:#3c2f00;transition:all .25s}
 .btn-gold:hover{background:linear-gradient(135deg,#fde68a,#f2ca50);box-shadow:0 0 30px rgba(242,202,80,.3)}
@@ -25,14 +25,31 @@
 @keyframes spin{to{transform:rotate(360deg)}}
 #toast{position:fixed;bottom:5rem;left:50%;transform:translateX(-50%) translateY(12px);opacity:0;transition:all .3s;z-index:999;pointer-events:none}
 #toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+.orb-container{z-index:0}
+.orb-1{width:60vw;height:60vw;max-width:750px;top:-20%;left:-15%;background:radial-gradient(circle,rgba(242,202,80,.06) 0%,transparent 68%);filter:blur(100px)}
+.orb-2{width:45vw;height:45vw;max-width:580px;bottom:-15%;right:-12%;background:radial-gradient(circle,rgba(195,192,255,.05) 0%,transparent 68%);filter:blur(80px)}
+.auth-card-wrap{z-index:1}
+.tab-switcher{background:rgba(14,14,18,.6)}
+.pw-input{padding-right:44px}
+.spinner{width:18px;height:18px;border:2px solid rgba(60,47,0,.2);border-top-color:rgba(60,47,0,.85);border-radius:50%;animation:spin .75s linear infinite}
+.tab-active{background:linear-gradient(135deg,#f2ca50,#d4af37);color:#3c2f00}
+.tab-inactive{background:transparent;color:#69666e}
+.google-btn{background:rgba(255,255,255,.03)}
+.toast-inner-auth{background:rgba(19,19,23,.92);border:.5px solid rgba(242,202,80,.35);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)}
+.toast-text-auth{font-size:12px;color:#e5e1e7;font-family:'Plus Jakarta Sans',sans-serif;font-weight:600;letter-spacing:.04em}
+.tab-active{background:linear-gradient(135deg,#f2ca50,#d4af37);color:#3c2f00}
+.tab-inactive{background:transparent;color:#69666e}
+.google-btn{background:rgba(255,255,255,.03)}
+.msg-success{background:rgba(52,211,153,.1);border:.5px solid rgba(52,211,153,.3);color:#6ee7b7}
+.msg-error{background:rgba(248,113,113,.1);border:.5px solid rgba(248,113,113,.3);color:#fca5a5}
 </style>
 </head>
 <body class="bg-background text-on-surface font-body min-h-screen flex items-center justify-center relative overflow-hidden">
 
 <!-- Orbs -->
-<div class="fixed inset-0 pointer-events-none overflow-hidden" style="z-index:0">
-  <div class="absolute rounded-full" style="width:60vw;height:60vw;max-width:750px;top:-20%;left:-15%;background:radial-gradient(circle,rgba(242,202,80,.06) 0%,transparent 68%);filter:blur(100px)"></div>
-  <div class="absolute rounded-full" style="width:45vw;height:45vw;max-width:580px;bottom:-15%;right:-12%;background:radial-gradient(circle,rgba(195,192,255,.05) 0%,transparent 68%);filter:blur(80px)"></div>
+<div class="fixed inset-0 pointer-events-none overflow-hidden orb-container">
+  <div class="absolute rounded-full orb-1"></div>
+  <div class="absolute rounded-full orb-2"></div>
 </div>
 
 <!-- Back link -->
@@ -42,7 +59,7 @@
 </a>
 
 <!-- Auth card -->
-<div class="relative w-full max-w-md mx-4 fade-in" style="z-index:1">
+<div class="relative w-full max-w-md mx-4 fade-in auth-card-wrap">
 
   <!-- Logo -->
   <div class="text-center mb-10">
@@ -54,9 +71,13 @@
   <div class="glass-panel ghost-border rounded-3xl p-8 shadow-[0_32px_80px_rgba(0,0,0,0.5)]">
 
     <!-- Tab switcher -->
-    <div class="flex ghost-border rounded-xl p-1 mb-8" style="background:rgba(14,14,18,.6)">
-      <button id="tab-login" onclick="switchMode('login')" class="flex-1 py-2.5 text-xs font-label font-semibold uppercase tracking-widest rounded-lg transition-all" style="background:linear-gradient(135deg,#f2ca50,#d4af37);color:#3c2f00">Sign In</button>
-      <button id="tab-register" onclick="switchMode('register')" class="flex-1 py-2.5 text-xs font-label font-semibold uppercase tracking-widest rounded-lg text-zinc-500 transition-all hover:text-zinc-300">Create Account</button>
+    <div class="flex ghost-border rounded-xl p-1 mb-8 tab-switcher">
+      <button id="tab-login" onclick="switchMode('login')"
+        class="flex-1 py-2.5 text-xs font-label font-semibold uppercase tracking-widest rounded-lg transition-all tab-active">Sign
+        In</button>
+      <button id="tab-register" onclick="switchMode('register')"
+        class="flex-1 py-2.5 text-xs font-label font-semibold uppercase tracking-widest rounded-lg text-zinc-500 transition-all hover:text-zinc-300 tab-inactive">Create
+        Account</button>
     </div>
 
     <!-- Headline -->
@@ -81,7 +102,8 @@
       <div>
         <label class="block text-[10px] text-primary uppercase tracking-[0.2em] mb-2 font-semibold">Password</label>
         <div class="relative">
-          <input id="password-input" type="password" class="levi-input" placeholder="••••••••" autocomplete="current-password" style="padding-right:44px"/>
+        <input id="password-input" type="password" class="levi-input pw-input" placeholder="••••••••"
+          autocomplete="current-password" />
           <button onclick="togglePassword()" class="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-primary transition-colors">
             <span class="material-symbols-outlined icon-sm" id="pw-eye">visibility</span>
           </button>
@@ -92,7 +114,7 @@
     <!-- Submit -->
     <button id="submit-btn" onclick="handleAuth()" class="btn-gold w-full py-4 rounded-full font-bold uppercase tracking-[0.25em] text-sm flex items-center justify-center gap-3 mt-8">
       <span id="submit-label">Sign In →</span>
-      <div id="submit-spinner" class="hidden" style="width:18px;height:18px;border:2px solid rgba(60,47,0,.2);border-top-color:rgba(60,47,0,.85);border-radius:50%;animation:spin .75s linear infinite"></div>
+    <div id="submit-spinner" class="hidden spinner"></div>
     </button>
 
     <!-- Divider -->
@@ -103,7 +125,8 @@
     </div>
 
     <!-- Google OAuth -->
-    <a href="/login/google" class="flex items-center justify-center gap-3 ghost-border rounded-xl py-3.5 text-sm text-on-surface-variant hover:text-on-surface hover:border-white/15 transition-all" style="background:rgba(255,255,255,.03)">
+    <a href="/login/google"
+      class="flex items-center justify-center gap-3 ghost-border rounded-xl py-3.5 text-sm text-on-surface-variant hover:text-on-surface hover:border-white/15 transition-all google-btn">
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M17.64 9.205c0-.639-.057-1.252-.164-1.841H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/><path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/><path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/><path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335"/></svg>
       Continue with Google
     </a>
@@ -111,7 +134,8 @@
     <!-- Toggle -->
     <p class="text-center text-xs text-zinc-500 mt-6">
       <span id="toggle-text">Don't have an account?</span>
-      <button onclick="switchMode(document.getElementById('tab-login').style.background?'register':'login')" id="toggle-btn" class="text-primary hover:underline ml-1 font-semibold">Create Account</button>
+      <button onclick="switchMode(mode==='login'?'register':'login')" id="toggle-btn"
+        class="text-primary hover:underline ml-1 font-semibold">Create Account</button>
     </p>
   </div>
 
@@ -124,18 +148,18 @@
 <div id="toast"></div>
 
 <script>
-function showToast(msg,type='success'){const t=document.getElementById('toast');t.innerHTML=`<div style="background:rgba(19,19,23,.92);border:.5px solid rgba(242,202,80,.35);backdrop-filter:blur(20px)" class="flex items-center gap-2.5 px-5 py-3 rounded-full shadow-2xl"><span style="font-size:12px;color:#e5e1e7;font-family:'Plus Jakarta Sans',sans-serif;font-weight:600;letter-spacing:.04em">${msg}</span></div>`;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),3000)}
+                function showToast(msg, type = 'success') { const t = document.getElementById('toast'); t.innerHTML = `<div style="background:rgba(19,19,23,.92);border:.5px solid rgba(242,202,80,.35);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)" class="flex items-center gap-2.5 px-5 py-3 rounded-full shadow-2xl"><span style="font-size:12px;color:#e5e1e7;font-family:'Plus Jakarta Sans',sans-serif;font-weight:600;letter-spacing:.04em">${msg}</span></div>`; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 3000) }
 
-const API_BASE=(location.hostname==='localhost'||location.hostname==='127.0.0.1')?'http://127.0.0.1:8000':location.origin;
+  const API_BASE = (['localhost', '127.0.0.1', '::1', '0.0.0.0'].includes(location.hostname)) ? `http://${location.hostname}:8000` : location.origin + '/api';
 let mode='login';
 
 function switchMode(newMode){
   mode=newMode;
   const isLogin=mode==='login';
-  document.getElementById('tab-login').style.background=isLogin?'linear-gradient(135deg,#f2ca50,#d4af37)':'';
-  document.getElementById('tab-login').style.color=isLogin?'#3c2f00':'';
-  document.getElementById('tab-register').style.background=isLogin?'':'linear-gradient(135deg,#f2ca50,#d4af37)';
-  document.getElementById('tab-register').style.color=isLogin?'':'#3c2f00';
+  const tL = document.getElementById('tab-login');
+  const tR = document.getElementById('tab-register');
+  tL.className = 'flex-1 py-2.5 text-xs font-label font-semibold uppercase tracking-widest rounded-lg transition-all ' + (isLogin ? 'tab-active' : 'tab-inactive');
+  tR.className = 'flex-1 py-2.5 text-xs font-label font-semibold uppercase tracking-widest rounded-lg transition-all ' + (isLogin ? 'tab-inactive' : 'tab-active');
   document.getElementById('auth-heading').textContent=isLogin?'Welcome Back':'Join the Seekers';
   document.getElementById('auth-subheading').textContent=isLogin?'Continue your philosophical journey.':'Create your LEVI account — it\'s free.';
   document.getElementById('submit-label').textContent=isLogin?'Sign In →':'Create Account →';
@@ -155,9 +179,7 @@ function togglePassword(){
 function showMsg(msg,ok){
   const el=document.getElementById('auth-msg');
   el.textContent=msg;
-  el.style.background=ok?'rgba(52,211,153,.1)':'rgba(248,113,113,.1)';
-  el.style.border=ok?'.5px solid rgba(52,211,153,.3)':'.5px solid rgba(248,113,113,.3)';
-  el.style.color=ok?'#6ee7b7':'#fca5a5';
+  el.className = 'mb-5 px-4 py-3 rounded-xl text-xs font-semibold ' + (ok ? 'msg-success' : 'msg-error');
   el.classList.remove('hidden');
 }
 

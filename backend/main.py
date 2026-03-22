@@ -13,9 +13,9 @@ from sqlalchemy.orm import Session
 
 from pydantic import BaseModel
 
-from jose import JWTError, jwt
+from jose import JWTError, jwt # type: ignore
 
-from passlib.context import CryptContext
+from passlib.context import CryptContext # type: ignore
 
 from datetime import datetime, timedelta, date
 
@@ -26,12 +26,12 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from slowapi import _rate_limit_exceeded_handler
-from authlib.integrations.starlette_client import OAuth
+from authlib.integrations.starlette_client import OAuth # type: ignore
 import os
 
 import logging
 
-import requests
+import requests # type: ignore
 
 from dotenv import load_dotenv
 
@@ -147,11 +147,11 @@ def verify_password(plain_password, hashed_password):
 def get_password_hash(password):
     return pwd_context.hash(password)
 
-def create_access_token(data: dict, expires_delta: timedelta = None):
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=15))
     to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM) # type: ignore
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
@@ -160,16 +160,30 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM]) # type: ignore
     except JWTError:
         raise credentials_exception
-    username: str = payload.get("sub")
-    if username is None:
+    username_val = payload.get("sub")
+    if username_val is None:
         raise credentials_exception
+    username: str = str(username_val)
     user = db.query(Users).filter(Users.username == username).first()
     if user is None:
         raise credentials_exception
     return user
+
+async def get_current_user_optional(token: Optional[str] = Depends(OAuth2PasswordBearer(tokenUrl="token", auto_error=False)), db: Session = Depends(get_db)):
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM]) # type: ignore
+        username_val = payload.get("sub")
+        if username_val is None:
+            return None
+        username: str = str(username_val)
+        return db.query(Users).filter(Users.username == username).first()
+    except JWTError:
+        return None
 
 class User(BaseModel):
     username: str
@@ -550,7 +564,7 @@ def gen_quote(prompt: Query):
 
 @app.post("/generate_image")
 @limiter.limit("5/minute")
-async def gen_image(request: Request, req: Query, db: Session = Depends(get_db), current_user: Optional[Users] = Depends(get_current_user)):
+async def gen_image(request: Request, req: Query, db: Session = Depends(get_db), current_user: Optional[Users] = Depends(get_current_user_optional)):
     try:
         user_id = current_user.id if current_user else None
         user_tier = current_user.tier if current_user else "free"
@@ -590,7 +604,7 @@ async def gen_image(request: Request, req: Query, db: Session = Depends(get_db),
                 req.text, 
                 author=req.author or "Unknown",
                 mood=req.mood or "neutral", 
-                custom_bg=req.custom_bg,
+                custom_bg=req.custom_bg or "",
                 user_tier=user_tier
             ),
         )
@@ -684,7 +698,7 @@ def get_feed(db: Session = Depends(get_db), limit: int = 20):
 
 @app.post("/chat")
 @limiter.limit("10/minute")
-async def chat(request: Request, msg: ChatMessage, db: Session = Depends(get_db), current_user: Optional[Users] = Depends(get_current_user)):
+async def chat(request: Request, msg: ChatMessage, db: Session = Depends(get_db), current_user: Optional[Users] = Depends(get_current_user_optional)):
     # Try to identify user if authenticated
     user_id = current_user.id if current_user else None
     
@@ -1026,7 +1040,7 @@ def confirm_payment(data: PaymentVerify, db: Session = Depends(get_db), current_
         raise HTTPException(status_code=400, detail="Payment verification failed")
     
     # Upgrade user tier in DB
-    payments.upgrade_user_tier(current_user.id, data.plan, db) 
+    payments.upgrade_user_tier(current_user.id, data.plan or "pro", db) 
     
     return {"status": "success", "message": f"Payment confirmed and account upgraded to {data.plan}"}
 
@@ -1077,7 +1091,7 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
 
         if user_id:
             from backend.payments import upgrade_user_tier
-            upgrade_user_tier(int(user_id), plan, db)
+            upgrade_user_tier(int(user_id), str(plan), db)
             
             # Audit Trail: Log payment success
             logger.info(f"[PAYMENT_SUCCESS] User: {user_id} | Amount: {amount} INR | Plan: {plan} | Order: {order_id} | Payment: {payment_id}")
@@ -1085,7 +1099,7 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
             # Send Receipt Email
             user = db.query(Users).filter(Users.id == int(user_id)).first()
             if user and user.email:
-                send_payment_receipt(user.email, plan, amount)
+                send_payment_receipt(user.email, str(plan), amount)
         else:
             logger.warning(f"[PAYMENT_ORPHAN] Received payment but could not identify user. Payment ID: {payment_id}")
 

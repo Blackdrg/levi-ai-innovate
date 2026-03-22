@@ -1,11 +1,12 @@
 import os
-import requests
+from typing import Any
+import requests # type: ignore
 import base64
 import random
 import textwrap
 import math
 from io import BytesIO
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
+from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance # type: ignore
 
 TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY")
 TOGETHER_API_URL = "https://api.together.xyz/v1/images/generations"
@@ -220,9 +221,10 @@ def generate_quote_image(
     author:    str   = "",
     mood:      str   = "neutral",
     size:      tuple = (1024, 1024),
-    custom_bg: str   = None,
-    user_tier: str   = "free"
-) -> BytesIO:
+    custom_bg: str   = "",
+    user_tier: str   = "free",
+    return_pil: bool = False
+) -> Any:
 
     # --- Step 1: Get background ---
     bg = None
@@ -265,6 +267,9 @@ def generate_quote_image(
     bg = bg.filter(ImageFilter.SHARPEN)
 
     # --- Step 5: Export ---
+    if return_pil:
+        return bg
+
     output = BytesIO()
     bg.convert("RGB").save(output, "PNG", optimize=True)
     output.seek(0)

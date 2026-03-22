@@ -280,7 +280,7 @@ def send_daily_quote_email(user_email: str, user_id: int, liked_topics: list):
         topic = liked_topics[0] if liked_topics else "life"
         quote = generate_quote(topic)
 
-        import requests
+        import requests # type: ignore
         resp = requests.post(
             "https://api.resend.com/emails",
             headers={

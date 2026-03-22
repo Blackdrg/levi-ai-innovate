@@ -19,6 +19,7 @@
             max-width: 800px;
             margin: 0 auto;
             background: rgba(27, 27, 31, 0.6);
+            -webkit-backdrop-filter: blur(24px);
             backdrop-filter: blur(24px);
             padding: 60px;
             border-radius: 2.5rem;
@@ -53,7 +54,13 @@
         }
 
         .last-updated {
-            font-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold mb-10 block;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            color: #71717a;
+            font-weight: bold;
+            margin-bottom: 2.5rem;
+            display: block;
         }
 
         .back-link {

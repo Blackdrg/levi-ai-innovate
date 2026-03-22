@@ -1,18 +1,20 @@
 
 import os
 import random
-import requests
+import requests # type: ignore
 import logging
 import threading
-from mtranslate import translate
-import groq
+from mtranslate import translate # type: ignore
+import groq # type: ignore
+
+from typing import Optional, Any, List
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 # Groq client initialization
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-groq_client = None
+groq_client: Any = None
 if GROQ_API_KEY:
     try:
         groq_client = groq.Groq(api_key=GROQ_API_KEY)
@@ -21,22 +23,22 @@ if GROQ_API_KEY:
         logger.error(f"Failed to initialize Groq client: {e}")
 
 HAS_GENERATOR = False
-generator = None
+generator: Any = None
 _gen_lock = threading.Lock()
 
 # Environment check
 RENDER = os.getenv("RENDER") == "true"
 
-def _generate_via_groq(prompt: str) -> str:
+def _generate_via_groq(prompt: str) -> Optional[str]:
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
         return None
     try:
-        import requests
+        import requests # type: ignore
         resp = requests.post(
             "https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}",
-                     "Content-Type": "application/json"},
+        "Content-Type": "application/json"},
             json={
                 "model": "llama3-8b-8192",
                 "messages": [{"role": "user", "content": prompt}],
@@ -51,7 +53,7 @@ def _generate_via_groq(prompt: str) -> str:
         logger.error(f"Groq error: {e}")
     return None
 
-def fetch_open_source_quote(mood: str = "") -> dict:
+def fetch_open_source_quote(mood: str = "") -> Optional[dict]:
 
     try:
 
@@ -197,7 +199,7 @@ def generate_quote(prompt: str, mood: str = "", max_length: int = 60) -> str:
 
 
 
-def generate_response(prompt: str, history: list = None, mood: str = "", max_length: int = 150, lang: str = "en", user_memory: object = None) -> str:
+def generate_response(prompt: str, history: Optional[List[dict]] = None, mood: str = "", max_length: int = 150, lang: str = "en", user_memory: Any = None) -> str:
     logger.info(f"generate_response: '{prompt[:60]}' (lang={lang})")
     if not prompt or not isinstance(prompt, str):
         return "I am listening, seeker. Your silence is profound."
@@ -250,8 +252,8 @@ def generate_response(prompt: str, history: list = None, mood: str = "", max_len
             # Build system prompt with user memory context
             memory_context = ""
             if user_memory:
-                topics = ", ".join(user_memory.liked_topics) if user_memory.liked_topics else "general wisdom"
-                moods = ", ".join(user_memory.mood_history) if user_memory.mood_history else "thought-provoking"
+                topics = ", ".join(user_memory.liked_topics) if hasattr(user_memory, 'liked_topics') and user_memory.liked_topics else "general wisdom"
+                moods = ", ".join(user_memory.mood_history) if hasattr(user_memory, 'mood_history') and user_memory.mood_history else "thought-provoking"
                 memory_context = f" User usually likes {topics} and feels {moods}."
             
             system_prompt = f"You are LEVI, a philosophical AI companion. Mood: {mood or 'thought-provoking'}.{memory_context} Be deep, concise, poetic. Max 3 sentences."
@@ -277,7 +279,8 @@ def generate_response(prompt: str, history: list = None, mood: str = "", max_len
                 # Basic mood tracking from current message
                 for m in ["stoic", "zen", "cyberpunk", "philosophical", "calm", "energetic", "inspiring", "melancholic"]:
                     if m in msg:
-                        if not user_memory.mood_history: user_memory.mood_history = []
+                        if not hasattr(user_memory, 'mood_history') or user_memory.mood_history is None: 
+                            user_memory.mood_history = []
                         if m not in user_memory.mood_history:
                             user_memory.mood_history = user_memory.mood_history[-4:] + [m]
                         break
