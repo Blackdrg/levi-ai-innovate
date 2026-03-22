@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 
 <html class="dark" lang="en"><head>
+<title>LEVI — Feed</title>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&amp;family=Plus+Jakarta+Sans:wght@200..800&amp;display=swap" rel="stylesheet"/>
@@ -92,9 +93,19 @@
     }
 .glass-card {
     background: rgba(27, 27, 31, 0.6);
+    -webkit-backdrop-filter: blur(20px);
     backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px)
-    }</style>
+    }
+.icon-fill { font-variation-settings: 'FILL' 1 !important; }
+.sidebar-bg { background: rgba(19, 19, 23, 0.6); -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); }
+.mobile-menu-overlay{background:rgba(13,13,18,.95);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px);padding-top:6rem}
+.mobile-menu-link{font-family:Newsreader,serif;font-style:italic;font-size:1.25rem;padding:12px 0;border-bottom:0.5px solid rgba(255,255,255,.06);display:block}
+.mobile-menu-link-inactive{color:#e5e1e7}
+.mobile-menu-link-active{color:#f2ca50}
+.toast-container{position:fixed;bottom:5rem;left:50%;transform:translateX(-50%) translateY(12px);opacity:0;transition:all .3s;z-index:999;pointer-events:none}
+.toast-inner-feed{background:rgba(19,19,23,.92);border:.5px solid rgba(242,202,80,.35);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);display:flex;align-items:center;gap:10px;padding:10px 20px;border-radius:9999px;box-shadow:0 8px 32px rgba(0,0,0,.5)}
+.toast-text-feed{color:#f2ca50;font-size:12px;font-family:Plus Jakarta Sans,sans-serif;font-weight:600;letter-spacing:.04em}
+</style>
 </head>
 <body class="bg-surface text-on-surface selection:bg-primary/30 selection:text-primary">
 <!-- TopNavBar Shell -->
@@ -113,7 +124,7 @@
         </button>
 </nav>
 <!-- SideNavBar Shell -->
-<aside class="hidden lg:flex flex-col w-64 h-screen fixed left-0 top-0 z-40 bg-[#131317]/60 backdrop-blur-2xl border-r border-white/5">
+<aside class="hidden lg:flex flex-col w-64 h-screen fixed left-0 top-0 z-40 sidebar-bg border-r border-white/5">
 <div class="p-8 pt-32">
 <div class="flex items-center gap-3 mb-12">
 <div class="w-10 h-10 rounded-full bg-surface-container-highest overflow-hidden border border-primary/20">
@@ -138,7 +149,7 @@
 <span class="font-sans text-xs uppercase tracking-widest">Studio</span>
 </a>
 <a class="flex items-center gap-4 px-4 py-3 bg-gradient-to-r from-[#f2ca50]/20 to-transparent text-[#f2ca50] border-l-2 border-[#f2ca50] transition-all group shadow-[inset_0_0_20px_rgba(242,202,80,0.05)]" href="#">
-<span class="material-symbols-outlined text-xl" data-icon="public" style="font-variation-settings: 'FILL' 1;">public</span>
+<span class="material-symbols-outlined text-xl icon-fill" data-icon="public">public</span>
 <span class="font-sans text-xs uppercase tracking-widest font-bold">Feed</span>
 </a>
 </nav>
@@ -213,7 +224,7 @@
 <div class="flex items-center justify-between border-t border-white/10 pt-6">
 <div class="flex items-center gap-4">
 <button class="flex items-center gap-1.5 text-zinc-300 hover:text-primary transition-colors">
-<span class="material-symbols-outlined text-lg" data-icon="favorite" style="font-variation-settings: 'FILL' 1;">favorite</span>
+<span class="material-symbols-outlined text-lg icon-fill" data-icon="favorite">favorite</span>
 <span class="text-xs font-bold">842</span>
 </button>
 <button class="flex items-center gap-1.5 text-zinc-300 hover:text-primary transition-colors">
@@ -352,19 +363,20 @@
 </button>
 
 <!-- Mobile menu overlay -->
-<div id="mobile-menu" class="hidden fixed inset-0 z-[60]" style="background:rgba(13,13,18,.95);backdrop-filter:blur(24px);padding-top:6rem">
-  <button onclick="toggleMobileMenu()" class="absolute top-8 right-6 text-zinc-400"><span class="material-symbols-outlined" style="font-size:28px;font-family:Material Symbols Outlined;font-variation-settings:FILL 0,wght 300">close</span></button>
+<div id="mobile-menu" class="hidden fixed inset-0 z-[60] mobile-menu-overlay">
+  <button onclick="toggleMobileMenu()" class="absolute top-8 right-6 text-zinc-400"><span
+      class="material-symbols-outlined close-icon">close</span></button>
   <nav class="flex flex-col gap-2 px-8 pt-4">
-    <a onclick="toggleMobileMenu()" href="index.html" style="font-family:Newsreader,serif;font-style:italic;font-size:1.25rem;color:#e5e1e7;padding:12px 0;border-bottom:0.5px solid rgba(255,255,255,.06);display:block">Home</a>
-    <a onclick="toggleMobileMenu()" href="chat.html" style="font-family:Newsreader,serif;font-style:italic;font-size:1.25rem;color:#e5e1e7;padding:12px 0;border-bottom:0.5px solid rgba(255,255,255,.06);display:block">AI Chat</a>
-    <a onclick="toggleMobileMenu()" href="studio.html" style="font-family:Newsreader,serif;font-style:italic;font-size:1.25rem;color:#e5e1e7;padding:12px 0;border-bottom:0.5px solid rgba(255,255,255,.06);display:block">Studio</a>
-    <a onclick="toggleMobileMenu()" href="feed.html" style="font-family:Newsreader,serif;font-style:italic;font-size:1.25rem;color:#f2ca50;padding:12px 0;border-bottom:0.5px solid rgba(255,255,255,.06);display:block">Feed</a>
+    <a onclick="toggleMobileMenu()" href="index.html" class="mobile-menu-link mobile-menu-link-inactive">Home</a>
+    <a onclick="toggleMobileMenu()" href="chat.html" class="mobile-menu-link mobile-menu-link-inactive">AI Chat</a>
+    <a onclick="toggleMobileMenu()" href="studio.html" class="mobile-menu-link mobile-menu-link-inactive">Studio</a>
+    <a onclick="toggleMobileMenu()" href="feed.html" class="mobile-menu-link mobile-menu-link-active">Feed</a>
   </nav>
 </div>
-<div id="levi-toast" style="position:fixed;bottom:5rem;left:50%;transform:translateX(-50%) translateY(12px);opacity:0;transition:all .3s;z-index:999;pointer-events:none"></div>
+<div id="levi-toast" class="toast-container"></div>
 <script>
 function toggleMobileMenu(){const m=document.getElementById('mobile-menu');if(!m)return;m.classList.toggle('hidden')}
-function showToast(msg,type){const t=document.getElementById('levi-toast');t.innerHTML='<div style="background:rgba(19,19,23,.92);border:.5px solid rgba(242,202,80,.35);backdrop-filter:blur(20px);display:flex;align-items:center;gap:10px;padding:10px 20px;border-radius:9999px;box-shadow:0 8px 32px rgba(0,0,0,.5)"><span style="color:#f2ca50;font-size:12px;font-family:Plus Jakarta Sans,sans-serif;font-weight:600;letter-spacing:.04em">'+msg+'</span></div>';t.style.opacity='1';t.style.transform='translateX(-50%) translateY(0)';clearTimeout(t._timer);t._timer=setTimeout(()=>{t.style.opacity='0';t.style.transform='translateX(-50%) translateY(12px)'},3000)}
+    function showToast(msg, type) { const t = document.getElementById('levi-toast'); t.innerHTML = '<div class="toast-inner-feed"><span class="toast-text-feed">' + msg + '</span></div>'; t.style.opacity = '1'; t.style.transform = 'translateX(-50%) translateY(0)'; clearTimeout(t._timer); t._timer = setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateX(-50%) translateY(12px)' }, 3000) }
 function toggleLanguage(){showToast('Hindi translation coming soon')}
 const API_BASE=(location.hostname==='localhost'||location.hostname==='127.0.0.1')?'http://127.0.0.1:8000':location.origin;
 // Auth nav update

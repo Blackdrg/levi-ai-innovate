@@ -1,5 +1,6 @@
 import razorpay
 import os
+from typing import Optional
 import hmac
 import hashlib
 import logging
@@ -29,7 +30,7 @@ if RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET:
     except Exception as e:
         logger.error(f"Failed to initialize Razorpay client: {e}")
 
-def create_order(amount: int, currency: str = "INR", receipt: str = "order_1", user_id: int = None, plan: str = "pro"):
+def create_order(amount: int, currency: str = "INR", receipt: str = "order_1", user_id: Optional[int] = None, plan: str = "pro"):
     """
     Create a Razorpay order. Amount in paise (₹1 = 100 paise).
     """

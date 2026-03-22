@@ -86,11 +86,12 @@
         z-index: 0;
         opacity: 0.05;
       }
+      .orb-delay { animation-delay: 2s; }
     </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-6 overflow-hidden">
     <div class="orb w-96 h-96 bg-primary top-[-10%] left-[-10%] animate-pulse"></div>
-    <div class="orb w-80 h-80 bg-secondary bottom-[-10%] right-[-10%] animate-pulse" style="animation-delay: 2s"></div>
+    <div class="orb w-80 h-80 bg-secondary bottom-[-10%] right-[-10%] animate-pulse orb-delay"></div>
 
     <div class="container">
         <div class="error-code">404</div>

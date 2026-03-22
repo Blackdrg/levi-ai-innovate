@@ -8,10 +8,10 @@
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 <script>tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#f2ca50","primary-container":"#d4af37","on-primary":"#3c2f00","secondary":"#c3c0ff","secondary-container":"#3626ce","on-secondary-container":"#b3b1ff","tertiary":"#d9c5ff","surface":"#131317","surface-container-lowest":"#0e0e12","surface-container-low":"#1b1b1f","surface-container":"#1f1f23","surface-container-high":"#2a292e","surface-container-highest":"#353439","on-surface":"#e5e1e7","on-surface-variant":"#d0c5af","outline":"#99907c","outline-variant":"#4d4635"},fontFamily:{headline:["Newsreader","serif"],body:["Plus Jakarta Sans","sans-serif"],label:["Plus Jakarta Sans","sans-serif"],sans:["Plus Jakarta Sans","sans-serif"]},borderRadius:{DEFAULT:"0.25rem",lg:"0.5rem",xl:"0.75rem","2xl":"1rem","3xl":"1.5rem",full:"9999px"}}}}</script>
 <style>
-.material-symbols-outlined{font-family:'Material Symbols Outlined';font-size:22px;line-height:1;font-variation-settings:'FILL' 0,'wght' 300,'GRAD' 0,'opsz' 24;user-select:none}
+.material-symbols-outlined{font-family:'Material Symbols Outlined';font-size:22px;line-height:1;font-variation-settings:'FILL' 0,'wght' 300,'GRAD' 0,'opsz' 24;-webkit-user-select:none;user-select:none}
 .icon-fill{font-variation-settings:'FILL' 1,'wght' 300,'GRAD' 0,'opsz' 24}.icon-sm{font-size:18px}.icon-lg{font-size:28px}
-.glass{background:rgba(19,19,23,.72);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
-.glass-panel{background:rgba(27,27,31,.6);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+.glass{background:rgba(19,19,23,.72);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px)}
+.glass-panel{background:rgba(27,27,31,.6);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)}
 .gold-text{background:linear-gradient(135deg,#f2ca50 0%,#fde68a 45%,#d4af37 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
 .btn-gold{background:linear-gradient(135deg,#f2ca50,#d4af37);color:#3c2f00;transition:all .25s}
 .btn-gold:hover{background:linear-gradient(135deg,#fde68a,#f2ca50);box-shadow:0 0 24px rgba(242,202,80,.3)}
@@ -35,18 +35,30 @@
 .fade-in{animation:fadeUp .35s ease forwards}
 #toast{position:fixed;bottom:5rem;left:50%;transform:translateX(-50%) translateY(12px);opacity:0;transition:all .3s;z-index:999;pointer-events:none}
 #toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+.h-full-screen{height:100vh}
+.orb-container{z-index:0}
+.orb-1{width:50vw;height:50vw;max-width:650px;max-height:650px;top:-15%;left:-12%;background:radial-gradient(circle,rgba(242,202,80,.05) 0%,transparent 68%);filter:blur(80px)}
+.orb-2{width:40vw;height:40vw;max-width:500px;max-height:500px;bottom:-12%;right:-10%;background:radial-gradient(circle,rgba(195,192,255,.04) 0%,transparent 68%);filter:blur(80px)}
+.z-50-nav{z-index:50}
+.mobile-menu-pad{padding-top:6rem}
+.sidebar-wrap{background:rgba(13,13,18,.7);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px);border-right:.5px solid rgba(255,255,255,.06)}
+.session-box{background:rgba(255,255,255,.03)}
+.chat-layout { height: 100vh; padding-top: 5.5rem; }
+.loading-spinner { width: 18px; height: 18px; border: 2px solid rgba(60,47,0,.2); border-top-color: rgba(60,47,0,.85); border-radius: 50%; animation: spin .75s linear infinite; }
+.mobile-nav-active { color: #f2ca50; }
+.mobile-nav-inactive { color: #69666e; }
 </style>
 </head>
-<body class="bg-background text-on-surface font-body min-h-screen overflow-hidden" style="height:100vh">
+<body class="bg-background text-on-surface font-body min-h-screen overflow-hidden h-full-screen">
 
 <!-- Orbs -->
-<div class="fixed inset-0 pointer-events-none overflow-hidden" style="z-index:0">
-  <div class="absolute rounded-full" style="width:50vw;height:50vw;max-width:650px;max-height:650px;top:-15%;left:-12%;background:radial-gradient(circle,rgba(242,202,80,.05) 0%,transparent 68%);filter:blur(80px)"></div>
-  <div class="absolute rounded-full" style="width:40vw;height:40vw;max-width:500px;max-height:500px;bottom:-12%;right:-10%;background:radial-gradient(circle,rgba(195,192,255,.04) 0%,transparent 68%);filter:blur(80px)"></div>
+<div class="fixed inset-0 pointer-events-none overflow-hidden orb-container">
+  <div class="absolute rounded-full orb-1"></div>
+  <div class="absolute rounded-full orb-2"></div>
 </div>
 
 <!-- TOP NAV ISLAND -->
-<nav class="fixed top-0 left-0 right-0 z-50 pt-6" style="z-index:50">
+<nav class="fixed top-0 left-0 right-0 z-50 pt-6 z-50-nav">
   <div class="mx-auto w-[90%] max-w-5xl glass rounded-full ghost-border px-6 py-3 flex justify-between items-center shadow-[0_20px_60px_rgba(0,0,0,0.4)]">
     <a href="index.html" class="text-2xl font-headline italic tracking-[-0.03em] gold-text">LEVI</a>
     <div class="hidden md:flex items-center gap-8">
@@ -68,7 +80,7 @@
 </nav>
 
 <!-- MOBILE MENU -->
-<div id="mobile-menu" class="hidden fixed inset-0 z-40 glass" style="padding-top:6rem">
+<div id="mobile-menu" class="hidden fixed inset-0 z-40 glass mobile-menu-pad">
   <button onclick="toggleMobileMenu()" class="absolute top-8 right-6 text-zinc-400"><span class="material-symbols-outlined icon-lg">close</span></button>
   <nav class="flex flex-col gap-2 px-8 pt-4">
     <a onclick="toggleMobileMenu()" href="index.html"   class="text-xl font-headline italic text-on-surface py-3 border-b border-white/5">Home</a>
@@ -80,7 +92,7 @@
 </div>
 
 <!-- SIDEBAR (desktop) -->
-<aside class="hidden lg:flex flex-col w-64 h-screen fixed left-0 top-0 z-40" style="background:rgba(13,13,18,.7);backdrop-filter:blur(24px);border-right:.5px solid rgba(255,255,255,.06)">
+<aside class="hidden lg:flex flex-col w-64 h-screen fixed left-0 top-0 z-40 sidebar-wrap">
   <div class="pt-28 pb-8 flex flex-col h-full px-5">
     <div class="px-4 mb-10">
       <h2 class="font-headline italic gold-text text-xl">LEVI AI</h2>
@@ -95,7 +107,7 @@
       <a href="my-gallery.html" class="nav-inactive flex items-center gap-4 px-4 py-3 rounded-r-xl text-xs uppercase tracking-widest"><span class="material-symbols-outlined icon-sm">photo_library</span>Gallery</a>
     </nav>
     <!-- Session info -->
-    <div class="mt-auto px-3 py-3 rounded-xl ghost-border" style="background:rgba(255,255,255,.03)">
+    <div class="mt-auto px-3 py-3 rounded-xl ghost-border session-box">
       <p class="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">Session</p>
       <p class="text-xs text-on-surface" id="session-info">Anonymous · Philosophical</p>
       <button onclick="clearChat()" class="mt-2 text-[10px] text-zinc-500 hover:text-primary transition-colors uppercase tracking-wider">Clear History</button>
@@ -104,7 +116,7 @@
 </aside>
 
 <!-- MAIN CHAT LAYOUT -->
-<div class="lg:ml-64 flex flex-col" style="height:100vh;padding-top:5.5rem">
+<div class="lg:ml-64 flex flex-col chat-layout">
 
   <!-- Chat header bar -->
   <div class="px-6 lg:px-10 py-4 border-b border-white/5 flex items-center justify-between flex-shrink-0">
@@ -152,7 +164,7 @@
       </div>
       <button id="send-btn" onclick="sendMessage()" class="btn-gold w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 shadow-[0_0_20px_rgba(242,202,80,.2)]">
         <span class="material-symbols-outlined icon-sm icon-fill" id="send-icon">send</span>
-        <div class="dot hidden" id="send-loading" style="width:18px;height:18px;border:2px solid rgba(60,47,0,.2);border-top-color:rgba(60,47,0,.85);border-radius:50%;animation:spin .75s linear infinite"></div>
+        <div class="loading-spinner hidden" id="send-loading"></div>
       </button>
     </div>
   </div>
@@ -161,10 +173,10 @@
 <!-- Mobile bottom nav -->
 <nav class="md:hidden fixed bottom-5 left-1/2 -translate-x-1/2 w-[88%] z-50">
   <div class="glass ghost-border rounded-full px-8 py-3 flex justify-around items-center shadow-2xl">
-    <a href="index.html"><span class="material-symbols-outlined" style="color:#69666e">auto_awesome</span></a>
-    <a href="chat.html"><span class="material-symbols-outlined icon-fill" style="color:#f2ca50">psychology</span></a>
-    <a href="studio.html"><span class="material-symbols-outlined" style="color:#69666e">auto_fix_high</span></a>
-    <a href="feed.html"><span class="material-symbols-outlined" style="color:#69666e">public</span></a>
+    <a href="index.html"><span class="material-symbols-outlined mobile-nav-inactive">auto_awesome</span></a>
+    <a href="chat.html"><span class="material-symbols-outlined icon-fill mobile-nav-active">psychology</span></a>
+    <a href="studio.html"><span class="material-symbols-outlined mobile-nav-inactive">auto_fix_high</span></a>
+    <a href="feed.html"><span class="material-symbols-outlined mobile-nav-inactive">public</span></a>
   </div>
 </nav>
 
@@ -172,12 +184,12 @@
 
 <script>
 function toggleMobileMenu(){const m=document.getElementById('mobile-menu');if(!m)return;m.classList.toggle('hidden');document.body.style.overflow=m.classList.contains('hidden')?'':'hidden'}
-function showToast(msg,type='success'){const t=document.getElementById('toast');const bg=type==='error'?'rgba(147,0,10,.85)':type==='warning'?'rgba(120,90,0,.85)':'rgba(19,19,23,.9)';const border=type==='error'?'rgba(255,180,171,.3)':type==='warning'?'rgba(242,202,80,.4)':'rgba(242,202,80,.35)';const icon=type==='error'?'error':type==='warning'?'warning':'check_circle';t.innerHTML=`<div style="background:${bg};border:.5px solid ${border};backdrop-filter:blur(20px)" class="flex items-center gap-2.5 px-5 py-3 rounded-full shadow-2xl"><span class="material-symbols-outlined icon-fill" style="font-size:16px;color:#f2ca50">${icon}</span><span style="font-size:12px;color:#e5e1e7;font-family:'Plus Jakarta Sans',sans-serif;font-weight:600;letter-spacing:.04em">${msg}</span></div>`;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),3200)}
+              function showToast(msg, type = 'success') { const t = document.getElementById('toast'); const bg = type === 'error' ? 'rgba(147,0,10,.85)' : type === 'warning' ? 'rgba(120,90,0,.85)' : 'rgba(19,19,23,.9)'; const border = type === 'error' ? 'rgba(255,180,171,.3)' : type === 'warning' ? 'rgba(242,202,80,.4)' : 'rgba(242,202,80,.35)'; const icon = type === 'error' ? 'error' : type === 'warning' ? 'warning' : 'check_circle'; t.innerHTML = `<div style="background:${bg};border:.5px solid ${border};-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)" class="flex items-center gap-2.5 px-5 py-3 rounded-full shadow-2xl"><span class="material-symbols-outlined icon-fill" style="font-size:16px;color:#f2ca50">${icon}</span><span style="font-size:12px;color:#e5e1e7;font-family:'Plus Jakarta Sans',sans-serif;font-weight:600;letter-spacing:.04em">${msg}</span></div>`; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 3200) }
 
 // Inject spin keyframe
 const s=document.createElement('style');s.textContent='@keyframes spin{to{transform:rotate(360deg)}}';document.head.appendChild(s);
 
-const API_BASE=(location.hostname==='localhost'||location.hostname==='127.0.0.1')?'http://127.0.0.1:8000':location.origin;
+          const API_BASE = (['localhost', '127.0.0.1', '::1', '0.0.0.0'].includes(location.hostname)) ? `http://${location.hostname}:8000` : location.origin + '/api';
 let currentMood='inspiring';
 let lastBotText='';
 let sessionId=localStorage.getItem('levi_session_id')||(()=>{const id='s_'+Date.now().toString(36);localStorage.setItem('levi_session_id',id);return id})();

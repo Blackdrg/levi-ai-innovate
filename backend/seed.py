@@ -1,16 +1,16 @@
-import pandas as pd
+import pandas as pd # type: ignore
 from sqlalchemy.orm import Session
 from db import SessionLocal, engine
 from models import Quote, Base
 from embeddings import embed_text
-import numpy as np
+import numpy as np # type: ignore
 
 Base.metadata.create_all(engine)
 
 db = SessionLocal()
 
 # Load CSV
-df = pd.read_csv("data/quotes.csv")
+df = pd.read_csv("backend/data/quotes.csv")
 
 for _, row in df.iterrows():
     # Existence-check upsert to avoid duplicates and redundant embedding calls

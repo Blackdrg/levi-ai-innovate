@@ -7,11 +7,13 @@ if (window.location.protocol === 'file:') {
 const isLocalDev = (
   window.location.hostname === 'localhost' ||
   window.location.hostname === '127.0.0.1' ||
-  window.location.hostname === '0.0.0.0'
+  window.location.hostname === '0.0.0.0' ||
+  window.location.hostname === '[::1]' ||
+  window.location.hostname === '::1'
 );
 
 const API_BASE = isLocalDev
-  ? `http://127.0.0.1:8000`
+  ? `http://${window.location.hostname}:8000`
   : `${window.location.origin}/api`;
 
 console.log(`[LEVI] API Base: ${API_BASE} | isLocalDev: ${isLocalDev}`);

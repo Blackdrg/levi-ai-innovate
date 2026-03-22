@@ -8,10 +8,10 @@
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 <script>tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#f2ca50","primary-container":"#d4af37","on-primary":"#3c2f00","secondary":"#c3c0ff","surface":"#131317","surface-container-lowest":"#0e0e12","surface-container-low":"#1b1b1f","surface-container":"#1f1f23","surface-container-high":"#2a292e","surface-container-highest":"#353439","on-surface":"#e5e1e7","on-surface-variant":"#d0c5af","outline":"#99907c","outline-variant":"#4d4635"},fontFamily:{headline:["Newsreader","serif"],body:["Plus Jakarta Sans","sans-serif"],label:["Plus Jakarta Sans","sans-serif"],sans:["Plus Jakarta Sans","sans-serif"]},borderRadius:{DEFAULT:"0.25rem",lg:"0.5rem",xl:"0.75rem","2xl":"1rem","3xl":"1.5rem",full:"9999px"}}}}</script>
 <style>
-.material-symbols-outlined{font-family:'Material Symbols Outlined';font-size:22px;line-height:1;font-variation-settings:'FILL' 0,'wght' 300,'GRAD' 0,'opsz' 24;user-select:none}
+.material-symbols-outlined{font-family:'Material Symbols Outlined';font-size:22px;line-height:1;font-variation-settings:'FILL' 0,'wght' 300,'GRAD' 0,'opsz' 24;-webkit-user-select:none;user-select:none}
 .icon-fill{font-variation-settings:'FILL' 1,'wght' 300,'GRAD' 0,'opsz' 24}.icon-sm{font-size:18px}
-.glass{background:rgba(19,19,23,.72);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
-.glass-card{background:rgba(27,27,31,.6);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+.glass{background:rgba(19,19,23,.72);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px)}
+.glass-card{background:rgba(27,27,31,.6);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)}
 .gold-gradient-text{background:linear-gradient(to right,#f2ca50,#d4af37);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
 .btn-gold{background:linear-gradient(135deg,#f2ca50,#d4af37);color:#3c2f00;transition:all .25s}
 .btn-gold:hover{background:linear-gradient(135deg,#fde68a,#f2ca50);box-shadow:0 0 24px rgba(242,202,80,.3)}
@@ -28,14 +28,26 @@
 .animate-fade-up{animation:fadeUp .5s ease forwards;opacity:0}
 #toast{position:fixed;bottom:5rem;left:50%;transform:translateX(-50%) translateY(12px);opacity:0;transition:all .3s;z-index:999;pointer-events:none}
 #toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+.orb-container{z-index:0}
+.orb-1{width:55vw;height:55vw;max-width:700px;top:-18%;left:-14%;background:radial-gradient(circle,rgba(242,202,80,.05) 0%,transparent 68%);filter:blur(100px)}
+.orb-2{width:40vw;height:40vw;max-width:520px;bottom:-12%;right:-8%;background:radial-gradient(circle,rgba(195,192,255,.04) 0%,transparent 68%);filter:blur(80px)}
+.mobile-menu-pad{padding-top:6rem}
+.sidebar-wrap{background:rgba(13,13,18,.65);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px)}
+.session-box{background:rgba(255,255,255,.03)}
+.main-wrap{position:relative;z-index:1}
+.loader-spinner{width:40px;height:40px;border:2px solid rgba(242,202,80,.2);border-top-color:#f2ca50;border-radius:50%;animation:spin .85s linear infinite}
+.empty-state-bg{background:rgba(242,202,80,.08)}
+.empty-state-icon{font-size:36px;color:rgba(242,202,80,.4)}
+.mobile-nav-inactive{color:#69666e}
+.mobile-nav-active{color:#f2ca50}
 </style>
 </head>
 <body class="bg-background text-on-surface font-body min-h-screen">
 
 <!-- Orbs -->
-<div class="fixed inset-0 pointer-events-none overflow-hidden" style="z-index:0">
-  <div class="absolute rounded-full" style="width:55vw;height:55vw;max-width:700px;top:-18%;left:-14%;background:radial-gradient(circle,rgba(242,202,80,.05) 0%,transparent 68%);filter:blur(100px)"></div>
-  <div class="absolute rounded-full" style="width:40vw;height:40vw;max-width:520px;bottom:-12%;right:-8%;background:radial-gradient(circle,rgba(195,192,255,.04) 0%,transparent 68%);filter:blur(80px)"></div>
+<div class="fixed inset-0 pointer-events-none overflow-hidden orb-container">
+  <div class="absolute rounded-full orb-1"></div>
+  <div class="absolute rounded-full orb-2"></div>
 </div>
 
 <!-- TOP NAV -->
@@ -59,8 +71,9 @@
 </nav>
 
 <!-- MOBILE MENU -->
-<div id="mobile-menu" class="hidden fixed inset-0 z-40 glass" style="padding-top:6rem">
-  <button onclick="toggleMobileMenu()" class="absolute top-8 right-6 text-zinc-400"><span class="material-symbols-outlined" style="font-size:28px">close</span></button>
+<div id="mobile-menu" class="hidden fixed inset-0 z-40 glass mobile-menu-pad">
+  <button onclick="toggleMobileMenu()" class="absolute top-8 right-6 text-zinc-400"><span
+      class="material-symbols-outlined icon-lg">close</span></button>
   <nav class="flex flex-col gap-2 px-8 pt-4">
     <a onclick="toggleMobileMenu()" href="index.html"      class="text-xl font-headline italic text-on-surface py-3 border-b border-white/5">Home</a>
     <a onclick="toggleMobileMenu()" href="chat.html"       class="text-xl font-headline italic text-on-surface py-3 border-b border-white/5">Chat</a>
@@ -70,7 +83,8 @@
 </div>
 
 <!-- SIDEBAR -->
-<aside class="hidden lg:flex flex-col w-64 h-screen fixed left-0 top-0 z-40 border-r border-white/5 pt-32 pb-8 px-6" style="background:rgba(13,13,18,.65);backdrop-filter:blur(24px)">
+<aside
+  class="hidden lg:flex flex-col w-64 h-screen fixed left-0 top-0 z-40 border-r border-white/5 pt-32 pb-8 px-6 sidebar-wrap">
   <div class="mb-10 px-4"><h2 class="font-headline italic gold-gradient-text text-xl">LEVI AI</h2><p class="text-[10px] uppercase tracking-[0.2em] text-zinc-500 mt-1">Celestial Muse</p></div>
   <nav class="flex flex-col gap-1 flex-1">
     <a href="index.html"      class="nav-inactive flex items-center gap-4 px-4 py-3 rounded-r-xl text-xs uppercase tracking-widest"><span class="material-symbols-outlined icon-sm">auto_awesome</span>Home</a>
@@ -81,7 +95,7 @@
     <a href="my-gallery.html" class="nav-active flex items-center gap-4 px-4 py-3 rounded-r-xl text-xs uppercase tracking-widest font-bold"><span class="material-symbols-outlined icon-sm icon-fill">photo_library</span>My Gallery</a>
     <a href="pricing.html"    class="nav-inactive flex items-center gap-4 px-4 py-3 rounded-r-xl text-xs uppercase tracking-widest"><span class="material-symbols-outlined icon-sm">workspace_premium</span>Pricing</a>
   </nav>
-  <div class="mt-auto px-3 py-3 rounded-xl ghost-border" style="background:rgba(255,255,255,.03)">
+<div class="mt-auto px-3 py-3 rounded-xl ghost-border session-box">
     <p class="text-xs font-semibold text-on-surface" id="sidebar-user">Seeker</p>
     <p class="text-[10px] text-zinc-500 mt-0.5" data-credits>-- credits</p>
     <button onclick="logout()" class="mt-2 text-[10px] text-zinc-500 hover:text-red-400 transition-colors uppercase tracking-wider">Sign Out</button>
@@ -89,7 +103,7 @@
 </aside>
 
 <!-- MAIN -->
-<main class="lg:ml-64 pt-28 px-5 lg:px-12 pb-24" style="position:relative;z-index:1">
+<main class="lg:ml-64 pt-28 px-5 lg:px-12 pb-24 main-wrap">
   <div class="max-w-6xl mx-auto">
 
     <!-- Header -->
@@ -110,14 +124,14 @@
 
     <!-- Loading state -->
     <div id="loading-state" class="flex flex-col items-center py-24 gap-4">
-      <div style="width:40px;height:40px;border:2px solid rgba(242,202,80,.2);border-top-color:#f2ca50;border-radius:50%;animation:spin .85s linear infinite"></div>
+      <div class="loader-spinner"></div>
       <p class="text-zinc-500 text-sm uppercase tracking-widest">Loading gallery…</p>
     </div>
 
     <!-- Empty state -->
     <div id="empty-state" class="hidden text-center py-24">
-      <div class="w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-6" style="background:rgba(242,202,80,.08)">
-        <span class="material-symbols-outlined" style="font-size:36px;color:rgba(242,202,80,.4)">photo_library</span>
+      <div class="w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-6 empty-state-bg">
+        <span class="material-symbols-outlined empty-state-icon">photo_library</span>
       </div>
       <h3 class="font-headline text-3xl italic font-light mb-3">No Creations Yet</h3>
       <p class="text-on-surface-variant text-sm mb-8 max-w-sm mx-auto font-light">Your gallery is empty. Head to Studio and synthesize your first visual masterpiece.</p>
@@ -131,10 +145,10 @@
 <!-- Mobile bottom nav -->
 <nav class="md:hidden fixed bottom-5 left-1/2 -translate-x-1/2 w-[88%] z-50">
   <div class="glass ghost-border rounded-full px-8 py-3 flex justify-around items-center shadow-2xl">
-    <a href="index.html"><span class="material-symbols-outlined" style="color:#69666e">auto_awesome</span></a>
-    <a href="chat.html"><span class="material-symbols-outlined" style="color:#69666e">psychology</span></a>
-    <a href="studio.html"><span class="material-symbols-outlined" style="color:#69666e">auto_fix_high</span></a>
-    <a href="my-gallery.html"><span class="material-symbols-outlined icon-fill" style="color:#f2ca50">photo_library</span></a>
+    <a href="index.html"><span class="material-symbols-outlined mobile-nav-inactive">auto_awesome</span></a>
+    <a href="chat.html"><span class="material-symbols-outlined mobile-nav-inactive">psychology</span></a>
+    <a href="studio.html"><span class="material-symbols-outlined mobile-nav-inactive">auto_fix_high</span></a>
+    <a href="my-gallery.html"><span class="material-symbols-outlined icon-fill mobile-nav-active">photo_library</span></a>
   </div>
 </nav>
 
@@ -143,10 +157,10 @@
 <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
 <script>
 function toggleMobileMenu(){const m=document.getElementById('mobile-menu');if(!m)return;m.classList.toggle('hidden')}
-function showToast(msg,type='success'){const t=document.getElementById('toast');const bg=type==='error'?'rgba(147,0,10,.85)':'rgba(19,19,23,.92)';const border=type==='error'?'rgba(255,180,171,.3)':'rgba(242,202,80,.35)';t.innerHTML=`<div style="background:${bg};border:.5px solid ${border};backdrop-filter:blur(20px)" class="flex items-center gap-2.5 px-5 py-3 rounded-full shadow-2xl"><span style="font-size:12px;color:#e5e1e7;font-family:'Plus Jakarta Sans',sans-serif;font-weight:600;letter-spacing:.04em">${msg}</span></div>`;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),3000)}
+              function showToast(msg, type = 'success') { const t = document.getElementById('toast'); const bg = type === 'error' ? 'rgba(147,0,10,.85)' : 'rgba(19,19,23,.92)'; const border = type === 'error' ? 'rgba(255,180,171,.3)' : 'rgba(242,202,80,.35)'; t.innerHTML = `<div style="background:${bg};border:.5px solid ${border};-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)" class="flex items-center gap-2.5 px-5 py-3 rounded-full shadow-2xl"><span style="font-size:12px;color:#e5e1e7;font-family:'Plus Jakarta Sans',sans-serif;font-weight:600;letter-spacing:.04em">${msg}</span></div>`; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 3000) }
 function logout(){localStorage.removeItem('levi_token');localStorage.removeItem('levi_user');window.location.href='index.html'}
 
-const API_BASE=(location.hostname==='localhost'||location.hostname==='127.0.0.1')?'http://127.0.0.1:8000':location.origin;
+  const API_BASE = (['localhost', '127.0.0.1', '::1', '0.0.0.0'].includes(location.hostname)) ? `http://${location.hostname}:8000` : location.origin + '/api';
 
 function cardHTML(item,i){
   const src=item.image_url||item.image_b64||item.url||'';
@@ -164,7 +178,7 @@ function cardHTML(item,i){
         <p class="text-[9px] font-label text-primary uppercase tracking-widest font-semibold">— ${author}</p>
       </div>
       <!-- Hover actions -->
-      <div class="reveal absolute inset-0 flex flex-col items-center justify-center gap-3" style="background:rgba(0,0,0,.6);backdrop-filter:blur(4px)">
+      <div class="reveal absolute inset-0 flex flex-col items-center justify-center gap-3" style="background:rgba(0,0,0,.6);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)">
         <button onclick="downloadItem('${src}','${text}')" class="flex items-center gap-2 btn-gold px-5 py-2.5 rounded-full text-xs font-semibold uppercase tracking-wider">
           <span class="material-symbols-outlined icon-sm">download</span>Download
         </button>

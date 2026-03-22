@@ -1,3 +1,4 @@
+from typing import Optional
 try:
     from moviepy import ImageClip, TextClip, CompositeVideoClip, AudioFileClip
     HAS_MOVIEPY = True
@@ -14,7 +15,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def generate_quote_video(quote: str, author: str, mood: str, user_tier: str = "free", bg_music: str = None):
+def generate_quote_video(quote: str, author: str, mood: str, user_tier: str = "free", bg_music: Optional[str] = None):
     """
     Generates an 8-second MP4 video for the quote.
     """

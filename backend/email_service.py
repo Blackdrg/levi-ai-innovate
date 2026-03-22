@@ -6,15 +6,17 @@ try:
 except ImportError:
     from generation import generate_quote
 
+from typing import Optional
+
 logger = logging.getLogger(__name__)
 
 # Resend API key
 RESEND_API_KEY = os.getenv("RESEND_API_KEY")
 if RESEND_API_KEY:
-    resend.api_key = RESEND_API_KEY
+    resend.api_key = RESEND_API_KEY # type: ignore
     logger.info("Resend initialized.")
 
-def send_daily_quote(user_email: str, user_name: str, liked_topics: list = None, last_mood: str = "philosophical"):
+def send_daily_quote(user_email: str, user_name: str, liked_topics: Optional[list] = None, last_mood: str = "philosophical"):
     """
     Sends a personalized daily quote via email using Resend.
     """

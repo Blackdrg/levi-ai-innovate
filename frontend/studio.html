@@ -8,10 +8,10 @@
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 <script>tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#f2ca50","primary-container":"#d4af37","on-primary":"#3c2f00","secondary":"#c3c0ff","secondary-container":"#3626ce","tertiary":"#d9c5ff","surface":"#131317","surface-container-lowest":"#0e0e12","surface-container-low":"#1b1b1f","surface-container":"#1f1f23","surface-container-high":"#2a292e","surface-container-highest":"#353439","on-surface":"#e5e1e7","on-surface-variant":"#d0c5af","outline":"#99907c","outline-variant":"#4d4635"},fontFamily:{headline:["Newsreader","serif"],body:["Plus Jakarta Sans","sans-serif"],label:["Plus Jakarta Sans","sans-serif"],sans:["Plus Jakarta Sans","sans-serif"]},borderRadius:{DEFAULT:"0.25rem",lg:"0.5rem",xl:"0.75rem","2xl":"1rem","3xl":"1.5rem",full:"9999px"}}}}</script>
 <style>
-.material-symbols-outlined{font-family:'Material Symbols Outlined';font-size:22px;line-height:1;font-variation-settings:'FILL' 0,'wght' 300,'GRAD' 0,'opsz' 24;user-select:none}
+.material-symbols-outlined{font-family:'Material Symbols Outlined';font-size:22px;line-height:1;font-variation-settings:'FILL' 0,'wght' 300,'GRAD' 0,'opsz' 24;-webkit-user-select:none;user-select:none}
 .icon-fill{font-variation-settings:'FILL' 1,'wght' 300,'GRAD' 0,'opsz' 24}.icon-sm{font-size:18px}.icon-lg{font-size:28px}
-.glass-panel{background:rgba(27,27,31,.6);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
-.glass{background:rgba(19,19,23,.72);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
+.glass-panel{background:rgba(27,27,31,.6);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)}
+.glass{background:rgba(19,19,23,.72);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px)}
 .gold-gradient-text{background:linear-gradient(to right,#f2ca50,#d4af37);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
 .btn-gold{background:linear-gradient(135deg,#f2ca50,#d4af37);color:#3c2f00;transition:all .25s}
 .btn-gold:hover{background:linear-gradient(135deg,#fde68a,#f2ca50);box-shadow:0 0 30px rgba(242,202,80,.3);transform:translateY(-1px)}
@@ -38,16 +38,42 @@
 .fade-in{animation:fadeUp .4s ease forwards}
 #toast{position:fixed;bottom:5rem;left:50%;transform:translateX(-50%) translateY(12px);opacity:0;transition:all .3s;z-index:999;pointer-events:none}
 #toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+.orb-container{z-index:0}
+.orb-1{width:55vw;height:55vw;max-width:700px;max-height:700px;top:-15%;left:-12%;background:radial-gradient(circle,rgba(242,202,80,.055) 0%,transparent 68%);filter:blur(100px)}
+.orb-2{width:45vw;height:45vw;max-width:580px;max-height:580px;bottom:-12%;right:-10%;background:radial-gradient(circle,rgba(195,192,255,.045) 0%,transparent 68%);filter:blur(80px)}
+.mobile-menu-pad{padding-top:6rem}
+.sidebar-wrap{background:rgba(13,13,18,.65);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px)}
+.user-card{background:rgba(255,255,255,.03)}
 @keyframes goldPulse{0%,100%{box-shadow:0 0 0 0 rgba(242,202,80,.35)}50%{box-shadow:0 0 0 8px rgba(242,202,80,0)}}
 .pulse-gold{animation:goldPulse 2s infinite}
+.main-workspace{position:relative;z-index:1}
+.loader-spinner{width:48px;height:48px;border:3px solid rgba(242,202,80,.15);border-top-color:#f2ca50;border-radius:50%;animation:spin .8s linear infinite}
+.preview-container{aspect-ratio:1/1;background:rgba(255,255,255,.02)}
+.placeholder-icon{font-size:48px;color:rgba(242,202,80,.2)}
+.action-btn-disabled{opacity:.4;pointer-events:none}
+.mobile-nav-inactive{color:#69666e}
+.mobile-nav-active{color:#f2ca50}
+.insight-card{background:rgba(27,27,31,.4)}
+.stability-track{background:rgba(255,255,255,.06)}
+.synth-spinner{width:18px;height:18px;border:2px solid rgba(60,47,0,.2);border-top-color:rgba(60,47,0,.85);border-radius:50%;animation:spin .75s linear infinite}
+.preview-bg{background:#0e0e12}
+.preview-placeholder-bg{background:rgba(242,202,80,.08)}
+.preview-placeholder-icon{color:rgba(242,202,80,.5)}
+.preview-overlay{background:linear-gradient(to top,rgba(0,0,0,.65) 0%,transparent 50%)}
+.loading-overlay-bg{background:rgba(10,10,15,.85);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.ambient-flare{background:rgba(242,202,80,.18);filter:blur(100px)}
+.mobile-nav-bg{background:rgba(13,13,18,.85);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)}
+.toast-inner-studio{border:.5px solid rgba(242,202,80,.35);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)}
+.toast-text-studio{font-size:12px;color:#e5e1e7;font-family:'Plus Jakarta Sans',sans-serif;font-weight:600;letter-spacing:.04em}
+.stability-initial{width:67%}
 </style>
 </head>
 <body class="bg-background text-on-surface font-body selection:bg-primary/30 min-h-screen">
 
 <!-- Orbs -->
-<div class="fixed inset-0 overflow-hidden pointer-events-none" style="z-index:0">
-  <div class="absolute rounded-full" style="width:55vw;height:55vw;max-width:700px;max-height:700px;top:-15%;left:-12%;background:radial-gradient(circle,rgba(242,202,80,.055) 0%,transparent 68%);filter:blur(100px)"></div>
-  <div class="absolute rounded-full" style="width:45vw;height:45vw;max-width:580px;max-height:580px;bottom:-12%;right:-10%;background:radial-gradient(circle,rgba(195,192,255,.045) 0%,transparent 68%);filter:blur(80px)"></div>
+<div class="fixed inset-0 overflow-hidden pointer-events-none orb-container">
+  <div class="absolute rounded-full orb-1"></div>
+  <div class="absolute rounded-full orb-2"></div>
 </div>
 
 <!-- TOP NAV ISLAND -->
@@ -63,14 +89,15 @@
     </div>
     <div class="flex items-center gap-3">
       <span class="hidden md:flex items-center gap-1.5 text-[10px] text-zinc-500"><span class="w-1.5 h-1.5 rounded-full bg-primary pulse-gold"></span><span data-credits>-- credits</span></span>
-      <button id="nav-auth-btn" onclick="window.location.href='auth.html'" class="btn-gold text-xs font-semibold tracking-wider uppercase px-5 py-2 rounded-full">Sign In</button>
+      <button id="nav-auth-btn" onclick="window.location.href='auth.html'"
+        class="btn-gold text-xs font-semibold tracking-wider uppercase px-5 py-2 rounded-full">Sign In</a>
       <button onclick="toggleMobileMenu()" class="md:hidden text-zinc-400"><span class="material-symbols-outlined">menu</span></button>
     </div>
   </div>
 </nav>
 
 <!-- MOBILE MENU -->
-<div id="mobile-menu" class="hidden fixed inset-0 z-40 glass" style="padding-top:6rem">
+<div id="mobile-menu" class="hidden fixed inset-0 z-40 glass mobile-menu-pad">
   <button onclick="toggleMobileMenu()" class="absolute top-8 right-6 text-zinc-400"><span class="material-symbols-outlined icon-lg">close</span></button>
   <nav class="flex flex-col gap-2 px-8 pt-4">
     <a onclick="toggleMobileMenu()" href="index.html"  class="text-xl font-headline italic text-on-surface py-3 border-b border-white/5">Home</a>
@@ -81,7 +108,8 @@
 </div>
 
 <!-- SIDEBAR (desktop) -->
-<aside class="hidden lg:flex flex-col w-64 h-screen fixed left-0 top-0 z-40 border-r border-white/5 pt-32 pb-8 px-6" style="background:rgba(13,13,18,.65);backdrop-filter:blur(24px)">
+<aside
+  class="hidden lg:flex flex-col w-64 h-screen fixed left-0 top-0 z-40 border-r border-white/5 pt-32 pb-8 px-6 sidebar-wrap">
   <div class="mb-12 px-4">
     <h2 class="font-headline italic text-primary text-xl">LEVI AI</h2>
     <p class="text-[10px] uppercase tracking-[0.2em] text-zinc-500 mt-1">Celestial Muse</p>
@@ -96,7 +124,7 @@
     <a href="pricing.html" class="nav-inactive flex items-center gap-4 px-4 py-3 rounded-r-xl text-xs uppercase tracking-widest"><span class="material-symbols-outlined icon-sm">workspace_premium</span>Pricing</a>
   </div>
   <div class="mt-auto px-4">
-    <div class="flex items-center gap-3 p-3 rounded-xl ghost-border" style="background:rgba(255,255,255,.03)">
+    <div class="flex items-center gap-3 p-3 rounded-xl ghost-border user-card">
       <div class="w-9 h-9 rounded-full btn-gold flex items-center justify-center text-sm font-bold flex-shrink-0" id="user-avatar">?</div>
       <div>
         <p class="text-xs font-semibold text-on-surface" id="user-name">Seeker</p>
@@ -107,7 +135,7 @@
 </aside>
 
 <!-- MAIN WORKSPACE -->
-<main class="lg:ml-64 pt-32 px-6 lg:px-12 pb-12" style="position:relative;z-index:1">
+<main class="lg:ml-64 pt-32 px-6 lg:px-12 pb-12 main-workspace">
   <header class="mb-12 max-w-4xl">
     <h1 class="font-headline text-5xl lg:text-7xl font-light tracking-tight mb-4">The <span class="gold-gradient-text italic font-normal">Synthesis</span> Lab</h1>
     <p class="text-on-surface-variant text-lg lg:text-xl font-light max-w-2xl leading-relaxed">Transform your whispers of wisdom into celestial visions. Distill your thoughts through the LEVI lens.</p>
@@ -161,11 +189,11 @@
       </div>
 
       <!-- Lab insights -->
-      <div class="p-8 rounded-3xl ghost-border" style="background:rgba(27,27,31,.4)">
+      <div class="p-8 rounded-3xl ghost-border insight-card">
         <h4 class="font-headline text-2xl mb-4">Laboratory Insights</h4>
         <p class="text-on-surface-variant text-sm leading-relaxed mb-6 font-light" id="insight-text">Synthesizing with <span class="text-primary italic" id="insight-style">Philosophical</span> style will prioritize ethereal lighting, high-contrast obsidian shadows, and golden particle dispersion.</p>
-        <div class="h-1 w-full rounded-full overflow-hidden" style="background:rgba(255,255,255,.06)">
-          <div class="h-full bg-primary transition-all duration-500" id="stability-bar" style="width:67%"></div>
+        <div class="h-1 w-full rounded-full overflow-hidden stability-track">
+          <div class="h-full bg-primary transition-all duration-500 stability-initial" id="stability-bar"></div>
         </div>
         <div class="mt-2 flex justify-between text-[10px] uppercase tracking-widest text-zinc-500">
           <span>Model Stability</span><span id="stability-val">67%</span>
@@ -177,7 +205,7 @@
         <button id="synth-btn" onclick="synthesize()" class="btn-gold w-full py-5 rounded-full font-bold uppercase tracking-[0.3em] flex items-center justify-center gap-3 shadow-[0_0_0px_rgba(242,202,80,0)] hover:shadow-[0_0_30px_rgba(242,202,80,.3)] transition-all active:scale-[0.98]">
           <span class="material-symbols-outlined icon-sm icon-fill" id="synth-icon">bolt</span>
           <span id="synth-label">Initiate Synthesis</span>
-          <div id="synth-spinner" class="hidden" style="width:18px;height:18px;border:2px solid rgba(60,47,0,.2);border-top-color:rgba(60,47,0,.85);border-radius:50%;animation:spin .75s linear infinite"></div>
+          <div id="synth-spinner" class="hidden synth-spinner"></div>
         </button>
         <button id="video-btn" onclick="makeVideo()" disabled class="w-full py-4 rounded-full ghost-border font-semibold text-xs uppercase tracking-widest text-primary flex items-center justify-center gap-2 hover:bg-primary/8 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
           <span class="material-symbols-outlined icon-sm">videocam</span>
@@ -188,12 +216,13 @@
 
     <!-- RIGHT: Preview -->
     <section class="lg:col-span-7 sticky top-32">
-      <div id="preview-wrap" class="relative group aspect-square overflow-hidden rounded-[2rem] ghost-border shadow-[0_32px_80px_rgba(0,0,0,0.6)]" style="background:#0e0e12">
+      <div id="preview-wrap"
+        class="relative group aspect-square overflow-hidden rounded-[2rem] ghost-border shadow-[0_32px_80px_rgba(0,0,0,0.6)] preview-bg">
 
         <!-- Placeholder -->
         <div id="preview-placeholder" class="absolute inset-0 flex flex-col items-center justify-center gap-4">
-          <div class="w-16 h-16 rounded-2xl flex items-center justify-center" style="background:rgba(242,202,80,.08)">
-            <span class="material-symbols-outlined icon-lg" style="color:rgba(242,202,80,.5)">image</span>
+          <div class="w-16 h-16 rounded-2xl flex items-center justify-center preview-placeholder-bg">
+            <span class="material-symbols-outlined icon-lg preview-placeholder-icon">image</span>
           </div>
           <p class="text-zinc-600 text-sm text-center tracking-wider uppercase">Visual Preview</p>
           <p class="text-zinc-700 text-xs text-center">Enter wisdom and click synthesize</p>
@@ -202,14 +231,14 @@
         <!-- Generated image -->
         <div id="preview-container" class="hidden absolute inset-0">
           <img id="preview-img" src="" alt="Generated visual" class="w-full h-full object-cover opacity-90 group-hover:scale-105 transition-transform duration-1000"/>
-          <div class="absolute inset-0" style="background:linear-gradient(to top,rgba(0,0,0,.65) 0%,transparent 50%)"></div>
+          <div class="absolute inset-0 preview-overlay"></div>
         </div>
 
         <!-- Loading overlay -->
-        <div id="loading-overlay" class="hidden absolute inset-0 flex flex-col items-center justify-center gap-4" style="background:rgba(10,10,15,.85);backdrop-filter:blur(8px)">
-          <div style="width:48px;height:48px;border:2px solid rgba(242,202,80,.2);border-top-color:#f2ca50;border-radius:50%;animation:spin .85s linear infinite"></div>
-          <p class="text-primary text-[10px] uppercase tracking-[0.3em] font-semibold">Synthesizing…</p>
-          <p class="text-zinc-500 text-xs">Together FLUX · 4-step diffusion</p>
+        <div id="loading-overlay"
+          class="hidden absolute inset-0 flex flex-col items-center justify-center gap-4 loading-overlay-bg">
+          <div class="loader-spinner"></div>
+          <p class="text-primary text-xs uppercase tracking-[0.3em] font-bold animate-pulse">Synthesizing Vision...</p>
         </div>
 
         <!-- Top HUD -->
@@ -246,7 +275,7 @@
         </div>
 
         <!-- Ambient flare -->
-        <div class="absolute -bottom-24 -right-24 w-64 h-64 rounded-full pointer-events-none" style="background:rgba(242,202,80,.18);filter:blur(100px)"></div>
+        <div class="absolute -bottom-24 -right-24 w-64 h-64 rounded-full pointer-events-none ambient-flare"></div>
       </div>
 
       <!-- Thumbnail strip -->
@@ -261,20 +290,21 @@
 </main>
 
 <!-- Mobile bottom nav -->
-<nav class="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] ghost-border rounded-full py-4 px-8 flex justify-between items-center z-50 shadow-2xl" style="background:rgba(13,13,18,.85);backdrop-filter:blur(20px)">
-  <a href="index.html"><span class="material-symbols-outlined" style="color:#69666e">auto_awesome</span></a>
-  <a href="chat.html"><span class="material-symbols-outlined" style="color:#69666e">psychology</span></a>
-  <a href="studio.html"><span class="material-symbols-outlined icon-fill" style="color:#f2ca50">auto_fix_high</span></a>
-  <a href="feed.html"><span class="material-symbols-outlined" style="color:#69666e">public</span></a>
+<nav
+  class="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] ghost-border rounded-full py-4 px-8 flex justify-between items-center z-50 shadow-2xl mobile-nav-bg">
+  <a href="index.html"><span class="material-symbols-outlined mobile-nav-inactive">auto_awesome</span></a>
+  <a href="chat.html"><span class="material-symbols-outlined mobile-nav-inactive">psychology</span></a>
+  <a href="studio.html"><span class="material-symbols-outlined icon-fill mobile-nav-active">auto_fix_high</span></a>
+  <a href="feed.html"><span class="material-symbols-outlined mobile-nav-inactive">public</span></a>
 </nav>
 
 <div id="toast"></div>
 
 <script>
 function toggleMobileMenu(){const m=document.getElementById('mobile-menu');if(!m)return;m.classList.toggle('hidden');document.body.style.overflow=m.classList.contains('hidden')?'':'hidden'}
-function showToast(msg,type='success'){const t=document.getElementById('toast');const bg=type==='error'?'rgba(147,0,10,.85)':type==='warning'?'rgba(120,90,0,.85)':'rgba(19,19,23,.9)';const border=type==='error'?'rgba(255,180,171,.3)':type==='warning'?'rgba(242,202,80,.4)':'rgba(242,202,80,.35)';const icon=type==='error'?'error':type==='warning'?'warning':'check_circle';t.innerHTML=`<div style="background:${bg};border:.5px solid ${border};backdrop-filter:blur(20px)" class="flex items-center gap-2.5 px-5 py-3 rounded-full shadow-2xl"><span class="material-symbols-outlined icon-fill" style="font-size:16px;color:#f2ca50">${icon}</span><span style="font-size:12px;color:#e5e1e7;font-family:'Plus Jakarta Sans',sans-serif;font-weight:600;letter-spacing:.04em">${msg}</span></div>`;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),3200)}
+              function showToast(msg, type = 'success') { const t = document.getElementById('toast'); const bg = type === 'error' ? 'rgba(147,0,10,.85)' : type === 'warning' ? 'rgba(120,90,0,.85)' : 'rgba(19,19,23,.9)'; const border = type === 'error' ? 'rgba(255,180,171,.3)' : type === 'warning' ? 'rgba(242,202,80,.4)' : 'rgba(242,202,80,.35)'; const icon = type === 'error' ? 'error' : type === 'warning' ? 'warning' : 'check_circle'; t.innerHTML = `<div class="toast-inner-studio flex items-center gap-2.5 px-5 py-3 rounded-full shadow-2xl" style="background:${bg}; border-color:${border}"><span class="material-symbols-outlined icon-fill" style="font-size:16px;color:#f2ca50">${icon}</span><span class="toast-text-studio">${msg}</span></div>`; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 3200) }
 
-const API_BASE=(location.hostname==='localhost'||location.hostname==='127.0.0.1')?'http://127.0.0.1:8000':location.origin;
+  const API_BASE = (['localhost', '127.0.0.1', '::1', '0.0.0.0'].includes(location.hostname)) ? `http://${location.hostname}:8000` : location.origin + '/api';
 let currentStyle='philosophical';let currentImage=null;
 const insights={philosophical:{text:'prioritize ethereal lighting, high-contrast obsidian shadows, and golden particle dispersion.',stability:67},zen:{text:'evoke bamboo mist, still water reflections, and morning light through ancient forests.',stability:82},cyberpunk:{text:'generate neon-soaked cityscapes, rain-slicked streets, and holographic overlays.',stability:74},futuristic:{text:'render clean white surfaces, cosmic voids, and geometric precision with bioluminescent accents.',stability:91},stoic:{text:'depict marble columns, dawn light, classical architecture — austere and powerful.',stability:88},melancholic:{text:'create rain-washed cobblestones, blue hour, soft bokeh with poetic melancholy.',stability:79}};
 

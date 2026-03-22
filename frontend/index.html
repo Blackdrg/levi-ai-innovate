@@ -11,12 +11,15 @@
 tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#f2ca50","primary-container":"#d4af37","on-primary":"#3c2f00","secondary":"#c3c0ff","secondary-container":"#3626ce","on-secondary-container":"#b3b1ff","tertiary":"#d9c5ff","surface":"#131317","surface-container-lowest":"#0e0e12","surface-container-low":"#1b1b1f","surface-container":"#1f1f23","surface-container-high":"#2a292e","surface-container-highest":"#353439","on-surface":"#e5e1e7","on-surface-variant":"#d0c5af","outline":"#99907c","outline-variant":"#4d4635"},fontFamily:{headline:["Newsreader","serif"],body:["Plus Jakarta Sans","sans-serif"],label:["Plus Jakarta Sans","sans-serif"],sans:["Plus Jakarta Sans","sans-serif"]},borderRadius:{DEFAULT:"0.25rem",lg:"0.5rem",xl:"0.75rem","2xl":"1rem","3xl":"1.5rem",full:"9999px"}}}}
 </script>
 <style>
-.material-symbols-outlined{font-family:'Material Symbols Outlined';font-size:22px;line-height:1;font-variation-settings:'FILL' 0,'wght' 300,'GRAD' 0,'opsz' 24;user-select:none}
+.material-symbols-outlined{font-family:'Material Symbols Outlined';font-size:22px;line-height:1;font-variation-settings:'FILL' 0,'wght' 300,'GRAD' 0,'opsz' 24;-webkit-user-select:none;user-select:none}
 .icon-fill{font-variation-settings:'FILL' 1,'wght' 300,'GRAD' 0,'opsz' 24}
 .icon-sm{font-size:18px}.icon-lg{font-size:28px}
-.glass{background:rgba(19,19,23,.72);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
-.glass-panel{background:rgba(27,27,31,.6);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
-.glass-card{background:rgba(27,27,31,.6);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+.glass{background:rgba(19,19,23,.72);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px)}
+.glass-panel{background:rgba(27,27,31,.6);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px)}
+.mood-pill-active{background:rgba(242,202,80,.15);border:.5px solid rgba(242,202,80,.4);color:#f2ca50}
+.mood-pill-inactive{background:rgba(255,255,255,.04);border:.5px solid rgba(255,255,255,.08)}
+.input-mock-custom{border:.5px solid rgba(255,255,255,.1);border-radius:12px;padding:10px 14px;background:rgba(14,14,18,.6)}
+.glass-card{background:rgba(27,27,31,.6);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)}
 .gold-text{background:linear-gradient(135deg,#f2ca50 0%,#fde68a 45%,#d4af37 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
 .btn-gold{background:linear-gradient(135deg,#f2ca50,#d4af37);color:#3c2f00;transition:all .25s}
 .btn-gold:hover{background:linear-gradient(135deg,#fde68a,#f2ca50);box-shadow:0 0 30px rgba(242,202,80,.3);transform:translateY(-1px)}
@@ -39,15 +42,47 @@ tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#f2ca50","pr
 .chat-bubble-out{background:linear-gradient(135deg,rgba(242,202,80,.18),rgba(212,175,55,.1));border:.5px solid rgba(242,202,80,.2);border-radius:12px 12px 2px 12px}
 #toast{position:fixed;bottom:5rem;left:50%;transform:translateX(-50%) translateY(12px);opacity:0;transition:all .3s;z-index:999;pointer-events:none}
 #toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+.orb-container{z-index:0}
+.orb-1{width:55vw;height:55vw;max-width:700px;top:-18%;left:-14%;background:radial-gradient(circle,rgba(242,202,80,.05) 0%,transparent 68%);filter:blur(100px)}
+.orb-2{width:40vw;height:40vw;max-width:520px;bottom:-12%;right:-8%;background:radial-gradient(circle,rgba(195,192,255,.04) 0%,transparent 68%);filter:blur(80px)}
+.mobile-menu-pad{padding-top:6rem}
+.hero-wrap{z-index:1}
+.z-1{position:relative;z-index:1}
+ .bg-white-04{background:rgba(255,255,255,.04)}
+ .border-white-07{border-color:rgba(255,255,255,.07)}
+ .border-white-08{border-color:rgba(255,255,255,.08)}
+ .border-white-1{border-color:rgba(255,255,255,.1)}
+ .bg-black-60{background:rgba(14,14,18,.6)}
+ .icon-gray{color:#69666e}
+ .icon-gold{color:#f2ca50}
+ .btn-ghost{background:rgba(255,255,255,.04);border:.5px solid rgba(255,255,255,.08)}
+ .bg-radial-gold{background:radial-gradient(ellipse at center,rgba(242,202,80,.06) 0%,transparent 65%)}
+ .bg-grad-cosmic{background:linear-gradient(135deg,#0a0a18,#1a1040)}
+ .bg-grad-zen{background:linear-gradient(135deg,#080c14,#1c2840)}
+ .bg-grad-cyber{background:linear-gradient(135deg,#0a0018,#200040)}
+ .bg-grad-ancient{background:linear-gradient(135deg,#0e0c0a,#2a2820)}
+ .bg-grad-overlay{background:linear-gradient(to top,rgba(0,0,0,.7),transparent)}
+.gallery-card-1{background:linear-gradient(135deg,#0a0a18,#1a1040)}
+.gallery-card-2{background:linear-gradient(135deg,#080c14,#1c2840)}
+.gallery-card-3{background:linear-gradient(135deg,#0a0018,#200040)}
+.gallery-card-4{background:linear-gradient(135deg,#0e0c0a,#2a2820)}
+.gallery-overlay{background:linear-gradient(to top,rgba(0,0,0,.7),transparent)}
+.cta-section{z-index:1}
+.plans-btn{background:rgba(255,255,255,.04)}
+.footer-section{z-index:1}
+.mobile-nav-active{color:#f2ca50}
+.mobile-nav-inactive{color:#69666e}
+.delay-150{animation-delay:.15s}
+.z-index-1{z-index:1}
+.wisdom-radial{background:radial-gradient(ellipse at center,rgba(242,202,80,.06) 0%,transparent 65%)}
 </style>
 </head>
-<body class="bg-background text-on-surface font-body min-h-screen overflow-x-hidden selection:bg-primary/20 selection:text-primary">
+<body class="bg-background text-on-surface font-body min-h-screen">
 
-<!-- Atmospheric orbs -->
-<div class="fixed inset-0 pointer-events-none overflow-hidden" style="z-index:0">
-  <div class="orb-anim1 absolute rounded-full" style="width:65vw;height:65vw;max-width:800px;max-height:800px;top:-18%;left:-14%;background:radial-gradient(circle,rgba(242,202,80,.055) 0%,transparent 68%);filter:blur(80px)"></div>
-  <div class="orb-anim2 absolute rounded-full" style="width:50vw;height:50vw;max-width:650px;max-height:650px;bottom:-15%;right:-12%;background:radial-gradient(circle,rgba(195,192,255,.048) 0%,transparent 68%);filter:blur(80px)"></div>
-  <div class="absolute rounded-full" style="width:30vw;height:30vw;max-width:400px;max-height:400px;top:40%;right:5%;background:radial-gradient(circle,rgba(217,197,255,.03) 0%,transparent 70%);filter:blur(60px)"></div>
+<!-- Orbs -->
+<div class="fixed inset-0 pointer-events-none overflow-hidden orb-container">
+  <div class="absolute rounded-full orb-1"></div>
+  <div class="absolute rounded-full orb-2"></div>
 </div>
 
 <!-- TOP NAV ISLAND -->
@@ -71,7 +106,7 @@ tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#f2ca50","pr
 </nav>
 
 <!-- MOBILE MENU -->
-<div id="mobile-menu" class="hidden fixed inset-0 z-40 glass" style="padding-top:6rem">
+<div id="mobile-menu" class="hidden fixed inset-0 z-40 glass mobile-menu-pad">
   <button onclick="toggleMobileMenu()" class="absolute top-8 right-6 text-zinc-400"><span class="material-symbols-outlined icon-lg">close</span></button>
   <nav class="flex flex-col gap-2 px-8 pt-4">
     <a onclick="toggleMobileMenu()" href="index.html"   class="text-xl font-headline italic text-on-surface py-3 border-b border-white/5">Home</a>
@@ -87,7 +122,7 @@ tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#f2ca50","pr
 <!-- ================================================================
   HERO
 ================================================================ -->
-<section class="relative min-h-screen flex items-center pt-28 pb-20 px-6 lg:px-20 overflow-hidden" style="z-index:1">
+<section class="relative min-h-screen flex items-center pt-28 pb-20 px-6 lg:px-20 overflow-hidden hero-wrap">
   <div class="max-w-7xl mx-auto w-full">
     <div class="grid lg:grid-cols-2 gap-16 items-center">
 
@@ -110,31 +145,40 @@ tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#f2ca50","pr
             <span class="material-symbols-outlined icon-sm icon-fill">bolt</span>
             Start Conversation
           </a>
-          <a href="studio.html" class="ghost-border text-on-surface hover:text-primary transition-colors font-semibold tracking-wider uppercase px-8 py-4 rounded-full flex items-center gap-2 text-sm" style="background:rgba(255,255,255,.04)">
+          <a href="studio.html"
+            class="ghost-border text-on-surface hover:text-primary transition-colors font-semibold tracking-wider uppercase px-8 py-4 rounded-full flex items-center gap-2 text-sm bg-white-04">
             <span class="material-symbols-outlined icon-sm">auto_fix_high</span>
-            Open Studio
+            Launch Studio
           </a>
         </div>
+      </div>
 
-        <!-- Stats -->
-        <div class="flex gap-10 mt-14 pt-10 border-t border-white/5">
-          <div>
-            <div class="text-3xl font-headline italic gold-text font-light" id="stat-quotes">12k+</div>
-            <div class="text-xs text-zinc-500 uppercase tracking-widest mt-1">Wisdoms Generated</div>
-          </div>
-          <div>
-            <div class="text-3xl font-headline italic gold-text font-light" id="stat-users">3.4k+</div>
-            <div class="text-xs text-zinc-500 uppercase tracking-widest mt-1">Seekers Joined</div>
-          </div>
-          <div>
-            <div class="text-3xl font-headline italic gold-text font-light" id="stat-images">8k+</div>
-            <div class="text-xs text-zinc-500 uppercase tracking-widest mt-1">Visuals Created</div>
+      <!-- Right: Preview -->
+      <div class="relative hidden lg:block">
+        <div class="animate-fade-up z-1">
+          <div
+            class="glass-card ghost-border rounded-[2.5rem] p-4 relative overflow-hidden shadow-[0_40px_100px_rgba(0,0,0,0.5)]">
+            <div class="rounded-[2rem] overflow-hidden aspect-[4/5] relative">
+              <img src="https://images.unsplash.com/photo-1464802686167-b939a6910659?auto=format&fit=crop&q=80"
+                class="w-full h-full object-cover opacity-80" alt="Cosmic Art" />
+              <div class="absolute inset-0 bg-gradient-to-t from-surface/90 via-surface/20 to-transparent"></div>
+              <div class="absolute bottom-10 left-10 right-10">
+                <p class="font-headline italic text-2xl text-on-surface mb-4 leading-tight">"The cosmos is within us. We are
+                  made of star-stuff. We are a way for the cosmos to know itself."</p>
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+                    <span class="material-symbols-outlined text-[16px] text-primary">auto_awesome</span>
+                  </div>
+                  <span class="text-xs uppercase tracking-widest text-zinc-500 font-bold">Synthesized by LEVI</span>
+                  </div>
+              </div>
+              </div>
           </div>
         </div>
       </div>
 
       <!-- Right: chat demo -->
-      <div class="animate-fade-up" style="animation-delay:.15s">
+      <div class="animate-fade-up delay-150">
         <div class="glass-panel ghost-border rounded-3xl p-6 shadow-[0_32px_80px_rgba(0,0,0,0.5)]">
           <!-- Demo chat header -->
           <div class="flex items-center justify-between mb-6">
@@ -175,15 +219,20 @@ tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#f2ca50","pr
 
           <!-- Mood pills -->
           <div class="flex gap-2 mb-4 flex-wrap">
-            <button class="text-[10px] px-3 py-1.5 rounded-full font-semibold tracking-wider uppercase" style="background:rgba(242,202,80,.15);border:.5px solid rgba(242,202,80,.4);color:#f2ca50">Philosophical</button>
-            <button class="text-[10px] px-3 py-1.5 rounded-full text-zinc-500 uppercase tracking-wider" style="background:rgba(255,255,255,.04);border:.5px solid rgba(255,255,255,.08)">Zen</button>
-            <button class="text-[10px] px-3 py-1.5 rounded-full text-zinc-500 uppercase tracking-wider" style="background:rgba(255,255,255,.04);border:.5px solid rgba(255,255,255,.08)">Stoic</button>
-            <button class="text-[10px] px-3 py-1.5 rounded-full text-zinc-500 uppercase tracking-wider" style="background:rgba(255,255,255,.04);border:.5px solid rgba(255,255,255,.08)">Cyberpunk</button>
+            <button
+              class="text-[10px] px-3 py-1.5 rounded-full font-semibold tracking-wider uppercase mood-pill-active">Philosophical</button>
+            <button
+              class="text-[10px] px-3 py-1.5 rounded-full text-zinc-500 uppercase tracking-wider mood-pill-inactive">Zen</button>
+            <button
+              class="text-[10px] px-3 py-1.5 rounded-full text-zinc-500 uppercase tracking-wider mood-pill-inactive">Stoic</button>
+            <button
+              class="text-[10px] px-3 py-1.5 rounded-full text-zinc-500 uppercase tracking-wider mood-pill-inactive">Cyberpunk</button>
           </div>
 
           <!-- Input mock -->
           <div class="flex gap-3 items-center">
-            <input type="text" placeholder="Ask about life, meaning, cosmos…" class="flex-1 text-sm levi-input py-3" style="border:.5px solid rgba(255,255,255,.1);border-radius:12px;padding:10px 14px;background:rgba(14,14,18,.6)"/>
+            <input type="text" placeholder="Ask about life, meaning, cosmos…"
+              class="flex-1 text-sm levi-input py-3 input-mock-custom" />
             <a href="chat.html" class="btn-gold w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0">
               <span class="material-symbols-outlined icon-sm icon-fill">send</span>
             </a>
@@ -197,28 +246,33 @@ tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#f2ca50","pr
 <!-- ================================================================
   FEATURES
 ================================================================ -->
-<section class="relative px-6 lg:px-20 py-24" style="z-index:1">
+<section class="relative px-6 lg:px-20 py-24 z-1">
   <div class="max-w-7xl mx-auto">
     <div class="text-center mb-16">
       <p class="text-[10px] text-primary uppercase tracking-[0.22em] font-semibold mb-4">What LEVI Offers</p>
       <h2 class="font-headline text-5xl lg:text-6xl font-light tracking-[-0.02em]">The Celestial <span class="gold-text italic">Toolkit</span></h2>
     </div>
-    <div class="grid md:grid-cols-3 gap-6">
-      <a href="chat.html" class="feature-card glass-card ghost-border rounded-3xl p-8 transition-all duration-300" style="border-color:rgba(255,255,255,.07)">
-        <div class="w-12 h-12 rounded-2xl btn-gold flex items-center justify-center mb-6">
-          <span class="material-symbols-outlined icon-sm icon-fill">psychology</span>
+    <div class="grid lg:grid-cols-3 gap-8">
+      <a href="chat.html"
+        class="feature-card glass-card ghost-border rounded-3xl p-8 transition-all duration-300 border-white-07">
+        <div class="w-14 h-14 rounded-2xl flex items-center justify-center mb-6 bg-primary/10">
+          <span class="material-symbols-outlined text-primary">psychology</span>
         </div>
-        <h3 class="font-headline text-2xl italic font-light mb-3">AI Philosopher</h3>
-        <p class="text-on-surface-variant text-sm leading-relaxed font-light">Deep, contextual conversations powered by Groq Llama 3. Discuss life, consciousness, and wisdom in multiple moods.</p>
+        <h3 class="text-xl font-headline italic text-on-surface mb-3">Philosophical Oracle</h3>
+        <p class="text-zinc-400 text-sm leading-relaxed">Engage in deep dialogue about life, meaning, and the cosmos with our
+          enlightened AI.</p>
       </a>
-      <a href="studio.html" class="feature-card glass-card ghost-border rounded-3xl p-8 transition-all duration-300" style="border-color:rgba(255,255,255,.07)">
-        <div class="w-12 h-12 rounded-2xl btn-gold flex items-center justify-center mb-6">
-          <span class="material-symbols-outlined icon-sm icon-fill">auto_fix_high</span>
+      <a href="studio.html"
+        class="feature-card glass-card ghost-border rounded-3xl p-8 transition-all duration-300 border-white-07">
+        <div class="w-14 h-14 rounded-2xl flex items-center justify-center mb-6 bg-secondary/10">
+          <span class="material-symbols-outlined text-secondary">auto_fix_high</span>
         </div>
-        <h3 class="font-headline text-2xl italic font-light mb-3">Visual Studio</h3>
-        <p class="text-on-surface-variant text-sm leading-relaxed font-light">Transform quotes into AI-generated art using Together FLUX. Choose moods, styles, and backgrounds to create 1024px masterpieces.</p>
+        <h3 class="text-xl font-headline italic text-on-surface mb-3">Creative Studio</h3>
+        <p class="text-zinc-400 text-sm leading-relaxed">Synthesize celestial art and visual poetry from your deepest creative
+          inspirations.</p>
       </a>
-      <a href="feed.html" class="feature-card glass-card ghost-border rounded-3xl p-8 transition-all duration-300" style="border-color:rgba(255,255,255,.07)">
+      <a href="feed.html"
+        class="feature-card glass-card ghost-border rounded-3xl p-8 transition-all duration-300 border-white-07">
         <div class="w-12 h-12 rounded-2xl btn-gold flex items-center justify-center mb-6">
           <span class="material-symbols-outlined icon-sm icon-fill">public</span>
         </div>
@@ -232,10 +286,10 @@ tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#f2ca50","pr
 <!-- ================================================================
   DAILY WISDOM TEASER
 ================================================================ -->
-<section class="relative px-6 lg:px-20 py-20" style="z-index:1">
+<section class="relative px-6 lg:px-20 py-20 z-index-1">
   <div class="max-w-4xl mx-auto text-center">
     <div class="glass-panel ghost-border rounded-3xl px-10 py-14 relative overflow-hidden">
-      <div class="absolute inset-0 pointer-events-none" style="background:radial-gradient(ellipse at center,rgba(242,202,80,.06) 0%,transparent 65%)"></div>
+      <div class="absolute inset-0 pointer-events-none wisdom-radial"></div>
       <p class="text-[10px] text-primary uppercase tracking-[0.22em] font-semibold mb-6">Today's Wisdom</p>
       <blockquote class="font-headline text-2xl lg:text-4xl font-light italic leading-snug text-on-surface mb-6" id="daily-quote">
         "The only true wisdom is in knowing you know nothing."
@@ -251,7 +305,7 @@ tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#f2ca50","pr
 <!-- ================================================================
   GALLERY TEASER
 ================================================================ -->
-<section class="relative px-6 lg:px-20 py-20" style="z-index:1">
+<section class="relative px-6 lg:px-20 py-20 z-index-1">
   <div class="max-w-7xl mx-auto">
     <div class="flex items-end justify-between mb-10">
       <h2 class="font-headline text-4xl lg:text-5xl font-light tracking-[-0.02em]">Recent <span class="gold-text italic">Creations</span></h2>
@@ -259,23 +313,23 @@ tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#f2ca50","pr
     </div>
     <!-- Gallery mock grid -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="gallery-preview">
-      <div class="rounded-2xl overflow-hidden aspect-square relative ghost-border" style="background:linear-gradient(135deg,#0a0a18,#1a1040)">
-        <div class="absolute inset-0 flex flex-col justify-end p-4" style="background:linear-gradient(to top,rgba(0,0,0,.7),transparent)">
+      <div class="rounded-2xl overflow-hidden aspect-square relative ghost-border gallery-card-1">
+        <div class="absolute inset-0 flex flex-col justify-end p-4 gallery-overlay">
           <p class="text-[10px] font-label text-primary uppercase tracking-widest font-semibold">Philosophy</p>
         </div>
       </div>
-      <div class="rounded-2xl overflow-hidden aspect-[3/4] relative ghost-border" style="background:linear-gradient(135deg,#080c14,#1c2840)">
-        <div class="absolute inset-0 flex flex-col justify-end p-4" style="background:linear-gradient(to top,rgba(0,0,0,.7),transparent)">
+      <div class="rounded-2xl overflow-hidden aspect-[3/4] relative ghost-border gallery-card-2">
+        <div class="absolute inset-0 flex flex-col justify-end p-4 gallery-overlay">
           <p class="text-[10px] font-label text-primary uppercase tracking-widest font-semibold">Zen</p>
         </div>
       </div>
-      <div class="rounded-2xl overflow-hidden aspect-square relative ghost-border" style="background:linear-gradient(135deg,#0a0018,#200040)">
-        <div class="absolute inset-0 flex flex-col justify-end p-4" style="background:linear-gradient(to top,rgba(0,0,0,.7),transparent)">
+      <div class="rounded-2xl overflow-hidden aspect-square relative ghost-border gallery-card-3">
+        <div class="absolute inset-0 flex flex-col justify-end p-4 gallery-overlay">
           <p class="text-[10px] font-label text-primary uppercase tracking-widest font-semibold">Cyberpunk</p>
         </div>
       </div>
-      <div class="rounded-2xl overflow-hidden aspect-[3/4] relative ghost-border" style="background:linear-gradient(135deg,#0e0c0a,#2a2820)">
-        <div class="absolute inset-0 flex flex-col justify-end p-4" style="background:linear-gradient(to top,rgba(0,0,0,.7),transparent)">
+      <div class="rounded-2xl overflow-hidden aspect-[3/4] relative ghost-border gallery-card-4">
+        <div class="absolute inset-0 flex flex-col justify-end p-4 gallery-overlay">
           <p class="text-[10px] font-label text-primary uppercase tracking-widest font-semibold">Stoic</p>
         </div>
       </div>
@@ -289,13 +343,15 @@ tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#f2ca50","pr
 <!-- ================================================================
   CTA
 ================================================================ -->
-<section class="relative px-6 lg:px-20 py-28" style="z-index:1">
+<section class="relative px-6 lg:px-20 py-28 cta-section">
   <div class="max-w-3xl mx-auto text-center">
     <h2 class="font-headline text-5xl lg:text-6xl font-light tracking-[-0.02em] mb-6">Begin Your <span class="gold-text italic">Journey</span></h2>
     <p class="text-on-surface-variant text-lg font-light mb-10 max-w-xl mx-auto">Join thousands of seekers exploring the intersection of AI, art, and ancient wisdom.</p>
     <div class="flex flex-wrap gap-4 justify-center">
       <a href="auth.html" class="btn-gold font-semibold tracking-wider uppercase px-10 py-4 rounded-full text-sm">Create Free Account</a>
-      <a href="pricing.html" class="ghost-border text-on-surface hover:text-primary transition-colors font-semibold tracking-wider uppercase px-10 py-4 rounded-full text-sm" style="background:rgba(255,255,255,.04)">View Plans</a>
+      <a href="pricing.html"
+        class="ghost-border text-on-surface hover:text-primary transition-colors font-semibold tracking-wider uppercase px-10 py-4 rounded-full text-sm plans-btn">View
+        Plans</a>
     </div>
   </div>
 </section>
@@ -303,7 +359,7 @@ tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#f2ca50","pr
 <!-- ================================================================
   FOOTER
 ================================================================ -->
-<footer class="relative px-6 lg:px-20 py-14 border-t border-white/5" style="z-index:1">
+<footer class="relative px-6 lg:px-20 py-14 border-t border-white/5 footer-section">
   <div class="max-w-7xl mx-auto grid md:grid-cols-4 gap-10">
     <div class="md:col-span-1">
       <div class="text-2xl font-headline italic gold-text mb-3">LEVI</div>
@@ -346,26 +402,28 @@ tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#f2ca50","pr
 <!-- Mobile bottom nav -->
 <nav class="md:hidden fixed bottom-5 left-1/2 -translate-x-1/2 w-[88%] z-50">
   <div class="glass ghost-border rounded-full px-8 py-3 flex justify-around items-center shadow-2xl">
-    <a href="index.html"><span class="material-symbols-outlined icon-fill" style="color:#f2ca50">auto_awesome</span></a>
-    <a href="chat.html"><span class="material-symbols-outlined" style="color:#69666e">psychology</span></a>
-    <a href="studio.html"><span class="material-symbols-outlined" style="color:#69666e">auto_fix_high</span></a>
-    <a href="feed.html"><span class="material-symbols-outlined" style="color:#69666e">public</span></a>
+    <a href="index.html"><span class="material-symbols-outlined icon-fill mobile-nav-active">auto_awesome</span></a>
+    <a href="chat.html"><span class="material-symbols-outlined mobile-nav-inactive">psychology</span></a>
+    <a href="studio.html"><span class="material-symbols-outlined mobile-nav-inactive">auto_fix_high</span></a>
+    <a href="feed.html"><span class="material-symbols-outlined mobile-nav-inactive">public</span></a>
   </div>
 </nav>
 
 <div id="toast"></div>
 
 <script>
+    const API_BASE = (['localhost', '127.0.0.1', '::1', '0.0.0.0'].includes(location.hostname)) ? `http://${location.hostname}:8000` : location.origin + '/api';
+
 // Shared helpers
 function toggleMobileMenu(){const m=document.getElementById('mobile-menu');if(!m)return;m.classList.toggle('hidden');document.body.style.overflow=m.classList.contains('hidden')?'':'hidden'}
-function showToast(msg,type='success'){const t=document.getElementById('toast');const bg=type==='error'?'rgba(147,0,10,.85)':type==='warning'?'rgba(120,90,0,.85)':'rgba(19,19,23,.9)';const border=type==='error'?'rgba(255,180,171,.3)':type==='warning'?'rgba(242,202,80,.4)':'rgba(242,202,80,.35)';const icon=type==='error'?'error':type==='warning'?'warning':'check_circle';t.innerHTML=`<div style="background:${bg};border:.5px solid ${border};backdrop-filter:blur(20px)" class="flex items-center gap-2.5 px-5 py-3 rounded-full shadow-2xl"><span class="material-symbols-outlined icon-fill" style="font-size:16px;color:#f2ca50">${icon}</span><span style="font-size:12px;color:#e5e1e7;font-family:'Plus Jakarta Sans',sans-serif;font-weight:600;letter-spacing:.04em">${msg}</span></div>`;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),3200)}
+                        function showToast(msg, type = 'success') { const t = document.getElementById('toast'); const bg = type === 'error' ? 'rgba(147,0,10,.85)' : type === 'warning' ? 'rgba(120,90,0,.85)' : 'rgba(19,19,23,.9)'; const border = type === 'error' ? 'rgba(255,180,171,.3)' : type === 'warning' ? 'rgba(242,202,80,.4)' : 'rgba(242,202,80,.35)'; const icon = type === 'error' ? 'error' : type === 'warning' ? 'warning' : 'check_circle'; t.innerHTML = `<div style="background:${bg};border:.5px solid ${border};-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)" class="flex items-center gap-2.5 px-5 py-3 rounded-full shadow-2xl"><span class="material-symbols-outlined icon-fill" style="font-size:16px;color:#f2ca50">${icon}</span><span style="font-size:12px;color:#e5e1e7;font-family:'Plus Jakarta Sans',sans-serif;font-weight:600;letter-spacing:.04em">${msg}</span></div>`; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 3200) }
 function toggleLanguage(){showToast('Hindi translation coming soon','warning')}
 
 // Update nav for logged-in user
 const u=localStorage.getItem('levi_user');if(u){try{const o=JSON.parse(u);const btn=document.getElementById('nav-auth-btn');btn.textContent=o.username||'Account';btn.href='my-gallery.html'}catch{}}
 
 // Load daily quote
-fetch('/daily_quote').then(r=>r.json()).then(d=>{if(d.quote){document.getElementById('daily-quote').textContent=`"${d.quote}"`;if(d.author)document.getElementById('daily-author').textContent=`— ${d.author}`}}).catch(()=>{})
+    fetch(API_BASE + '/daily_quote').then(r => r.json()).then(d => { if (d.quote) { document.getElementById('daily-quote').textContent = `"${d.quote}"`; if (d.author) document.getElementById('daily-author').textContent = `— ${d.author}` } }).catch(() => { })
 
 // Typing dots animation CSS
 const style=document.createElement('style');
