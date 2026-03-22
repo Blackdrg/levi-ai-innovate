@@ -42,8 +42,18 @@ Add these to your Render/Production environment:
 *   `RESEND_API_KEY`: Your Resend API key for emails.
 *   `USE_CELERY`: Set to `true` for production.
 *   `FRONTEND_URL`: `https://levi-ai.create.app` (or your custom domain).
+* `VAPID_PUBLIC_KEY`: Your public VAPID key.
+* `VAPID_PRIVATE_KEY`: Your private VAPID key.
+* `VAPID_ADMIN_EMAIL`: Your admin email (e.g., `admin@yourdomain.com`).
 
-## Phase E: Deploy
+## Phase E: Web Push Notifications (5 min)
+
+1. **Generate Keys**: Run `npx web-push generate-vapid-keys`.
+2. **Add to Env**: Add the public, private, and email to your environment.
+3. **Frontend Button**: The "Get Daily Wisdom Notifications" button in the Studio will now work.
+
+## Phase F: Deploy
+
 1.  **Push Code**: `git push origin main`.
 2.  **Verify**: Check Render logs for "Database tables ready" and "Uvicorn running".
 3.  **Test**: Perform a test purchase and verify credits in the Studio.
@@ -58,5 +68,6 @@ Add these to your Render/Production environment:
 ✅ S3 video/image storage
 ✅ ImageMagick + ffmpeg in Docker
 ✅ Daily email system (Resend)
+✅ Web Push notifications (pywebpush)
 ✅ Celery background tasks
 ✅ Frontend ↔ Backend connected (Vercel → Render)

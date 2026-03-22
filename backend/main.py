@@ -88,9 +88,12 @@ validate_env()
 
 try:
     from backend.db import SessionLocal, engine, get_db, DATABASE_URL
-    from backend.models import Quote, Analytics, FeedItem, Base, Users, UserMemory, ChatHistory
+    from backend.models import Quote, Analytics, FeedItem, Base, Users, UserMemory, ChatHistory, PushSubscription
     from backend.embeddings import embed_text, cosine_sim, HAS_MODEL
-    from backend.redis_client import get_cached_search, cache_search, get_conversation, save_conversation, HAS_REDIS, REDIS_URL
+    from backend.redis_client import (
+        get_cached_search, cache_search, get_conversation, save_conversation, 
+        HAS_REDIS, REDIS_URL, cache_quote_embedding, get_cached_embedding
+    )
     from backend.generation import generate_quote, generate_response
     from backend.image_gen import generate_quote_image
     from backend.video_gen import generate_quote_video
@@ -101,9 +104,12 @@ except (ImportError, ModuleNotFoundError) as e:
     logger.warning(f"Could not import from backend.*: {e}. Falling back to local imports.")
     try:
         from db import SessionLocal, engine, get_db, DATABASE_URL
-        from models import Quote, Analytics, FeedItem, Base, Users, UserMemory, ChatHistory
+        from models import Quote, Analytics, FeedItem, Base, Users, UserMemory, ChatHistory, PushSubscription
         from embeddings import embed_text, cosine_sim, HAS_MODEL
-        from redis_client import get_cached_search, cache_search, get_conversation, save_conversation, HAS_REDIS, REDIS_URL
+        from redis_client import (
+            get_cached_search, cache_search, get_conversation, save_conversation, 
+            HAS_REDIS, REDIS_URL, cache_quote_embedding, get_cached_embedding
+        )
         from generation import generate_quote, generate_response
         from image_gen import generate_quote_image
         from video_gen import generate_quote_video
@@ -490,21 +496,25 @@ def search_quotes(query: Query, db: Session = Depends(get_db)):
             results = base_q.order_by(Quote.embedding.l2_distance(query_embedding)).limit(query.top_k).all()
 
         else:
-
             all_q = db.query(Quote)
-
             if query.mood:
-
                 all_q = all_q.filter(Quote.mood == query.mood)
-
             all_quotes = all_q.all()
-
             q_emb = np.array(query_embedding)
-
-            scored = [(q, cosine_sim(q_emb, np.array(q.embedding))) for q in all_quotes if q.embedding is not None]
+            
+            scored = []
+            for q in all_quotes:
+                cached_emb = get_cached_embedding(q.id)
+                if cached_emb:
+                    emb = np.array(cached_emb)
+                elif q.embedding is not None:
+                    emb = np.array(q.embedding)
+                    cache_quote_embedding(q.id, q.embedding)
+                else:
+                    continue
+                scored.append((q, cosine_sim(q_emb, emb)))
 
             scored.sort(key=lambda x: x[1], reverse=True)
-
             results = [s[0] for s in scored[:query.top_k]]
 
     formatted = [
@@ -926,6 +936,51 @@ class PaymentVerify(BaseModel):
     razorpay_payment_id: str
     razorpay_signature: str
     plan: Optional[str] = "pro"
+
+class PushSubscriptionSchema(BaseModel):
+    endpoint: str
+    keys: dict
+
+@app.get("/push/vapid_public_key")
+async def get_vapid_public_key():
+    return {"public_key": os.getenv("VAPID_PUBLIC_KEY")}
+
+@app.post("/push/subscribe")
+async def subscribe_push(sub: PushSubscriptionSchema, db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
+    # Check if subscription already exists for this endpoint
+    existing = db.query(PushSubscription).filter(PushSubscription.endpoint == sub.endpoint).first()
+    if existing:
+        existing.user_id = current_user.id
+        existing.p256dh = sub.keys.get("p256dh")
+        existing.auth = sub.keys.get("auth")
+    else:
+        new_sub = PushSubscription(
+            user_id=current_user.id,
+            endpoint=sub.endpoint,
+            p256dh=sub.keys.get("p256dh"),
+            auth=sub.keys.get("auth")
+        )
+        db.add(new_sub)
+    
+    db.commit()
+    return {"status": "success", "message": "Subscribed to push notifications"}
+
+@app.post("/push/send_test")
+async def send_test_push(current_user: Users = Depends(get_current_user), db: Session = Depends(get_db)):
+    from backend.tasks import send_push_notification_task
+    subs = db.query(PushSubscription).filter(PushSubscription.user_id == current_user.id).all()
+    if not subs:
+        raise HTTPException(status_code=404, detail="No push subscriptions found for this user")
+    
+    for s in subs:
+        send_push_notification_task.delay(
+            s.endpoint,
+            s.p256dh,
+            s.auth,
+            "LEVI Wisdom",
+            "This is a test notification from your daily wisdom guide. ✨"
+        )
+    return {"status": "success", "message": f"Sent {len(subs)} test notifications"}
 
 @app.post("/create_order")
 def new_order(req: OrderRequest, db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):

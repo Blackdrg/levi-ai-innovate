@@ -8,8 +8,15 @@ const previewContainer = document.getElementById('preview-container');
 const generateBtn = document.getElementById('generate-studio');
 const downloadBtn = document.getElementById('download-btn');
 const generateVideoBtn = document.getElementById('generate-video-studio'); 
+const pushSubscribeBtn = document.getElementById('push-subscribe-btn');
 const creditsDisplay = document.getElementById('user-credits'); 
 const quoteInput = document.getElementById('studio-quote');
+const charCount = document.getElementById('char-count'); 
+if (charCount && quoteInput) { 
+  quoteInput.addEventListener('input', () => {
+    charCount.innerText = `${quoteInput.value.length} / 300`;
+  });
+}
 const authorInput = document.getElementById('studio-author');
 const keywordInput = document.getElementById('studio-bg-keywords');
 const fileInput = document.getElementById('studio-bg-upload');
@@ -189,6 +196,27 @@ if (generateVideoBtn) {
     });
 }
 
+// Push Notifications
+if (pushSubscribeBtn) {
+    pushSubscribeBtn.addEventListener('click', async () => {
+        // We'll try to fetch the key from the backend or fallback to the provided one
+        let vapidPublicKey = "B...YOUR_PUBLIC_VAPID_KEY_HERE..."; 
+        try {
+            const res = await fetch(`${window.location.origin.includes('localhost') ? 'http://localhost:8000' : ''}/push/vapid_public_key`);
+            if (res.ok) {
+                const data = await res.json();
+                vapidPublicKey = data.public_key;
+            }
+        } catch (e) { console.warn("Could not fetch VAPID key, using fallback."); }
+        
+        const success = await window.ui.subscribeToPush(vapidPublicKey);
+        if (success) {
+            pushSubscribeBtn.innerText = "Notifications Enabled! ✨";
+            pushSubscribeBtn.disabled = true;
+        }
+    });
+}
+
 // Action Buttons
 if (downloadBtn) {
     downloadBtn.addEventListener('click', () => {
@@ -218,3 +246,19 @@ window.prefill = (text, author, mood) => {
     
     window.ui.showToast(`Prefilled ${author}'s wisdom`);
 };
+
+const shareBtn = document.getElementById('share-btn'); 
+if (shareBtn) { 
+  shareBtn.addEventListener('click', () => { 
+    const text = quoteInput.value.trim(); 
+    const author = authorInput.value.trim() || 'LEVI AI'; 
+    window.ui.shareContent('LEVI Wisdom', `"${text}" — ${author}`, window.location.href); 
+  }); 
+} 
+ 
+const regenBtn = document.getElementById('regenerate-btn'); 
+if (regenBtn) { 
+  regenBtn.addEventListener('click', () => { 
+    document.getElementById('generate-studio').click(); 
+  }); 
+}
