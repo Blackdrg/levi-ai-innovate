@@ -93,6 +93,23 @@ class UserMemory(Base):
     last_active: Mapped[dt_datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class UserMemoryLog(Base):
+    """Vector-based memory log for long-term user personalization."""
+    __tablename__ = "user_memory_logs"
+    __table_args__ = {'extend_existing': True}
+
+    id: Mapped[int]               = mapped_column(primary_key=True, index=True)
+    user_id: Mapped[int]          = mapped_column(ForeignKey("users.id"), index=True)
+    text: Mapped[str]             = mapped_column(nullable=False)
+    response: Mapped[Optional[str]] = mapped_column(nullable=True)
+    timestamp: Mapped[dt_datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    if HAS_PGVECTOR and "postgresql" in DATABASE_URL:
+        embedding = mapped_column(VECTOR(384))
+    else:
+        embedding = mapped_column(PickleType)
+
+
 class FeedItem(Base):
     __tablename__ = "feed_items"
     __table_args__ = {'extend_existing': True}

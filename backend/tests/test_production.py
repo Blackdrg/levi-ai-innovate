@@ -41,7 +41,7 @@ def test_generate_image_async(mock_task, mock_credits, mock_db, app_client, auth
     with patch('os.getenv', side_effect=lambda k, d=None: "true" if k == "USE_CELERY" else d):
         resp = app_client.post('/generate_image', json={'text': 'Test quote', 'mood': 'zen'}, headers=auth_headers)
         
-    assert resp.status_code == 200
+    assert resp.status_code == 202
     assert resp.json()["task_id"] == "test_task_id"
     assert resp.json()["status"] == "processing"
 

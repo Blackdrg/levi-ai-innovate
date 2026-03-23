@@ -1033,11 +1033,63 @@ async def gen_image(request: Request, req: Query, db: Session = Depends(get_db),
 @app.post("/generate_video")
 @limiter.limit("2/minute")
 async def gen_video(request: Request, req: Query, db: Session = Depends(get_db), current_user: Optional[Users] = Depends(get_current_user_optional)):
-    """Video generation is temporarily disabled until the real pipeline is ready."""
-    raise HTTPException(
-        status_code=503,
-        detail="Video generation is temporarily disabled. Please use image generation instead."
-    )
+    """Generate or queue video generation for a quote."""
+    try:
+        # ── Cost Protection Layer ──────────────────────────
+        from backend.redis_client import get_daily_ai_spend, incr_daily_ai_spend  # type: ignore
+        daily_limit = float(os.getenv("DAILY_AI_LIMIT", "500"))
+        if get_daily_ai_spend() >= daily_limit:
+            raise HTTPException(status_code=429, detail="Daily AI usage limit reached. Try again tomorrow.")
+        incr_daily_ai_spend(2.0)  # Videos might cost more
+
+        user_id = current_user.id if current_user else None
+        user_tier = current_user.tier if current_user else "free"
+
+        # Credit System: Deduct upfront (Videos cost 2 credits)
+        if current_user:
+            from backend.payments import use_credits  # type: ignore
+            use_credits(current_user.id, amount=2, db=db)
+            logger.info(f"Deducted 2 credits upfront for user {user_id}")
+
+        USE_CELERY = os.getenv("USE_CELERY", "true").lower() == "true"
+
+        if USE_CELERY:
+            from backend.tasks import generate_video_task  # type: ignore
+            task = generate_video_task.delay(
+                req.text,
+                req.author or "Unknown",
+                req.mood or "neutral",
+                user_id,
+                user_tier
+            )
+            return JSONResponse(status_code=202, content={"task_id": task.id, "status": "processing", "message": "Video generation started in background."})
+
+        # Fallback inline processing (not recommended for video)
+        loop = asyncio.get_event_loop()
+        from backend.video_gen import generate_quote_video  # type: ignore
+        video_bytes_io = await loop.run_in_executor(
+            _executor,
+            generate_quote_video,
+            req.text,
+            req.author or "Unknown",
+            req.mood or "neutral",
+            user_tier
+        )
+        
+        # Upload to s3 if available, or error since video is too large for inline responses
+        if os.getenv("AWS_S3_BUCKET"):
+             from backend.tasks import upload_video_to_s3 # type: ignore
+             video_url = upload_video_to_s3(video_bytes_io.getvalue(), user_id)
+             return {"status": "done", "url": video_url}
+        else:
+             raise HTTPException(status_code=400, detail="Celery required for video or AWS S3 must be configured.")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        logger.error(f"Video generation error: {e}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 
@@ -1166,6 +1218,46 @@ async def chat(
     except Exception as e:
         logger.warning(f"Implicit feedback collection failed: {e}")
 
+    # ── Router Agent: Multi-Agent System ──────────────────────────
+    try:
+         from backend.agents import RouterAgent  # type: ignore
+         router = RouterAgent()
+         classification = router.classify_intent(msg.message)
+         intent = classification.get("intent", "chat")
+         params = classification.get("parameters", {})
+
+         if intent in ["generate_image", "generate_video", "generate_content"]:
+              credits_needed = 2 if intent == "generate_video" else 1
+              if current_user:
+                   from backend.payments import use_credits  # type: ignore
+                   try:
+                        use_credits(current_user.id, amount=credits_needed, db=db)
+                   except HTTPException as he:
+                        return {"response": f"❌ [Router] Credits exhausted. {he.detail}"}
+                   except Exception:
+                        return {"response": "❌ [Router] Credit check failed."}
+
+              if intent == "generate_image":
+                   from backend.tasks import generate_image_task  # type: ignore
+                   generate_image_task.delay(params.get("topic") or msg.message, "Unknown", msg.mood or "neutral", user_id, current_user.tier if current_user else "free")
+                   return {"response": f"🎨 [Visual Agent] I am generating an image for '{params.get('topic') or msg.message}'. Check your Feed shortly!"}
+
+              if intent == "generate_video":
+                   from backend.tasks import generate_video_task  # type: ignore
+                   generate_video_task.delay(params.get("topic") or msg.message, "Unknown", msg.mood or "neutral", user_id, current_user.tier if current_user else "free")
+                   return {"response": f"🎥 [Video Agent] Video synthesis started for '{params.get('topic') or msg.message}'. This will appear in your Feed when ready."}
+
+              if intent == "generate_content":
+                   from backend.content_engine import generate_content  # type: ignore
+                   c_type = params.get("content_type", "essay")
+                   result = generate_content(content_type=c_type, topic=params.get("topic") or msg.message)
+                   if "content" in result:
+                        return {"response": f"✍️ [Content Agent] Here is your {c_type}:\n\n{result['content']}"}
+                   return {"response": f"❌ [Content Agent] Failed to generate {c_type}."}
+    except Exception as e:
+         logger.warning(f"RouterAgent failed: {e}")
+         # Graceful fallback to normal chat flow
+
     # Build personalised system prompt for authenticated users
     personalized_system = None
     try:
@@ -1194,6 +1286,40 @@ async def chat(
     except Exception as e:
         logger.warning(f"Failed to build personalised prompt: {e}")
         pass  # graceful degradation
+
+    # ── Vector Memory Retrieval ──
+    if user_id:
+        try:
+            from backend.embeddings import embed_text, cosine_sim  # type: ignore
+            from backend.models import UserMemoryLog  # type: ignore
+            q_emb = embed_text(msg.message)
+            
+            if "postgresql" in DATABASE_URL:
+                 past_mem = db.query(UserMemoryLog).filter(UserMemoryLog.user_id == user_id).order_by(UserMemoryLog.embedding.l2_distance(q_emb)).limit(3).all()
+            else:
+                 import numpy as np  # type: ignore
+                 all_mem = db.query(UserMemoryLog).filter(UserMemoryLog.user_id == user_id).all()
+                 scored = []
+                 for m in all_mem:
+                      if m.embedding:
+                           emb = m.embedding
+                           if not isinstance(emb, list):
+                                import pickle
+                                try: emb = pickle.loads(emb)
+                                except: continue
+                           if isinstance(emb, list):
+                                scored.append((m, cosine_sim(np.array(q_emb), np.array(emb))))
+                 scored.sort(key=lambda x: x[1], reverse=True)
+                 past_mem = [s[0] for i, s in enumerate(scored) if i < 3]
+
+            if past_mem:
+                 memory_context = "\n\n[Relevant past memories]:\n" + "\n".join([f"- User: {m.text}\n  LEVI: {m.response}" for m in past_mem if m.response])
+                 if personalized_system:
+                      personalized_system += memory_context
+                 else:
+                      personalized_system = memory_context
+        except Exception as e:
+             logger.warning(f"Vector memory retrieval failed: {e}")
 
     # Use fine-tuned model if available
     try:
@@ -1234,6 +1360,23 @@ async def chat(
     # Save conversation history
     history.append({"user": msg.message, "bot": bot_response})
     save_conversation(msg.session_id, history)
+
+    # ── Vector Memory Storage ──
+    if user_id:
+        try:
+            from backend.embeddings import embed_text  # type: ignore
+            from backend.models import UserMemoryLog  # type: ignore
+            emb_to_save = embed_text(msg.message)
+            new_mem_log = UserMemoryLog(
+                user_id=user_id,
+                text=msg.message,
+                response=bot_response,
+                embedding=emb_to_save
+            )
+            db.add(new_mem_log)
+            db.commit()
+        except Exception as e:
+            logger.warning(f"Vector memory storage failed: {e}")
 
     return {"response": bot_response}
 
