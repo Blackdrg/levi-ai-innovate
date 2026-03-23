@@ -570,10 +570,8 @@ async def logout(token: str = Depends(oauth2_scheme)):
     Requires Redis — returns 503 if Redis is unavailable (revocation would be silently non-functional).
     """
     from backend.redis_client import HAS_REDIS, delete_jti  # type: ignore
-    # Relaxation: Allow logout even if Redis is missing (will use memory cache)
-    # but we log a warning since it won't persist across restarts.
     if not HAS_REDIS:
-        logger.warning("Logout proceeding without Redis. Session revocation will not persist across restarts.")
+        raise HTTPException(status_code=503, detail="Redis is required for session revocation")
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])  # type: ignore
         jti = payload.get("jti")
@@ -709,8 +707,8 @@ async def health(db: Session = Depends(get_db)):
     # Check Redis
     if HAS_REDIS:
         try:
-            from backend.redis_client import _client  # type: ignore
-            if _client and _client.ping():
+            from backend.redis_client import r  # type: ignore
+            if r and r.ping():
                 status_info["dependencies"]["redis"] = "healthy"
             else:
                 status_info["status"] = "error"

@@ -1,9 +1,10 @@
+# pyright: reportMissingImports=false
 import os
 import sys
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
+from sqlalchemy import engine_from_config  # type: ignore
+from sqlalchemy import pool  # type: ignore
 
 from alembic import context # type: ignore
 from dotenv import load_dotenv
@@ -12,8 +13,9 @@ from dotenv import load_dotenv
 sys.path.append(os.getcwd())
 load_dotenv()
 
-from db import Base
-import models # ensure all models are imported
+from db import Base  # type: ignore
+import models  # type: ignore # ensure all models are imported
+import training_models  # type: ignore # ensure training models are included
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

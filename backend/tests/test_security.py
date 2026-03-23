@@ -1,12 +1,13 @@
-﻿import pytest
-from fastapi.testclient import TestClient
+# pyright: reportMissingImports=false
+import pytest  # type: ignore
+from fastapi.testclient import TestClient  # type: ignore
 from datetime import datetime, timedelta
-import hmac
+import hmac  # type: ignore
 import os
-from backend.main import app, _INJECTION_PATTERNS
-from backend.models import Users
-from backend.auth import create_access_token, create_refresh_token
-import jwt
+from backend.main import app, _INJECTION_PATTERNS  # type: ignore
+from backend.models import Users  # type: ignore
+from backend.auth import create_access_token, create_refresh_token  # type: ignore
+from jose import jwt  # type: ignore
 
 client = TestClient(app)
 
@@ -27,14 +28,14 @@ def test_prompt_injection_expanded():
 def test_admin_key_constant_time():
     # We can't easily test timing in unit tests, but we can verify the function exists
     # and handles bytes correctly as implemented.
-    from backend.main import verify_admin
+    from backend.main import verify_admin  # type: ignore
     import inspect
     source = inspect.getsource(verify_admin)
     assert "hmac.compare_digest" in source
 
 def test_logout_redis_unavailable(monkeypatch):
     # Mock HAS_REDIS to False
-    import backend.main as main
+    import backend.main as main  # type: ignore
     monkeypatch.setattr(main, "HAS_REDIS", False)
     
     # We need a valid token to reach the logout logic
@@ -87,8 +88,8 @@ def test_ssrf_custom_bg_blocked():
     # We verify that main.py's Pydantic validation (if any) or our manual check would catch it.
     # Note: main.py doesn't have a Pydantic validator for 'http', but image_gen now simply 
     # doesn't handle it, effectively blocking the fetch.
-    from backend.image_gen import generate_quote_image
-    from PIL import Image
+    from backend.image_gen import generate_quote_image  # type: ignore
+    from PIL import Image  # type: ignore
     
     # Testing the function directly to ensure the fetch code is gone
     # If the code was there, it would try to fetch and likely timeout/fail.

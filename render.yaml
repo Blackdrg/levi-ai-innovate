@@ -22,7 +22,7 @@ services:
       - key: USE_CELERY
         value: "true"
       - key: CORS_ORIGINS
-        value: "https://levi-ai.vercel.app"
+        value: "https://levi-ai.vercel.app,https://levi-git-main-daksh-mehats-projects.vercel.app,https://levi-k8iuadcvd-daksh-mehats-projects.vercel.app,https://levi-ai-daksh-mehats-projects.vercel.app"
       - key: PYTHONUNBUFFERED
         value: "1"
       - key: TRANSFORMERS_CACHE
@@ -69,7 +69,7 @@ services:
     runtime: python
     plan: free
     buildCommand: "pip install -r backend/requirements.txt"
-    startCommand: "cd backend && celery -A tasks worker --beat --loglevel=info"
+    startCommand: "cd backend && PYTHONPATH=$PWD/.. celery -A tasks worker --beat --loglevel=info"
     envVars:
       - key: DATABASE_URL
         fromService:

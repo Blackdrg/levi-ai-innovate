@@ -30,7 +30,7 @@ def send_daily_quote(user_email: str, user_name: str, liked_topics: Optional[lis
         quote_text = generate_quote(prompt=topic, mood=last_mood)
         
         params: Any = {
-            "from": "onboarding@resend.dev", # Default sender for Resend free tier
+            "from": os.getenv("RESEND_SENDER", "onboarding@resend.dev"), # Default sender for Resend free tier
             "to": [user_email],
             "subject": f"Your daily wisdom, {user_name} ✨",
             "html": f"""
@@ -59,7 +59,7 @@ def send_payment_receipt(user_email: str, plan: str, amount_inr: float):
 
         params: Any = {
 
-            "from": "onboarding@resend.dev",
+            "from": os.getenv("RESEND_SENDER", "onboarding@resend.dev"),
 
             "to": [user_email],
 
@@ -120,7 +120,7 @@ def send_verification_email(user_email: str, token: str):
 
     try:
         params: Any = {
-            "from": "onboarding@resend.dev",
+            "from": os.getenv("RESEND_SENDER", "onboarding@resend.dev"),
             "to": [user_email],
             "subject": "Verify your LEVI account ✨",
             "html": f"""
@@ -158,7 +158,7 @@ def send_password_reset_email(user_email: str, token: str):
 
     try:
         params: Any = {
-            "from": "onboarding@resend.dev",
+            "from": os.getenv("RESEND_SENDER", "onboarding@resend.dev"),
             "to": [user_email],
             "subject": "Reset your LEVI password ✨",
             "html": f"""

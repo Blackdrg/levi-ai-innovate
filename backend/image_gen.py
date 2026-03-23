@@ -158,10 +158,7 @@ def add_watermark(img: Image.Image, user_tier: str = "free") -> Image.Image:
     if user_tier == "free":
         draw = ImageDraw.Draw(img, "RGBA")
         W, H = img.size
-        try:
-            font = ImageFont.truetype("Arial", 22)
-        except:
-            font = ImageFont.load_default()
+        font = load_font(22)
         
         text = "Made with LEVI AI"
         bbox = draw.textbbox((0, 0), text, font=font) if hasattr(draw, "textbbox") else (0, 0, 150, 24)

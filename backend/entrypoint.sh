@@ -10,11 +10,8 @@ alembic upgrade head || echo "Migrations failed, continuing..."
 echo "Seeding database..."
 python seed.py || echo "Seeding failed or already seeded, continuing..."
 
-# Start Celery worker and beat in the background
-# (In production, consider using a process manager like supervisord or separate containers)
-echo "Starting Celery worker and beat..."
-celery -A backend.tasks worker --loglevel=info --detach
-celery -A backend.tasks beat --loglevel=info --detach
+# Note: Celery worker and beat are managed separately (e.g., in render.yaml or docker-compose)
+# to avoid orphaned processes and duplicate execution.
 
 # Start the application
 echo "Starting application..."
