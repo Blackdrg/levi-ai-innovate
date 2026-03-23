@@ -33,8 +33,7 @@ async function synthesize(){
   if(!text){showToast('Enter some wisdom first','error');return}
   setLoading(true);
   try{
-    const token=localStorage.getItem('levi_token');
-    const headers={'Content-Type':'application/json'};if(token)headers['Authorization']='Bearer '+token;
+    const headers={'Content-Type':'application/json'};
     const body={text,author:document.getElementById('author-input').value||'LEVI AI',mood:currentStyle,background:document.getElementById('bg-input').value};
     const r=await fetch(API_BASE+'/generate_image',{method:'POST',headers,body:JSON.stringify(body)});
     if(!r.ok)throw new Error('HTTP '+r.status);

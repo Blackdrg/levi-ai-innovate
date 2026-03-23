@@ -75,7 +75,7 @@ def upload_to_s3(file_bytes: bytes, filename: str, content_type: str = "video/mp
             url = s3.generate_presigned_url(
                 "get_object",
                 Params={"Bucket": bucket, "Key": filename},
-                ExpiresIn=3600,
+                ExpiresIn=604800,
             )
 
         logger.info(f"Uploaded to S3: {url}")

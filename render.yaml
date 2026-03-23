@@ -11,11 +11,16 @@ services:
       - key: RENDER
         value: "true"
       - key: DATABASE_URL
-        sync: false
+        fromService:
+          type: pgsql
+          name: levi-db
+          property: connectionString
       - key: REDIS_URL
         sync: false
       - key: SECRET_KEY
-        generateValue: true
+        sync: false
+      - key: USE_CELERY
+        value: "true"
       - key: CORS_ORIGINS
         value: "https://levi-ai.vercel.app"
       - key: PYTHONUNBUFFERED
@@ -51,28 +56,39 @@ services:
     envVars:
       - key: DATABASE_URL
         fromService:
-          type: dpg
+          type: pgsql
           name: levi-db
           property: connectionString
       - key: RESEND_API_KEY
         sync: false
+      - key: USE_CELERY
+        value: "true"
 
   - type: worker
     name: celery-worker
     runtime: python
     plan: free
     buildCommand: "pip install -r backend/requirements.txt"
-    startCommand: "cd backend && celery -A tasks worker --loglevel=info"
+    startCommand: "cd backend && celery -A tasks worker --beat --loglevel=info"
     envVars:
       - key: DATABASE_URL
-        sync: false
+        fromService:
+          type: pgsql
+          name: levi-db
+          property: connectionString
       - key: REDIS_URL
         sync: false
       - key: SECRET_KEY
         sync: false
+      - key: USE_CELERY
+        value: "true"
       - key: GROQ_API_KEY
         sync: false
       - key: TOGETHER_API_KEY
         sync: false
       - key: RESEND_API_KEY # Sync RESEND_API_KEY for emails in tasks
         sync: false
+
+databases:
+  - name: levi-db
+    plan: free
