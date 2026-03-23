@@ -64,7 +64,7 @@ def start_services():
             time.sleep(2)
 
     # 2. Paths
-    venv_python = os.path.join("venv", "Scripts", "python.exe") if os.name == 'nt' else os.path.join("venv", "bin", "python")
+    venv_python = os.path.join(".venv", "Scripts", "python.exe") if os.name == 'nt' else os.path.join(".venv", "bin", "python")
     if not os.path.exists(venv_python):
         venv_python = sys.executable
 
