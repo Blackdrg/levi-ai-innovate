@@ -68,6 +68,13 @@ def collect_training_sample(
     if rating >= MIN_QUALITY_SCORE:
         _augment_knowledge_base(db, user_message, bot_response, mood)
 
+    # Update Structured Memory Graph
+    if user_id:
+        try:
+            update_memory_graph(user_id, user_message, db)
+        except Exception as e:
+            logger.warning(f"[Learning] Memory graph update failed: {e}")
+
     db.commit()
     logger.info(f"[Learning] Collected sample rating={rating} mood={mood} user={user_id}")
     return sample
@@ -193,6 +200,13 @@ class UserPreferenceModel:
 
         if not samples:
             prof = _default_profile()
+            # Fetch structured memory even for new users if it exists
+            try:
+                from models import UserMemory  # type: ignore
+            except ImportError:
+                from backend.models import UserMemory  # type: ignore
+            memory = self.db.query(UserMemory).filter(UserMemory.user_id == self.user_id).first()
+            prof["structured_memory"] = memory.structured_memory if memory else {}
             self._profile = prof
             return prof
 
@@ -233,6 +247,15 @@ class UserPreferenceModel:
             "avg_rating": round(float(sum(s.rating for s in samples) / len(samples)), 2),  # type: ignore
             "total_interactions": len(samples),
         }
+
+        # Fetch structured memory graph
+        try:
+            from models import UserMemory  # type: ignore
+        except ImportError:
+            from backend.models import UserMemory  # type: ignore
+        memory = self.db.query(UserMemory).filter(UserMemory.user_id == self.user_id).first()
+        prof["structured_memory"] = memory.structured_memory if memory else {}
+
         self._profile = prof
         return prof
 
@@ -243,7 +266,16 @@ class UserPreferenceModel:
         profile = self.get_profile()
         lines = [base_prompt]
 
-        if profile["preferred_moods"]:
+        # ─── Structured Memory injection ───
+        structured = profile.get("structured_memory", {})
+        if structured:
+            entities = structured.get("entities", {})
+            for cat, items in entities.items():
+                if items:
+                    # e.g., "User interests: coffee, stoicism"
+                    lines.append(f"User {cat}: {', '.join(items)}.")
+
+        if profile.get("preferred_moods"):
             moods_str = ", ".join(profile["preferred_moods"])
             lines.append(f"This user responds best to {moods_str} style responses.")
 
@@ -269,6 +301,108 @@ def _default_profile() -> Dict[str, Any]:
         "avg_rating": 3.0,
         "total_interactions": 0,
     }
+
+
+# ─────────────────────────────────────────────
+# 2.5 STRUCTURED MEMORY GRAPH - EXTRACTOR
+# ─────────────────────────────────────────────
+def _extract_memory_insights(text: str) -> Dict[str, Any]:
+    """
+    Uses Groq to extract structured facts, interests, and goals from user text.
+    """
+    import groq  # type: ignore
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        return {}
+
+    try:
+        client = groq.Groq(api_key=api_key)
+        system_prompt = """You are a profile extraction system for a philosophical AI. 
+Analyze the user statement and extract key-value facts for user memory.
+Return in STRICT JSON ONLY:
+{
+  "entities": {
+     "interests": ["keyword 1", "keyword 2"],
+     "goals": ["goal phrase 1"],
+     "facts": ["general descriptive fact 1"]
+  }
+}"""
+        response = client.chat.completions.create(
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Extract from: \"{text}\""}
+            ],
+            model="llama3-8b-8192",
+            temperature=0.3,
+            response_format={"type": "json_object"}
+        )
+        content = response.choices[0].message.content.strip()
+        return json.loads(content)
+    except Exception as e:
+        logger.warning(f"[MemoryExtractor] Extraction failed: {e}")
+        return {}
+
+
+def update_memory_graph(user_id: int, text: str, db: Session):
+    """
+    Extracts insights from text and merges them into the UserMemory table.
+    """
+    try:
+        from models import UserMemory  # type: ignore
+    except ImportError:
+        from backend.models import UserMemory  # type: ignore
+
+    try:
+        memory = db.query(UserMemory).filter(UserMemory.user_id == user_id).first()
+        if not memory:
+            memory = UserMemory(user_id=user_id, structured_memory={})
+            db.add(memory)
+
+        extracted = _extract_memory_insights(text)
+        if not extracted:
+            return
+
+        current = dict(memory.structured_memory) if memory.structured_memory else {}
+        curr_entities = dict(current.get("entities", {}))
+        new_entities = dict(extracted.get("entities", {}))
+
+        updated_entities = {}
+        for key in ["interests", "goals", "facts"]:
+            list_curr = list(curr_entities.get(key, []))
+            list_new = list(new_entities.get(key, []))
+            
+            # Merge and stringify items using loop
+            merged_set = set()
+            for item in (list_curr + list_new):
+                if item:
+                    merged_set.add(str(item))
+
+            # Pyre2-safe cap instead of list[:15]
+            capped_list = []
+            for m_item in merged_set:
+                if len(capped_list) >= 15:
+                    break
+                capped_list.append(m_item)
+            updated_entities[key] = capped_list
+
+        # Reconstruct to satisfy Pyre2 type dictionary assignment
+        from typing import Dict, Any  # type: ignore
+        updated_current: Dict[str, Any] = {}
+        for c_key, c_val in current.items():
+            updated_current[str(c_key)] = c_val
+        updated_current["entities"] = updated_entities
+        
+        memory.structured_memory = updated_current
+        
+        # Explicitly mark as modified for SQLAlchemy with JSON columns
+        from sqlalchemy.orm.attributes import flag_modified  # type: ignore
+        flag_modified(memory, "structured_memory")
+        
+        db.commit()
+        logger.info(f"[MemoryGraph] Updated memory graph for user {user_id}")
+    except Exception as e:
+        logger.warning(f"[MemoryGraph] Failed to update memory for user {user_id}: {e}")
+        db.rollback()
 
 
 # ─────────────────────────────────────────────
