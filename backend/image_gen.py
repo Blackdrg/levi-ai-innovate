@@ -98,7 +98,8 @@ def generate_background_together(prompt: str, size: tuple = (1024, 1024)) -> Ima
         img = Image.open(BytesIO(img_bytes)).convert("RGBA")
 
         if img.size != size:
-            img = img.resize(size, Image.Resampling.LANCZOS)
+            from PIL import ImageOps  # type: ignore
+            img = ImageOps.fit(img, size, Image.Resampling.LANCZOS)
         return img
 
     except Exception as e:
@@ -271,11 +272,24 @@ def generate_quote_image(
             print(f"[custom_bg] Failed: {e}")
             bg = None
 
-    # Together.AI generation
+    # Primary: SD Engine (local SD or Together AI fallback)
+    if bg is None:
+        try:
+            from backend.sd_engine import generate as sd_generate  # type: ignore
+        except ImportError:
+            from sd_engine import generate as sd_generate  # type: ignore
+        prompt = build_prompt(quote, mood)
+        style = getattr(generate_quote_image, '_current_style', 'default')
+        sd_result = sd_generate(prompt, style=style, size=size, enhance=True)
+        if sd_result:
+            bg = Image.open(sd_result).convert("RGBA")
+
+    # Legacy Together.AI generation (if sd_engine returned None)
     if bg is None and TOGETHER_API_KEY:
         prompt = build_prompt(quote, mood)
         print(f"[Together.AI] Prompt: {prompt}")
         bg = generate_background_together(prompt, size)
+
 
     # Fallback to gradient if API fails or key missing
     if bg is None:

@@ -89,6 +89,7 @@ class UserMemory(Base):
     mood_history: Mapped[list]    = mapped_column(JSON, default=list)
     liked_topics: Mapped[list]    = mapped_column(JSON, default=list)
     interaction_count: Mapped[int] = mapped_column(default=0)
+    structured_memory: Mapped[dict] = mapped_column(JSON, default=dict)  # {"entities": {}, "relations": []}
     last_active: Mapped[dt_datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -149,3 +150,18 @@ class PaymentEvent(Base):
     currency: Mapped[str]       = mapped_column(String(10), default="INR")
     status: Mapped[str]         = mapped_column(String(20), default="captured")
     timestamp: Mapped[dt_datetime] = mapped_column(DateTime, default=func.now())
+
+
+class Persona(Base):
+    __tablename__ = "personas"
+    __table_args__ = {'extend_existing': True}
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True) # None = Admin built-in
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    system_prompt: Mapped[str] = mapped_column(String(2000), nullable=False)
+    avatar_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    is_public: Mapped[bool] = mapped_column(default=True)
+    likes: Mapped[int] = mapped_column(default=0)
+    created_at: Mapped[dt_datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

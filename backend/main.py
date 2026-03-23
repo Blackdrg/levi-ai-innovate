@@ -311,6 +311,7 @@ class ChatMessage(BaseModel):
     message: str = Field(..., max_length=1000)
     lang: Optional[str] = Field("en", max_length=10)
     mood: Optional[str] = Field("", max_length=50)
+    persona_id: Optional[int] = None # Added for custom personas
 
     @validator("message")
     def sanitize_message(cls, v):
@@ -318,6 +319,22 @@ class ChatMessage(BaseModel):
         for pattern in _INJECTION_PATTERNS:
             if pattern in v_lower:
                 raise ValueError(f"Potential prompt injection detected: {pattern}")
+        return v
+
+class PersonaCreate(BaseModel):
+    name: str = Field(..., max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
+    system_prompt: str = Field(..., max_length=2000)
+    avatar_url: Optional[str] = Field(None, max_length=500)
+    is_public: bool = True
+
+    @validator("name", "description", "system_prompt")
+    def sanitize_persona_inputs(cls, v):
+        if v:
+            v_lower = v.lower()
+            for pattern in _INJECTION_PATTERNS:
+                if pattern in v_lower:
+                    raise ValueError(f"Potential prompt injection detected: {pattern}")
         return v
 
 # Helper for per-user rate limiting
@@ -853,6 +870,74 @@ def gen_quote(prompt: Query):
     return {"generated_quote": generated}
 
 
+# ── Content Engine: Unified Content Generator ────────────────────────────────
+
+class ContentRequest(BaseModel):
+    type: str           # quote, essay, story, script, philosophy, caption, thread, blog
+    topic: str
+    tone: str = "inspiring"
+    depth: str = "high"  # low, medium, high
+
+
+@app.post("/generate_content")
+@limiter.limit("5/minute")
+async def gen_content(
+    request: Request,
+    req: ContentRequest,
+    db: Session = Depends(get_db),
+    current_user: Optional[Users] = Depends(get_current_user_optional),
+):
+    """Generate content of any type (quote, essay, story, script, etc.)."""
+    # Cost protection
+    from backend.redis_client import get_daily_ai_spend, incr_daily_ai_spend  # type: ignore
+    daily_limit = float(os.getenv("DAILY_AI_LIMIT", "500"))
+    if get_daily_ai_spend() >= daily_limit:
+        raise HTTPException(status_code=429, detail="Daily AI usage limit reached.")
+    incr_daily_ai_spend(1.0)
+
+    # Credit check for non-quote types
+    if req.type != "quote" and current_user:
+        from backend.payments import use_credits  # type: ignore
+        use_credits(current_user.id, amount=1, db=db)
+
+    try:
+        from backend.content_engine import generate_content  # type: ignore
+    except ImportError:
+        from content_engine import generate_content  # type: ignore
+
+    result = generate_content(
+        content_type=req.type,
+        topic=req.topic,
+        tone=req.tone,
+        depth=req.depth,
+    )
+
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+
+    return result
+
+
+@app.get("/content_types")
+async def list_content_types():
+    """Return available content types and tones."""
+    try:
+        from backend.content_engine import get_available_types, get_available_tones  # type: ignore
+    except ImportError:
+        from content_engine import get_available_types, get_available_tones  # type: ignore
+    return {"types": get_available_types(), "tones": get_available_tones()}
+
+
+@app.get("/image_styles")
+async def list_image_styles():
+    """Return available image generation styles."""
+    try:
+        from backend.sd_engine import get_available_styles  # type: ignore
+    except ImportError:
+        from sd_engine import get_available_styles  # type: ignore
+    return {"styles": get_available_styles()}
+
+
 
 
 
@@ -1086,12 +1171,30 @@ async def chat(
     # Build personalised system prompt for authenticated users
     personalized_system = None
     try:
-        if user_id:
+        if True:  # Run for all users to enable personas, but skip prefers if not logged in
             from learning import UserPreferenceModel, AdaptivePromptManager  # type: ignore
-            pref = UserPreferenceModel(db, user_id)
-            base = AdaptivePromptManager(db).get_best_variant(msg.mood or "philosophical")
-            personalized_system = pref.build_system_prompt(base, msg.mood or "philosophical")
-    except Exception:
+            
+            base = "You are LEVI, a philosophical AI muse."
+            if user_id:
+                 base = AdaptivePromptManager(db).get_best_variant(msg.mood or "philosophical")
+            
+            # ─── Load Custom Persona ───
+            if msg.persona_id:
+                try:
+                    from models import Persona  # type: ignore
+                except ImportError:
+                    from backend.models import Persona  # type: ignore
+                persona = db.query(Persona).filter(Persona.id == msg.persona_id).first()
+                if persona:
+                    base = persona.system_prompt
+
+            if user_id:
+                pref = UserPreferenceModel(db, user_id)
+                personalized_system = pref.build_system_prompt(base, msg.mood or "philosophical")
+            else:
+                personalized_system = base
+    except Exception as e:
+        logger.warning(f"Failed to build personalised prompt: {e}")
         pass  # graceful degradation
 
     # Use fine-tuned model if available
@@ -1913,7 +2016,173 @@ async def downgrade_tier(db: Session = Depends(get_db), current_user: Users = De
     db.commit()
     return {"status": "success", "message": "Subscription cancelled. Downgraded to free tier."}
 
+
+
+# \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+# Content Engine API Routes
+# \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+
+class ContentGenerateRequest(BaseModel):
+    content_type: str = Field(..., max_length=50, description="One of: quote, essay, story, script, philosophy, caption, thread, blog, poem, newsletter, readme")
+    topic: str = Field(..., max_length=500, description="The subject matter to write about")
+    tone: str = Field("inspiring", max_length=50, description="Tone/style of the content")
+    depth: str = Field("high", description="Output depth: 'low', 'medium', or 'high'")
+    language: str = Field("English", max_length=50, description="Output language (e.g. 'English', 'Spanish', 'Hindi')")
+
+    @validator("topic", "tone")
+    def sanitize_content_inputs(cls, v):
+        if v:
+            v_lower = v.lower()
+            for pattern in _INJECTION_PATTERNS:
+                if pattern in v_lower:
+                    raise ValueError(f"Potential prompt injection detected: {pattern}")
+        return v
+
+
+@app.post("/api/content/generate")
+@limiter.limit("20/minute")
+async def api_content_generate(
+    request: Request,
+    body: ContentGenerateRequest,
+    current_user: Users = Depends(get_current_user),
+):
+    """
+    Generate a piece of content using the LEVI content engine.
+
+    Supports 11 content types: quote, essay, story, script, philosophy,
+    caption, thread, blog, poem, newsletter, readme.
+
+    Rate-limited to 20 requests per minute per user. Requires authentication.
+    """
+    try:
+        try:
+            from backend.content_engine import generate_content  # type: ignore
+        except ImportError:
+            from content_engine import generate_content  # type: ignore
+
+        result = generate_content(
+            content_type=body.content_type,
+            topic=body.topic,
+            tone=body.tone,
+            depth=body.depth,
+            language=body.language,
+        )
+
+        if "error" in result:
+            raise HTTPException(status_code=400, detail=result["error"])
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[ContentEngine] Generation failed: {e}")
+        raise HTTPException(status_code=500, detail="Content generation failed. Please try again.")
+
+
+@app.get("/api/content/types")
+async def api_content_types():
+    """Return all supported content types."""
+    try:
+        try:
+            from backend.content_engine import get_available_types  # type: ignore
+        except ImportError:
+            from content_engine import get_available_types  # type: ignore
+        return {"types": get_available_types()}
+    except Exception as e:
+        logger.error(f"[ContentEngine] Failed to fetch types: {e}")
+        raise HTTPException(status_code=500, detail="Could not retrieve content types.")
+
+
+@app.get("/api/content/tones")
+async def api_content_tones():
+    """Return all supported content tones."""
+    try:
+        try:
+            from backend.content_engine import get_available_tones  # type: ignore
+        except ImportError:
+            from content_engine import get_available_tones  # type: ignore
+        return {"tones": get_available_tones()}
+    except Exception as e:
+        logger.error(f"[ContentEngine] Failed to fetch tones: {e}")
+        raise HTTPException(status_code=500, detail="Could not retrieve content tones.")
+
+
+# \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+# Image Engine API Routes
+# \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+
+@app.get("/api/image/styles")
+async def api_image_styles():
+    """Return all available Stable Diffusion image style presets."""
+    try:
+        try:
+            from backend.sd_engine import get_available_styles  # type: ignore
+        except ImportError:
+            from sd_engine import get_available_styles  # type: ignore
+        return {"styles": get_available_styles()}
+    except Exception as e:
+        logger.error(f"[SDEngine] Failed to fetch styles: {e}")
+# ──────────────────────────────────────────────────────────────────────
+# AI Personas Marketplace API Routes
+# ──────────────────────────────────────────────────────────────────────
+
+@app.get("/api/personas")
+async def api_get_personas(db: Session = Depends(get_db)):
+    """
+    List all available AI Personas (Public system templates and created variants).
+    """
+    try:
+        try:
+             from backend.models import Persona  # type: ignore
+        except ImportError:
+             from models import Persona  # type: ignore
+             
+        personas = db.query(Persona).filter(Persona.is_public == True).all()
+        return {"personas": personas}
+    except Exception as e:
+        logger.error(f"[Personas] Failed to fetch personas: {e}")
+        raise HTTPException(status_code=500, detail="Could not retrieve AI personas.")
+
+
+@app.post("/api/personas")
+async def api_create_persona(
+    body: PersonaCreate,
+    current_user: Users = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Create a new AI Persona system template for personalized generation.
+    """
+    try:
+        try:
+             from backend.models import Persona  # type: ignore
+        except ImportError:
+             from models import Persona  # type: ignore
+
+        new_persona = Persona(
+            user_id=current_user.id,
+            name=body.name,
+            description=body.description,
+            system_prompt=body.system_prompt,
+            avatar_url=body.avatar_url,
+            is_public=body.is_public
+        )
+        db.add(new_persona)
+        db.commit()
+        db.refresh(new_persona)
+        return {"status": "success", "message": "Persona created", "persona": new_persona}
+    except Exception as e:
+        logger.error(f"[Personas] Failed to create persona: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Could not create AI persona.")
+
+# ──────────────────────────────────────────────────────────────────────
+
+
 if __name__ == "__main__":
     import uvicorn  # type: ignore
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=False)
+
+
 
