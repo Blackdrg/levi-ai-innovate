@@ -100,7 +100,7 @@ def upload_video_to_s3(video_bytes: bytes, user_id: int) -> str:
 # Task 1: Generate quote image in background
 # ─────────────────────────────────────────────
 @celery_app.task(bind=True, max_retries=2)
-def generate_image_task(self, quote: str, author: str, mood: str, user_id: int):
+def generate_image_task(self, quote: str, author: str, mood: str, user_id: int, user_tier: str = "free"):
     """
     Generate image via Together.AI + upload to S3.
     Returns the S3 URL.
@@ -110,30 +110,30 @@ def generate_image_task(self, quote: str, author: str, mood: str, user_id: int):
         logger.info(f"[Task] Generating image for user {user_id}")
 
         db = SessionLocal()
-        user_tier = "free"
         try:
-            user = db.query(Users).filter(Users.id == user_id).first()
-            if user:
-                user_tier = user.tier
-        finally:
-            db.close()
+            # user_tier is now passed, but we fallback to DB if it's default
+            if user_tier == "free" and user_id:
+                try:
+                    user = db.query(Users).filter(Users.id == user_id).first()
+                    if user:
+                        user_tier = user.tier
+                except Exception:
+                    pass
 
-        bio = generate_quote_image(quote, author, mood, user_tier=user_tier)
-        img_bytes = bio.getvalue()
+            bio = generate_quote_image(quote, author, mood, user_tier=user_tier)
+            img_bytes = bio.getvalue()
 
-        # Store in S3 if configured, otherwise return base64
-        image_url = None
-        image_b64 = None
-        
-        if os.getenv("AWS_S3_BUCKET"):
-            image_url = upload_image_to_s3(img_bytes, user_id)
-        else:
-            import base64
-            image_b64 = "data:image/png;base64," + base64.b64encode(img_bytes).decode()
+            # Store in S3 if configured, otherwise return base64
+            image_url = None
+            image_b64 = None
+            
+            if os.getenv("AWS_S3_BUCKET"):
+                image_url = upload_image_to_s3(img_bytes, user_id)
+            else:
+                import base64
+                image_b64 = "data:image/png;base64," + base64.b64encode(img_bytes).decode()
 
-        # Save to FeedItem for persistence
-        db = SessionLocal()
-        try:
+            # Save to FeedItem for persistence
             new_item = FeedItem(
                 user_id=user_id,
                 text=quote,
@@ -144,11 +144,8 @@ def generate_image_task(self, quote: str, author: str, mood: str, user_id: int):
             )
             db.add(new_item)
             db.commit()
-            
-            # No deduction here (already handled in main.py)
-            pass
-
             db.refresh(new_item)
+            
             return {
                 "status": "done", 
                 "url": image_url or image_b64, 
@@ -182,44 +179,38 @@ def generate_image_task(self, quote: str, author: str, mood: str, user_id: int):
 # Task 2: Generate quote VIDEO in background
 # ─────────────────────────────────────────────
 @celery_app.task(bind=True, max_retries=1)
-def generate_video_task(self, quote: str, author: str, mood: str, user_id: int):
+def generate_video_task(self, quote: str, author: str, mood: str, user_id: int, user_tier: str = "free"):
     """
     Generate video via HeyGen/Leonardo + upload to S3.
     Deducts 2 credits on success.
     """
+    db = SessionLocal()
     try:
         from backend.video_gen import generate_quote_video  # type: ignore
-        logger.info(f"[Task] Generating video for user {user_id}")
-        video_bytes = generate_quote_video(quote, author, mood)
+        logger.info(f"[Task] Generating video for user {user_id} (Tier: {user_tier})")
+        video_bytes = generate_quote_video(quote, author, mood, user_tier=user_tier)
         video_url = upload_video_to_s3(video_bytes, user_id)
 
         # Save to FeedItem
-        db = SessionLocal()
-        try:
-            new_item = FeedItem(
-                user_id=user_id,
-                text=quote,
-                author=author,
-                mood=mood,
-                video_url=video_url
-            )
-            db.add(new_item)
-            db.commit()
-            
-            # No deduction here (already handled in main.py)
-            pass
-
-            db.refresh(new_item)
-            return {"status": "done", "url": video_url, "id": new_item.id}
-        finally:
-            db.close()
+        new_item = FeedItem(
+            user_id=user_id,
+            text=quote,
+            author=author,
+            mood=mood,
+            video_url=video_url
+        )
+        db.add(new_item)
+        db.commit()
+        db.refresh(new_item)
+        return {"status": "done", "url": video_url, "id": new_item.id}
     except Exception as e:
+        if db:
+            db.rollback()
         logger.error(f"[Task] Video generation failed: {e}")
         
         # Refund on failure if retries exhausted
         if self.request.retries >= self.max_retries:
             try:
-                db = SessionLocal()
                 user = db.query(Users).filter(Users.id == user_id).first()
                 if user:
                     user.credits = (user.credits or 0) + 2
@@ -227,10 +218,10 @@ def generate_video_task(self, quote: str, author: str, mood: str, user_id: int):
                     logger.info(f"[Task] Refunded 2 credits to user {user_id}")
             except Exception as refund_err:
                 logger.error(f"[Task] Failed to refund credit: {refund_err}")
-            finally:
-                db.close()
             return {"status": "failed", "error": str(e)}
         raise self.retry(exc=e, countdown=10)
+    finally:
+        db.close()
 
 
 # ─────────────────────────────────────────────

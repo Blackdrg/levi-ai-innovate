@@ -93,24 +93,10 @@ export async function chat(message, session = "user1") {
 }
 
 export async function login(username, password) {
-  const formData = new URLSearchParams();
-  formData.append('username', username);
-  formData.append('password', password);
-
-  const res = await fetch(`${API_BASE}/token`, {
+  return apiFetch("/login", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded"
-    },
-    body: formData,
-    credentials: 'include'
+    body: { username, password }
   });
-
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.detail || `Login failed: ${res.status}`);
-  }
-  return await res.json();
 }
 
 export async function register(username, password) {
