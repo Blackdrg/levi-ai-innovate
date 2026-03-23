@@ -82,7 +82,7 @@ if SENTRY_DSN:
         profiles_sample_rate=1.0,
         enable_tracing=True,
         environment=os.getenv("ENVIRONMENT", "production"),
-        send_default_pii=False, # Optional: include user data
+        send_default_pii=True, # Enable data like request headers and IP
     )
     logger.info("Sentry initialized with performance monitoring.")
 
