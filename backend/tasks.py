@@ -376,6 +376,11 @@ celery_app.conf.beat_schedule = {
         "task":     "backend.tasks.dispatch_daily_emails",
         "schedule": crontab(hour=8, minute=0),
     },
+    # Reset credits for paid users on the 1st of every month at midnight
+    "monthly-credit-reset": {
+        "task":     "backend.tasks.reset_monthly_credits",
+        "schedule": crontab(day_of_month=1, hour=0, minute=0),
+    },
 }
 
 try:
@@ -383,6 +388,27 @@ try:
     celery_app.conf.beat_schedule.update(TRAINING_BEAT_SCHEDULE)
 except ImportError:
     pass
+
+
+@celery_app.task
+def reset_monthly_credits():
+    """Reset credits for pro/creator users on the 1st of each month."""
+    db = SessionLocal()
+    try:
+        from backend.payments import get_tier_credits  # type: ignore
+        users = db.query(Users).filter(Users.tier.in_(["pro", "creator"])).all()
+        reset_count = 0
+        for user in users:
+            user.credits = get_tier_credits(user.tier)
+            reset_count += 1
+        db.commit()
+        logger.info(f"Monthly credit reset complete: {reset_count} users updated.")
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Monthly credit reset failed: {e}")
+    finally:
+        db.close()
+
 
 
 @celery_app.task

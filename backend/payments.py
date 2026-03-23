@@ -33,6 +33,19 @@ if RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET:
 
 from typing import Optional, Any
 
+
+TIER_CREDITS = {
+    "free": 10,
+    "pro": 100,
+    "creator": 500,
+}
+
+
+def get_tier_credits(tier: str) -> int:
+    """Return the monthly credit allowance for a given tier."""
+    return TIER_CREDITS.get(tier, 10)
+
+
 def create_order(amount: int, currency: str = "INR", receipt: str = "order_1", user_id: Optional[int] = None, plan: str = "pro"):
     """
     Create a Razorpay order. Amount in paise (₹1 = 100 paise).

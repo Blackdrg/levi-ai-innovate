@@ -190,3 +190,52 @@ def delete_jti(jti: str):
     elif f"jti:{jti}" in _memory_cache:
         _memory_cache.pop(f"jti:{jti}", None)
 
+
+# ── UserMemory caching (TTL = 10 min) ──────────────────────
+def cache_user_memory(user_id: int, memory_dict: dict):
+    """Cache a UserMemory dict in Redis for 10 minutes."""
+    _set(f"usermem:{user_id}", json.dumps(memory_dict), ex=600)
+
+
+def get_cached_user_memory(user_id: int) -> dict | None:
+    """Retrieve cached UserMemory dict. Returns None on miss."""
+    raw = _get(f"usermem:{user_id}")
+    if not raw:
+        return None
+    return json.loads(cast(Any, raw))
+
+
+def invalidate_user_memory(user_id: int):
+    """Remove cached UserMemory (e.g. after an update)."""
+    if HAS_REDIS:
+        r.delete(f"usermem:{user_id}")
+    else:
+        _memory_cache.pop(f"usermem:{user_id}", None)
+
+
+# ── Daily AI spend tracking ─────────────────────────────────
+from datetime import date as _date
+
+def incr_daily_ai_spend(amount: float = 1.0) -> float:
+    """Increment today's AI spend counter. Returns new total."""
+    key = f"ai_spend:{_date.today().isoformat()}"
+    if HAS_REDIS:
+        pipe = r.pipeline()
+        pipe.incrbyfloat(key, amount)
+        pipe.expire(key, 86400 * 2)  # auto-expire after 2 days
+        result = pipe.execute()
+        return float(result[0])
+    else:
+        current = float(_memory_cache.get(key) or 0)
+        current += amount
+        _memory_cache[key] = str(current)  # type: ignore
+        return current
+
+
+def get_daily_ai_spend() -> float:
+    """Get today's accumulated AI spend."""
+    key = f"ai_spend:{_date.today().isoformat()}"
+    raw = _get(key)
+    if raw is None:
+        return 0.0
+    return float(raw)

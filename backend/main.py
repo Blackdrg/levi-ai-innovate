@@ -860,6 +860,13 @@ def gen_quote(prompt: Query):
 @limiter.limit("5/minute")
 async def gen_image(request: Request, req: Query, db: Session = Depends(get_db), current_user: Optional[Users] = Depends(get_current_user_optional)):
     try:
+        # ── Cost Protection Layer ──────────────────────────
+        from backend.redis_client import get_daily_ai_spend, incr_daily_ai_spend  # type: ignore
+        daily_limit = float(os.getenv("DAILY_AI_LIMIT", "500"))
+        if get_daily_ai_spend() >= daily_limit:
+            raise HTTPException(status_code=429, detail="Daily AI usage limit reached. Try again tomorrow.")
+        incr_daily_ai_spend(1.0)
+
         user_id = current_user.id if current_user else None
         user_tier = current_user.tier if current_user else "free"
         
@@ -943,59 +950,12 @@ async def gen_image(request: Request, req: Query, db: Session = Depends(get_db),
 @app.post("/generate_video")
 @limiter.limit("2/minute")
 async def gen_video(request: Request, req: Query, db: Session = Depends(get_db), current_user: Optional[Users] = Depends(get_current_user_optional)):
-    try:
-        user_id = current_user.id if current_user else None
-        user_tier = current_user.tier if current_user else "free"
+    """Video generation is temporarily disabled until the real pipeline is ready."""
+    raise HTTPException(
+        status_code=503,
+        detail="Video generation is temporarily disabled. Please use image generation instead."
+    )
 
-        # Check if we should use Celery for async processing
-        USE_CELERY = os.getenv("USE_CELERY", "true").lower() == "true"
-
-        # Deduct upfront
-        if current_user:
-            from backend.payments import use_credits  # type: ignore
-            use_credits(current_user.id, amount=2, db=db) # Videos cost 2 credits
-            logger.info(f"Deducted 2 credits upfront for user {user_id}")
-
-        if USE_CELERY:
-            from backend.tasks import generate_video_task  # type: ignore
-            task = generate_video_task.delay(
-                req.text,
-                req.author or "Unknown",
-                req.mood or "neutral",
-                user_id,
-                user_tier
-            )
-            return JSONResponse(status_code=202, content={"task_id": task.id, "status": "processing", "message": "Video generation started in background."})
-
-        # Synchronous video generation (for local development or if Celery is off)
-        video_url = await generate_quote_video( # type: ignore
-            req.text,
-            author=req.author or "Unknown",
-            mood=req.mood or "neutral",
-            user_tier=user_tier
-        )
-
-        # No deduction here anymore (moved to upfront)
-
-        new_feed = FeedItem(
-            user_id=user_id,
-            text=req.text,
-            author=req.author or "Unknown",
-            mood=req.mood or "neutral",
-            video_url=video_url,
-            likes=0
-        )
-
-        db.add(new_feed)
-        db.commit()
-        db.refresh(new_feed)
-
-        return {"id": new_feed.id, "video_url": video_url}
-
-    except Exception as e:
-        import traceback
-        logger.error(f"Video generation error: {e}\n{traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/like/{item_type}/{item_id}")
@@ -1059,6 +1019,13 @@ async def chat(
     msg_text_snip = _safe_truncate(str(msg.message), 60)
     logger.info(f"Chat [{msg.session_id}] (User: {user_id}): '{msg_text_snip}'")
 
+    # ── Cost Protection Layer ──────────────────────────
+    from backend.redis_client import get_daily_ai_spend, incr_daily_ai_spend  # type: ignore
+    daily_limit = float(os.getenv("DAILY_AI_LIMIT", "500"))
+    if get_daily_ai_spend() >= daily_limit:
+        raise HTTPException(status_code=429, detail="Daily AI usage limit reached. Try again tomorrow.")
+    incr_daily_ai_spend(1.0)
+
     # Analytics
     today = date.today()
     analytics = db.query(Analytics).filter(Analytics.date == today).first()
@@ -1068,14 +1035,30 @@ async def chat(
     else:
         analytics.chats_count = (analytics.chats_count or 0) + 1
 
-    # User memory
+    # User memory — Redis-cached (TTL = 10 min)
     user_mem = None
     if user_id:
-        user_mem = db.query(UserMemory).filter(UserMemory.user_id == user_id).first()
-        if not user_mem:
-            user_mem = UserMemory(user_id=user_id, mood_history=[], liked_topics=[], interaction_count=0)
-            db.add(user_mem)
+        from backend.redis_client import get_cached_user_memory, cache_user_memory  # type: ignore
+        cached = get_cached_user_memory(user_id)
+        if cached:
+            user_mem = db.query(UserMemory).filter(UserMemory.user_id == user_id).first()
+            if not user_mem:
+                user_mem = UserMemory(user_id=user_id, mood_history=cached.get("mood_history", []),
+                                      liked_topics=cached.get("liked_topics", []),
+                                      interaction_count=cached.get("interaction_count", 0))
+                db.add(user_mem)
+        else:
+            user_mem = db.query(UserMemory).filter(UserMemory.user_id == user_id).first()
+            if not user_mem:
+                user_mem = UserMemory(user_id=user_id, mood_history=[], liked_topics=[], interaction_count=0)
+                db.add(user_mem)
         user_mem.interaction_count += 1
+        # Update cache
+        cache_user_memory(user_id, {
+            "mood_history": user_mem.mood_history or [],
+            "liked_topics": user_mem.liked_topics or [],
+            "interaction_count": user_mem.interaction_count,
+        })
 
     db.commit()
 

@@ -6,6 +6,13 @@ from sqlalchemy.orm import sessionmaker  # type: ignore
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./levi.db")
 
+# Warn if SQLite is used in production (Render sets RENDER=true)
+if DATABASE_URL.startswith("sqlite") and os.getenv("RENDER") == "true":
+    import logging as _logging
+    _logging.getLogger(__name__).warning(
+        "⚠️  SQLite detected in production! Set DATABASE_URL to a PostgreSQL connection string."
+    )
+
 # Fix for SQLite (needs check_same_thread=False)
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 
