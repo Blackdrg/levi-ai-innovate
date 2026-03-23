@@ -6,7 +6,7 @@ services:
     dockerContext: .
     plan: free
     healthCheckPath: /health
-    preDeployCommand: python seed.py
+    preDeployCommand: "cd backend && alembic upgrade head && python seed.py"
     envVars:
       - key: RENDER
         value: "true"
@@ -22,10 +22,20 @@ services:
         value: "1"
       - key: TRANSFORMERS_CACHE
         value: /app/model_cache
-      - key: CLIENT_KEY
-        generateValue: true
-      - key: LOG_LEVEL
-        value: "info"
+      - key: ADMIN_KEY
+        sync: false
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: TOGETHER_API_KEY
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
       - key: WEB_CONCURRENCY
         value: "1"
       - key: PORT
@@ -63,4 +73,6 @@ services:
       - key: GROQ_API_KEY
         sync: false
       - key: TOGETHER_API_KEY
+        sync: false
+      - key: RESEND_API_KEY # Sync RESEND_API_KEY for emails in tasks
         sync: false

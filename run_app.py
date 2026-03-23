@@ -1,3 +1,4 @@
+# pyright: reportMissingImports=false
 
 import subprocess
 import sys
@@ -5,7 +6,7 @@ import os
 import time
 import signal
 import socket
-from dotenv import load_dotenv
+from dotenv import load_dotenv  # type: ignore
 
 # Load local environment variables
 if os.path.exists(".env.local"):

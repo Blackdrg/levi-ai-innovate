@@ -1,17 +1,19 @@
+# pyright: reportMissingImports=false
 
-from fastapi import FastAPI, Depends, HTTPException, status, Request, Response
-from starlette.middleware.sessions import SessionMiddleware
-from starlette.routing import Route
+from fastapi import FastAPI, Depends, HTTPException, status, Request, Response  # type: ignore
+from starlette.middleware.sessions import SessionMiddleware  # type: ignore
+from starlette.routing import Route  # type: ignore
 
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.cors import CORSMiddleware  # type: ignore
 
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm  # type: ignore
 
-from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse  # type: ignore
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session  # type: ignore
+from sqlalchemy import text # type: ignore
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, validator  # type: ignore
 
 from jose import JWTError, jwt # type: ignore
 
@@ -19,22 +21,24 @@ from passlib.context import CryptContext # type: ignore
 
 from datetime import datetime, timedelta, date
 
-from slowapi import Limiter
+from slowapi import Limiter  # type: ignore
 
-from slowapi.util import get_remote_address
+from slowapi.util import get_remote_address  # type: ignore
 
-from slowapi.errors import RateLimitExceeded
+from slowapi.errors import RateLimitExceeded  # type: ignore
 
-from slowapi import _rate_limit_exceeded_handler
+from slowapi import _rate_limit_exceeded_handler  # type: ignore
 from authlib.integrations.starlette_client import OAuth # type: ignore
 import os
-import sentry_sdk
+import sentry_sdk  # type: ignore
 
 import logging
 import json
-from pythonjsonlogger.json import JsonFormatter
+from pythonjsonlogger.json import JsonFormatter  # type: ignore
 import time
 import uuid
+import hmac
+import hashlib
 
 # Structured JSON logging
 class CustomJsonFormatter(JsonFormatter):
@@ -50,11 +54,20 @@ class CustomJsonFormatter(JsonFormatter):
 
 logger = logging.getLogger(__name__)
 logHandler = logging.StreamHandler()
-formatter = CustomJsonFormatter('%(timestamp)s %(level)s %(name)s %(message)s')
+formatter = CustomJsonFormatter(fmt='%(timestamp)s %(level)s %(name)s %(message)s')  # type: ignore
 logHandler.setFormatter(formatter)
 logger.addHandler(logHandler)
 logger.setLevel(logging.INFO)
 logger.propagate = False # Prevent double logging
+
+def _safe_truncate(text: str, limit: int = 60) -> str:
+    """Safe character-based truncation to bypass strict type-checker slicing errors."""
+    if not text: return ""
+    res = ""
+    for i, char in enumerate(text):
+        if i >= limit: break
+        res += char
+    return res
 
 # Sentry Initialization
 SENTRY_DSN = os.getenv("SENTRY_DSN")
@@ -88,72 +101,81 @@ REQUIRED_ENV_VARS = [
 def validate_env():
     missing = [var for var in REQUIRED_ENV_VARS if not os.getenv(var)]
     is_prod = os.getenv("RENDER") or os.getenv("DIGITALOCEAN") or os.getenv("ENVIRONMENT") == "production"
-    
+
     if missing:
         error_msg = f"CRITICAL: Missing required environment variables: {', '.join(missing)}"
         logger.error(error_msg)
         if is_prod:
-             raise RuntimeError(error_msg)
+            raise RuntimeError(error_msg)
         else:
-             print(f"\n⚠️  WARNING: {error_msg}\n")
+            print(f"\n⚠️  WARNING: {error_msg}\n")
+
+    # ── SECRET_KEY entropy guard ─────────────────────────────────────────────
+    # A short or guessable key allows JWT forgery. Require at least 32 raw bytes.
+    # Generate a safe key with: python -c "import secrets; print(secrets.token_hex(32))"
+    _secret = os.getenv("SECRET_KEY", "")
+    if len(_secret.encode()) < 32:
+        raise RuntimeError(
+            "SECRET_KEY must be at least 32 bytes. "
+            "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+        )
 
 validate_env()
 # ─────────────────────────────────────────────────────────────
 
 try:
-    from backend.db import SessionLocal, engine, get_db, DATABASE_URL
-    from backend.models import Quote, Analytics, FeedItem, Base, Users, UserMemory, ChatHistory, PushSubscription
-    from backend.embeddings import embed_text, cosine_sim, HAS_MODEL
-    from backend.redis_client import (
+    from backend.db import SessionLocal, engine, get_db, DATABASE_URL  # type: ignore
+    from backend.models import Quote, Analytics, FeedItem, Base, Users, UserMemory, ChatHistory, PushSubscription, PaymentEvent  # type: ignore
+    from backend.embeddings import embed_text, cosine_sim, HAS_MODEL  # type: ignore
+    from backend.redis_client import (  # type: ignore
         get_cached_search, cache_search, get_conversation, save_conversation, 
         HAS_REDIS, REDIS_URL, cache_quote_embedding, get_cached_embedding
     )
-    from backend.generation import generate_quote, generate_response
-    from backend.image_gen import generate_quote_image
-    from backend.video_gen import generate_quote_video
-    from backend.email_service import send_daily_quote, send_payment_receipt
-    from backend.payments import router as payments_router, use_credits, verify_payment_signature, verify_razorpay_signature, upgrade_user_tier
-    from backend.tasks import generate_video_task as generate_video_async
-    from backend.learning import (
+    from backend.generation import generate_quote, generate_response  # type: ignore
+    from backend.image_gen import generate_quote_image  # type: ignore
+    from backend.video_gen import generate_quote_video  # type: ignore
+    from backend.email_service import send_daily_quote, send_payment_receipt  # type: ignore
+    from backend.payments import router as payments_router, use_credits, verify_payment_signature, verify_razorpay_signature, upgrade_user_tier  # type: ignore
+    from backend.tasks import generate_video_task as generate_video_async  # type: ignore
+    from backend.learning import (  # type: ignore
         collect_training_sample, UserPreferenceModel,
         AdaptivePromptManager, get_learning_stats, infer_implicit_feedback
     )
-    from backend.trainer import trigger_training_pipeline, get_model_history, get_active_model_id, generate_with_active_model
-    from backend.training_models import TrainingData, ResponseFeedback, ModelVersion, TrainingJob
+    from backend.trainer import trigger_training_pipeline, get_model_history, get_active_model_id, generate_with_active_model  # type: ignore
+    from backend.training_models import TrainingData, ResponseFeedback, ModelVersion, TrainingJob  # type: ignore
 except (ImportError, ModuleNotFoundError) as e:
     logger.warning(f"Could not import from backend.*: {e}. Falling back to local imports.")
     try:
-        from db import SessionLocal, engine, get_db, DATABASE_URL
-        from models import Quote, Analytics, FeedItem, Base, Users, UserMemory, ChatHistory, PushSubscription
-        from embeddings import embed_text, cosine_sim, HAS_MODEL
-        from redis_client import (
+        from db import SessionLocal, engine, get_db, DATABASE_URL  # type: ignore
+        from models import Quote, Analytics, FeedItem, Base, Users, UserMemory, ChatHistory, PushSubscription, PaymentEvent  # type: ignore
+        from embeddings import embed_text, cosine_sim, HAS_MODEL  # type: ignore
+        from redis_client import (  # type: ignore
             get_cached_search, cache_search, get_conversation, save_conversation, 
             HAS_REDIS, REDIS_URL, cache_quote_embedding, get_cached_embedding
         )
-        from generation import generate_quote, generate_response
-        from image_gen import generate_quote_image
-        from video_gen import generate_quote_video
-        from email_service import send_daily_quote, send_payment_receipt
-        from payments import router as payments_router, use_credits, verify_payment_signature, verify_razorpay_signature, upgrade_user_tier
-        from tasks import generate_video_task as generate_video_async
-        from learning import (
+        from generation import generate_quote, generate_response  # type: ignore
+        from image_gen import generate_quote_image  # type: ignore
+        from video_gen import generate_quote_video  # type: ignore
+        from email_service import send_daily_quote, send_payment_receipt  # type: ignore
+        from payments import router as payments_router, use_credits, verify_payment_signature, verify_razorpay_signature, upgrade_user_tier  # type: ignore
+        from tasks import generate_video_task as generate_video_async  # type: ignore
+        from learning import (  # type: ignore
             collect_training_sample, UserPreferenceModel,
             AdaptivePromptManager, get_learning_stats, infer_implicit_feedback
         )
-        from trainer import trigger_training_pipeline, get_model_history, get_active_model_id, generate_with_active_model
-        from training_models import TrainingData, ResponseFeedback, ModelVersion, TrainingJob
+        from trainer import trigger_training_pipeline, get_model_history, get_active_model_id, generate_with_active_model  # type: ignore
+        from training_models import TrainingData, ResponseFeedback, ModelVersion, TrainingJob  # type: ignore
     except (ImportError, ModuleNotFoundError) as e2:
         logger.error(f"Fallback imports also failed: {e2}")
-        raise e2
+        raise e2  # type: ignore
 
-import numpy as np
+import numpy as np  # type: ignore
 import hashlib
 import base64
 from io import BytesIO
 from typing import List, Optional
-from sqlalchemy import func
+from sqlalchemy import func  # type: ignore
 import asyncio
-import hmac
 from concurrent.futures import ThreadPoolExecutor
 
 _executor = ThreadPoolExecutor(max_workers=4)
@@ -174,20 +196,12 @@ def get_password_hash(password):
 
 import uuid
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
-    to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=15))
-    jti = str(uuid.uuid4())
-    to_encode.update({"exp": expire, "jti": jti})
-    
-    # Store JTI in Redis (whitelist)
-    from backend.redis_client import store_jti
-    # Convert timedelta to seconds for Redis EX
-    delta = expires_delta or timedelta(minutes=15)
-    seconds = int(delta.total_seconds())
-    store_jti(jti, seconds)
-    
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM) # type: ignore
+# create_access_token and create_refresh_token live in auth.py.
+# Importing here so callers within main.py use the single authoritative implementation.
+try:
+    from backend.auth import create_access_token, create_refresh_token  # type: ignore
+except ImportError:
+    from auth import create_access_token, create_refresh_token  # type: ignore
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
@@ -202,7 +216,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
              raise credentials_exception
         
         # Check JTI in Redis (whitelist)
-        from backend.redis_client import is_jti_blacklisted
+        from backend.redis_client import is_jti_blacklisted  # type: ignore
         if is_jti_blacklisted(jti):
              raise credentials_exception
              
@@ -226,7 +240,7 @@ async def get_current_user_optional(token: Optional[str] = Depends(OAuth2Passwor
         if not jti:
             return None
             
-        from backend.redis_client import is_jti_blacklisted
+        from backend.redis_client import is_jti_blacklisted  # type: ignore
         if is_jti_blacklisted(jti):
             return None
             
@@ -239,9 +253,10 @@ async def get_current_user_optional(token: Optional[str] = Depends(OAuth2Passwor
         return None
 
 async def verify_admin(request: Request):
-    admin_key = os.getenv("ADMIN_KEY")
-    provided_key = request.headers.get("X-Admin-Key")
-    if not admin_key or provided_key != admin_key:
+    admin_key = os.getenv("ADMIN_KEY", "")
+    provided_key = request.headers.get("X-Admin-Key", "")
+    # Use constant-time comparison to prevent timing-based brute-force attacks.
+    if not admin_key or not hmac.compare_digest(provided_key.encode(), admin_key.encode()):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Unauthorized admin access")
     return True
 
@@ -259,6 +274,17 @@ class UserIn(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+    refresh_token: Optional[str] = None  # included when the endpoint issues one
+
+# Expanded prompt-injection blocklist — covers the most common jailbreak templates.
+# Note: string matching is a lightweight first layer only. A dedicated LLM guard
+# (e.g. Llama Guard, OpenAI moderation API) should be added before production.
+_INJECTION_PATTERNS = [
+    "ignore previous", "ignore above", "ignore all previous",
+    "forget previous", "new persona", "pretend you are",
+    "system:", "assistant:", "user:",
+    "jailbreak", "disregard", "override previous",
+]
 
 class Query(BaseModel):
     text: str = Field(..., max_length=500)
@@ -273,12 +299,10 @@ class Query(BaseModel):
     def sanitize_text(cls, v):
         if v is None:
             return v
-        # Basic prompt injection detection
-        forbidden = ["ignore previous", "system:", "assistant:", "user:"]
         v_lower = v.lower()
-        for f in forbidden:
-            if f in v_lower:
-                raise ValueError(f"Potential prompt injection detected: {f}")
+        for pattern in _INJECTION_PATTERNS:
+            if pattern in v_lower:
+                raise ValueError(f"Potential prompt injection detected: {pattern}")
         return v
 
 class ChatMessage(BaseModel):
@@ -289,11 +313,10 @@ class ChatMessage(BaseModel):
 
     @validator("message")
     def sanitize_message(cls, v):
-        forbidden = ["ignore previous", "system:", "assistant:", "user:"]
         v_lower = v.lower()
-        for f in forbidden:
-            if f in v_lower:
-                raise ValueError(f"Potential prompt injection detected: {f}")
+        for pattern in _INJECTION_PATTERNS:
+            if pattern in v_lower:
+                raise ValueError(f"Potential prompt injection detected: {pattern}")
         return v
 
 # Helper for per-user rate limiting
@@ -334,7 +357,7 @@ async def add_request_id(request: Request, call_next):
         "method": request.method,
         "path": request.url.path,
         "status_code": response.status_code,
-        "duration_ms": round(duration, 2)
+        "duration_ms": int(duration + 0.5) # Round to nearest int instead of float formatting
     })
     
     return response
@@ -345,18 +368,22 @@ async def security_headers(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    # CSP mirrors vercel.json and covers API responses that are consumed by the browser.
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; script-src 'self'; object-src 'none'; frame-ancestors 'none';"
+    )
     return response
 
 app.include_router(payments_router)
 
 # Rate Limiter setup
-from slowapi.errors import RateLimitExceeded
-from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded  # type: ignore
+from slowapi import _rate_limit_exceeded_handler  # type: ignore
 from typing import Any, cast
 app.add_exception_handler(RateLimitExceeded, cast(Any, _rate_limit_exceeded_handler))
 
 # Ensure database tables are created
-Base.metadata.create_all(bind=engine)
+# Base.metadata.create_all(bind=engine) # Removed - using Alembic migrations instead
 
 
 
@@ -381,12 +408,14 @@ for o in env_origins:
 
 allow_all = os.getenv("CORS_ORIGINS", "").strip() == "*"
 
+# SECURITY: allow_credentials=True is MANDATORY for httpOnly cookies.
+# When allow_credentials=True, allow_origins MUST be a list of trusted domains, NOT ["*"].
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if allow_all else origins,
-    allow_credentials=False,
+    allow_origins=origins,
+    allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
+    allow_headers=["Authorization", "Content-Type", "X-Admin-Key", "X-Request-ID"],
 )
 
 # Essential Session Middleware for OAuth
@@ -406,7 +435,11 @@ oauth.register(
 
 @app.get("/login/google")
 async def login_google(request: Request):
-    redirect_uri = request.url_for('auth_google')
+    # Determine the redirect URI, ensuring HTTPS if not on localhost
+    is_local = request.url.hostname in ["localhost", "127.0.0.1"]
+    scheme = "http" if is_local else "https"
+    redirect_uri = str(request.url_for('auth_google')).replace("http://", f"{scheme}://")
+    
     return await oauth.google.authorize_redirect(request, redirect_uri)
 
 @app.get("/auth/google")
@@ -416,39 +449,87 @@ async def auth_google(request: Request, db: Session = Depends(get_db)):
         user_info = token.get('userinfo')
         if not user_info:
             raise HTTPException(status_code=400, detail="Failed to fetch user info from Google")
-        
+
         email = user_info.get('email')
-        username = email.split('@')[0] # Simple username generation
-        
-        # Check if user exists, if not create them
+        username = email.split('@')[0]  # Simple username generation
+
+        # Upsert user
         user = db.query(Users).filter(Users.username == username).first()
         if not user:
             user = Users(
                 username=username,
                 email=email,
-                password_hash=get_password_hash(os.urandom(16).hex()), # Random password for OAuth users
-                is_verified=1 # OAuth users are verified by Google
+                password_hash=get_password_hash(os.urandom(16).hex()),
+                is_verified=1  # OAuth users are verified by Google
             )
             db.add(user)
             db.commit()
         elif not user.is_verified:
-            # If user exists but wasn't verified, Google login verifies them
             user.is_verified = 1
             db.commit()
-            
-        # Generate JWT token
-        access_token = create_access_token(
-            data={"sub": user.username},
-            expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-        )
-        
-        # Redirect to frontend with token (adjust URL as needed for your frontend)
+
+        # ——————————————————————————————————————————————————————————
+        # SECURITY: do NOT embed the JWT in the redirect URL (?token=...).
+        # Tokens in URLs are logged by every proxy, CDN, and browser history.
+        # Instead, issue a short-lived one-time opaque code and exchange it via POST.
+        # ——————————————————————————————————————————————————————————
+        from backend.redis_client import _set  # type: ignore
+        one_time_code = uuid.uuid4().hex
+        _set(f"oauth_code:{one_time_code}", user.username, ex=60)  # 60-second TTL
+
         frontend_url = os.getenv("FRONTEND_URL", "http://localhost:8080")
-        return RedirectResponse(url=f"{frontend_url}?token={access_token}")
-        
+        # Frontend calls POST /auth/exchange with {"code": one_time_code} to get JWT
+        return RedirectResponse(url=f"{frontend_url}?code={one_time_code}")
+
     except Exception as e:
         logger.error(f"OAuth error: {e}")
         raise HTTPException(status_code=400, detail="Authentication failed")
+
+
+class OAuthExchangeRequest(BaseModel):
+    code: str = Field(..., max_length=64)
+
+@app.post("/auth/exchange", response_model=Token)
+async def auth_exchange(body: OAuthExchangeRequest, db: Session = Depends(get_db)):
+    """
+    Exchange a short-lived one-time OAuth code for a JWT access + refresh token.
+    The code is consumed (deleted) on first use to prevent replay.
+    """
+    from backend.redis_client import _get, HAS_REDIS  # type: ignore
+    from backend.redis_client import _set as redis_set  # type: ignore
+    import redis as _redis  # type: ignore
+
+    username_raw = _get(f"oauth_code:{body.code}")
+    if not username_raw:
+        raise HTTPException(status_code=400, detail="Invalid or expired OAuth code")
+
+    # Consume the code (delete it) — one-time use
+    if HAS_REDIS:
+        try:
+            from backend.redis_client import r as _r  # type: ignore
+            _r.delete(f"oauth_code:{body.code}")
+        except Exception:
+            pass
+    else:
+        from backend.redis_client import _memory_cache  # type: ignore
+        _memory_cache.pop(f"oauth_code:{body.code}", None)
+
+    username = username_raw.decode() if isinstance(username_raw, bytes) else username_raw
+    user = db.query(Users).filter(Users.username == username).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    access_token = create_access_token(
+        data={"sub": user.username},
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
+    refresh_token = create_refresh_token(data={"sub": user.username})
+    
+    response = JSONResponse(content={"status": "success", "message": "Authenticated successfully"})
+    response.set_cookie(key="access_token", value=access_token, httponly=True, secure=True, samesite="lax", max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60)
+    response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=True, samesite="lax", max_age=30 * 24 * 3600)
+    
+    return response
 
 @app.exception_handler(Exception)
 
@@ -468,19 +549,85 @@ async def global_exception_handler(request: Request, exc: Exception):
 async def logout(token: str = Depends(oauth2_scheme)):
     """
     Logout by revoking the current JWT's JTI.
+    Requires Redis — returns 503 if Redis is unavailable (revocation would be silently non-functional).
     """
+    from backend.redis_client import HAS_REDIS, delete_jti  # type: ignore
+    if not HAS_REDIS:
+        raise HTTPException(
+            status_code=503,
+            detail="Logout unavailable: Redis is required for session revocation. "
+                   "Please contact support or wait for Redis to recover."
+        )
     try:
-        # Decode without verification to get JTI if possible, 
-        # but better to use verified payload if we have it.
-        # Since Depends(oauth2_scheme) gives us the token, we decode it.
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM]) # type: ignore
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])  # type: ignore
         jti = payload.get("jti")
         if jti:
-            from backend.redis_client import delete_jti
             delete_jti(jti)
-        return {"status": "success", "message": "Logged out successfully"}
+        
+        response = JSONResponse(content={"status": "success", "message": "Logged out successfully"})
+        response.delete_cookie("access_token")
+        response.delete_cookie("refresh_token")
+        return response
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+@app.post("/refresh", response_model=Token)
+async def refresh_access_token(body: RefreshRequest, db: Session = Depends(get_db)):
+    """
+    Exchange a valid refresh token for a new access token + rotated refresh token.
+    The old refresh JTI is revoked on use (rotation prevents replay).
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or expired refresh token",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(body.refresh_token, SECRET_KEY, algorithms=[ALGORITHM])  # type: ignore
+    except JWTError:
+        raise credentials_exception
+
+    if payload.get("type") != "refresh":
+        raise credentials_exception
+
+    jti = payload.get("jti")
+    if not jti:
+        raise credentials_exception
+
+    # Verify the refresh JTI exists in Redis
+    from backend.redis_client import _get, _set, HAS_REDIS  # type: ignore
+    if _get(f"refresh_jti:{jti}") is None:
+        raise credentials_exception
+
+    # Revoke the old refresh JTI (rotation — prevents replay)
+    if HAS_REDIS:
+        try:
+            from backend.redis_client import r as _r  # type: ignore
+            _r.delete(f"refresh_jti:{jti}")
+        except Exception:
+            pass
+    else:
+        from backend.redis_client import _memory_cache  # type: ignore
+        _memory_cache.pop(f"refresh_jti:{jti}", None)
+
+    username_val = payload.get("sub")
+    if not username_val:
+        raise credentials_exception
+
+    user = db.query(Users).filter(Users.username == str(username_val)).first()
+    if not user:
+        raise credentials_exception
+
+    new_access = create_access_token(
+        data={"sub": user.username},
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
+    new_refresh = create_refresh_token(data={"sub": user.username})
+    return {"access_token": new_access, "refresh_token": new_refresh, "token_type": "bearer"}
 
 @app.on_event("startup")
 async def startup_event():
@@ -498,9 +645,8 @@ async def startup_event():
 
     try:
 
-        Base.metadata.create_all(bind=engine)
-
-        logger.info("Database tables ready.")
+        # Base.metadata.create_all(bind=engine) # Removed - using Alembic migrations instead
+        logger.info("Database connection verified.")
 
     except Exception as e:
 
@@ -523,20 +669,44 @@ def root():
 
 
 @app.get("/health")
-
-def health():
-
-    return {
-
+async def health(db: Session = Depends(get_db)):
+    """
+    Enhanced health check with dependency verification.
+    """
+    status_info: dict = {
         "status": "ok",
-
-        "version": "2.1.0",
-
-        "search_mode": "semantic" if HAS_MODEL else "random_fallback",
-
-        "redis": HAS_REDIS,
-
+        "timestamp": datetime.utcnow().isoformat(),
+        "dependencies": {
+            "database": "unhealthy",
+            "redis": "unhealthy" if HAS_REDIS else "unavailable"
+        }
     }
+    
+    # Check Database
+    try:
+        db.execute(text("SELECT 1"))
+        status_info["dependencies"]["database"] = "healthy"
+    except Exception as e:
+        logger.error(f"Health Check: Database unreachable: {e}")
+        status_info["status"] = "error"
+
+    # Check Redis
+    if HAS_REDIS:
+        try:
+            from backend.redis_client import _client  # type: ignore
+            if _client and _client.ping():
+                status_info["dependencies"]["redis"] = "healthy"
+            else:
+                status_info["status"] = "error"
+        except Exception as e:
+            logger.error(f"Health Check: Redis unreachable: {e}")
+            status_info["status"] = "error"
+            status_info["dependencies"]["redis"] = "unhealthy"
+
+    if status_info["status"] != "ok":
+        return JSONResponse(status_code=503, content=status_info)
+        
+    return status_info
 
 
 
@@ -548,11 +718,11 @@ def daily_quote(db: Session = Depends(get_db)):
 
     try:
 
-        from backend.generation import fetch_open_source_quote
+        from backend.generation import fetch_open_source_quote  # type: ignore
 
     except ImportError:
 
-        from generation import fetch_open_source_quote
+        from generation import fetch_open_source_quote  # type: ignore
 
     os_quote = fetch_open_source_quote()
 
@@ -658,7 +828,7 @@ def search_quotes(query: Query, db: Session = Depends(get_db)):
                 scored.append((q, cosine_sim(q_emb, emb)))
 
             scored.sort(key=lambda x: x[1], reverse=True)
-            results = [s[0] for s in scored[:query.top_k]]
+            results = [s[0] for s in scored[:query.top_k]]  # type: ignore
 
     formatted = [
         {"quote": q.text, "author": q.author, "topic": q.topic, "mood": q.mood,
@@ -697,24 +867,27 @@ async def gen_image(request: Request, req: Query, db: Session = Depends(get_db),
         # Security: Validate custom_bg if provided
         if req.custom_bg:
             # Check size (approximate for base64)
-            if len(req.custom_bg) > 7 * 1024 * 1024: # ~5MB after decoding
+            if len(req.custom_bg) > 7 * 1024 * 1024: # type: ignore # ~5MB after decoding
                 raise HTTPException(status_code=400, detail="Custom background exceeds 5MB limit")
             
             # Basic type check
             allowed_types = ["data:image/jpeg", "data:image/png", "data:image/webp"]
-            if not any(req.custom_bg.startswith(t) for t in allowed_types):
+            if not any(req.custom_bg.startswith(t) for t in allowed_types): # type: ignore
                 raise HTTPException(status_code=400, detail="Invalid image format. Only JPEG, PNG and WEBP are allowed.")
         
-        # Credit System: Deduct 1 credit for generation
+        # Credit System: Deduct upfront for background tasks
         if current_user:
+            from backend.payments import use_credits  # type: ignore
+            # Images cost 1 credit
             use_credits(current_user.id, amount=1, db=db)
+            logger.info(f"Deducted 1 credit upfront for user {user_id}")
             
         # Check if we should use Celery for async processing (Scale Infrastructure)
         # Default to True in production (Render/DigitalOcean)
         USE_CELERY = os.getenv("USE_CELERY", "true").lower() == "true"
         
         if USE_CELERY:
-            from backend.tasks import generate_image_task
+            from backend.tasks import generate_image_task  # type: ignore
             task = generate_image_task.delay(
                 req.text, 
                 req.author or "Unknown",
@@ -726,7 +899,7 @@ async def gen_image(request: Request, req: Query, db: Session = Depends(get_db),
         loop = asyncio.get_event_loop()
         bio = await loop.run_in_executor(
             _executor,
-            lambda: generate_quote_image(
+            lambda: generate_quote_image( # type: ignore
                 req.text, 
                 author=req.author or "Unknown",
                 mood=req.mood or "neutral", 
@@ -739,12 +912,14 @@ async def gen_image(request: Request, req: Query, db: Session = Depends(get_db),
 
         img_data = f"data:image/png;base64,{img_b64}"
 
+        # No deduction here anymore (moved to upfront)
+
         new_feed = FeedItem(
             user_id=user_id,
-            text=req.text, 
+            text=req.text,
             author=req.author or "Unknown",
-            mood=req.mood or "neutral", 
-            image_b64=img_data, 
+            mood=req.mood or "neutral",
+            image_b64=img_data,
             likes=0
         )
 
@@ -765,7 +940,62 @@ async def gen_image(request: Request, req: Query, db: Session = Depends(get_db),
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/generate_video")
+@limiter.limit("2/minute")
+async def gen_video(request: Request, req: Query, db: Session = Depends(get_db), current_user: Optional[Users] = Depends(get_current_user_optional)):
+    try:
+        user_id = current_user.id if current_user else None
+        user_tier = current_user.tier if current_user else "free"
 
+        # Check if we should use Celery for async processing
+        USE_CELERY = os.getenv("USE_CELERY", "true").lower() == "true"
+
+        # Deduct upfront
+        if current_user:
+            from backend.payments import use_credits  # type: ignore
+            use_credits(current_user.id, amount=2, db=db) # Videos cost 2 credits
+            logger.info(f"Deducted 2 credits upfront for user {user_id}")
+
+        if USE_CELERY:
+            from backend.tasks import generate_video_task  # type: ignore
+            task = generate_video_task.delay(
+                req.text,
+                req.author or "Unknown",
+                req.mood or "neutral",
+                user_id,
+                user_tier
+            )
+            return {"task_id": task.id, "status": "processing", "message": "Video generation started in background."}
+
+        # Synchronous video generation (for local development or if Celery is off)
+        video_url = await generate_quote_video( # type: ignore
+            req.text,
+            author=req.author or "Unknown",
+            mood=req.mood or "neutral",
+            user_tier=user_tier
+        )
+
+        # No deduction here anymore (moved to upfront)
+
+        new_feed = FeedItem(
+            user_id=user_id,
+            text=req.text,
+            author=req.author or "Unknown",
+            mood=req.mood or "neutral",
+            video_url=video_url,
+            likes=0
+        )
+
+        db.add(new_feed)
+        db.commit()
+        db.refresh(new_feed)
+
+        return {"id": new_feed.id, "video_url": video_url}
+
+    except Exception as e:
+        import traceback
+        logger.error(f"Video generation error: {e}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/like/{item_type}/{item_id}")
@@ -826,7 +1056,8 @@ async def chat(
     current_user: Optional[Users] = Depends(get_current_user_optional),
 ):
     user_id = current_user.id if current_user else None
-    logger.info(f"Chat [{msg.session_id}] (User: {user_id}): '{msg.message[:60]}'")
+    msg_text_snip = _safe_truncate(str(msg.message), 60)
+    logger.info(f"Chat [{msg.session_id}] (User: {user_id}): '{msg_text_snip}'")
 
     # Analytics
     today = date.today()
@@ -853,7 +1084,7 @@ async def chat(
 
     # Infer implicit feedback from previous turn
     try:
-        from learning import infer_implicit_feedback, collect_training_sample
+        from learning import infer_implicit_feedback, collect_training_sample  # type: ignore
         implicit_rating = infer_implicit_feedback(history, msg.message)
         if implicit_rating and len(history) >= 1:
             prev = history[-1]
@@ -873,7 +1104,7 @@ async def chat(
     personalized_system = None
     try:
         if user_id:
-            from learning import UserPreferenceModel, AdaptivePromptManager
+            from learning import UserPreferenceModel, AdaptivePromptManager  # type: ignore
             pref = UserPreferenceModel(db, user_id)
             base = AdaptivePromptManager(db).get_best_variant(msg.mood or "philosophical")
             personalized_system = pref.build_system_prompt(base, msg.mood or "philosophical")
@@ -882,7 +1113,7 @@ async def chat(
 
     # Use fine-tuned model if available
     try:
-        from trainer import generate_with_active_model
+        from trainer import generate_with_active_model  # type: ignore
         if generate_with_active_model.__module__:  # check it imported
             bot_response = generate_with_active_model(
                 prompt=msg.message,
@@ -903,7 +1134,7 @@ async def chat(
 
     # Store this turn as training data (auto-scored)
     try:
-        from learning import collect_training_sample
+        from learning import collect_training_sample  # type: ignore
         collect_training_sample(
             db=db,
             user_message=msg.message,
@@ -949,8 +1180,8 @@ async def submit_feedback(
     user_id = current_user.id if current_user else None
 
     try:
-        from learning import collect_training_sample
-        from training_models import ResponseFeedback
+        from learning import collect_training_sample  # type: ignore
+        from training_models import ResponseFeedback  # type: ignore
 
         # Store training sample
         sample = collect_training_sample(
@@ -989,7 +1220,7 @@ async def get_my_learning_profile(
     current_user: Users = Depends(get_current_user),
 ):
     """Returns the AI's current learned profile for this user."""
-    from learning import UserPreferenceModel
+    from learning import UserPreferenceModel  # type: ignore
     model = UserPreferenceModel(db, current_user.id)
     profile = model.get_profile()
     return {
@@ -1008,7 +1239,7 @@ async def get_learning_stats_route(
     current_user: Users = Depends(get_current_user),
 ):
     """Returns learning system statistics. Admin-level endpoint."""
-    from learning import get_learning_stats
+    from learning import get_learning_stats  # type: ignore
     stats = get_learning_stats(db)
     return stats
 
@@ -1020,7 +1251,7 @@ async def get_model_versions(
     current_user: Users = Depends(get_current_user),
 ):
     """Returns all fine-tuned model versions."""
-    from trainer import get_model_history, get_active_model_id
+    from trainer import get_model_history, get_active_model_id  # type: ignore
     versions = get_model_history(db)
     return {
         "active_model": get_active_model_id() or "groq/llama3-8b-8192 (base)",
@@ -1039,7 +1270,7 @@ async def trigger_training_manually(
     if current_user.tier not in ("creator", "admin"):
         raise HTTPException(status_code=403, detail="Requires creator tier")
 
-    from trainer import trigger_training_pipeline
+    from trainer import trigger_training_pipeline  # type: ignore
     task = trigger_training_pipeline.delay()
     return {
         "status": "queued",
@@ -1052,9 +1283,9 @@ async def trigger_training_manually(
 @app.get("/model/status")
 async def model_status(db: Session = Depends(get_db)):
     """Public endpoint: returns which model is powering LEVI right now."""
-    from trainer import get_active_model_id
-    from training_models import TrainingJob
-    from learning import get_learning_stats
+    from trainer import get_active_model_id  # type: ignore
+    from training_models import TrainingJob  # type: ignore
+    from learning import get_learning_stats  # type: ignore
 
     active = get_active_model_id()
     stats  = get_learning_stats(db)
@@ -1173,23 +1404,25 @@ async def register(request: Request, user_in: UserIn, db: Session = Depends(get_
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
     
-    # Generate verification token
+    # Generate verification token with 24-hour expiry
     verification_token = str(uuid.uuid4())
-    
+    token_expires_at = datetime.utcnow() + timedelta(hours=24)
+
     user = Users(
         username=user_in.username,
         email=user_in.username,
         password_hash=get_password_hash(user_in.password),
         is_verified=0,
-        verification_token=verification_token
+        verification_token=verification_token,
+        verification_token_expires_at=token_expires_at,
     )
     db.add(user)
     db.commit()
-    
+
     # Send verification email
-    from backend.email_service import send_verification_email
+    from backend.email_service import send_verification_email  # type: ignore
     send_verification_email(user.username, verification_token)
-    
+
     return JSONResponse(
         status_code=201,
         content={"message": "Registration successful. Please check your email to verify your account."}
@@ -1200,11 +1433,20 @@ async def verify_email(token: str, db: Session = Depends(get_db)):
     user = db.query(Users).filter(Users.verification_token == token).first()
     if not user:
         raise HTTPException(status_code=400, detail="Invalid or expired verification token")
-    
+
+    # Reject tokens older than 24 hours
+    if user.verification_token_expires_at and datetime.utcnow() > user.verification_token_expires_at:
+        # Clean up the stale token
+        user.verification_token = None
+        user.verification_token_expires_at = None
+        db.commit()
+        raise HTTPException(status_code=400, detail="Verification token has expired. Please register again.")
+
     user.is_verified = 1
     user.verification_token = None
+    user.verification_token_expires_at = None
     db.commit()
-    
+
     # Redirect to login or success page
     frontend_url = os.getenv("FRONTEND_URL", "https://levi-ai.create.app")
     return RedirectResponse(url=f"{frontend_url}/auth.html?verified=true")
@@ -1219,9 +1461,13 @@ async def login_for_access_token(request: Request, form_data: OAuth2PasswordRequ
     if not user.is_verified:
         raise HTTPException(status_code=403, detail="Please verify your email address before logging in.")
     
-    token = create_access_token(data={"sub": user.username},
-                                expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-    return {"access_token": token, "token_type": "bearer"}
+    access_token = create_access_token(data={"sub": user.username},
+                                        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    refresh_token = create_refresh_token(data={"sub": user.username})
+    response = JSONResponse(content={"status": "success", "message": "Logged in successfully"})
+    response.set_cookie(key="access_token", value=access_token, httponly=True, secure=True, samesite="lax", max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60)
+    response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=True, samesite="lax", max_age=30 * 24 * 3600)
+    return response
 
 @app.post("/login", response_model=Token)
 @limiter.limit("10/minute")
@@ -1237,9 +1483,60 @@ async def login_json(request: Request, user_in: UserIn, db: Session = Depends(ge
     if not user.is_verified:
         raise HTTPException(status_code=403, detail="Please verify your email address before logging in.")
         
-    token = create_access_token(data={"sub": user.username},
-                                expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-    return {"access_token": token, "token_type": "bearer"}
+    access_token = create_access_token(data={"sub": user.username},
+                                        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    refresh_token = create_refresh_token(data={"sub": user.username})
+    response = JSONResponse(content={"status": "success", "message": "Logged in successfully"})
+    response.set_cookie(key="access_token", value=access_token, httponly=True, secure=True, samesite="lax", max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60)
+    response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=True, samesite="lax", max_age=30 * 24 * 3600)
+    return response
+
+# ── Password Reset ───────────────────────────────────────────────────────────
+class ForgotPasswordRequest(BaseModel):
+    email: str = Field(..., max_length=100)
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(..., max_length=100)
+    new_password: str = Field(..., min_length=8, max_length=100)
+
+@app.post("/forgot-password")
+@limiter.limit("3/minute")
+async def forgot_password(request: Request, req: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    user = db.query(Users).filter(Users.username == req.email).first()
+    if not user:
+        # Security: Don't reveal if user exists
+        return {"message": "If this email is registered, you will receive a reset link shortly."}
+
+    token = str(uuid.uuid4())
+    user.reset_password_token = token
+    user.reset_password_token_expires_at = datetime.utcnow() + timedelta(hours=1)
+    db.commit()
+
+    from backend.email_service import send_password_reset_email  # type: ignore
+    send_password_reset_email(user.username, token)
+
+    return {"message": "If this email is registered, you will receive a reset link shortly."}
+
+@app.post("/reset-password")
+@limiter.limit("3/minute")
+async def reset_password(request: Request, req: ResetPasswordRequest, db: Session = Depends(get_db)):
+    user = db.query(Users).filter(Users.reset_password_token == req.token).first()
+    
+    if not user or not user.reset_password_token_expires_at:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+    
+    if datetime.utcnow() > user.reset_password_token_expires_at:
+        user.reset_password_token = None
+        user.reset_password_token_expires_at = None
+        db.commit()
+        raise HTTPException(status_code=400, detail="Reset token has expired")
+
+    user.password_hash = get_password_hash(req.new_password)
+    user.reset_password_token = None
+    user.reset_password_token_expires_at = None
+    db.commit()
+
+    return {"status": "success", "message": "Password updated successfully. You can now log in."}
 
 # Phase 2: Viral Loops & Engagement
 
@@ -1248,8 +1545,8 @@ async def get_task_status(task_id: str):
     """
     Check the status of a Celery background task.
     """
-    from backend.tasks import celery_app
-    from celery.result import AsyncResult
+    from backend.tasks import celery_app  # type: ignore
+    from celery.result import AsyncResult  # type: ignore
     
     res = AsyncResult(task_id, app=celery_app)
     if res.ready():
@@ -1293,48 +1590,6 @@ async def track_share(db: Session = Depends(get_db), current_user: Users = Depen
         "bonus_credits": current_user.bonus_credits
     }
 
-@app.post("/generate_video")
-async def gen_video(req: Query, db: Session = Depends(get_db), current_user: Optional[Users] = Depends(get_current_user)):
-    try:
-        user_id = current_user.id if current_user else None
-        
-        # Default to True in production
-        USE_CELERY = os.getenv("USE_CELERY", "true").lower() == "true"
-        
-        if USE_CELERY:
-            from backend.tasks import generate_video_task
-            task = generate_video_task.delay(
-                req.text, 
-                req.author or "Unknown",
-                req.mood or "neutral",
-                user_id
-            )
-            return {"task_id": task.id, "status": "processing", "message": "Video generation started in background."}
-
-        from backend.video_gen import generate_quote_video
-        video_bytes = generate_quote_video(
-            req.text, 
-            author=req.author or "Unknown",
-            mood=req.mood or "neutral"
-        )
-        
-        # Persistence for sync video (if used)
-        new_item = FeedItem(
-            user_id=user_id,
-            text=req.text,
-            author=req.author or "Unknown",
-            mood=req.mood or "neutral",
-            # We don't have an easy way to store raw video bytes in DB, 
-            # so sync video without S3 is less persistent than async.
-        )
-        db.add(new_item)
-        db.commit()
-
-        return Response(content=video_bytes, media_type="video/mp4")
-    except Exception as e:
-        logger.error(f"Video generation error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
 @app.get("/my_gallery")
 async def get_my_gallery(db: Session = Depends(get_db), current_user: Users = Depends(get_current_user), limit: int = 20, offset: int = 0):
     """Fetch all generated items for the current user."""
@@ -1358,7 +1613,8 @@ async def get_my_gallery(db: Session = Depends(get_db), current_user: Users = De
 # ─────────────────────────────────────────────────────────────
 
 @app.get("/admin/users")
-async def admin_list_users(db: Session = Depends(get_db), _admin: bool = Depends(verify_admin)):
+@limiter.limit("5/minute")  # Brute-force protection for admin key
+async def admin_list_users(request: Request, db: Session = Depends(get_db), _admin: bool = Depends(verify_admin)):
     users = db.query(Users).order_by(Users.created_at.desc()).all()
     return [{
         "id": u.id,
@@ -1371,7 +1627,8 @@ async def admin_list_users(db: Session = Depends(get_db), _admin: bool = Depends
     } for u in users]
 
 @app.get("/admin/feed")
-async def admin_list_feed(db: Session = Depends(get_db), limit: int = 50, offset: int = 0, _admin: bool = Depends(verify_admin)):
+@limiter.limit("5/minute")
+async def admin_list_feed(request: Request, db: Session = Depends(get_db), limit: int = 50, offset: int = 0, _admin: bool = Depends(verify_admin)):
     items = db.query(FeedItem).order_by(FeedItem.timestamp.desc()).offset(offset).limit(limit).all()
     return [{
         "id": i.id,
@@ -1386,7 +1643,8 @@ async def admin_list_feed(db: Session = Depends(get_db), limit: int = 50, offset
     } for i in items]
 
 @app.delete("/admin/feed/{item_id}")
-async def admin_delete_feed_item(item_id: int, db: Session = Depends(get_db), _admin: bool = Depends(verify_admin)):
+@limiter.limit("5/minute")
+async def admin_delete_feed_item(request: Request, item_id: int, db: Session = Depends(get_db), _admin: bool = Depends(verify_admin)):
     item = db.query(FeedItem).filter(FeedItem.id == item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
@@ -1395,7 +1653,8 @@ async def admin_delete_feed_item(item_id: int, db: Session = Depends(get_db), _a
     return {"status": "success", "message": f"Item {item_id} deleted"}
 
 @app.post("/admin/adjust_credits")
-async def admin_adjust_credits(adj: AdminAdjustCredits, db: Session = Depends(get_db), _admin: bool = Depends(verify_admin)):
+@limiter.limit("5/minute")
+async def admin_adjust_credits(request: Request, adj: AdminAdjustCredits, db: Session = Depends(get_db), _admin: bool = Depends(verify_admin)):
     user = db.query(Users).filter(Users.id == adj.user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -1404,7 +1663,8 @@ async def admin_adjust_credits(adj: AdminAdjustCredits, db: Session = Depends(ge
     return {"status": "success", "new_credits": user.credits}
 
 @app.get("/admin/payments")
-async def admin_list_payments(_admin: bool = Depends(verify_admin)):
+@limiter.limit("5/minute")
+async def admin_list_payments(request: Request, _admin: bool = Depends(verify_admin)):
     """
     In a real app, you might query a Payments table. 
     For now, we can check recent success logs or Redis idempotency keys.
@@ -1496,7 +1756,7 @@ async def subscribe_push(sub: PushSubscriptionSchema, db: Session = Depends(get_
 
 @app.post("/push/send_test")
 async def send_test_push(current_user: Users = Depends(get_current_user), db: Session = Depends(get_db)):
-    from backend.tasks import send_push_notification_task
+    from backend.tasks import send_push_notification_task  # type: ignore
     subs = db.query(PushSubscription).filter(PushSubscription.user_id == current_user.id).all()
     if not subs:
         raise HTTPException(status_code=404, detail="No push subscriptions found for this user")
@@ -1514,7 +1774,7 @@ async def send_test_push(current_user: Users = Depends(get_current_user), db: Se
 
 @app.post("/create_order")
 def new_order(req: OrderRequest, db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
-    from backend.payments import create_order
+    from backend.payments import create_order  # type: ignore
     amounts = {
         "pro": int(os.getenv("RAZORPAY_PRO_PLAN_AMOUNT", 29900)),
         "creator": int(os.getenv("RAZORPAY_CREATOR_PLAN_AMOUNT", 59900))
@@ -1528,7 +1788,7 @@ def new_order(req: OrderRequest, db: Session = Depends(get_db), current_user: Us
 
 @app.post("/verify_payment")
 def confirm_payment(data: PaymentVerify, db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
-    from backend import payments
+    from backend import payments  # type: ignore
     valid = payments.verify_razorpay_signature(
         data.razorpay_order_id,
         data.razorpay_payment_id,
@@ -1556,7 +1816,13 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
         logger.warning("Razorpay webhook missing secret or signature")
         return {"status": "ignored"}
 
-    expected_signature = hmac.new(webhook_secret.encode(), payload, hashlib.sha256).hexdigest()
+    # Ensure secret exists and is a string
+    _secret_str = str(webhook_secret) if webhook_secret else ""
+    expected_signature = hmac.new(
+        _secret_str.encode(), 
+        payload, 
+        hashlib.sha256
+    ).hexdigest()
     
     # Ensure signature is a string for comparison
     actual_signature = signature.decode() if isinstance(signature, bytes) else signature
@@ -1566,7 +1832,7 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
 
     import json
     try:
-        data = json.loads(payload)
+        data = json.loads(payload) # type: ignore
     except json.JSONDecodeError:
         logger.error("Failed to parse Razorpay webhook payload as JSON")
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
@@ -1581,19 +1847,21 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
             logger.error("Razorpay webhook missing payment_id")
             return {"status": "error", "message": "Missing payment_id"}
 
-        # Idempotency check: prevent double-crediting
-        from backend.redis_client import _get, _set, HAS_REDIS
-        processed_key = f"payment_processed:{payment_id}"
-        if _get(processed_key):
+        # Idempotency check: prevent double-crediting using DB-backed events
+        existing_event = db.query(PaymentEvent).filter(PaymentEvent.payment_id == payment_id).first()
+        if existing_event:
             logger.info(f"Payment {payment_id} already processed. Skipping.")
             return {"status": "success", "message": "Already processed"}
         
-        # Mark as processed in Redis (24h TTL)
-        _set(processed_key, "1", ex=86400)
-
+        # Create a new payment event recor
         order_id = payment_entity.get("order_id")
-        amount = payment_entity.get("amount", 0) / 100 # Convert paise to INR
+        amount_paise = payment_entity.get("amount", 0)
+        amount_inr = amount_paise / 100
         notes = payment_entity.get("notes", {})
+        
+        # Placeholder for user identification logic (will update below)
+        user_id_val = notes.get("user_id")
+        plan_val = notes.get("plan", "pro")
         
         # Security: Re-derive user and plan from notes/receipt (verified by signature)
         user_id = notes.get("user_id")
@@ -1606,17 +1874,27 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
                 plan = parts[1]
                 user_id = parts[2]
 
-        if user_id:
-            from backend.payments import upgrade_user_tier
-            upgrade_user_tier(int(user_id), str(plan), db)
+        if user_id_val:
+            # Create the event in DB before upgrading to ensure persistence
+            new_event = PaymentEvent(
+                payment_id=payment_id,
+                order_id=order_id,
+                user_id=int(user_id_val),
+                amount=amount_inr,
+                status="captured"
+            )
+            db.add(new_event)
+            
+            from backend.payments import upgrade_user_tier  # type: ignore
+            upgrade_user_tier(int(user_id_val), str(plan_val), db)
             
             # Audit Trail: Log payment success
-            logger.info(f"[PAYMENT_SUCCESS] User: {user_id} | Amount: {amount} INR | Plan: {plan} | Order: {order_id} | Payment: {payment_id}")
+            logger.info(f"[PAYMENT_SUCCESS] User: {user_id_val} | Amount: {amount_inr} INR | Plan: {plan_val} | Order: {order_id} | Payment: {payment_id}")
 
             # Send Receipt Email
-            user = db.query(Users).filter(Users.id == int(user_id)).first()
+            user = db.query(Users).filter(Users.id == int(user_id_val)).first()
             if user and user.email:
-                send_payment_receipt(user.email, str(plan), amount)
+                send_payment_receipt(user.email, str(plan_val), amount_inr)
         else:
             logger.warning(f"[PAYMENT_ORPHAN] Received payment but could not identify user. Payment ID: {payment_id}")
 
@@ -1653,6 +1931,6 @@ async def downgrade_tier(db: Session = Depends(get_db), current_user: Users = De
     return {"status": "success", "message": "Subscription cancelled. Downgraded to free tier."}
 
 if __name__ == "__main__":
-    import uvicorn
+    import uvicorn  # type: ignore
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=False)
 

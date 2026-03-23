@@ -1,3 +1,4 @@
+# pyright: reportMissingImports=false
 """
 LEVI Self-Training Pipeline
 Submits fine-tuning jobs to Together AI, tracks model versions,
@@ -7,10 +8,10 @@ and hot-switches to improved models automatically.
 import os
 import json
 import logging
-import requests
+import requests  # type: ignore
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
-from celery import Celery
+from celery import Celery  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +27,9 @@ MAX_TRAINING_EPOCHS  = 3
 # Celery app reference (imported from tasks.py)
 # ─────────────────────────────────────────────
 try:
-    from tasks import celery_app
+    from tasks import celery_app  # type: ignore
 except ImportError:
-    from backend.tasks import celery_app
+    from backend.tasks import celery_app  # type: ignore
 
 
 # ─────────────────────────────────────────────
@@ -120,9 +121,9 @@ def check_finetuning_job(job_id: str) -> Dict[str, Any]:
 def record_model_version(db, job_id: str, model_id: str, training_samples: int):
     """Save a successfully trained model version to the database."""
     try:
-        from training_models import ModelVersion
+        from training_models import ModelVersion  # type: ignore
     except ImportError:
-        from backend.training_models import ModelVersion
+        from backend.training_models import ModelVersion  # type: ignore
 
     version = ModelVersion(
         job_id=job_id,
@@ -141,9 +142,9 @@ def record_model_version(db, job_id: str, model_id: str, training_samples: int):
 def activate_model_version(db, model_id: str):
     """Switch the active model to a new fine-tuned version."""
     try:
-        from training_models import ModelVersion
+        from training_models import ModelVersion  # type: ignore
     except ImportError:
-        from backend.training_models import ModelVersion
+        from backend.training_models import ModelVersion  # type: ignore
 
     # Deactivate all
     db.query(ModelVersion).update({"is_active": False})
@@ -166,9 +167,9 @@ def get_active_model_id() -> Optional[str]:
 def get_model_history(db) -> List[Dict]:
     """Return all model versions sorted newest first."""
     try:
-        from training_models import ModelVersion
+        from training_models import ModelVersion  # type: ignore
     except ImportError:
-        from backend.training_models import ModelVersion
+        from backend.training_models import ModelVersion  # type: ignore
 
     versions = db.query(ModelVersion).order_by(ModelVersion.created_at.desc()).all()
     return [
@@ -257,13 +258,13 @@ def trigger_training_pipeline(self):
     5. Store job ID for later polling
     """
     try:
-        from db import SessionLocal
-        from learning import export_training_data, get_learning_stats
-        from training_models import TrainingJob
+        from db import SessionLocal  # type: ignore
+        from learning import export_training_data, get_learning_stats  # type: ignore
+        from training_models import TrainingJob  # type: ignore
     except ImportError:
-        from backend.db import SessionLocal
-        from backend.learning import export_training_data, get_learning_stats
-        from backend.training_models import TrainingJob
+        from backend.db import SessionLocal  # type: ignore
+        from backend.learning import export_training_data, get_learning_stats  # type: ignore
+        from backend.training_models import TrainingJob  # type: ignore
 
     db = SessionLocal()
     try:
@@ -315,11 +316,11 @@ def poll_training_job(self, job_id: str):
     Retries every 5 minutes, up to 4 hours.
     """
     try:
-        from db import SessionLocal
-        from training_models import TrainingJob
+        from db import SessionLocal  # type: ignore
+        from training_models import TrainingJob  # type: ignore
     except ImportError:
-        from backend.db import SessionLocal
-        from backend.training_models import TrainingJob
+        from backend.db import SessionLocal  # type: ignore
+        from backend.training_models import TrainingJob  # type: ignore
 
     db = SessionLocal()
     try:
@@ -370,13 +371,13 @@ def update_embeddings_task():
     Runs nightly.
     """
     try:
-        from db import SessionLocal
-        from models import Quote
-        from embeddings import embed_text
+        from db import SessionLocal  # type: ignore
+        from models import Quote  # type: ignore
+        from embeddings import embed_text  # type: ignore
     except ImportError:
-        from backend.db import SessionLocal
-        from backend.models import Quote
-        from backend.embeddings import embed_text
+        from backend.db import SessionLocal  # type: ignore
+        from backend.models import Quote  # type: ignore
+        from backend.embeddings import embed_text  # type: ignore
 
     db = SessionLocal()
     try:
@@ -385,7 +386,7 @@ def update_embeddings_task():
         for q in missing:
             try:
                 q.embedding = embed_text(q.text)
-                updated += 1
+                updated = int(updated) + 1  # type: ignore
             except Exception as e:
                 logger.warning(f"[Trainer] Embedding update failed for quote {q.id}: {e}")
         db.commit()

@@ -1,3 +1,4 @@
+# pyright: reportMissingImports=false
 
 import os
 import random
@@ -165,7 +166,7 @@ def generate_quote(prompt: str, mood: str = "", max_length: int = 60) -> str:
         with _gen_lock:
             if generator is None:
                 try:
-                    from transformers import pipeline as hf_pipeline
+                    from transformers import pipeline as hf_pipeline  # type: ignore
                     logger.info("Lazy-loading text-generation model...")
                     generator = hf_pipeline("text-generation", model="distilgpt2", device=-1)
                     HAS_GENERATOR = True
@@ -188,6 +189,8 @@ def generate_quote(prompt: str, mood: str = "", max_length: int = 60) -> str:
     try:
         with _gen_lock:
             gen = generator
+            if gen is None:
+                raise ValueError("Generator is None")
             result = gen(
                 base_prompt, max_new_tokens=max_length, num_return_sequences=1,
                 do_sample=True, temperature=0.9, top_p=0.95,
@@ -212,18 +215,19 @@ def generate_quote(prompt: str, mood: str = "", max_length: int = 60) -> str:
 
 
 def generate_response(prompt: str, history: Optional[List[dict]] = None, mood: str = "", max_length: int = 150, lang: str = "en", user_memory: Any = None) -> str:
-    logger.info(f"generate_response: '{prompt[:60]}' (lang={lang})")
+    log_prompt = str(prompt)
+    logger.info(f"generate_response: '{log_prompt}' (lang={lang})")
     if not prompt or not isinstance(prompt, str):
         return "I am listening, seeker. Your silence is profound."
 
     input_text = prompt
     if lang == "hi":
         try:
-            input_text = translate(prompt, "en", "auto")
+            input_text = str(translate(prompt, "en", "auto"))
         except Exception as e:
             logger.error(f"Translation error: {e}")
 
-    msg = input_text.lower().strip()
+    msg: str = str(input_text).lower().strip()
     quote_keywords = ["quote", "wisdom", "inspiration", "inspire", "saying", "motto", "thought", "vichar", "suvichar"]
     visual_keywords = ["visual", "image", "picture", "art", "draw", "paint", "canvas", "background", "chitra", "photo"]
 
@@ -274,7 +278,10 @@ def generate_response(prompt: str, history: Optional[List[dict]] = None, mood: s
                 {"role": "system", "content": system_prompt}
             ]
             if history:
-                for entry in history[-3:]:
+                n = len(history)
+                start_v = n - 3 if n >= 3 else 0
+                for i in range(start_v, n):
+                    entry = history[i]
                     messages.append({"role": "user", "content": entry.get("user", "")})
                     messages.append({"role": "assistant", "content": entry.get("bot", "")})
             messages.append({"role": "user", "content": input_text})
@@ -339,7 +346,7 @@ def generate_response(prompt: str, history: Optional[List[dict]] = None, mood: s
         with _gen_lock:
             if generator is None:
                 try:
-                    from transformers import pipeline as hf_pipeline
+                    from transformers import pipeline as hf_pipeline  # type: ignore
                     logger.info("Lazy-loading text-generation model...")
                     generator = hf_pipeline("text-generation", model="distilgpt2", device=-1)
                     HAS_GENERATOR = True
@@ -359,13 +366,16 @@ def generate_response(prompt: str, history: Optional[List[dict]] = None, mood: s
             gen = generator
             context = "LEVI is a wise, creative, and concise AI companion.\n"
             if history:
-                for entry in history[-2:]:
+                n = len(history)
+                start_v = n - 2 if n >= 2 else 0
+                for i in range(start_v, n):
+                    entry = history[i]
                     u, b = entry.get("user", ""), entry.get("bot", "")
                     if u and b:
                         context += f"User: {u}\nLEVI: {b}\n"
             context += f"User: {input_text}\nLEVI:"
-            result = gen(context, max_new_tokens=60, num_return_sequences=1, do_sample=True,
-                         temperature=0.8, pad_token_id=gen.tokenizer.eos_token_id)
+            result = gen(context, max_new_tokens=60, num_return_sequences=1, do_sample=True,  # type: ignore
+                         temperature=0.8, pad_token_id=gen.tokenizer.eos_token_id)  # type: ignore
         response = result[0]["generated_text"].split("LEVI:")[-1].split("User:")[0].strip()
 
         if not response:

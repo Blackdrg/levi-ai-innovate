@@ -1,5 +1,6 @@
-from fastapi import FastAPI
-import uvicorn
+# pyright: reportMissingImports=false
+from fastapi import FastAPI  # type: ignore
+import uvicorn  # type: ignore
 
 app = FastAPI()
 

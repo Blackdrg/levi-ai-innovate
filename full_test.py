@@ -1,5 +1,6 @@
+# pyright: reportMissingImports=false
 
-import requests
+import requests  # type: ignore
 import json
 
 BASE_URL = "http://localhost:8000"
@@ -15,7 +16,7 @@ def test_endpoint(name, method, endpoint, payload=None):
         
         print(f"Status: {response.status_code}")
         if response.status_code == 200:
-            print(f"Success! Sample response: {str(response.json())[:100]}...")
+            print(f"Success! Sample response: {str(response.json())[:100]}...")  # type: ignore
             return True
         else:
             print(f"Failed: {response.text}")

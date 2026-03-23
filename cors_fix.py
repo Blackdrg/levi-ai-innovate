@@ -3,6 +3,13 @@
 # Find the line: "env_origins = os.getenv("CORS_ORIGINS", "").split(",")"
 # and replace everything up to "app.add_middleware(..." with this:
 # -----------------------------------------------------------------------
+import os  # type: ignore
+try:
+    from fastapi import FastAPI  # type: ignore
+    from fastapi.middleware.cors import CORSMiddleware  # type: ignore
+    from backend.main import app  # type: ignore
+except ImportError:
+    pass
 
 env_origins = os.getenv("CORS_ORIGINS", "").split(",")
 

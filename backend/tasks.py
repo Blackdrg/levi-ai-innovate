@@ -1,12 +1,21 @@
+# pyright: reportMissingImports=false
 import os
 import uuid
 import logging
-import boto3
+import boto3  # type: ignore
 from io import BytesIO
 from typing import Any, List, Optional
-from celery import Celery
-from botocore.exceptions import BotoCoreError, ClientError
-from pywebpush import webpush, WebPushException
+from celery import Celery  # type: ignore
+from botocore.exceptions import BotoCoreError, ClientError  # type: ignore
+from pywebpush import webpush, WebPushException  # type: ignore
+
+# ── Authority Imports ────────────────────────
+try:
+    from backend.db import SessionLocal  # type: ignore
+    from backend.models import FeedItem, Users, PushSubscription  # type: ignore
+except ImportError:
+    from db import SessionLocal  # type: ignore
+    from models import FeedItem, Users, PushSubscription  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -46,22 +55,29 @@ def upload_to_s3(file_bytes: bytes, filename: str, content_type: str = "video/mp
     s3     = get_s3_client()
 
     try:
+        # ACL="public-read" is disabled on most modern AWS accounts.
+        # Use CloudFront or pre-signed URLs instead.
         s3.put_object(
             Bucket      = bucket,
             Key         = filename,
             Body        = file_bytes,
             ContentType = content_type,
-            ACL         = "public-read" # Simplest way to make it public as requested
+            # No ACL — bucket policy or CloudFront controls access
         )
-        region = os.getenv("AWS_REGION", "us-east-1")
-        
-        # Use CloudFront CDN if configured, otherwise direct S3 URL
+
+        # Use CloudFront CDN if configured (preferred for production)
         cloudfront = os.getenv("CLOUDFRONT_DOMAIN")
         if cloudfront:
             url = f"https://{cloudfront}/{filename}"
         else:
-            url = f"https://{bucket}.s3.{region}.amazonaws.com/{filename}"
-            
+            # Fall back to a pre-signed URL (expires in 1 hour).
+            # Store CLOUDFRONT_DOMAIN to avoid expiring URLs in production.
+            url = s3.generate_presigned_url(
+                "get_object",
+                Params={"Bucket": bucket, "Key": filename},
+                ExpiresIn=3600,
+            )
+
         logger.info(f"Uploaded to S3: {url}")
         return url
 
@@ -90,9 +106,7 @@ def generate_image_task(self, quote: str, author: str, mood: str, user_id: int):
     Returns the S3 URL.
     """
     try:
-        from backend.image_gen import generate_quote_image
-        from backend.models import FeedItem, Users
-        from backend.db import SessionLocal
+        from backend.image_gen import generate_quote_image  # type: ignore
         logger.info(f"[Task] Generating image for user {user_id}")
 
         db = SessionLocal()
@@ -130,6 +144,10 @@ def generate_image_task(self, quote: str, author: str, mood: str, user_id: int):
             )
             db.add(new_item)
             db.commit()
+            
+            # No deduction here (already handled in main.py)
+            pass
+
             db.refresh(new_item)
             return {
                 "status": "done", 
@@ -142,8 +160,20 @@ def generate_image_task(self, quote: str, author: str, mood: str, user_id: int):
 
     except Exception as e:
         logger.error(f"[Task] Image generation failed: {e}")
-        # If we've exhausted retries, we should return a "failed" status
+        
+        # Refund on failure if retries exhausted
         if self.request.retries >= self.max_retries:
+            try:
+                db = SessionLocal()
+                user = db.query(Users).filter(Users.id == user_id).first()
+                if user:
+                    user.credits = (user.credits or 0) + 1
+                    db.commit()
+                    logger.info(f"[Task] Refunded 1 credit to user {user_id}")
+            except Exception as refund_err:
+                logger.error(f"[Task] Failed to refund credit: {refund_err}")
+            finally:
+                db.close()
             return {"status": "failed", "error": str(e)}
         raise self.retry(exc=e, countdown=5)
 
@@ -154,19 +184,16 @@ def generate_image_task(self, quote: str, author: str, mood: str, user_id: int):
 @celery_app.task(bind=True, max_retries=1)
 def generate_video_task(self, quote: str, author: str, mood: str, user_id: int):
     """
-    Generate a Reels-ready MP4 video and upload to S3.
+    Generate video via HeyGen/Leonardo + upload to S3.
+    Deducts 2 credits on success.
     """
     try:
-        from backend.models import FeedItem
-        from backend.db import SessionLocal
+        from backend.video_gen import generate_quote_video  # type: ignore
         logger.info(f"[Task] Generating video for user {user_id}")
-        video_bytes = _create_quote_video(quote, author, mood)
+        video_bytes = generate_quote_video(quote, author, mood)
+        video_url = upload_video_to_s3(video_bytes, user_id)
 
-        video_url = None
-        if os.getenv("AWS_S3_BUCKET"):
-            video_url = upload_video_to_s3(video_bytes, user_id)
-        
-        # Save to FeedItem for persistence
+        # Save to FeedItem
         db = SessionLocal()
         try:
             new_item = FeedItem(
@@ -178,19 +205,30 @@ def generate_video_task(self, quote: str, author: str, mood: str, user_id: int):
             )
             db.add(new_item)
             db.commit()
+            
+            # No deduction here (already handled in main.py)
+            pass
+
             db.refresh(new_item)
-            return {
-                "status": "done", 
-                "url": video_url, 
-                "id": new_item.id,
-                "type": "s3" if video_url else "local"
-            }
+            return {"status": "done", "url": video_url, "id": new_item.id}
         finally:
             db.close()
-
     except Exception as e:
         logger.error(f"[Task] Video generation failed: {e}")
+        
+        # Refund on failure if retries exhausted
         if self.request.retries >= self.max_retries:
+            try:
+                db = SessionLocal()
+                user = db.query(Users).filter(Users.id == user_id).first()
+                if user:
+                    user.credits = (user.credits or 0) + 2
+                    db.commit()
+                    logger.info(f"[Task] Refunded 2 credits to user {user_id}")
+            except Exception as refund_err:
+                logger.error(f"[Task] Failed to refund credit: {refund_err}")
+            finally:
+                db.close()
             return {"status": "failed", "error": str(e)}
         raise self.retry(exc=e, countdown=10)
 
@@ -228,8 +266,8 @@ def send_push_notification_task(self, subscription_id, endpoint, p256dh, auth, t
         # If subscription is no longer valid (410 Gone), delete from DB
         if ex.response and ex.response.status_code == 410:
             logger.warning(f"Subscription {subscription_id} expired/gone. Deleting.")
-            from backend.db import SessionLocal
-            from backend.models import PushSubscription
+            from backend.db import SessionLocal  # type: ignore
+            from backend.models import PushSubscription  # type: ignore
             db = SessionLocal()
             try:
                 db.query(PushSubscription).filter(PushSubscription.id == subscription_id).delete()
@@ -248,11 +286,11 @@ def _create_quote_video(quote: str, author: str, mood: str) -> bytes:
     output_path = f"/tmp/video_{uuid.uuid4().hex}.mp4"
     try:
         try:
-            from moviepy import ImageClip, TextClip, CompositeVideoClip, AudioFileClip
+            from moviepy import ImageClip, TextClip, CompositeVideoClip, AudioFileClip  # type: ignore
         except ImportError:
-            from moviepy.editor import ImageClip, TextClip, CompositeVideoClip, AudioFileClip
+            from moviepy.editor import ImageClip, TextClip, CompositeVideoClip, AudioFileClip  # type: ignore
         
-        from backend.image_gen import generate_quote_image
+        from backend.image_gen import generate_quote_image  # type: ignore
 
         # Generate background image
         bio = generate_quote_image(quote, author, mood, size=(1080, 1920))
@@ -286,6 +324,7 @@ def _create_quote_video(quote: str, author: str, mood: str) -> bytes:
         for path in [img_path, output_path]:
             if os.path.exists(path):
                 os.remove(path)
+    return b""
 
 
 # ─────────────────────────────────────────────
@@ -300,7 +339,7 @@ def send_daily_quote_email(user_email: str, user_id: int, liked_topics: list):
         return
 
     try:
-        from backend.generation import generate_quote
+        from backend.generation import generate_quote  # type: ignore
         topic = liked_topics[0] if liked_topics else "life"
         quote = generate_quote(topic)
 
@@ -338,7 +377,7 @@ def send_daily_quote_email(user_email: str, user_id: int, liked_topics: list):
 # ─────────────────────────────────────────────
 # Celery Beat schedule (cron jobs)
 # ─────────────────────────────────────────────
-from celery.schedules import crontab
+from celery.schedules import crontab  # type: ignore
 
 celery_app.conf.beat_schedule = {
     # Send daily quotes every morning at 8 AM
@@ -349,7 +388,7 @@ celery_app.conf.beat_schedule = {
 }
 
 try:
-    from backend.trainer import TRAINING_BEAT_SCHEDULE
+    from backend.trainer import TRAINING_BEAT_SCHEDULE  # type: ignore
     celery_app.conf.beat_schedule.update(TRAINING_BEAT_SCHEDULE)
 except ImportError:
     pass
@@ -359,8 +398,8 @@ except ImportError:
 def dispatch_daily_emails():
     """Fetch all users and dispatch daily quote tasks (Email + Push)."""
     try:
-        from backend.db import SessionLocal
-        from backend.models import Users, PushSubscription
+        from backend.db import SessionLocal  # type: ignore
+        from backend.models import Users, PushSubscription  # type: ignore
         from backend.generation import generate_quote
         db = SessionLocal()
         

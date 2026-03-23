@@ -1,3 +1,4 @@
+# pyright: reportMissingImports=false
 
 """
 
@@ -9,9 +10,9 @@ This module is importable without a FastAPI app instance.
 
 """
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request  # type: ignore
 
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import OAuth2PasswordBearer  # type: ignore
 
 from jose import JWTError, jwt # type: ignore
 
@@ -23,16 +24,16 @@ from typing import Optional, Any
 
 import os
 
-from dotenv import load_dotenv
+from dotenv import load_dotenv  # type: ignore
 
-from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from pydantic import BaseModel  # type: ignore
+from sqlalchemy.orm import Session  # type: ignore
 try:
-    from backend.db import get_db
-    from backend.models import Users
+    from backend.db import get_db  # type: ignore
+    from backend.models import Users  # type: ignore
 except (ImportError, ModuleNotFoundError):
-    from db import get_db
-    from models import Users
+    from db import get_db  # type: ignore
+    from models import Users  # type: ignore
 
 
 
@@ -49,8 +50,24 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+def get_token(request: Request, header_token: Optional[str] = Depends(oauth2_scheme)) -> str:
+    """
+    Extract token from Authorization header or 'access_token' cookie.
+    """
+    if header_token:
+        return header_token
+    
+    cookie_token = request.cookies.get("access_token")
+    if cookie_token:
+        return cookie_token
+        
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Not authenticated",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
 
 
 
@@ -96,22 +113,46 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=15))
     jti = str(uuid.uuid4())
-    to_encode.update({"exp": expire, "jti": jti})
-    
-    # Store JTI in Redis (whitelist)
+    to_encode.update({"exp": expire, "jti": jti, "type": "access"})
+
+    # Store JTI in Redis whitelist so logout (delete_jti) actually revokes it.
     try:
-        from backend.redis_client import store_jti
+        from backend.redis_client import store_jti  # type: ignore
     except ImportError:
-        from redis_client import store_jti
-        
+        from redis_client import store_jti  # type: ignore
+
     delta = expires_delta or timedelta(minutes=15)
     seconds = int(delta.total_seconds())
     store_jti(jti, seconds)
-    
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM) # type: ignore
+
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)  # type: ignore
 
 
-async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    """
+    Issue a long-lived refresh token (default 30 days).
+    Stored under 'refresh_jti:{jti}' in Redis so it can be revoked on use
+    (rotation) or on logout.
+    """
+    to_encode = data.copy()
+    delta = expires_delta or timedelta(days=30)
+    expire = datetime.utcnow() + delta
+    jti = str(uuid.uuid4())
+    to_encode.update({"exp": expire, "jti": jti, "type": "refresh"})
+
+    try:
+        from backend.redis_client import _set  # type: ignore
+    except ImportError:
+        from redis_client import _set  # type: ignore
+
+    # Use a distinct key prefix so refresh JTIs cannot be confused with access JTIs.
+    _set(f"refresh_jti:{jti}", "1", ex=int(delta.total_seconds()))
+
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)  # type: ignore
+
+
+
+async def get_current_user(token: str = Depends(get_token), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -124,9 +165,9 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
              raise credentials_exception
              
         try:
-            from backend.redis_client import is_jti_blacklisted
+            from backend.redis_client import is_jti_blacklisted  # type: ignore
         except ImportError:
-            from redis_client import is_jti_blacklisted
+            from redis_client import is_jti_blacklisted  # type: ignore
             
         if is_jti_blacklisted(jti):
              raise credentials_exception

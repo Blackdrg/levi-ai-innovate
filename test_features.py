@@ -1,4 +1,5 @@
-import requests
+# pyright: reportMissingImports=false
+import requests  # type: ignore
 import json
 import base64
 

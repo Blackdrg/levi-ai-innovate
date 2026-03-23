@@ -1,9 +1,10 @@
+# pyright: reportMissingImports=false
 import os
 import logging
-from sqlalchemy.orm import Session
-from backend.db import SessionLocal
-from backend.models import Users, UserMemory
-from backend.email_service import send_daily_quote
+from sqlalchemy.orm import Session  # type: ignore
+from backend.db import SessionLocal  # type: ignore
+from backend.models import Users, UserMemory  # type: ignore
+from backend.email_service import send_daily_quote  # type: ignore
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)

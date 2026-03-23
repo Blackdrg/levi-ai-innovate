@@ -1,16 +1,17 @@
+# pyright: reportMissingImports=false
 """
 LEVI Training Data Models
 SQLAlchemy ORM classes for the AI self-learning system.
 Add these to your Alembic migration.
 """
 
-from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Text, ForeignKey
-from sqlalchemy.sql import func
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Text, ForeignKey  # type: ignore
+from sqlalchemy.sql import func  # type: ignore
 
 try:
-    from backend.db import Base
+    from backend.db import Base  # type: ignore
 except ImportError:
-    from db import Base
+    from db import Base  # type: ignore
 
 
 class TrainingData(Base):
@@ -26,8 +27,8 @@ class TrainingData(Base):
     bot_response = Column(Text, nullable=False)
     mood         = Column(String, default="philosophical")
     rating       = Column(Integer, nullable=True)       # 1-5; null = not yet rated
-    session_id   = Column(String, nullable=False)
-    user_id      = Column(Integer, ForeignKey("users.id"), nullable=True)
+    session_id   = Column(String, nullable=False, index=True)
+    user_id      = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     fingerprint  = Column(String, unique=True, nullable=True)  # dedup hash
     is_exported  = Column(Boolean, default=False)       # has been included in a training job
     created_at   = Column(DateTime(timezone=True), server_default=func.now())

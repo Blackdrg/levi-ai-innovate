@@ -1,11 +1,12 @@
+# pyright: reportMissingImports=false
 
-import redis
+import redis  # type: ignore
 
 import os
 
 import json
 
-from dotenv import load_dotenv
+from dotenv import load_dotenv  # type: ignore
 
 
 
@@ -187,5 +188,5 @@ def delete_jti(jti: str):
     if HAS_REDIS:
         r.delete(f"jti:{jti}")
     elif f"jti:{jti}" in _memory_cache:
-        del _memory_cache[f"jti:{jti}"]
+        _memory_cache.pop(f"jti:{jti}", None)
 

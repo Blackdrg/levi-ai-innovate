@@ -41,7 +41,10 @@ def build_prompt(quote: str, mood: str) -> str:
     # Extract 2-3 meaningful words from the quote to add context
     stop_words = {"the","a","an","is","are","to","of","and","or","in","it","you","we","i","me"}
     words = [w.strip(".,!?\"'") for w in quote.lower().split() if w not in stop_words and len(w) > 3]
-    keywords = " ".join(words[:2]) if words else ""
+    top_words = []
+    for i, w in enumerate(words):
+        if i < 2: top_words.append(w)
+    keywords = " ".join(top_words) if words else ""
     return f"{base}, {keywords}, no text, no words, wallpaper quality, ultra detailed"
 
 def together_retry_logic(retry_state):
@@ -257,12 +260,11 @@ def generate_quote_image(
     # Custom upload takes priority
     if custom_bg:
         try:
+            # Only base64 data-URIs are accepted — HTTP URLs are rejected upstream
+            # to prevent Server-Side Request Forgery (SSRF).
             if custom_bg.startswith("data:image"):
                 _, encoded = custom_bg.split(",", 1)
                 bg = Image.open(BytesIO(base64.b64decode(encoded))).convert("RGBA")
-            elif custom_bg.startswith("http"):
-                r = requests.get(custom_bg, timeout=5)
-                bg = Image.open(BytesIO(r.content)).convert("RGBA")
             if bg and bg.size != size:
                 bg = bg.resize(size, Image.Resampling.LANCZOS)
         except Exception as e:

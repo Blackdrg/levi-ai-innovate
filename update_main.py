@@ -1,10 +1,11 @@
+# pyright: reportMissingImports=false
 import sys
 import re
 import os
 
 script_dir = r"c:\Users\mehta\Desktop\New folder\LEVI-AI"
 sys.path.append(script_dir)
-import learning_routes
+import learning_routes  # type: ignore
 
 main_file = os.path.join(script_dir, "backend", "main.py")
 

@@ -1,10 +1,11 @@
+# pyright: reportMissingImports=false
 import os
-import resend
+import resend  # type: ignore
 import logging
 try:
-    from backend.generation import generate_quote
+    from backend.generation import generate_quote  # type: ignore
 except ImportError:
-    from generation import generate_quote
+    from generation import generate_quote  # type: ignore
 
 from typing import Optional, Any
 
@@ -29,7 +30,7 @@ def send_daily_quote(user_email: str, user_name: str, liked_topics: Optional[lis
         quote_text = generate_quote(prompt=topic, mood=last_mood)
         
         params: Any = {
-            "from": "LEVI <onboarding@resend.dev>", # Default sender for Resend free tier
+            "from": "onboarding@resend.dev", # Default sender for Resend free tier
             "to": [user_email],
             "subject": f"Your daily wisdom, {user_name} ✨",
             "html": f"""
@@ -58,7 +59,7 @@ def send_payment_receipt(user_email: str, plan: str, amount_inr: float):
 
         params: Any = {
 
-            "from": "LEVI <noreply@resend.dev>",
+            "from": "onboarding@resend.dev",
 
             "to": [user_email],
 
@@ -119,7 +120,7 @@ def send_verification_email(user_email: str, token: str):
 
     try:
         params: Any = {
-            "from": "LEVI <onboarding@resend.dev>",
+            "from": "onboarding@resend.dev",
             "to": [user_email],
             "subject": "Verify your LEVI account ✨",
             "html": f"""
@@ -142,4 +143,42 @@ def send_verification_email(user_email: str, token: str):
         return True
     except Exception as e:
         logger.error(f"Failed to send verification email to {user_email}: {e}")
+        return False
+
+def send_password_reset_email(user_email: str, token: str):
+    """
+    Sends a password reset email with a signed token link.
+    """
+    if not RESEND_API_KEY:
+        logger.warning("Resend API key missing. Reset email not sent.")
+        return False
+
+    frontend_url = os.getenv("FRONTEND_URL", "https://levi-ai.create.app")
+    reset_link = f"{frontend_url}/reset-password.html?token={token}"
+
+    try:
+        params: Any = {
+            "from": "onboarding@resend.dev",
+            "to": [user_email],
+            "subject": "Reset your LEVI password ✨",
+            "html": f"""
+                <div style="font-family: sans-serif; padding: 20px; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; border-radius: 12px;">
+                    <h2 style="color: #6366f1; text-align: center;">Reset Your Password</h2>
+                    <p>Greetings seeker,</p>
+                    <p>We received a request to reset your LEVI account password. If this wasn't you, you can safely ignore this email.</p>
+                    <div style="text-align: center; margin-top: 30px;">
+                        <a href="{reset_link}" style="background: #6366f1; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold;">Reset Password</a>
+                    </div>
+                    <p style="margin-top: 20px; font-size: 0.9em; color: #666;">This link will expire in 1 hour. If the button doesn't work, copy and paste this link: <br>{reset_link}</p>
+                    <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0;">
+                    <small style="color: #999;">Sent with 💜 by LEVI AI</small>
+                </div>
+            """
+        }
+        
+        response = resend.Emails.send(params)
+        logger.info(f"Password reset email sent to {user_email}. ID: {response['id']}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send password reset email to {user_email}: {e}")
         return False

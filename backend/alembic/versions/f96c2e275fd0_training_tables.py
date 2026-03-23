@@ -1,3 +1,4 @@
+# pyright: reportMissingImports=false
 """training_tables
 
 Revision ID: f96c2e275fd0
@@ -7,8 +8,8 @@ Create Date: 2026-03-23 01:37:45.700303
 """
 from typing import Sequence, Union
 
-from alembic import op
-import sqlalchemy as sa
+from alembic import op  # type: ignore
+import sqlalchemy as sa  # type: ignore
 
 
 # revision identifiers, used by Alembic.

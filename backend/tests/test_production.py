@@ -1,13 +1,14 @@
+# pyright: reportMissingImports=false
 import sys
 sys.path.append('.')
-import pytest
+import pytest  # type: ignore
 from unittest.mock import patch, MagicMock
-from fastapi.testclient import TestClient
+from fastapi.testclient import TestClient  # type: ignore
 
 try:
-    from backend.main import app
+    from backend.main import app  # type: ignore
 except ImportError:
-    from main import app
+    from main import app  # type: ignore
 
 @patch('backend.main.get_db')
 @patch('backend.main.use_credits')

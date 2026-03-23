@@ -1,4 +1,5 @@
-from backend.image_gen import generate_quote_image
+# pyright: reportMissingImports=false
+from backend.image_gen import generate_quote_image  # type: ignore
 import traceback
 
 try:

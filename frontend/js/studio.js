@@ -58,17 +58,41 @@ function setLoading(on){
 }
 
 async function pollTask(id,text){
-  let tries=0;
-  const poll=async()=>{
-    if(tries++>40){showToast('Task timeout','error');return}
-    try{
-      const r=await fetch(API_BASE+'/task_status/'+id);
-      const d=await r.json();
-      if(d.status==='completed'&&d.result){displayImage(d.result.url||d.result.image_b64||d.result,text);document.getElementById('loading-overlay').classList.add('hidden')}
-      else if(d.status==='failed'){showToast('Synthesis failed','error');document.getElementById('loading-overlay').classList.add('hidden')}
-      else setTimeout(poll,2000);
-    }catch{setTimeout(poll,2500)}
+  let retryCount = 0;
+  const maxRetries = 40; // Increased max retries for longer tasks
+  let pollInterval = 2000; // Initial poll interval
+
+  const poll = async () => {
+    try {
+      const r = await fetch(`${API_BASE}/task_status/${id}`);
+      const d = await r.json();
+
+      if (d.status === 'completed' && d.result) {
+        displayImage(d.result.url || d.result.image_b64 || d.result, text);
+        document.getElementById('loading-overlay').classList.add('hidden');
+      } else if (d.status === 'failed') {
+        showToast('Synthesis failed', 'error');
+        document.getElementById('loading-overlay').classList.add('hidden');
+      } else {
+        // Pending, keep polling with exponential backoff
+        retryCount++;
+        if (retryCount >= maxRetries) {
+          showToast('Task timeout', 'error');
+          document.getElementById('loading-overlay').classList.add('hidden');
+          return;
+        }
+
+        // Exponential backoff: increase delay, cap at 10s
+        pollInterval = Math.min(pollInterval * 1.2, 10000);
+        setTimeout(poll, pollInterval);
+      }
+    } catch (error) {
+      console.error("Polling error:", error);
+      // On network error, retry with a fixed delay (e.g., 5s)
+      setTimeout(poll, 5000);
+    }
   };
+
   document.getElementById('loading-overlay').classList.remove('hidden');
   poll();
 }

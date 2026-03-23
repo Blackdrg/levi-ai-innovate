@@ -1,8 +1,9 @@
+# pyright: reportMissingImports=false
 import pandas as pd # type: ignore
 from sqlalchemy.orm import Session
-from db import SessionLocal, engine
-from models import Quote, Base
-from embeddings import embed_text
+from db import SessionLocal, engine  # type: ignore
+from models import Quote, Base  # type: ignore
+from embeddings import embed_text  # type: ignore
 import numpy as np # type: ignore
 
 Base.metadata.create_all(engine)

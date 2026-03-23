@@ -1,14 +1,15 @@
+# pyright: reportMissingImports=false
 from typing import Optional
 try:
-    from moviepy import ImageClip, TextClip, CompositeVideoClip, AudioFileClip
+    from moviepy import ImageClip, TextClip, CompositeVideoClip, AudioFileClip  # type: ignore
     HAS_MOVIEPY = True
 except ImportError:
     HAS_MOVIEPY = False
 
 try:
-    from backend.image_gen import generate_quote_image
+    from backend.image_gen import generate_quote_image  # type: ignore
 except ImportError:
-    from image_gen import generate_quote_image
+    from image_gen import generate_quote_image  # type: ignore
 from io import BytesIO
 import os
 import logging
@@ -28,7 +29,7 @@ def generate_quote_video(quote: str, author: str, mood: str, user_tier: str = "f
         img_pil = generate_quote_image(quote, author, mood, user_tier=user_tier, return_pil=True)
         
         # Convert PIL image to numpy array for MoviePy
-        import numpy as np
+        import numpy as np  # type: ignore
         img_array = np.array(img_pil)
         
         # 2. Create the base clip

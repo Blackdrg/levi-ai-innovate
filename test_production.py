@@ -1,16 +1,17 @@
+# pyright: reportMissingImports=false
 import sys
 sys.path.append('.')
-import pytest
+import pytest  # type: ignore
 from unittest.mock import patch, MagicMock
-from fastapi.testclient import TestClient
+from fastapi.testclient import TestClient  # type: ignore
 from io import BytesIO
 
 try:
-    from backend.main import app, get_current_user
-    from backend.models import Users
+    from backend.main import app, get_current_user  # type: ignore
+    from backend.models import Users  # type: ignore
 except ImportError:
-    from main import app, get_current_user
-    from models import Users
+    from main import app, get_current_user  # type: ignore
+    from models import Users  # type: ignore
 
 
 # ── Shared mock user ──────────────────────────────────────────────────────────

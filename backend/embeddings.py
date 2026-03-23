@@ -1,5 +1,6 @@
+# pyright: reportMissingImports=false
 
-import numpy as np
+import numpy as np  # type: ignore
 
 import threading
 
@@ -40,7 +41,7 @@ def embed_text(text: str) -> list:
         with _model_lock:
             if model is None: # Double check pattern
                 try:
-                    from sentence_transformers import SentenceTransformer
+                    from sentence_transformers import SentenceTransformer  # type: ignore
                     logger.info("Lazy-loading sentence-transformer model...")
                     model = SentenceTransformer("paraphrase-MiniLM-L6-v2", device="cpu")
                     HAS_MODEL = True

@@ -70,7 +70,6 @@
   <!-- Card -->
   <div class="glass-panel ghost-border rounded-3xl p-8 shadow-[0_32px_80px_rgba(0,0,0,0.5)]">
 
-    <!-- Tab switcher -->
     <div class="flex ghost-border rounded-xl p-1 mb-8 tab-switcher">
       <button id="tab-login" onclick="switchMode('login')"
         class="flex-1 py-2.5 text-xs font-label font-semibold uppercase tracking-widest rounded-lg transition-all tab-active">Sign
@@ -91,22 +90,24 @@
 
     <!-- Form -->
     <div class="space-y-4">
+      <div id="username-field">
+        <label class="block text-[10px] text-primary uppercase tracking-[0.2em] mb-2 font-semibold">Username</label>
+        <input id="username-input" type="text" class="levi-input" placeholder="seeker_name" autocomplete="username"/>
+      </div>
       <div id="email-field" class="hidden">
         <label class="block text-[10px] text-primary uppercase tracking-[0.2em] mb-2 font-semibold">Email</label>
         <input id="email-input" type="email" class="levi-input" placeholder="your@email.com" autocomplete="email"/>
       </div>
-      <div>
-        <label class="block text-[10px] text-primary uppercase tracking-[0.2em] mb-2 font-semibold">Username</label>
-        <input id="username-input" type="text" class="levi-input" placeholder="seeker_of_truth" autocomplete="username"/>
-      </div>
-      <div>
+      <div id="password-field">
         <label class="block text-[10px] text-primary uppercase tracking-[0.2em] mb-2 font-semibold">Password</label>
         <div class="relative">
-        <input id="password-input" type="password" class="levi-input pw-input" placeholder="••••••••"
-          autocomplete="current-password" />
+          <input id="password-input" type="password" class="levi-input pw-input" placeholder="••••••••" autocomplete="current-password" />
           <button onclick="togglePassword()" class="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-primary transition-colors">
             <span class="material-symbols-outlined icon-sm" id="pw-eye">visibility</span>
           </button>
+        </div>
+        <div id="forgot-link-wrap" class="flex justify-end mt-2">
+          <button onclick="switchMode('forgot')" class="text-[10px] text-zinc-500 hover:text-primary transition-colors font-semibold uppercase tracking-wider">Forgot Password?</button>
         </div>
       </div>
     </div>
@@ -156,16 +157,37 @@ let mode='login';
 function switchMode(newMode){
   mode=newMode;
   const isLogin=mode==='login';
+  const isRegister=mode==='register';
+  const isForgot=mode==='forgot';
+  
   const tL = document.getElementById('tab-login');
   const tR = document.getElementById('tab-register');
-  tL.className = 'flex-1 py-2.5 text-xs font-label font-semibold uppercase tracking-widest rounded-lg transition-all ' + (isLogin ? 'tab-active' : 'tab-inactive');
-  tR.className = 'flex-1 py-2.5 text-xs font-label font-semibold uppercase tracking-widest rounded-lg transition-all ' + (isLogin ? 'tab-inactive' : 'tab-active');
-  document.getElementById('auth-heading').textContent=isLogin?'Welcome Back':'Join the Seekers';
-  document.getElementById('auth-subheading').textContent=isLogin?'Continue your philosophical journey.':'Create your LEVI account — it\'s free.';
-  document.getElementById('submit-label').textContent=isLogin?'Sign In →':'Create Account →';
-  document.getElementById('email-field').classList.toggle('hidden',isLogin);
-  document.getElementById('toggle-text').textContent=isLogin?'Don\'t have an account?':'Already a seeker?';
-  document.getElementById('toggle-btn').textContent=isLogin?'Create Account':'Sign In';
+  
+  if (isForgot) {
+    tL.className = 'flex-1 py-2.5 text-xs font-label font-semibold uppercase tracking-widest rounded-lg transition-all tab-inactive';
+    tR.className = 'flex-1 py-2.5 text-xs font-label font-semibold uppercase tracking-widest rounded-lg transition-all tab-inactive';
+  } else {
+    tL.className = 'flex-1 py-2.5 text-xs font-label font-semibold uppercase tracking-widest rounded-lg transition-all ' + (isLogin ? 'tab-active' : 'tab-inactive');
+    tR.className = 'flex-1 py-2.5 text-xs font-label font-semibold uppercase tracking-widest rounded-lg transition-all ' + (isRegister ? 'tab-active' : 'tab-inactive');
+  }
+  
+  document.getElementById('auth-heading').textContent=isForgot?'Reset Path':(isLogin?'Welcome Back':'Join the Seekers');
+  document.getElementById('auth-subheading').textContent=isForgot?'Enter your email to receive a reset link.':(isLogin?'Continue your philosophical journey.':'Create your LEVI account — it\'s free.');
+  document.getElementById('submit-label').textContent=isForgot?'Send Reset Link →':(isLogin?'Sign In →':'Create Account →');
+  
+  document.getElementById('username-field').classList.toggle('hidden', isForgot);
+  document.getElementById('email-field').classList.toggle('hidden', isLogin);
+  document.getElementById('password-field').classList.toggle('hidden', isForgot);
+  
+  document.getElementById('toggle-text').textContent=isForgot?'Remembered it?':'Don\'t have an account?';
+  if (isForgot) {
+      document.getElementById('toggle-text').textContent = 'Back to ';
+      document.getElementById('toggle-btn').textContent = 'Sign In';
+  } else {
+      document.getElementById('toggle-text').textContent = isLogin ? 'Don\'t have an account?' : 'Already a seeker?';
+      document.getElementById('toggle-btn').textContent = isLogin ? 'Create Account' : 'Sign In';
+  }
+  
   document.getElementById('auth-msg').classList.add('hidden');
   document.getElementById('password-input').autocomplete=isLogin?'current-password':'new-password';
 }
@@ -195,29 +217,43 @@ async function handleAuth(){
   document.getElementById('submit-btn').disabled=true;
 
   try{
-    const endpoint=mode==='login'?'/login':'/register';
-    const body=mode==='login'?{username,password}:{username,password,email:email||undefined};
+    let endpoint = '/login';
+    if (mode === 'register') endpoint = '/register';
+    if (mode === 'forgot') endpoint = '/forgot-password';
+    
+    let body = {};
+    if (mode === 'login') body = {username, password};
+    if (mode === 'register') body = {username, password, email: email || undefined};
+    if (mode === 'forgot') body = {email};
+    
     const r=await fetch(API_BASE+endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     const d=await r.json();
-    if(!r.ok)throw new Error(d.detail||d.message||'Authentication failed');
+    if(!r.ok)throw new Error(d.detail||d.message||'Action failed');
+    
+    if (mode === 'forgot') {
+        showMsg('Success! Check your email for the reset link.', true);
+        return;
+    }
+    
     if(d.access_token||d.token){
-      localStorage.setItem('levi_token',d.access_token||d.token);
-      if(d.user)localStorage.setItem('levi_user',JSON.stringify(d.user));
-      else localStorage.setItem('levi_user',JSON.stringify({username,credits:d.credits||10}));
-      showMsg(mode==='login'?'Welcome back, '+username+'!':'Account created! Welcome, '+username+'!',true);
-      setTimeout(()=>window.location.href='studio.html',1000);
-    }else throw new Error('No token in response');
-  }catch(e){
-    showMsg(e.message||'Authentication failed. Please try again.');
-  }finally{
+      showMsg('Success! Welcome, ' + username + '!', true);
+      setTimeout(() => window.location.href = 'studio.html', 1000);
+    } else {
+      throw new Error('Action failed');
+    }
+  } catch (e) {
+    showMsg(e.message || 'Action failed. Please try again.');
+  } finally {
     document.getElementById('submit-label').classList.remove('hidden');
     document.getElementById('submit-spinner').classList.add('hidden');
-    document.getElementById('submit-btn').disabled=false;
+    document.getElementById('submit-btn').disabled = false;
   }
 }
 
-// If already logged in, redirect
-if(localStorage.getItem('levi_token'))window.location.href='studio.html';
+// Check for existing session (cookie-based). 
+// Since we can't read httpOnly cookies in JS, we just rely on first API call or skip redirect 
+// if we want to stay on the login page.
+// Previous code: if(localStorage.getItem('levi_token')) window.location.href='studio.html';
 
   // Check for query params
   const params = new URLSearchParams(window.location.search);

@@ -1,11 +1,12 @@
-import pytest
+# pyright: reportMissingImports=false
+import pytest  # type: ignore
 import hmac
 import hashlib
 import os
-from fastapi import HTTPException
-from backend.main import verify_password, get_password_hash, create_access_token
-from backend.payments import verify_razorpay_signature, use_credits
-from backend.models import Users
+from fastapi import HTTPException  # type: ignore
+from backend.main import verify_password, get_password_hash, create_access_token  # type: ignore
+from backend.payments import verify_razorpay_signature, use_credits  # type: ignore
+from backend.models import Users  # type: ignore
 
 def test_password_hashing():
     password = "testpassword123"

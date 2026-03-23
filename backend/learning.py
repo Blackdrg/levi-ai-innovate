@@ -1,3 +1,4 @@
+# pyright: reportMissingImports=false
 """
 LEVI AI Learning System
 Collects conversation feedback, learns user preferences,
@@ -10,8 +11,8 @@ import logging
 import hashlib
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy.orm import Session  # type: ignore
+from sqlalchemy import func  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -35,16 +36,16 @@ def collect_training_sample(
     rating: Optional[int],       # 1-5 from user, None if not rated
     session_id: str,
     user_id: Optional[int] = None,
-) -> "TrainingData":
+) -> Any:
     """
     Store a conversation turn as a training sample.
     Automatically infers quality from response characteristics
     when no explicit rating is given.
     """
     try:
-        from training_models import TrainingData
+        from training_models import TrainingData  # type: ignore
     except ImportError:
-        from backend.training_models import TrainingData
+        from backend.training_models import TrainingData  # type: ignore
 
     # Auto-score if no rating provided
     if rating is None:
@@ -120,11 +121,11 @@ def _augment_knowledge_base(db: Session, question: str, answer: str, mood: str):
     """
     try:
         try:
-            from models import Quote
-            from embeddings import embed_text
+            from models import Quote  # type: ignore
+            from embeddings import embed_text  # type: ignore
         except ImportError:
-            from backend.models import Quote
-            from backend.embeddings import embed_text
+            from backend.models import Quote  # type: ignore
+            from backend.embeddings import embed_text  # type: ignore
 
         # Avoid exact duplicates
         existing = db.query(Quote).filter(Quote.text == answer).first()
@@ -169,16 +170,17 @@ class UserPreferenceModel:
     def __init__(self, db: Session, user_id: int):
         self.db = db
         self.user_id = user_id
-        self._profile: Optional[Dict] = None
+        self._profile: Optional[Dict[str, Any]] = None
 
     def get_profile(self) -> Dict[str, Any]:
-        if self._profile:
-            return self._profile
+        p = self._profile
+        if p is not None:
+            return p
 
         try:
-            from training_models import TrainingData
+            from training_models import TrainingData  # type: ignore
         except ImportError:
-            from backend.training_models import TrainingData
+            from backend.training_models import TrainingData  # type: ignore
 
         # Fetch last 40 rated interactions for this user
         samples = (
@@ -190,19 +192,23 @@ class UserPreferenceModel:
         )
 
         if not samples:
-            self._profile = _default_profile()
-            return self._profile
+            prof = _default_profile()
+            self._profile = prof
+            return prof
 
         # Preferred moods (weight by rating)
         mood_scores: Dict[str, List[int]] = {}
         for s in samples:
             mood_scores.setdefault(s.mood, []).append(s.rating)
 
-        preferred_moods = sorted(
+        preferred_moods_sorted = sorted(
             mood_scores.keys(),
             key=lambda m: sum(mood_scores[m]) / len(mood_scores[m]),
             reverse=True
-        )[:3]
+        )
+        preferred_moods = []
+        for i, m in enumerate(preferred_moods_sorted):
+            if i < 3: preferred_moods.append(m)
 
         # Preferred response length
         lengths = [len(s.bot_response.split()) for s in samples if s.rating >= 4]
@@ -220,14 +226,15 @@ class UserPreferenceModel:
         from collections import Counter
         top_topics = [w for w, _ in Counter(topic_words).most_common(5)]
 
-        self._profile = {
+        prof: Dict[str, Any] = {
             "preferred_moods": preferred_moods,
             "response_style": style,
             "top_topics": top_topics,
-            "avg_rating": round(sum(s.rating for s in samples) / len(samples), 2),
+            "avg_rating": round(float(sum(s.rating for s in samples) / len(samples)), 2),  # type: ignore
             "total_interactions": len(samples),
         }
-        return self._profile
+        self._profile = prof
+        return prof
 
     def build_system_prompt(self, base_prompt: str, current_mood: str) -> str:
         """
@@ -299,15 +306,15 @@ class AdaptivePromptManager:
             idx = mood_map.get(mood.lower(), 0)
             return self.PROMPT_VARIANTS[idx]
 
-        best_idx = max(scores, key=scores.get)
+        best_idx = max(scores.keys(), key=lambda k: scores[k])
         return self.PROMPT_VARIANTS[best_idx]
 
     def record_outcome(self, variant_idx: int, rating: int):
         """Update the running average score for a variant."""
         try:
-            from training_models import PromptPerformance
+            from training_models import PromptPerformance  # type: ignore
         except ImportError:
-            from backend.training_models import PromptPerformance
+            from backend.training_models import PromptPerformance  # type: ignore
 
         record = self.db.query(PromptPerformance).filter(
             PromptPerformance.variant_idx == variant_idx
@@ -328,16 +335,17 @@ class AdaptivePromptManager:
         self._scores = None  # invalidate cache
 
     def _load_scores(self) -> Dict[int, float]:
-        if self._scores is not None:
-            return self._scores
+        s = self._scores
+        if s is not None:
+            return s
         try:
-            from training_models import PromptPerformance
+            from training_models import PromptPerformance  # type: ignore
         except ImportError:
-            from backend.training_models import PromptPerformance
+            from backend.training_models import PromptPerformance  # type: ignore
 
         records = self.db.query(PromptPerformance).all()
         self._scores = {r.variant_idx: r.avg_score for r in records if r.sample_count >= 5}
-        return self._scores
+        return self._scores  # type: ignore
 
 
 # ─────────────────────────────────────────────
@@ -356,9 +364,9 @@ def export_training_data(
     Returns (file_path, record_count).
     """
     try:
-        from training_models import TrainingData
+        from training_models import TrainingData  # type: ignore
     except ImportError:
-        from backend.training_models import TrainingData
+        from backend.training_models import TrainingData  # type: ignore
 
     samples = (
         db.query(TrainingData)
@@ -399,11 +407,11 @@ def export_training_data(
 def get_learning_stats(db: Session) -> Dict[str, Any]:
     """Return a summary of the learning system's state."""
     try:
-        from training_models import TrainingData, PromptPerformance
-        from models import Quote
+        from training_models import TrainingData, PromptPerformance  # type: ignore
+        from models import Quote  # type: ignore
     except ImportError:
-        from backend.training_models import TrainingData, PromptPerformance
-        from backend.models import Quote
+        from backend.training_models import TrainingData, PromptPerformance  # type: ignore
+        from backend.models import Quote  # type: ignore
 
     total_samples = db.query(func.count(TrainingData.id)).scalar() or 0
     high_quality  = db.query(func.count(TrainingData.id)).filter(TrainingData.rating >= 4).scalar() or 0
@@ -416,7 +424,7 @@ def get_learning_stats(db: Session) -> Dict[str, Any]:
     return {
         "total_training_samples": total_samples,
         "high_quality_samples":   high_quality,
-        "avg_response_rating":    round(float(avg_rating or 0), 2),
+        "avg_response_rating":    round(float(avg_rating or 0), 2),  # type: ignore
         "learned_quotes":         learned_quotes,
         "unexported_samples":     unexported,
         "best_prompt_variant":    prompt_perf.variant_idx if prompt_perf else 0,

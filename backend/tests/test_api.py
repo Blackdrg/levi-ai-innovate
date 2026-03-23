@@ -1,3 +1,4 @@
+# pyright: reportMissingImports=false
 """API Tests."""
 import sys
 import os
@@ -7,9 +8,9 @@ from unittest.mock import patch, MagicMock
 # but we still need basic imports for mocking
 
 try:
-    from backend.main import app, get_current_user
+    from backend.main import app, get_current_user  # type: ignore
 except ImportError:
-    from main import app, get_current_user
+    from main import app, get_current_user  # type: ignore
 
 def test_health(app_client):
     """Test health."""

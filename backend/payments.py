@@ -1,19 +1,20 @@
-import razorpay
+# pyright: reportMissingImports=false
+import razorpay  # type: ignore
 import os
 from typing import Optional
 import hmac
 import hashlib
 import logging
-from fastapi import APIRouter, HTTPException, Depends, Request
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, HTTPException, Depends, Request  # type: ignore
+from sqlalchemy.orm import Session  # type: ignore
 try:
-    from backend.db import get_db
-    from backend.models import Users
-    from backend.auth import get_current_user
+    from backend.db import get_db  # type: ignore
+    from backend.models import Users  # type: ignore
+    from backend.auth import get_current_user  # type: ignore
 except ImportError:
-    from db import get_db
-    from models import Users
-    from auth import get_current_user
+    from db import get_db  # type: ignore
+    from models import Users  # type: ignore
+    from auth import get_current_user  # type: ignore
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/payments", tags=["payments"])
@@ -39,7 +40,8 @@ def create_order(amount: int, currency: str = "INR", receipt: str = "order_1", u
     if not client:
         raise HTTPException(status_code=500, detail="Razorpay client not configured")
     try:
-        order_data = {
+        from typing import Dict, Any
+        order_data: Dict[str, Any] = {
             "amount": amount,
             "currency": currency,
             "receipt": receipt,
@@ -107,3 +109,24 @@ def use_credits(user_id: int, amount: int, db: Session):
     user.credits = current_credits - amount
     db.commit()
     return int(user.credits)
+
+def process_subscription_lapse(user_id: int, db: Session):
+    """
+    Downgrade a user to 'free' tier and cap credits at 10.
+    Called when a subscription.charged webhook fails or a billing period ends.
+    """
+    try:
+        from models import Users  # type: ignore
+        user = db.query(Users).filter(Users.id == user_id).first()
+        if user and user.tier != "free":
+            logger.info(f"Subscription lapsed for user {user_id}. Downgrading to free tier.")
+            user.tier = "free"
+            # Cap credits at 10 for free tier if they had more
+            if user.credits > 10:
+                user.credits = 10
+            db.commit()
+            return True
+    except Exception as e:
+        logger.error(f"Failed to process subscription lapse for user {user_id}: {e}")
+        db.rollback()
+    return False

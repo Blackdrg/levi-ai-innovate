@@ -1,5 +1,5 @@
-// DEPLOY: 2026-03-21 — bump this string on every deploy
-const CACHE_NAME = 'levi-v5-20260321';
+// DEPLOY: 2026-03-23 — bump this string on every deploy
+const CACHE_NAME = 'levi-v5.2-20260323';
 
 const ASSETS = [
   './',
@@ -12,14 +12,14 @@ const ASSETS = [
   'auth.html',
   'terms.html',
   'privacy.html',
-  'css/output.css',
-  'css/animations.css',
-  'js/ui.js',
-  'js/api.js',
-  'js/chat.js',
-  'js/quotes.js',
-  'js/studio.js',
-  'js/my-gallery.js',
+  'css/output.css?v=' + Date.now(),
+  'css/animations.css?v=' + Date.now(),
+  'js/ui.js?v=' + Date.now(),
+  'js/api.js?v=' + Date.now(),
+  'js/chat.js?v=' + Date.now(),
+  'js/quotes.js?v=' + Date.now(),
+  'js/studio.js?v=' + Date.now(),
+  'js/my-gallery.js?v=' + Date.now(),
   'manifest.json'
 ];
 

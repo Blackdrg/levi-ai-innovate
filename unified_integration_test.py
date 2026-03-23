@@ -1,5 +1,6 @@
+# pyright: reportMissingImports=false
 
-import requests
+import requests  # type: ignore
 import os
 import sys
 import time
@@ -85,10 +86,10 @@ if __name__ == "__main__":
         ("End-to-End API Bridge", check_frontend_backend_bridge)
     ]
     
-    passed = 0
+    passed: int = 0
     for name, fn in steps:
         if test_step(name, fn):
-            passed += 1
+            passed = passed + 1  # type: ignore
             
     print("\n" + "="*40)
     print(f"FINAL RESULT: {passed}/{len(steps)} STEPS PASSED")
