@@ -6,13 +6,13 @@ services:
     dockerContext: .
     plan: free
     healthCheckPath: /health
-    preDeployCommand: "cd backend && alembic upgrade head && python seed.py"
+
     envVars:
       - key: RENDER
         value: "true"
       - key: DATABASE_URL
         fromService:
-          type: pgsql
+          type: database
           name: levi-db
           property: connectionString
       - key: REDIS_URL
@@ -46,23 +46,7 @@ services:
       - key: PORT
         value: "10000"
 
-  - type: cron
-    name: daily-wisdom-email
-    runtime: python
-    plan: free
-    schedule: "0 9 * * *" # Every day at 9 AM UTC
-    buildCommand: "pip install -r backend/requirements.txt"
-    startCommand: "cd backend && python cron_daily_wisdom.py"
-    envVars:
-      - key: DATABASE_URL
-        fromService:
-          type: pgsql
-          name: levi-db
-          property: connectionString
-      - key: RESEND_API_KEY
-        sync: false
-      - key: USE_CELERY
-        value: "true"
+
 
   - type: worker
     name: celery-worker
@@ -73,7 +57,7 @@ services:
     envVars:
       - key: DATABASE_URL
         fromService:
-          type: pgsql
+          type: database
           name: levi-db
           property: connectionString
       - key: REDIS_URL
