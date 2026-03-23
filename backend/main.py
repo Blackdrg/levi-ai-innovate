@@ -270,6 +270,7 @@ class User(BaseModel):
 class UserIn(BaseModel):
     username: str = Field(..., max_length=100)
     password: str = Field(..., min_length=8, max_length=100)
+    email: Optional[str] = Field(None, max_length=100)
 
 class Token(BaseModel):
     access_token: str
@@ -892,9 +893,10 @@ async def gen_image(request: Request, req: Query, db: Session = Depends(get_db),
                 req.text, 
                 req.author or "Unknown",
                 req.mood or "neutral",
-                user_id
+                user_id,
+                user_tier
             )
-            return {"task_id": task.id, "status": "processing", "message": "Image generation started in background."}
+            return JSONResponse(status_code=202, content={"task_id": task.id, "status": "processing", "message": "Image generation started in background."})
 
         loop = asyncio.get_event_loop()
         bio = await loop.run_in_executor(
@@ -965,7 +967,7 @@ async def gen_video(request: Request, req: Query, db: Session = Depends(get_db),
                 user_id,
                 user_tier
             )
-            return {"task_id": task.id, "status": "processing", "message": "Video generation started in background."}
+            return JSONResponse(status_code=202, content={"task_id": task.id, "status": "processing", "message": "Video generation started in background."})
 
         # Synchronous video generation (for local development or if Celery is off)
         video_url = await generate_quote_video( # type: ignore
@@ -1410,7 +1412,7 @@ async def register(request: Request, user_in: UserIn, db: Session = Depends(get_
 
     user = Users(
         username=user_in.username,
-        email=user_in.username,
+        email=user_in.email or user_in.username,
         password_hash=get_password_hash(user_in.password),
         is_verified=0,
         verification_token=verification_token,
@@ -1451,7 +1453,7 @@ async def verify_email(token: str, db: Session = Depends(get_db)):
     frontend_url = os.getenv("FRONTEND_URL", "https://levi-ai.create.app")
     return RedirectResponse(url=f"{frontend_url}/auth.html?verified=true")
 
-@app.post("/token", response_model=Token)
+@app.post("/token")
 @limiter.limit("10/minute")
 async def login_for_access_token(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(Users).filter(Users.username == form_data.username).first()
@@ -1469,7 +1471,7 @@ async def login_for_access_token(request: Request, form_data: OAuth2PasswordRequ
     response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=True, samesite="lax", max_age=30 * 24 * 3600)
     return response
 
-@app.post("/login", response_model=Token)
+@app.post("/login")
 @limiter.limit("10/minute")
 async def login_json(request: Request, user_in: UserIn, db: Session = Depends(get_db)):
     """
