@@ -1,0 +1,48 @@
+
+--- Testing Health Check ---
+Status: 200
+Success! Response: {"status":"ok","timestamp":"2026-03-23T19:55:46.819737","dependencies":{"database":"healthy","redis":"unavailable"}}
+
+--- Testing Daily Quote ---
+Status: 200
+Success! Response: {"quote":"Fishing is much more than fish.","author":"Herbert Hoover"}
+
+--- Testing Analytics ---
+Status: 500
+Failed Body: {"detail":"An internal error occurred."}
+
+--- Testing English Chat ---
+Status: 500
+Failed Body: {"detail":"An internal error occurred."}
+
+--- Testing Hindi Chat ---
+Status: 500
+Failed Body: {"detail":"An internal error occurred."}
+
+--- Testing Quote Generation ---
+Status: 200
+Success! Response: {"generated_quote":"\"Success is not a destination, but a tapestry woven by the threads of our unwavering passions, unrelenting perseverance, and the courage to rewrite our own definition of victory.\" - Aria Vesper"}
+
+--- Testing Health Check ---
+Status: 200
+Success! Response: {"status":"ok","timestamp":"2026-03-24T05:00:03.249160","dependencies":{"database":"healthy","redis":"unavailable"}}
+
+--- Testing Daily Quote ---
+Status: 200
+Success! Response: {"quote":"The key to success is failure.","author":"Michael Jordan"}
+
+--- Testing Analytics ---
+Status: 500
+Failed Body: {"detail":"An internal error occurred."}
+
+--- Testing English Chat ---
+Status: 500
+Failed Body: {"detail":"An internal error occurred."}
+
+--- Testing Hindi Chat ---
+Status: 500
+Failed Body: {"detail":"An internal error occurred."}
+
+--- Testing Quote Generation ---
+Status: 200
+Success! Response: {"generated_quote":"\"Weave the tapestry of your dreams, and in every thread of resilience, let the beauty of success unfold – for it is not the destination, but the canvas of your journey that reveals the masterpiece you were born to create.\" - Aria Winters"}

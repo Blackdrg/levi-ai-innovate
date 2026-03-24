@@ -234,18 +234,43 @@ def generate_content(
     depth_multiplier = {"low": 0.5, "medium": 0.75, "high": 1.0}
     base_tokens = int(template["max_tokens"])
     max_tokens = int(base_tokens * depth_multiplier.get(depth, 1.0))
+    
+    # Dynamic Temperature mapping
+    temp_map = {"poem": 0.92, "readme": 0.70, "story": 0.85, "essay": 0.75, "quote": 0.85}
+    temperature = temp_map.get(content_type, 0.80)
 
     # Build prompts — inject language directive if non-English
     system_prompt = str(template["system"]).format(topic=topic, tone=tone)
     user_prompt = str(template["user"]).format(topic=topic, tone=tone)
+    
+    # Inject Tone Modifiers
+    TONE_MODIFIERS = {
+        "dark": "Use stark, visceral imagery and focus on the shadows of the human experience.",
+        "humorous": "Be witty, clever, and use subtle irony or playful observations.",
+        "bold": "Be uncompromising, direct, and authoritative in your assertions.",
+        "intimate": "Speak as a close confidant, using personal, warm, and vulnerable language."
+    }
+    if tone in TONE_MODIFIERS:
+        system_prompt += f"\n\nTone strict adherence: {TONE_MODIFIERS[tone]}"
+        
+    system_prompt += "\nCRITICAL ANTI-CLICHE RULE: Do not use the words 'profound', 'tapestry', 'cosmic dance', 'delve', 'testament', 'journey', or 'landscape'. Never start with pleasantries like 'Certainly' or 'Here is'."
+    
     if language.lower() not in ("english", "en"):
         system_prompt += f" Write entirely in {language}."
 
-    # ── Generate via Groq ──
-    content = _generate_via_groq(system_prompt, user_prompt, max_tokens)
+    raw_content = _generate_via_groq(system_prompt, user_prompt, max_tokens, temperature)
 
-    if not content:
+    if not raw_content:
         content = f"[Content generation unavailable. Topic: {topic}, Type: {content_type}]"
+    else:
+        # Anti-cliché post-processing
+        c_str: str = str(raw_content)
+        for op in ["certainly", "great question", "here is", "sure!", "of course", "here's"]:
+            if c_str.lower().startswith(op):
+                start_idx: int = len(op)
+                end_idx: int = len(c_str)
+                c_str = c_str[start_idx:end_idx].lstrip(' \n,:-!')  # type: ignore
+        content = c_str.replace("cosmic dance", "natural motion").replace("In conclusion,", "").strip()
 
     word_count = len(content.split())
 
@@ -260,7 +285,7 @@ def generate_content(
     }
 
 
-def _generate_via_groq(system_prompt: str, user_prompt: str, max_tokens: int) -> Optional[str]:
+def _generate_via_groq(system_prompt: str, user_prompt: str, max_tokens: int, temperature: float = 0.8) -> Optional[str]:
     """Call Groq Llama3 for content generation."""
     try:
         import groq  # type: ignore
@@ -277,7 +302,7 @@ def _generate_via_groq(system_prompt: str, user_prompt: str, max_tokens: int) ->
                 {"role": "user", "content": user_prompt},
             ],
             max_tokens=max_tokens,
-            temperature=0.8,
+            temperature=temperature,
         )
         return response.choices[0].message.content.strip()
     except Exception as e:

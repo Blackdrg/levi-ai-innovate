@@ -51,7 +51,9 @@ def _generate_via_groq(prompt: str) -> Optional[str]:
                 "model": "llama-3.1-8b-instant",
                 "messages": [{"role": "user", "content": prompt}],
                 "max_tokens": 120,
-                "temperature": 0.8
+                "temperature": min(1.0, max(0.1, 0.8 + random.uniform(-0.08, 0.08))),
+                "frequency_penalty": 0.4,
+                "presence_penalty": 0.3
             },
             timeout=8
         )
@@ -265,6 +267,19 @@ def generate_response(prompt: str, history: Optional[List[dict]] = None, mood: s
     # Groq-powered response logic (SDK backup)
     if groq_client:
         try:
+            personas = [
+                "Socratic Questioner: answer questions with deeper questions to guide discovery",
+                "Zen Master: use minimal words, paradoxical koans, focus on the present moment",
+                "Cosmic Philosopher: view everything through the vast lens of the universe, stars, and infinite time",
+                "Stoic Sage: emphasize what is within our control, emotional resilience, and practical virtue",
+                "Rumi Mystic: speak with poetic fervor, love, and spiritual metaphor",
+                "Existentialist: focus on radical freedom, the burden of choice, and creating meaning",
+                "Taoist: emphasize the flow of nature (the Dao), wu-wei (effortless action), and balance",
+                "Analytical Synthesizer: break down complex emotional or spiritual problems into logical, structured components"
+            ]
+            persona = random.choice(personas)
+            anti_cliches = "profound, tapestry, cosmic dance, delve, testament, realm, journey, beacon, symphony, embark, landscape, pivotal, foster"
+            
             # Build system prompt with user memory context
             memory_context = ""
             if user_memory:
@@ -272,7 +287,15 @@ def generate_response(prompt: str, history: Optional[List[dict]] = None, mood: s
                 moods = ", ".join(user_memory.mood_history) if hasattr(user_memory, 'mood_history') and user_memory.mood_history else "thought-provoking"
                 memory_context = f" User usually likes {topics} and feels {moods}."
             
-            system_prompt = f"You are LEVI, a philosophical AI companion. Mood: {mood or 'thought-provoking'}.{memory_context} Be deep, concise, poetic. Max 3 sentences."
+            depth = len(history) if history else 0
+            depth_instruction = "Keep the response brief and welcoming." if depth < 2 else "Dive deep into the nuance, skipping pleasantries." if depth > 4 else "Evolve the thought further, building on previous context."
+            
+            system_prompt = (
+                f"You are LEVI. Act as a {persona}. Mood: {mood or 'thought-provoking'}.{memory_context} "
+                f"Depth awareness: {depth_instruction} Be concise. Max 3 sentences. "
+                f"CRITICAL: Do NOT use ANY of these clichéd words/phrases: {anti_cliches}. "
+                "Never start with 'Certainly', 'Great question', or 'Absolutely'. Start your actual thought immediately."
+            )
             
             messages = [
                 {"role": "system", "content": system_prompt}
@@ -286,12 +309,26 @@ def generate_response(prompt: str, history: Optional[List[dict]] = None, mood: s
                     messages.append({"role": "assistant", "content": entry.get("bot", "")})
             messages.append({"role": "user", "content": input_text})
 
+            base_temp = 0.8
+            dynamic_temp = min(1.0, max(0.1, base_temp + random.uniform(-0.08, 0.08)))
+
             response = groq_client.chat.completions.create(
                 model="llama-3.1-8b-instant",
                 messages=messages,
-                max_tokens=max_length
+                max_tokens=max_length,
+                temperature=dynamic_temp,
+                frequency_penalty=0.4,
+                presence_penalty=0.3
             )
-            bot_response = response.choices[0].message.content.strip()
+            content_val = response.choices[0].message.content
+            bot_response: str = content_val.strip() if content_val else ""
+            
+            # Strip AI openers just in case
+            lower_b: str = bot_response.lower()
+            for opener in ["certainly!", "certainly,", "great question!", "great question.", "absolutely!", "of course!", "of course,", "here is", "here's"]:
+                if lower_b.startswith(opener):
+                    bot_response = bot_response[len(opener):].lstrip(' \n,')
+                    lower_b = bot_response.lower()
             
             # Update user memory topics/moods if we have memory object
             if user_memory:

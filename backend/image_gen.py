@@ -36,9 +36,27 @@ MOOD_PROMPTS = {
 }
 
 def build_prompt(quote: str, mood: str) -> str:
-    """Build a rich image prompt from mood + key quote words."""
+    """Build a rich image prompt from mood + key quote words using Groq if available."""
+    groq_api_key = os.getenv("GROQ_API_KEY")
+    if groq_api_key:
+        try:
+            import groq # type: ignore
+            client = groq.Groq(api_key=groq_api_key)
+            resp = client.chat.completions.create(
+                model="llama-3.1-8b-instant",
+                messages=[
+                    {"role": "system", "content": "You are a midjourney prompt engineer. Take the quote and mood, and write a vivid, cinematic, highly detailed 1-sentence image description. NO TEXT, no words in the image. Wallpaper quality."},
+                    {"role": "user", "content": f"Quote: '{quote}'\nMood: {mood}"}
+                ],
+                max_tokens=60,
+                temperature=0.8
+            )
+            enhanced = resp.choices[0].message.content.strip()
+            return f"{enhanced}, no text, no words, ultra detailed, wallpaper quality"
+        except Exception as e:
+            logger.warning(f"Groq prompt enhancement failed: {e}")
+
     base = MOOD_PROMPTS.get(mood.lower(), MOOD_PROMPTS["neutral"])
-    # Extract 2-3 meaningful words from the quote to add context
     stop_words = {"the","a","an","is","are","to","of","and","or","in","it","you","we","i","me"}
     words = [w.strip(".,!?\"'") for w in quote.lower().split() if w not in stop_words and len(w) > 3]
     top_words = []
@@ -113,25 +131,39 @@ def generate_background_together(prompt: str, size: tuple = (1024, 1024)) -> Ima
 
 def generate_gradient_fallback(mood: str, size: tuple) -> Image.Image:
     mood_colors = {
-        "inspiring":     [(40, 0, 80),   (100, 40, 180)],
-        "calm":          [(10, 40, 50),  (40, 120, 130)],
-        "energetic":     [(80, 0, 20),   (200, 60, 40)],
-        "philosophical": [(10, 10, 30),  (50, 50, 90)],
-        "melancholic":   [(5, 10, 30),   (30, 40, 100)],
-        "stoic":         [(30, 30, 30),  (100, 100, 100)],
-        "zen":           [(30, 50, 20),  (100, 140, 60)],
-        "cyberpunk":     [(20, 0, 40),   (180, 0, 255)],
-        "futuristic":    [(0, 10, 40),   (0, 200, 255)],
-        "neutral":       [(20, 30, 50),  (60, 80, 120)],
+        "inspiring":     [(20, 0, 40),   (100, 40, 150), (255, 150, 50)],
+        "calm":          [(5, 20, 30),  (20, 80, 100),  (100, 200, 220)],
+        "energetic":     [(40, 0, 10),   (150, 20, 20),  (255, 100, 0)],
+        "philosophical": [(5, 5, 15),  (30, 20, 60),  (80, 70, 120)],
+        "melancholic":   [(5, 5, 20),   (20, 30, 80),   (60, 80, 120)],
+        "stoic":         [(15, 15, 15),  (60, 60, 60),  (120, 120, 120)],
+        "zen":           [(10, 30, 10),  (50, 100, 40), (120, 180, 80)],
+        "cyberpunk":     [(20, 0, 40),   (100, 0, 150),   (0, 255, 255)],
+        "futuristic":    [(0, 5, 20),   (0, 100, 200),  (0, 250, 255)],
+        "romantic":      [(40, 0, 20),   (180, 40, 80),  (255, 120, 150)],
+        "dark":          [(0, 0, 5),     (15, 10, 10),   (40, 20, 20)],
+        "neutral":       [(10, 15, 25),  (40, 50, 80),  (100, 120, 160)],
     }
     colors = mood_colors.get(mood.lower(), mood_colors["neutral"])
     base = Image.new("RGBA", size, colors[0] + (255,))
-    top  = Image.new("RGBA", size, colors[1] + (255,))
-    mask = Image.new("L", size)
-    d = ImageDraw.Draw(mask)
-    for y in range(size[1]):
-        d.line([(0, y), (size[0], y)], fill=int(255 * y / size[1]))
-    return Image.composite(top, base, mask)
+    mid  = Image.new("RGBA", size, colors[1] + (255,))
+    top  = Image.new("RGBA", size, colors[2] + (255,))
+    
+    mask1 = Image.new("L", size)
+    d1 = ImageDraw.Draw(mask1)
+    half_h = size[1] // 2
+    for y in range(half_h):
+        d1.line([(0, y), (size[0], y)], fill=int(255 * (y / half_h)))
+    
+    mask2 = Image.new("L", size)
+    d2 = ImageDraw.Draw(mask2)
+    for y in range(half_h, size[1]):
+        val = int(255 * ((y - half_h) / half_h))
+        d2.line([(0, y), (size[0], y)], fill=val)
+        d1.line([(0, y), (size[0], y)], fill=255)
+    
+    step1 = Image.composite(mid, base, mask1)
+    return Image.composite(top, step1, mask2)
 
 
 # ─────────────────────────────────────────────
@@ -186,20 +218,17 @@ def load_font(size: int, mood: str = ""):
 
 
 def overlay_text(img: Image.Image, quote: str, author: str, mood: str) -> Image.Image:
-    draw = ImageDraw.Draw(img, "RGBA")
     W, H = img.size
 
-    # Dynamic font size
-    if   len(quote) < 60:  base_size = 82
-    elif len(quote) < 120: base_size = 68
-    elif len(quote) < 200: base_size = 56
-    else:                  base_size = 46
+    # Dynamic font size (38-88px mapped over 20-300 chars)
+    length = len(quote)
+    base_size = int(max(38.0, min(88.0, 88.0 - (length - 20) * (50.0 / 280.0))))
 
     font_quote  = load_font(base_size, mood)
     font_author = load_font(int(base_size * 0.55), mood)
+    font_big    = load_font(int(base_size * 2.5), mood)
 
-    # Wrap text
-    char_width = max(16, min(28, int(W / base_size * 1.6)))
+    char_width = int(max(16.0, min(32.0, W / base_size * 1.6)))
     lines = textwrap.wrap(quote, width=char_width)
 
     line_h      = font_quote.getbbox("Ay")[3] - font_quote.getbbox("Ay")[1] if hasattr(font_quote, "getbbox") else base_size + 10
@@ -208,32 +237,44 @@ def overlay_text(img: Image.Image, quote: str, author: str, mood: str) -> Image.
     total_h      = len(lines) * line_spacing + author_gap
     start_y      = (H - total_h) / 2
 
-    # Draw each line
+    txt_layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    txt_draw = ImageDraw.Draw(txt_layer)
+    accent = (255, 200, 100, 180) if mood == "inspiring" else (100, 200, 255, 180) if mood in ["calm", "cyberpunk"] else (255, 255, 255, 150)
+
+    # Large quote marks
+    txt_draw.text((60, start_y - int(base_size)), '"', fill=accent, font=font_big)
+
     for i, line in enumerate(lines):
-        bbox = draw.textbbox((0, 0), line, font=font_quote) if hasattr(draw, "textbbox") else (0, 0, W//2, base_size)
+        bbox = txt_draw.textbbox((0, 0), line, font=font_quote) if hasattr(txt_draw, "textbbox") else (0, 0, W//2, base_size)
         tw = bbox[2] - bbox[0]
         x  = (W - tw) / 2
         y  = start_y + i * line_spacing
+        
+        # Glow & Deep shadow happens via filter, here we just draw core and standard shadow
+        txt_draw.text((x + 2, y + 2), line, fill=(0, 0, 0, 200), font=font_quote)
+        txt_draw.text((x, y), line, fill=(255, 255, 255, 255), font=font_quote)
 
-        # Shadow layers
-        for ox, oy in [(2, 2), (3, 3), (4, 4)]:
-            draw.text((x + ox, y + oy), line, fill=(0, 0, 0, 80), font=font_quote)
-        # Main text
-        draw.text((x, y), line, fill=(255, 255, 255, 255), font=font_quote)
-
-    # Author line
     author_text = f"— {author}" if author else "— LEVI AI"
-    abbox = draw.textbbox((0, 0), author_text, font=font_author) if hasattr(draw, "textbbox") else (0, 0, 200, 30)
+    abbox = txt_draw.textbbox((0, 0), author_text, font=font_author) if hasattr(txt_draw, "textbbox") else (0, 0, 200, 30)
     aw    = abbox[2] - abbox[0]
     ay    = start_y + len(lines) * line_spacing + 40
 
-    # Decorative line above author
-    draw.line([(W/2 - 50, ay - 16), (W/2 + 50, ay - 16)], fill=(255, 255, 255, 120), width=2)
-    draw.text(((W - aw) / 2, ay), author_text, fill=(255, 255, 255, 200), font=font_author)
+    txt_draw.line([(W/2 - 50, ay - 16), (W/2 + 50, ay - 16)], fill=accent, width=2)
+    txt_draw.text(((W - aw) / 2, ay), author_text, fill=(255, 255, 255, 200), font=font_author)
 
-    # Border frames
-    draw.rectangle([40, 40, W-40, H-40], outline=(255, 255, 255, 40), width=2)
-    draw.rectangle([55, 55, W-55, H-55], outline=(255, 255, 255, 15), width=1)
+    # Filter glow layer
+    glow_layer = txt_layer.filter(ImageFilter.GaussianBlur(radius=6))
+    img = Image.alpha_composite(img, glow_layer)
+    img = Image.alpha_composite(img, txt_layer)
+
+    # Complex Border frames
+    draw = ImageDraw.Draw(img, "RGBA")
+    draw.rectangle([40, 40, W-40, H-40], outline=accent, width=2)
+    draw.rectangle([55, 55, W-55, H-55], outline=(255, 255, 255, 20), width=1)
+    # Corner accents
+    d = 30
+    draw.line([(35, 35), (35+d, 35)], fill=accent, width=4)
+    draw.line([(35, 35), (35, 35+d)], fill=accent, width=4)
 
     return img
 
@@ -249,27 +290,24 @@ def generate_quote_image(
     size:      tuple = (1024, 1024),
     custom_bg: str   = "",
     user_tier: str   = "free",
-    return_pil: bool = False
+    return_pil: bool = False,
+    user_id:   int   = 0
 ) -> Any:
 
     # --- Step 1: Get background ---
     bg = None
 
-    # Custom upload takes priority
     if custom_bg:
         try:
-            # Only base64 data-URIs are accepted — HTTP URLs are rejected upstream
-            # to prevent Server-Side Request Forgery (SSRF).
             if custom_bg.startswith("data:image"):
                 _, encoded = custom_bg.split(",", 1)
                 bg = Image.open(BytesIO(base64.b64decode(encoded))).convert("RGBA")
             if bg and bg.size != size:
                 bg = bg.resize(size, Image.Resampling.LANCZOS)
         except Exception as e:
-            print(f"[custom_bg] Failed: {e}")
+            logger.warning(f"[custom_bg] Failed: {e}")
             bg = None
 
-    # Primary: SD Engine (local SD or Together AI fallback)
     if bg is None:
         try:
             from backend.sd_engine import generate as sd_generate  # type: ignore
@@ -281,16 +319,11 @@ def generate_quote_image(
         if sd_result:
             bg = Image.open(sd_result).convert("RGBA")
 
-    # Legacy Together.AI generation (if sd_engine returned None)
     if bg is None and TOGETHER_API_KEY:
         prompt = build_prompt(quote, mood)
-        print(f"[Together.AI] Prompt: {prompt}")
         bg = generate_background_together(prompt, size)
 
-
-    # Fallback to gradient if API fails or key missing
     if bg is None:
-        print("[Fallback] Using gradient background")
         bg = generate_gradient_fallback(mood, size)
 
     # --- Step 2: Dark overlay so text is readable ---
@@ -304,11 +337,34 @@ def generate_quote_image(
     bg = add_watermark(bg, user_tier)
     bg = bg.filter(ImageFilter.SHARPEN)
 
-    # --- Step 5: Export ---
     if return_pil:
         return bg
-
+        
     output = BytesIO()
     bg.convert("RGB").save(output, "PNG", optimize=True)
+    
+    # --- Step 5: S3 Upload Integration ---
+    if os.getenv("AWS_S3_BUCKET"):
+        try:
+            import boto3 # type: ignore
+            import uuid
+            s3 = boto3.client(
+                "s3",
+                aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+                aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+                region_name=os.getenv("AWS_REGION", "us-east-1")
+            )
+            bucket = os.getenv("AWS_S3_BUCKET")
+            filename = f"images/{user_id}/{uuid.uuid4().hex}.png"
+            output.seek(0)
+            s3.put_object(Bucket=bucket, Key=filename, Body=output.getvalue(), ContentType="image/png")
+            
+            cloudfront = os.getenv("CLOUDFRONT_DOMAIN")
+            if cloudfront:
+                return f"https://{cloudfront}/{filename}"
+            return s3.generate_presigned_url("get_object", Params={"Bucket": bucket, "Key": filename}, ExpiresIn=604800)
+        except Exception as e:
+            logger.error(f"S3 Direct Upload failed: {e}")
+
     output.seek(0)
     return output

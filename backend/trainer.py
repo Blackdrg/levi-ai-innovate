@@ -18,10 +18,11 @@ logger = logging.getLogger(__name__)
 TOGETHER_API_KEY   = os.getenv("TOGETHER_API_KEY")
 TOGETHER_FINETUNE  = "https://api.together.xyz/v1/fine-tuning/jobs"
 TOGETHER_FILES     = "https://api.together.xyz/v1/files"
-BASE_MODEL         = "togethercomputer/llama-2-7b-chat"   # fallback; prefer Llama-3 when available
+BASE_MODEL         = "meta-llama/Meta-Llama-3-8B-Instruct"
 MIN_SAMPLES_TO_TRAIN = 200    # minimum high-quality samples before triggering a training run
 FINETUNE_POLL_SEC    = 300    # check job status every 5 minutes
 MAX_TRAINING_EPOCHS  = 3
+QUALITY_THRESHOLD    = 0.62
 
 # ─────────────────────────────────────────────
 # Celery app reference (imported from tasks.py)
@@ -343,11 +344,11 @@ def poll_training_job(self, job_id: str):
                 version.eval_score = eval_score
                 db.commit()
 
-                if eval_score >= 0.65:  # only activate if quality threshold met
+                if eval_score >= QUALITY_THRESHOLD:  # only activate if quality threshold met
                     activate_model_version(db, model_id)
                     logger.info(f"[Trainer] ✅ New model activated: {model_id} (score={eval_score:.2f})")
                 else:
-                    logger.warning(f"[Trainer] ⚠️  Model {model_id} eval score {eval_score:.2f} below threshold. Not activating.")
+                    logger.warning(f"[Trainer] ⚠️  Model {model_id} eval score {eval_score:.2f} below threshold {QUALITY_THRESHOLD}. Not activating.")
             return {"status": "completed", "model_id": model_id}
 
         elif status == "failed":

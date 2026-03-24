@@ -99,7 +99,7 @@ def upload_video_to_s3(video_bytes: bytes, user_id: int) -> str:
 # ─────────────────────────────────────────────
 # Task 1: Generate quote image in background
 # ─────────────────────────────────────────────
-@celery_app.task(bind=True, max_retries=2)
+@celery_app.task(bind=True, max_retries=2, acks_late=True, reject_on_worker_lost=True)
 def generate_image_task(self, quote: str, author: str, mood: str, user_id: int, user_tier: str = "free"):
     """
     Generate image via Together.AI + upload to S3.
@@ -120,18 +120,21 @@ def generate_image_task(self, quote: str, author: str, mood: str, user_id: int, 
                 except Exception:
                     pass
 
-            bio = generate_quote_image(quote, author, mood, user_tier=user_tier)
-            img_bytes = bio.getvalue()
+            result = generate_quote_image(quote, author, mood, user_tier=user_tier, user_id=user_id)
 
             # Store in S3 if configured, otherwise return base64
             image_url = None
             image_b64 = None
             
-            if os.getenv("AWS_S3_BUCKET"):
-                image_url = upload_image_to_s3(img_bytes, user_id)
+            if isinstance(result, str):
+                image_url = result
             else:
-                import base64
-                image_b64 = "data:image/png;base64," + base64.b64encode(img_bytes).decode()
+                img_bytes = result.getvalue()
+                if os.getenv("AWS_S3_BUCKET") and not image_url:
+                    image_url = upload_image_to_s3(img_bytes, user_id)
+                else:
+                    import base64
+                    image_b64 = "data:image/png;base64," + base64.b64encode(img_bytes).decode()
 
             # Save to FeedItem for persistence
             new_item = FeedItem(
@@ -178,7 +181,7 @@ def generate_image_task(self, quote: str, author: str, mood: str, user_id: int, 
 # ─────────────────────────────────────────────
 # Task 2: Generate quote VIDEO in background
 # ─────────────────────────────────────────────
-@celery_app.task(bind=True, max_retries=1)
+@celery_app.task(bind=True, max_retries=1, acks_late=True, reject_on_worker_lost=True)
 def generate_video_task(self, quote: str, author: str, mood: str, user_id: int, user_tier: str = "free"):
     """
     Generate video via HeyGen/Leonardo + upload to S3.

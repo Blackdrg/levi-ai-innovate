@@ -46,15 +46,25 @@ def generate_narration_script(quote: str, author: str, mood: str) -> str:
     """Use Groq to create a brief narration script."""
     try:
         import groq  # type: ignore
+        import random
         api_key = os.getenv("GROQ_API_KEY")
         if not api_key:
             return f"{quote} — by {author}"
+            
+        styles = [
+            "dramatic, theatrical reading", 
+            "calm, ASMR whisper", 
+            "passionate, energetic declaration", 
+            "stoic, measured philosophical delivery"
+        ]
+        style = random.choice(styles)
+        
         client = groq.Groq(api_key=api_key)
         response = client.chat.completions.create(
             model="llama-3.1-8b-instant",
             messages=[{
                 "role": "system",
-                "content": "You are a narration scriptwriter. Create a brief (max 40 words) evocative narration that reads a quote aloud. Output ONLY the narration text."
+                "content": f"You are a narration scriptwriter. Create a brief (max 40 words) evocative narration that reads a quote aloud. Style: {style}. Output ONLY the narration text."
             }, {
                 "role": "user",
                 "content": f'Quote: "{quote}" — {author}\nMood: {mood}'
@@ -104,21 +114,39 @@ def synthesize_speech(text: str) -> Optional[str]:
 # ─────────────────────────────────────────────
 # Ken Burns effect
 # ─────────────────────────────────────────────
-def _apply_ken_burns(clip: Any, duration: float, zoom: float = 0.04) -> Any:
+def _apply_ken_burns(clip: Any, duration: float, direction: str = "in") -> Any:
     try:
         import numpy as np  # type: ignore
         from PIL import Image as PILImage  # type: ignore
         w, h = clip.size
 
+        z_start, z_end = 1.0, 1.0
+        x_shift, y_shift = 0, 0
+        zoom_amt = 0.05
+        
+        if direction == "in": z_start, z_end = 1.0, 1.0 + zoom_amt
+        elif direction == "out": z_start, z_end = 1.0 + zoom_amt, 1.0
+        elif direction == "left": z_start, z_end = 1.05, 1.05; x_shift = -1
+        elif direction == "right": z_start, z_end = 1.05, 1.05; x_shift = 1
+        elif direction == "up": z_start, z_end = 1.05, 1.05; y_shift = -1
+        elif direction == "diagonal": z_start, z_end = 1.0, 1.05; x_shift = 1; y_shift = -1
+
         def effect(get_frame, t):
             progress = t / duration
-            scale = 1 + zoom * progress
+            scale = z_start + (z_end - z_start) * progress
             frame = get_frame(t)
             img = PILImage.fromarray(frame)
             nw, nh = int(w * scale), int(h * scale)
             img = img.resize((nw, nh), PILImage.Resampling.LANCZOS)
-            left = (nw - w) // 2
-            top = (nh - h) // 2
+            
+            base_left = (nw - w) / 2
+            base_top = (nh - h) / 2
+            
+            dx = x_shift * (nw - w) / 2 * progress
+            dy = y_shift * (nh - h) / 2 * progress
+            
+            left = int(base_left + dx)
+            top = int(base_top + dy)
             img = img.crop((left, top, left + w, top + h))
             return np.array(img)
 
@@ -139,6 +167,7 @@ def generate_quote_video(
     bg_music: Optional[str] = None,
     with_narration: bool = True,
     with_subtitles: bool = True,
+    aspect_ratio: str = "9:16"
 ) -> BytesIO:
     """
     Full video pipeline. Returns MP4 bytes.
@@ -153,6 +182,7 @@ def generate_quote_video(
         raise ImportError("Pillow (PIL) is required. Install with: pip install Pillow")
 
     import numpy as np  # type: ignore
+    import random
 
     tmp_files = []
 
@@ -163,17 +193,32 @@ def generate_quote_video(
         except ImportError:
             from image_gen import generate_quote_image  # type: ignore
 
+        size = (1080, 1920) if aspect_ratio == "9:16" else (1920, 1080)
         img_pil = generate_quote_image(
             quote, author, mood,
-            size=(1080, 1920),
+            size=size,
             user_tier=user_tier,
             return_pil=True,
         )
         img_array = np.array(img_pil)
 
         duration = 10  # seconds
-        clip = ImageClip(img_array).with_duration(duration)  # type: ignore
-        clip = _apply_ken_burns(clip, duration)
+        scene_dur = duration / 2.0
+        
+        clip1 = ImageClip(img_array).with_duration(scene_dur)  # type: ignore
+        d1 = random.choice(["in", "left", "up"])
+        clip1 = _apply_ken_burns(clip1, scene_dur, direction=d1)
+        
+        clip2 = ImageClip(img_array).with_duration(scene_dur)  # type: ignore
+        d2 = random.choice(["out", "right", "diagonal"])
+        clip2 = _apply_ken_burns(clip2, scene_dur, direction=d2)
+        
+        try:
+            from moviepy.editor import concatenate_videoclips # type: ignore
+        except ImportError:
+            from moviepy import concatenate_videoclips # type: ignore
+            
+        clip = concatenate_videoclips([clip1, clip2], method="compose")
 
         # ── Step 2: Narration script ──────────────────────────────────────
         narration_text = quote
@@ -192,12 +237,14 @@ def generate_quote_video(
 
         if with_subtitles:
             try:
+                accent = "yellow" if mood == "inspiring" else "cyan" if mood in ["calm", "cyberpunk"] else "white"
                 txt = TextClip(
                     text=f'"{quote}"',
-                    font_size=36,
-                    color="white",
+                    font_size=50 if aspect_ratio == "16:9" else 36,
+                    color=accent,
                     method="caption",
-                    size=(int(1080 * 0.8), None),
+                    size=(int(1080 * 0.8) if aspect_ratio == "9:16" else int(1920 * 0.6), None),
+                    stroke_color="black", stroke_width=2
                 )
                 txt = txt.with_position("center").with_duration(duration).crossfadein(1.5)  # type: ignore
                 final_clip = CompositeVideoClip([clip, txt])
