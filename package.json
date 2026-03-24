@@ -1,0 +1,15 @@
+{
+  "name": "levi-ai-root",
+  "version": "1.0.0",
+  "description": "Root management for LEVI AI",
+  "scripts": {
+    "server": "python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000",
+    "client": "python -m http.server 8080 --bind 127.0.0.1 --directory frontend",
+    "tailwind": "npm run --prefix frontend watch",
+    "dev": "concurrently \"npm run server\" \"npm run client\" \"npm run tailwind\"",
+    "dev:simple": "concurrently \"npm run server\" \"npm run client\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
