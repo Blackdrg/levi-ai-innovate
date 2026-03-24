@@ -30,6 +30,11 @@ from slowapi.errors import RateLimitExceeded  # type: ignore
 from slowapi import _rate_limit_exceeded_handler  # type: ignore
 from authlib.integrations.starlette_client import OAuth # type: ignore
 import os
+from dotenv import load_dotenv
+if os.path.exists(".env.local"):
+    load_dotenv(".env.local")
+else:
+    load_dotenv()
 import sentry_sdk  # type: ignore
 
 import logging
@@ -108,7 +113,7 @@ def validate_env():
         if is_prod:
             raise RuntimeError(error_msg)
         else:
-            print(f"\n⚠️  WARNING: {error_msg}\n")
+            print(f"\n[WARNING] {error_msg}\n")
 
     # ── SECRET_KEY entropy guard ─────────────────────────────────────────────
     # A short or guessable key allows JWT forgery. Require at least 32 raw bytes.
@@ -543,11 +548,7 @@ async def auth_exchange(body: OAuthExchangeRequest, db: Session = Depends(get_db
     )
     refresh_token = create_refresh_token(data={"sub": user.username})
     
-    response = JSONResponse(content={"status": "success", "message": "Authenticated successfully"})
-    response.set_cookie(key="access_token", value=access_token, httponly=True, secure=True, samesite="lax", max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60)
-    response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=True, samesite="lax", max_age=30 * 24 * 3600)
-    
-    return response
+    return {"access_token": access_token, "token_type": "bearer", "status": "success", "message": "Authenticated successfully"}
 
 @app.exception_handler(Exception)
 
@@ -754,29 +755,31 @@ def daily_quote(db: Session = Depends(get_db)):
 
 
 @app.get("/analytics")
-
 def get_analytics(db: Session = Depends(get_db)):
+    try:
+        total_chats = db.query(func.sum(Analytics.chats_count)).scalar() or 0
+        total_likes = db.query(func.sum(Analytics.likes_count)).scalar() or 0
+        total_users = db.query(func.sum(Analytics.daily_users)).scalar() or 0
+    except Exception as e:
+        logger.warning(f"Analytics query failed: {e}")
+        total_chats = 0
+        total_likes = 0
+        total_users = 0
 
-    total_chats = db.query(func.sum(Analytics.chats_count)).scalar() or 0
-
-    popular_topics = (
-
-        db.query(Quote.topic, func.count(Quote.id))
-
-        .group_by(Quote.topic).order_by(func.count(Quote.id).desc()).limit(5).all()
-
-    )
+    popular_topics = []
+    try:
+        popular_topics = (
+            db.query(Quote.topic, func.count(Quote.id))
+            .group_by(Quote.topic).order_by(func.count(Quote.id).desc()).limit(5).all()
+        )
+    except Exception as e:
+        logger.warning(f"Popular topics query failed: {e}")
 
     return {
-
         "total_chats": total_chats,
-
-        "daily_users": 0,
-
+        "daily_users": total_users,
         "popular_topics": [t for t, _ in popular_topics if t],
-
-        "likes_count": 0,
-
+        "likes_count": total_likes,
     }
 
 
@@ -961,17 +964,10 @@ async def gen_image(request: Request, req: Query, db: Session = Depends(get_db),
             if not any(req.custom_bg.startswith(t) for t in allowed_types): # type: ignore
                 raise HTTPException(status_code=400, detail="Invalid image format. Only JPEG, PNG and WEBP are allowed.")
         
-        # Credit System: Deduct upfront for background tasks
-        if current_user:
-            from backend.payments import use_credits  # type: ignore
-            # Images cost 1 credit
-            use_credits(current_user.id, amount=1, db=db)
-            logger.info(f"Deducted 1 credit upfront for user {user_id}")
-            
         # Check if we should use Celery for async processing (Scale Infrastructure)
         # Default to True in production (Render/DigitalOcean)
         USE_CELERY = os.getenv("USE_CELERY", "true").lower() == "true"
-        
+
         if USE_CELERY:
             from backend.tasks import generate_image_task  # type: ignore
             task = generate_image_task.delay(
@@ -981,6 +977,12 @@ async def gen_image(request: Request, req: Query, db: Session = Depends(get_db),
                 user_id,
                 user_tier
             )
+            # Credit System: Deduct AFTER successful dispatch
+            if current_user:
+                from backend.payments import use_credits  # type: ignore
+                use_credits(current_user.id, amount=1, db=db)
+                logger.info(f"Deducted 1 credit for user {user_id} after task dispatch")
+
             return JSONResponse(status_code=202, content={"task_id": task.id, "status": "processing", "message": "Image generation started in background."})
 
         loop = asyncio.get_event_loop()
@@ -1042,12 +1044,7 @@ async def gen_video(request: Request, req: Query, db: Session = Depends(get_db),
         user_id = current_user.id if current_user else None
         user_tier = current_user.tier if current_user else "free"
 
-        # Credit System: Deduct upfront (Videos cost 2 credits)
-        if current_user:
-            from backend.payments import use_credits  # type: ignore
-            use_credits(current_user.id, amount=2, db=db)
-            logger.info(f"Deducted 2 credits upfront for user {user_id}")
-
+        # Check if we should use Celery for async processing (Scale Infrastructure)
         USE_CELERY = os.getenv("USE_CELERY", "true").lower() == "true"
 
         if USE_CELERY:
@@ -1059,6 +1056,12 @@ async def gen_video(request: Request, req: Query, db: Session = Depends(get_db),
                 user_id,
                 user_tier
             )
+            # Credit System: Deduct AFTER successful dispatch
+            if current_user:
+                from backend.payments import use_credits  # type: ignore
+                use_credits(current_user.id, amount=2, db=db)
+                logger.info(f"Deducted 2 credits for user {user_id} after task dispatch")
+
             return JSONResponse(status_code=202, content={"task_id": task.id, "status": "processing", "message": "Video generation started in background."})
 
         # Fallback inline processing (not recommended for video)
