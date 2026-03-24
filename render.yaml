@@ -49,10 +49,10 @@ services:
 
   - type: worker
     name: celery-worker
-    runtime: python
+    runtime: docker
+    dockerFilePath: backend/Dockerfile.prod
+    dockerContext: .
     plan: free
-    buildCommand: "pip install -r backend/requirements.txt"
-    startCommand: "cd backend && PYTHONPATH=$PWD/.. celery -A tasks worker --beat --loglevel=info"
     envVars:
       - key: DATABASE_URL
         fromDatabase:

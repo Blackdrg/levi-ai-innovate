@@ -1,5 +1,5 @@
 // DEPLOY: 2026-03-23 — bump this string on every deploy
-const CACHE_NAME = 'levi-v5.2-20260323';
+const CACHE_NAME = 'levi-v6.0-20260324';
 
 const ASSETS = [
   './',
@@ -44,7 +44,7 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('fetch', event => {
   // Simple cache-first for assets, network-first for API
-  if (event.request.url.includes('/api/')) {
+  if (event.request.url.includes('/api/') || event.request.url.includes('/chat')) {
     event.respondWith(
       fetch(event.request).catch(() => caches.match(event.request))
     );

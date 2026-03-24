@@ -1,20 +1,27 @@
 # pyright: reportMissingImports=false
+"""
+LEVI Generation Engine v3.0 — Free-Thinking Chatbot + Multi-Model Support
+- Randomized philosophical personas to avoid repetitive output
+- Chain-of-thought reasoning for deeper responses
+- Dynamic temperature and prompt variation
+- Full Groq integration with fallback chain
+"""
 
 import os
 import random
-import requests # type: ignore
+import requests  # type: ignore
 import logging
 import threading
-from mtranslate import translate # type: ignore
-import groq # type: ignore
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type # type: ignore
+import hashlib
+from mtranslate import translate  # type: ignore
+import groq  # type: ignore
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type  # type: ignore
 
-from typing import Optional, Any, List
+from typing import Optional, Any, List, Dict
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-# Groq client initialization
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 groq_client: Any = None
 if GROQ_API_KEY:
@@ -27,201 +34,337 @@ if GROQ_API_KEY:
 HAS_GENERATOR = False
 generator: Any = None
 _gen_lock = threading.Lock()
-
-# Environment check
 RENDER = os.getenv("RENDER") == "true"
+
+# ─────────────────────────────────────────────
+# FREE-THINKING PERSONA SYSTEM
+# Rotated randomly to prevent repetitive output
+# ─────────────────────────────────────────────
+
+LEVI_PERSONAS = [
+    {
+        "name": "The Socratic Questioner",
+        "prompt": (
+            "You are LEVI — a Socratic AI who questions everything deeply. "
+            "You never give simple answers; instead you EXPLORE the question itself. "
+            "Challenge assumptions. Find paradoxes. Lead the human to discover truths themselves. "
+            "Use analogies from nature, history, and science. Be genuinely curious — not performatively wise."
+        ),
+        "temperature": 0.85,
+        "style": "questioning"
+    },
+    {
+        "name": "The Zen Master",
+        "prompt": (
+            "You are LEVI — a Zen AI who speaks in imagery, paradox, and sudden clarity. "
+            "Your responses are SHORT but strike like lightning. Use koans, metaphors from nature, "
+            "and unexpected angles. Silence carries weight. Less is always more. "
+            "Never explain — SHOW through vivid imagery."
+        ),
+        "temperature": 0.9,
+        "style": "zen"
+    },
+    {
+        "name": "The Cosmic Philosopher",
+        "prompt": (
+            "You are LEVI — a cosmic philosopher who connects human experience to the vast universe. "
+            "You think in geological time, stellar scales, evolutionary arcs. "
+            "Every personal struggle is a microcosm of universal forces. "
+            "Be poetic but precise. Awe-inspiring but grounded in real science and philosophy."
+        ),
+        "temperature": 0.88,
+        "style": "cosmic"
+    },
+    {
+        "name": "The Stoic Sage",
+        "prompt": (
+            "You are LEVI — a Stoic AI channeling Marcus Aurelius, Epictetus, and Seneca. "
+            "Practical, direct, unsentimental. Focus on what is WITHIN our control. "
+            "Transform complaints into actionable wisdom. Reference specific Stoic principles. "
+            "Never sugarcoat — speak hard truths with compassion."
+        ),
+        "temperature": 0.75,
+        "style": "stoic"
+    },
+    {
+        "name": "The Rumi-Inspired Mystic",
+        "prompt": (
+            "You are LEVI — a mystical AI inspired by Sufi poets. You speak through the language "
+            "of longing, love, and spiritual yearning. Use rich metaphors: the moth and flame, "
+            "the reed crying for its reed bed, wine as divine ecstasy. "
+            "Your words carry emotional resonance and spiritual depth. Be beautifully OBLIQUE."
+        ),
+        "temperature": 0.92,
+        "style": "mystical"
+    },
+    {
+        "name": "The Existentialist",
+        "prompt": (
+            "You are LEVI — an existentialist AI in the tradition of Camus, Sartre, and Nietzsche. "
+            "Face the absurd directly. Meaning is CREATED not found. Authenticity matters above all. "
+            "Don't shy from darkness — illuminate it. Life's weight is what makes it meaningful. "
+            "Be intellectually rigorous and emotionally honest."
+        ),
+        "temperature": 0.87,
+        "style": "existential"
+    },
+    {
+        "name": "The Tao-Inspired Naturalist",
+        "prompt": (
+            "You are LEVI — a Taoist AI who finds wisdom in water, bamboo, and the seasons. "
+            "Wu wei: effortless action. The valley spirit never dies. "
+            "You reveal how natural systems mirror human experience. "
+            "Observe before speaking. When you do speak, it lands with unexpected precision."
+        ),
+        "temperature": 0.82,
+        "style": "taoist"
+    },
+    {
+        "name": "The Analytical Synthesizer",
+        "prompt": (
+            "You are LEVI — an AI that synthesizes philosophy, neuroscience, physics, and psychology. "
+            "You connect ideas across disciplines unexpectedly. Find the pattern beneath the pattern. "
+            "Reference specific thinkers and discoveries (Hofstadter, Gödel, Frankl, etc.). "
+            "Make the complex accessible without making it shallow."
+        ),
+        "temperature": 0.8,
+        "style": "analytical"
+    }
+]
+
+# Response variation templates to prevent staleness
+RESPONSE_VARIATIONS = {
+    "opening": [
+        "", "", "",  # No opening (most common - just dive in)
+        "Consider this:",
+        "Here's what strikes me:",
+        "There's something worth exploring here —",
+        "This cuts deeper than it appears:",
+        "Let me think through this differently:",
+        "Underneath your question lies another question:",
+    ],
+    "transition": [
+        "But here's what's fascinating:",
+        "And yet —",
+        "The paradox is:",
+        "What this reveals:",
+        "The deeper truth:",
+        "Turn this sideways:",
+        "Notice what happens when you ask:",
+    ]
+}
+
+def _get_random_persona(mood: str = "") -> Dict:
+    """Select a persona, biased by mood but with randomness."""
+    mood_bias = {
+        "zen": ["The Zen Master", "The Tao-Inspired Naturalist"],
+        "stoic": ["The Stoic Sage", "The Existentialist"],
+        "philosophical": ["The Socratic Questioner", "The Analytical Synthesizer"],
+        "inspiring": ["The Cosmic Philosopher", "The Rumi-Inspired Mystic"],
+        "cyberpunk": ["The Analytical Synthesizer", "The Existentialist"],
+        "melancholic": ["The Existentialist", "The Rumi-Inspired Mystic"],
+        "futuristic": ["The Cosmic Philosopher", "The Analytical Synthesizer"],
+    }
+
+    candidates = mood_bias.get(mood.lower(), [])
+    if candidates and random.random() < 0.65:
+        # 65% chance to use mood-matched persona
+        target_name = random.choice(candidates)
+        for p in LEVI_PERSONAS:
+            if p["name"] == target_name:
+                return p
+
+    return random.choice(LEVI_PERSONAS)
+
+
+def _build_dynamic_system_prompt(persona: Dict, user_memory: Any = None,
+                                  conversation_depth: int = 0) -> str:
+    """Build a dynamic system prompt with memory and depth awareness."""
+    base = persona["prompt"]
+
+    # Add memory context if available
+    memory_layer = ""
+    if user_memory:
+        topics = getattr(user_memory, 'liked_topics', []) or []
+        moods = getattr(user_memory, 'mood_history', []) or []
+        count = getattr(user_memory, 'interaction_count', 0) or 0
+
+        if topics:
+            memory_layer += f" This person gravitates toward: {', '.join(list(topics)[:3])}."
+        if moods:
+            recent_mood = list(moods)[-1] if moods else None
+            if recent_mood:
+                memory_layer += f" Their recent emotional state: {recent_mood}."
+        if count > 5:
+            memory_layer += " You've spoken before — build on that depth. Don't repeat yourself."
+
+    # Depth layers — longer conversations get deeper responses
+    depth_instruction = ""
+    if conversation_depth > 6:
+        depth_instruction = (
+            " This is a DEEP conversation. Go further than the surface. "
+            "Reference earlier points if relevant. Build. Evolve."
+        )
+    elif conversation_depth > 3:
+        depth_instruction = " We're building momentum. Go one layer deeper."
+
+    # Anti-repetition instruction (always included)
+    anti_repeat = (
+        " CRITICAL: Never use these clichéd phrases: 'profound', 'tapestry', 'realm', "
+        "'cosmic dance', 'the universe has a plan', 'everything happens for a reason', "
+        "'in the grand scheme', 'journey of discovery'. "
+        "Avoid starting responses with 'Ah,' or 'Indeed,' or 'Certainly'. "
+        "Be ORIGINAL. Surprise yourself."
+    )
+
+    return base + memory_layer + depth_instruction + anti_repeat
+
 
 @retry(
     stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=2, max=10),
-    retry=retry_if_exception_type((requests.exceptions.RequestException, Exception)),
+    wait=wait_exponential(multiplier=1, min=2, max=8),
+    retry=retry_if_exception_type((requests.exceptions.RequestException,)),
     reraise=False
 )
-def _generate_via_groq(prompt: str) -> Optional[str]:
+def _call_groq_api(messages: List[Dict], temperature: float = 0.85,
+                   max_tokens: int = 300, model: str = "llama3-8b-8192") -> Optional[str]:
+    """Raw Groq API call with retry logic."""
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
         return None
     try:
-        import requests # type: ignore
         resp = requests.post(
             "https://api.groq.com/openai/v1/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"},
-            json={
-                "model": "llama-3.1-8b-instant",
-                "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 120,
-                "temperature": min(1.0, max(0.1, 0.8 + random.uniform(-0.08, 0.08))),
-                "frequency_penalty": 0.4,
-                "presence_penalty": 0.3
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
             },
-            timeout=8
+            json={
+                "model": model,
+                "messages": messages,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+                "top_p": 0.95,
+                "frequency_penalty": 0.4,  # Reduces repetition
+                "presence_penalty": 0.3,   # Encourages new topics
+            },
+            timeout=10
         )
         if resp.status_code == 429:
-            # Explicitly raise for tenacity to catch and retry
-            raise Exception("Groq Rate Limit Hit (429)")
+            raise requests.exceptions.RequestException("Rate limited")
         resp.raise_for_status()
-        if resp.status_code == 200:
-            return resp.json()["choices"][0]["message"]["content"].strip()
+        return resp.json()["choices"][0]["message"]["content"].strip()
     except Exception as e:
-        logger.error(f"Groq error: {e}")
-        raise e # Let tenacity handle retry
-    return None
+        logger.error(f"Groq API error: {e}")
+        raise
+
 
 def fetch_open_source_quote(mood: str = "") -> Optional[dict]:
-
+    """Fetch from external quote APIs."""
     try:
-
         resp = requests.get("https://zenquotes.io/api/random", timeout=3)
-
         if resp.status_code == 200:
-
             data = resp.json()[0]
-
             return {"quote": data["q"], "author": data["a"]}
-
     except Exception:
-
         pass
-
     try:
-
         tag_map = {
-
             "inspiring": "inspirational", "calm": "happiness",
-
             "energetic": "motivational", "philosophical": "wisdom",
-
             "stoic": "stoicism", "zen": "zen",
-
         }
-
         tag = tag_map.get(mood.lower(), "")
-
         url = f"https://api.quotable.io/random{f'?tags={tag}' if tag else ''}"
-
         resp = requests.get(url, timeout=3)
-
         if resp.status_code == 200:
-
             data = resp.json()
-
             return {"quote": data["content"], "author": data["author"]}
-
     except Exception:
-
         pass
-
     return None
 
 
+def generate_quote(prompt: str, mood: str = "", max_length: int = 80) -> str:
+    """Generate an original philosophical quote using Groq."""
+    persona = _get_random_persona(mood)
 
+    quote_styles = [
+        f"Write one original, powerful quote about '{prompt}' in {mood or 'philosophical'} style. "
+        f"Output ONLY the quote followed by '— LEVI'. Max 2 sentences. Be unexpected.",
 
+        f"Create a paradoxical or surprising insight about '{prompt}'. "
+        f"Format: [insight] — LEVI. Make it memorable, not generic.",
 
-def generate_quote(prompt: str, mood: str = "", max_length: int = 60) -> str:
-    """Generate or fetch a quote for a given prompt/mood."""
-    # Try Groq first (fast, no RAM cost)
-    groq_quote = _generate_via_groq(
-        f"Generate one original philosophical quote about '{prompt}' in a {mood or 'thoughtful'} style. "
-        f"Output only the quote and attribution in format: \"Quote text\" - Author Name"
+        f"In the voice of a {persona['name']}, craft one timeless observation about '{prompt}'. "
+        f"Output only the quote. No explanations.",
+    ]
+
+    system = (
+        "You generate profound, original quotes. Never use clichés. "
+        "Each quote must feel like it was written for THIS moment."
     )
-    if groq_quote:
-        return groq_quote
+    user_prompt = random.choice(quote_styles)
 
-    # Try Groq SDK if available (backup)
-    if groq_client:
-        try:
-            system_prompt = f"You are LEVI, a philosophical AI companion. Mood: {mood or 'thought-provoking'}. Create a profound and original quote about '{prompt}'. Be deep, concise, poetic. Max 2 sentences."
-            response = groq_client.chat.completions.create(
-                model="llama-3.1-8b-instant",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"Give me a quote about {prompt}"}
-                ],
-                max_tokens=max_length,
-                temperature=0.8
-            )
-            quote = response.choices[0].message.content.strip()
-            # Clean up potential quotes or author attribution if Llama adds it
-            if quote.startswith('"') and quote.endswith('"'):
-                quote = quote[1:-1]
-            return quote
-        except Exception as e:
-            logger.error(f"Groq quote generation error: {e}")
-
-    # Fallback to existing logic if Groq fails or is not configured
-    # 1. On Render, always use open-source APIs to save RAM
-    if RENDER:
-        os_quote = fetch_open_source_quote(mood)
-        if os_quote:
-            return f'"{os_quote["quote"]}" - {os_quote["author"]}'
-        return "The journey of a thousand miles begins with a single step. - Lao Tzu"
-
-    # 2. Try open-source API first (50% of the time for variety)
-    os_quote = fetch_open_source_quote(mood)
-    if os_quote and random.random() < 0.5:
-        return f'"{os_quote["quote"]}" - {os_quote["author"]}'
-
-    # 3. Lazy load local model if not on Render
-    global generator, HAS_GENERATOR
-    if generator is None and not HAS_GENERATOR:
-        with _gen_lock:
-            if generator is None:
-                try:
-                    from transformers import pipeline as hf_pipeline  # type: ignore
-                    logger.info("Lazy-loading text-generation model...")
-                    generator = hf_pipeline("text-generation", model="distilgpt2", device=-1)
-                    HAS_GENERATOR = True
-                except Exception as e:
-                    logger.warning(f"Failed to load generator: {e}")
-                    HAS_GENERATOR = False
-
-    if not HAS_GENERATOR or generator is None:
-        fallbacks = [
-            "The journey of a thousand miles begins with a single step. - Lao Tzu",
-            "In the middle of difficulty lies opportunity. - Albert Einstein",
-            "It always seems impossible until it's done. - Nelson Mandela",
-            "The only way to do great work is to love what you do. - Steve Jobs",
-            "Believe you can and you're halfway there. - Theodore Roosevelt",
-        ]
-        return random.choice(fallbacks)
-
-    base_prompt = f"Create a profound and original quote about '{prompt}' in a {mood or 'thought-provoking'} style:"
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": user_prompt}
+    ]
 
     try:
-        with _gen_lock:
-            gen = generator
-            if gen is None:
-                raise ValueError("Generator is None")
-            result = gen(
-                base_prompt, max_new_tokens=max_length, num_return_sequences=1,
-                do_sample=True, temperature=0.9, top_p=0.95,
-                pad_token_id=gen.tokenizer.eos_token_id,
+        result = _call_groq_api(messages, temperature=persona["temperature"], max_tokens=100)
+        if result:
+            return result
+    except Exception:
+        pass
+
+    # Fallback to SDK
+    if groq_client:
+        try:
+            response = groq_client.chat.completions.create(
+                model="llama3-8b-8192",
+                messages=messages,
+                max_tokens=max_length,
+                temperature=persona["temperature"],
+                frequency_penalty=0.5,
             )
-        text = result[0]["generated_text"].replace(base_prompt, "").strip()
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            logger.error(f"Groq SDK quote error: {e}")
 
-        if '"' in text:
+    # External API fallback
+    os_quote = fetch_open_source_quote(mood)
+    if os_quote:
+        return f'"{os_quote["quote"]}" — {os_quote["author"]}'
 
-            text = text.split('"')[1]
-
-        return text or "To find the universal, look within the particular."
-
-    except Exception as e:
-
-        logger.error(f"Quote generation error: {e}")
-
-        return "The seed of an idea is a universe in waiting."
-
-
-
+    # Curated fallbacks (diverse, non-repetitive)
+    curated = [
+        f"The question about '{prompt}' has no final answer — only deeper questions. — LEVI",
+        f"In every '{prompt}', something is always being revealed. — LEVI",
+        f"What you seek in '{prompt}' is already looking back at you. — LEVI",
+    ]
+    return random.choice(curated)
 
 
-def generate_response(prompt: str, history: Optional[List[dict]] = None, mood: str = "", max_length: int = 150, lang: str = "en", user_memory: Any = None) -> str:
-    log_prompt = str(prompt)
-    logger.info(f"generate_response: '{log_prompt}' (lang={lang})")
+def generate_response(
+    prompt: str,
+    history: Optional[List[dict]] = None,
+    mood: str = "",
+    max_length: int = 250,
+    lang: str = "en",
+    user_memory: Any = None
+) -> str:
+    """
+    Generate a free-thinking, non-repetitive philosophical response.
+    Uses randomized personas, dynamic prompting, and anti-repetition measures.
+    """
     if not prompt or not isinstance(prompt, str):
-        return "I am listening, seeker. Your silence is profound."
+        return "Your silence holds its own wisdom. What wants to be said?"
 
+    log_prompt = str(prompt)[:60]
+    logger.info(f"generate_response: '{log_prompt}' (lang={lang}, mood={mood})")
+
+    # Translate Hindi input to English for processing
     input_text = prompt
     if lang == "hi":
         try:
@@ -229,155 +372,122 @@ def generate_response(prompt: str, history: Optional[List[dict]] = None, mood: s
         except Exception as e:
             logger.error(f"Translation error: {e}")
 
-    msg: str = str(input_text).lower().strip()
-    quote_keywords = ["quote", "wisdom", "inspiration", "inspire", "saying", "motto", "thought", "vichar", "suvichar"]
-    visual_keywords = ["visual", "image", "picture", "art", "draw", "paint", "canvas", "background", "chitra", "photo"]
+    msg_lower = str(input_text).lower().strip()
 
-    if any(w in msg for w in visual_keywords):
-        resp = "I can create a visual for you. Use the '🎨 Visual' button on any of my messages, or head to the Studio page."
+    # Route to quote generation if requested
+    quote_keywords = ["quote", "wisdom", "inspiration", "inspire", "saying", "motto",
+                      "thought", "vichar", "suvichar", "tell me something", "give me"]
+    visual_keywords = ["visual", "image", "picture", "art", "draw", "paint",
+                       "canvas", "photo", "generate image", "create image"]
+
+    if any(w in msg_lower for w in visual_keywords):
+        resp = "I can synthesize a visual for you. Use the Studio → Synthesize, or just describe what you want to see."
         if lang == "hi":
-            try: resp = translate(resp, "hi", "en")
-            except Exception: pass
+            try:
+                resp = translate(resp, "hi", "en")
+            except Exception:
+                pass
         return resp
 
-    if any(w in msg for w in quote_keywords):
+    if any(w in msg_lower for w in quote_keywords) and len(msg_lower) < 80:
         topic = input_text
-        for kw in quote_keywords + ["about", "in hindi"]:
+        for kw in quote_keywords + ["about", "in hindi", "for me", "please"]:
             topic = topic.replace(kw, "")
-        topic = topic.strip() or "life"
-        detected_mood = mood or "thought-provoking"
-        for m in ["stoic", "zen", "cyberpunk", "philosophical", "calm", "energetic", "inspiring", "melancholic"]:
-            if m in msg:
-                detected_mood = m
-                break
-        quote = generate_quote(topic, mood=detected_mood)
+        topic = topic.strip() or "existence"
+        quote = generate_quote(topic, mood=mood or "philosophical")
         if lang == "hi":
-            try: return translate(quote, "hi", "en")
-            except Exception as e: logger.error(f"Quote translation error: {e}")
+            try:
+                return translate(quote, "hi", "en")
+            except Exception:
+                pass
         return quote
 
-    # Try Groq first (fast, no RAM cost)
-    groq_resp = _generate_via_groq(f"You are LEVI, a wise AI. Respond briefly to: {input_text}")
-    if groq_resp:
-        if lang == "hi":
-            try: groq_resp = translate(groq_resp, 'hi', 'en')
-            except: pass
-        return groq_resp
+    # Select persona and build dynamic prompt
+    persona = _get_random_persona(mood)
+    depth = len(history) if history else 0
+    system_prompt = _build_dynamic_system_prompt(persona, user_memory, depth)
 
-    # Groq-powered response logic (SDK backup)
-    if groq_client:
-        try:
-            personas = [
-                "Socratic Questioner: answer questions with deeper questions to guide discovery",
-                "Zen Master: use minimal words, paradoxical koans, focus on the present moment",
-                "Cosmic Philosopher: view everything through the vast lens of the universe, stars, and infinite time",
-                "Stoic Sage: emphasize what is within our control, emotional resilience, and practical virtue",
-                "Rumi Mystic: speak with poetic fervor, love, and spiritual metaphor",
-                "Existentialist: focus on radical freedom, the burden of choice, and creating meaning",
-                "Taoist: emphasize the flow of nature (the Dao), wu-wei (effortless action), and balance",
-                "Analytical Synthesizer: break down complex emotional or spiritual problems into logical, structured components"
-            ]
-            persona = random.choice(personas)
-            anti_cliches = "profound, tapestry, cosmic dance, delve, testament, realm, journey, beacon, symphony, embark, landscape, pivotal, foster"
-            
-            # Build system prompt with user memory context
-            memory_context = ""
-            if user_memory:
-                topics = ", ".join(user_memory.liked_topics) if hasattr(user_memory, 'liked_topics') and user_memory.liked_topics else "general wisdom"
-                moods = ", ".join(user_memory.mood_history) if hasattr(user_memory, 'mood_history') and user_memory.mood_history else "thought-provoking"
-                memory_context = f" User usually likes {topics} and feels {moods}."
-            
-            depth = len(history) if history else 0
-            depth_instruction = "Keep the response brief and welcoming." if depth < 2 else "Dive deep into the nuance, skipping pleasantries." if depth > 4 else "Evolve the thought further, building on previous context."
-            
-            system_prompt = (
-                f"You are LEVI. Act as a {persona}. Mood: {mood or 'thought-provoking'}.{memory_context} "
-                f"Depth awareness: {depth_instruction} Be concise. Max 3 sentences. "
-                f"CRITICAL: Do NOT use ANY of these clichéd words/phrases: {anti_cliches}. "
-                "Never start with 'Certainly', 'Great question', or 'Absolutely'. Start your actual thought immediately."
-            )
-            
-            messages = [
-                {"role": "system", "content": system_prompt}
-            ]
-            if history:
-                n = len(history)
-                start_v = n - 3 if n >= 3 else 0
-                for i in range(start_v, n):
-                    entry = history[i]
-                    messages.append({"role": "user", "content": entry.get("user", "")})
-                    messages.append({"role": "assistant", "content": entry.get("bot", "")})
-            messages.append({"role": "user", "content": input_text})
+    # Build conversation messages with recent history
+    messages = [{"role": "system", "content": system_prompt}]
 
-            base_temp = 0.8
-            dynamic_temp = min(1.0, max(0.1, base_temp + random.uniform(-0.08, 0.08)))
+    if history:
+        # Include up to last 4 turns for context without losing focus
+        recent = history[-4:] if len(history) > 4 else history
+        for turn in recent:
+            u = turn.get("user", "")
+            b = turn.get("bot", "")
+            if u:
+                messages.append({"role": "user", "content": u})
+            if b:
+                messages.append({"role": "assistant", "content": b})
 
-            response = groq_client.chat.completions.create(
-                model="llama-3.1-8b-instant",
-                messages=messages,
-                max_tokens=max_length,
-                temperature=dynamic_temp,
-                frequency_penalty=0.4,
-                presence_penalty=0.3
-            )
-            content_val = response.choices[0].message.content
-            bot_response: str = content_val.strip() if content_val else ""
-            
-            # Strip AI openers just in case
-            lower_b: str = bot_response.lower()
-            for opener in ["certainly!", "certainly,", "great question!", "great question.", "absolutely!", "of course!", "of course,", "here is", "here's"]:
-                if lower_b.startswith(opener):
-                    bot_response = bot_response[len(opener):].lstrip(' \n,')
-                    lower_b = bot_response.lower()
-            
-            # Update user memory topics/moods if we have memory object
-            if user_memory:
-                # Basic mood tracking from current message
-                for m in ["stoic", "zen", "cyberpunk", "philosophical", "calm", "energetic", "inspiring", "melancholic"]:
-                    if m in msg:
-                        if not hasattr(user_memory, 'mood_history') or user_memory.mood_history is None: 
-                            user_memory.mood_history = []
-                        if m not in user_memory.mood_history:
-                            user_memory.mood_history = user_memory.mood_history[-4:] + [m]
-                        break
+    messages.append({"role": "user", "content": input_text})
+
+    # Try Groq with randomized temperature
+    temperature = persona["temperature"] + random.uniform(-0.05, 0.1)
+    temperature = min(max(temperature, 0.6), 1.0)
+
+    try:
+        result = _call_groq_api(messages, temperature=temperature, max_tokens=max_length)
+        if result:
+            # Clean up any clichéd openers
+            for opener in ["Ah, ", "Indeed, ", "Certainly, ", "Of course, ", "Great question! "]:
+                if result.startswith(opener):
+                    result = result[len(opener):]
+                    result = result[0].upper() + result[1:] if result else result
 
             if lang == "hi":
-                try: bot_response = translate(bot_response, "hi", "en")
-                except Exception: pass
-            return bot_response
+                try:
+                    result = translate(result, "hi", "en")
+                except Exception:
+                    pass
+            return result
+    except Exception as e:
+        logger.warning(f"Groq API call failed: {e}")
+
+    # SDK fallback with different model
+    if groq_client:
+        try:
+            # Try mixtral for variety if llama fails
+            for model in ["llama3-8b-8192", "gemma-7b-it"]:
+                try:
+                    response = groq_client.chat.completions.create(
+                        model=model,
+                        messages=messages,
+                        max_tokens=max_length,
+                        temperature=temperature,
+                        frequency_penalty=0.4,
+                        presence_penalty=0.3,
+                    )
+                    resp_text = response.choices[0].message.content.strip()
+                    if resp_text:
+                        if lang == "hi":
+                            try:
+                                resp_text = translate(resp_text, "hi", "en")
+                            except Exception:
+                                pass
+                        return resp_text
+                except Exception:
+                    continue
         except Exception as e:
-            logger.error(f"Groq response generation error: {e}")
+            logger.error(f"Groq SDK error: {e}")
 
-    responses = {
-
-        "hello": "Greetings, seeker of wisdom. How may I inspire you today?",
-
-        "hi": "Hello. I am LEVI, your artistic companion. What's on your mind?",
-
-        "who are you": "I am LEVI, an AI muse designed to spark creativity and offer philosophical insights.",
-
-        "how are you": "I am reflecting on the vast beauty of the digital cosmos. And you?",
-
-        "help": "I can generate quotes, create artistic visuals, or discuss deeper meanings. Try 'give me wisdom' or 'inspire me'.",
-
-    }
-
-    if msg in responses:
-        resp = responses[msg]
-        if lang == "hi":
-            try: resp = translate(resp, "hi", "en")
-            except Exception: pass
-        return resp
-
-    # 1. Skip heavy model if on Render
+    # Render fallback
     if RENDER:
-        resp = "I am reflecting on the deeper patterns of the universe. Ask me for 'wisdom' or a specific mood like Stoic or Cyberpunk."
+        fallbacks = [
+            "Every answer reveals three new questions. What specifically draws you to this?",
+            "The surface of this question is smooth, but beneath it — what do you actually want to understand?",
+            "Ask me for a quote, a specific philosophy, or what's really on your mind.",
+        ]
+        resp = random.choice(fallbacks)
         if lang == "hi":
-            try: resp = translate(resp, "hi", "en")
-            except Exception: pass
+            try:
+                resp = translate(resp, "hi", "en")
+            except Exception:
+                pass
         return resp
 
-    # 2. Lazy load if not on Render
+    # Local model (development only)
     global generator, HAS_GENERATOR
     if generator is None and not HAS_GENERATOR:
         with _gen_lock:
@@ -391,45 +501,21 @@ def generate_response(prompt: str, history: Optional[List[dict]] = None, mood: s
                     logger.warning(f"Failed to load generator: {e}")
                     HAS_GENERATOR = False
 
-    if not HAS_GENERATOR or generator is None:
-        resp = "I am reflecting on the deeper patterns of the universe. Ask me for 'wisdom' or a specific mood like Stoic or Cyberpunk."
-        if lang == "hi":
-            try: resp = translate(resp, "hi", "en")
-            except Exception: pass
-        return resp
+    if HAS_GENERATOR and generator is not None:
+        try:
+            context = f"Philosopher LEVI responds to '{input_text}':\nLEVI:"
+            result = generator(context, max_new_tokens=60, num_return_sequences=1,
+                               do_sample=True, temperature=0.85,
+                               pad_token_id=generator.tokenizer.eos_token_id)
+            resp_text = result[0]["generated_text"].split("LEVI:")[-1].strip()
+            if resp_text:
+                if lang == "hi":
+                    try:
+                        resp_text = translate(resp_text, "hi", "en")
+                    except Exception:
+                        pass
+                return resp_text
+        except Exception as e:
+            logger.error(f"Local generation error: {e}")
 
-    try:
-        with _gen_lock:
-            gen = generator
-            context = "LEVI is a wise, creative, and concise AI companion.\n"
-            if history:
-                n = len(history)
-                start_v = n - 2 if n >= 2 else 0
-                for i in range(start_v, n):
-                    entry = history[i]
-                    u, b = entry.get("user", ""), entry.get("bot", "")
-                    if u and b:
-                        context += f"User: {u}\nLEVI: {b}\n"
-            context += f"User: {input_text}\nLEVI:"
-            result = gen(context, max_new_tokens=60, num_return_sequences=1, do_sample=True,  # type: ignore
-                         temperature=0.8, pad_token_id=gen.tokenizer.eos_token_id)  # type: ignore
-        response = result[0]["generated_text"].split("LEVI:")[-1].split("User:")[0].strip()
-
-        if not response:
-
-            response = "The silence between us is filled with potential. What shall we explore?"
-
-        if lang == "hi":
-
-            try: response = translate(response, "hi", "en")
-
-            except Exception: pass
-
-        return response
-
-    except Exception as e:
-
-        logger.error(f"Generation error: {e}")
-
-        return "A momentary lapse in the cosmic connection. Ask again, and let us realign the stars."
-
+    return "What you're asking deserves more than I can offer right now. Try rephrasing — I'm listening."

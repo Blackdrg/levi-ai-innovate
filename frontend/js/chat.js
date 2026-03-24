@@ -113,19 +113,26 @@ async function sendMessage() {
     if(sendIcon) sendIcon.classList.add("hidden");
     if(spinner) spinner.classList.remove("hidden");
 
+    let sessionId = sessionStorage.getItem("chat_session_id");
+    if (!sessionId) {
+        sessionId = "session_" + Math.random().toString(36).substring(2, 15);
+        sessionStorage.setItem("chat_session_id", sessionId);
+    }
+
     try {
         const token = localStorage.getItem("access_token");
         const headers = { "Content-Type": "application/json" };
         if (token) headers["Authorization"] = `Bearer ${token}`;
 
         const baseUrl = window.location.port === "8080" ? "http://localhost:8000" : "";
-        const res = await fetch(baseUrl + "/api/chat", {
+        const res = await fetch(baseUrl + "/chat", {
             method: "POST",
             headers: headers,
             body: JSON.stringify({
-                text: text,
+                session_id: sessionId,
+                message: text,
                 mood: currentMood,
-                history: chatHistory.slice(-5) // Send last 5 for context depth
+                history: chatHistory.slice(-5) 
             })
         });
 
@@ -166,7 +173,7 @@ async function submitFeedback(msgId, score, btn) {
         if (token) headers["Authorization"] = `Bearer ${token}`;
         
         const baseUrl = window.location.port === "8080" ? "http://localhost:8000" : "";
-        await fetch(baseUrl + "/api/training/feedback", {
+        await fetch(baseUrl + "/feedback", {
             method: "POST",
             headers: headers,
             body: JSON.stringify({ message_id: msgId, score: score })

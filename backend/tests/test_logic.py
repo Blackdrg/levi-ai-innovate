@@ -36,7 +36,7 @@ def test_hmac_verification():
     order_id = "order_1"
     payment_id = "pay_1"
     msg = f"{order_id}|{payment_id}"
-    signature = hmac.HMAC(secret.encode(), msg.encode(), hashlib.sha256).hexdigest()
+    signature = hmac.new(secret.encode(), msg.encode(), hashlib.sha256).hexdigest()
     
     with pytest.MonkeyPatch().context() as m:
         m.setattr("backend.payments.RAZORPAY_KEY_SECRET", secret)

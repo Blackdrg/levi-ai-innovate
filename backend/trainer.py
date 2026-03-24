@@ -1,8 +1,12 @@
+#!/usr/bin/env python3
 # pyright: reportMissingImports=false
 """
-LEVI Self-Training Pipeline
-Submits fine-tuning jobs to Together AI, tracks model versions,
-and hot-switches to improved models automatically.
+LEVI Self-Training Pipeline v3.0
+- Exports high-quality conversation data
+- Submits fine-tuning jobs to Together AI
+- Monitors job progress
+- Activates improved models automatically
+- Weekly automated training cycle
 """
 
 import os
@@ -11,42 +15,87 @@ import logging
 import requests  # type: ignore
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
-from celery import Celery  # type: ignore
 
 logger = logging.getLogger(__name__)
 
-TOGETHER_API_KEY   = os.getenv("TOGETHER_API_KEY")
-TOGETHER_FINETUNE  = "https://api.together.xyz/v1/fine-tuning/jobs"
-TOGETHER_FILES     = "https://api.together.xyz/v1/files"
-BASE_MODEL         = "meta-llama/Meta-Llama-3-8B-Instruct"
-MIN_SAMPLES_TO_TRAIN = 200    # minimum high-quality samples before triggering a training run
-FINETUNE_POLL_SEC    = 300    # check job status every 5 minutes
-MAX_TRAINING_EPOCHS  = 3
-QUALITY_THRESHOLD    = 0.62
+TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY")
+TOGETHER_FINETUNE = "https://api.together.xyz/v1/fine-tuning/jobs"
+TOGETHER_FILES = "https://api.together.xyz/v1/files"
+BASE_MODEL = "meta-llama/Llama-3-8b-chat-hf"
+MIN_SAMPLES_TO_TRAIN = 150
+MAX_TRAINING_EPOCHS = 2
+QUALITY_THRESHOLD = 0.62  # Minimum eval score to activate model
 
-# ─────────────────────────────────────────────
-# Celery app reference (imported from tasks.py)
-# ─────────────────────────────────────────────
 try:
     from tasks import celery_app  # type: ignore
 except ImportError:
-    from backend.tasks import celery_app  # type: ignore
+    try:
+        from backend.tasks import celery_app  # type: ignore
+    except ImportError:
+        celery_app = None
 
 
-# ─────────────────────────────────────────────
-# 1. TRAINING JOB SUBMISSION
-# ─────────────────────────────────────────────
-def _together_headers() -> Dict:
+def _headers() -> Dict:
     return {
         "Authorization": f"Bearer {TOGETHER_API_KEY}",
         "Content-Type": "application/json",
     }
 
 
+# ─────────────────────────────────────────────
+# Training Data Export
+# ─────────────────────────────────────────────
+
+def export_training_data(db, output_path: str = "/tmp/levi_training.jsonl",
+                          min_rating: int = 4, limit: int = 2000) -> tuple:
+    """Export high-quality conversation pairs as JSONL."""
+    try:
+        from training_models import TrainingData  # type: ignore
+    except ImportError:
+        from backend.training_models import TrainingData  # type: ignore
+
+    samples = (
+        db.query(TrainingData)
+        .filter(
+            TrainingData.rating >= min_rating,
+            TrainingData.is_exported == False,
+        )
+        .order_by(TrainingData.rating.desc(), TrainingData.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    if not samples:
+        logger.info("[Trainer] No new training samples to export.")
+        return output_path, 0
+
+    count = 0
+    with open(output_path, "w", encoding="utf-8") as f:
+        for s in samples:
+            # Together AI instruction format
+            record = {
+                "text": (
+                    f"<human>: {s.user_message}\n"
+                    f"<bot>: {s.bot_response}"
+                ),
+            }
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+            s.is_exported = True
+            count += 1
+
+    db.commit()
+    logger.info(f"[Trainer] Exported {count} training samples to {output_path}")
+    return output_path, count
+
+
+# ─────────────────────────────────────────────
+# Together AI File & Job Management
+# ─────────────────────────────────────────────
+
 def upload_training_file(file_path: str) -> Optional[str]:
-    """Upload a JSONL training file to Together AI. Returns file_id."""
+    """Upload JSONL file to Together AI. Returns file_id."""
     if not TOGETHER_API_KEY:
-        logger.warning("[Trainer] TOGETHER_API_KEY not set — skipping upload.")
+        logger.warning("[Trainer] TOGETHER_API_KEY not set")
         return None
     try:
         with open(file_path, "rb") as f:
@@ -59,18 +108,15 @@ def upload_training_file(file_path: str) -> Optional[str]:
             )
         resp.raise_for_status()
         file_id = resp.json()["id"]
-        logger.info(f"[Trainer] Uploaded training file: {file_id}")
+        logger.info(f"[Trainer] Uploaded: {file_id}")
         return file_id
     except Exception as e:
-        logger.error(f"[Trainer] File upload failed: {e}")
+        logger.error(f"[Trainer] Upload failed: {e}")
         return None
 
 
 def submit_finetuning_job(file_id: str, suffix: str = "levi") -> Optional[str]:
-    """
-    Submit a fine-tuning job on Together AI.
-    Returns the job_id if successful.
-    """
+    """Submit fine-tuning job. Returns job_id."""
     if not TOGETHER_API_KEY:
         return None
     try:
@@ -79,48 +125,48 @@ def submit_finetuning_job(file_id: str, suffix: str = "levi") -> Optional[str]:
             "model": BASE_MODEL,
             "n_epochs": MAX_TRAINING_EPOCHS,
             "suffix": suffix,
-            "learning_rate": 1e-5,
-            "batch_size": 16,
+            "learning_rate": 2e-5,
+            "batch_size": 8,
+            "warmup_ratio": 0.05,
         }
-        resp = requests.post(TOGETHER_FINETUNE, headers=_together_headers(), json=payload, timeout=30)
+        resp = requests.post(TOGETHER_FINETUNE, headers=_headers(), json=payload, timeout=30)
         resp.raise_for_status()
         job_id = resp.json()["id"]
-        logger.info(f"[Trainer] Fine-tuning job submitted: {job_id}")
+        logger.info(f"[Trainer] Job submitted: {job_id}")
         return job_id
     except Exception as e:
-        logger.error(f"[Trainer] Fine-tuning submission failed: {e}")
+        logger.error(f"[Trainer] Job submission failed: {e}")
         return None
 
 
 def check_finetuning_job(job_id: str) -> Dict[str, Any]:
-    """Poll the status of a fine-tuning job."""
+    """Poll fine-tuning job status."""
     if not TOGETHER_API_KEY:
-        return {"status": "error", "message": "No API key"}
+        return {"status": "error"}
     try:
         resp = requests.get(
             f"{TOGETHER_FINETUNE}/{job_id}",
-            headers=_together_headers(),
+            headers=_headers(),
             timeout=15,
         )
         resp.raise_for_status()
         data = resp.json()
         return {
-            "status": data.get("status", "unknown"),        # pending, running, completed, failed
-            "model_id": data.get("fine_tuned_model"),       # set when completed
-            "created_at": data.get("created_at"),
-            "finished_at": data.get("finished_at"),
+            "status": data.get("status", "unknown"),
+            "model_id": data.get("fine_tuned_model"),
             "error": data.get("error"),
         }
     except Exception as e:
-        logger.error(f"[Trainer] Job status check failed: {e}")
+        logger.error(f"[Trainer] Status check failed: {e}")
         return {"status": "error", "message": str(e)}
 
 
 # ─────────────────────────────────────────────
-# 2. MODEL VERSION MANAGEMENT
+# Model Version Management
 # ─────────────────────────────────────────────
-def record_model_version(db, job_id: str, model_id: str, training_samples: int):
-    """Save a successfully trained model version to the database."""
+
+def record_model_version(db, job_id: str, model_id: str, training_samples: int, eval_score: float = 0.0):
+    """Save trained model version to DB."""
     try:
         from training_models import ModelVersion  # type: ignore
     except ImportError:
@@ -130,43 +176,35 @@ def record_model_version(db, job_id: str, model_id: str, training_samples: int):
         job_id=job_id,
         model_id=model_id,
         training_samples=training_samples,
+        eval_score=eval_score,
         is_active=False,
         created_at=datetime.utcnow(),
-        eval_score=None,
     )
     db.add(version)
     db.commit()
-    logger.info(f"[Trainer] Recorded model version {model_id}")
     return version
 
 
 def activate_model_version(db, model_id: str):
-    """Switch the active model to a new fine-tuned version."""
+    """Set a model as active."""
     try:
         from training_models import ModelVersion  # type: ignore
     except ImportError:
         from backend.training_models import ModelVersion  # type: ignore
 
-    # Deactivate all
     db.query(ModelVersion).update({"is_active": False})
-    # Activate target
     db.query(ModelVersion).filter(ModelVersion.model_id == model_id).update({"is_active": True})
     db.commit()
-    # Update env-level override so generation.py picks it up
+
     os.environ["LEVI_ACTIVE_MODEL"] = model_id
     logger.info(f"[Trainer] Activated model: {model_id}")
 
 
 def get_active_model_id() -> Optional[str]:
-    """
-    Returns the current fine-tuned model ID if available,
-    otherwise None (falls back to base Groq Llama3).
-    """
     return os.environ.get("LEVI_ACTIVE_MODEL")
 
 
 def get_model_history(db) -> List[Dict]:
-    """Return all model versions sorted newest first."""
     try:
         from training_models import ModelVersion  # type: ignore
     except ImportError:
@@ -187,251 +225,80 @@ def get_model_history(db) -> List[Dict]:
 
 
 # ─────────────────────────────────────────────
-# 3. MODEL EVALUATION (simple A/B scoring)
+# Model Evaluation
 # ─────────────────────────────────────────────
-def evaluate_candidate_model(model_id: str, eval_prompts: Optional[List[str]] = None) -> float:
-    """
-    Test a fine-tuned model against a small eval set.
-    Returns average response quality score (0-1).
-    Falls back to 0.5 if API unavailable.
-    """
+
+EVAL_PROMPTS = [
+    "What is the nature of consciousness?",
+    "How should I approach fear in my life?",
+    "Explain the Stoic concept of the dichotomy of control.",
+    "What does silence teach us that words cannot?",
+    "How does one find meaning in suffering?",
+]
+
+
+def evaluate_model(model_id: str) -> float:
+    """Evaluate a fine-tuned model. Returns 0-1 score."""
     if not TOGETHER_API_KEY:
         return 0.5
 
-    if eval_prompts is None:
-        eval_prompts = [
-            "What is the meaning of consciousness?",
-            "Give me wisdom about failure.",
-            "How should I approach uncertainty in life?",
-            "What does the Stoic philosophy teach about control?",
-            "Describe the relationship between silence and wisdom.",
-        ]
-
     scores = []
-    for prompt in eval_prompts:
+    for prompt in EVAL_PROMPTS:
         try:
             resp = requests.post(
                 "https://api.together.xyz/v1/chat/completions",
-                headers=_together_headers(),
+                headers=_headers(),
                 json={
                     "model": model_id,
                     "messages": [
-                        {"role": "system", "content": "You are LEVI, a philosophical AI muse. Be concise and profound."},
+                        {"role": "system", "content": "You are LEVI, a philosophical AI. Be concise and profound."},
                         {"role": "user", "content": prompt},
                     ],
-                    "max_tokens": 120,
-                    "temperature": 0.7,
+                    "max_tokens": 150,
+                    "temperature": 0.75,
                 },
                 timeout=20,
             )
             resp.raise_for_status()
             text = resp.json()["choices"][0]["message"]["content"].strip()
 
-            # Simple quality heuristics
-            words = len(text.split())
             score = 0.5
-            if 15 < words < 80:   score += 0.2
-            if '"' in text:        score += 0.1
-            if '—' in text:        score += 0.1
-            if text[0].isupper():  score += 0.05
-            if 'sorry' not in text.lower() and 'cannot' not in text.lower(): score += 0.05
+            words = len(text.split())
+            if 15 < words < 100:
+                score += 0.2
+            if '"' in text or "'" in text:
+                score += 0.1
+            if not any(c in text.lower() for c in ['sorry', 'i cannot', 'as an ai']):
+                score += 0.1
+            if text[0].isupper():
+                score += 0.05
+            if len(text) > 30:
+                score += 0.05
             scores.append(min(1.0, score))
         except Exception as e:
-            logger.warning(f"[Trainer] Eval prompt failed: {e}")
+            logger.warning(f"[Eval] Prompt failed: {e}")
             scores.append(0.3)
 
     avg = sum(scores) / len(scores) if scores else 0.5
-    logger.info(f"[Trainer] Model {model_id} eval score: {avg:.3f}")
+    logger.info(f"[Eval] Model {model_id} score: {avg:.3f}")
     return avg
 
 
 # ─────────────────────────────────────────────
-# 4. CELERY TASKS FOR FULL PIPELINE
+# Generation with Active Model
 # ─────────────────────────────────────────────
-@celery_app.task(name="levi.trigger_training_pipeline", bind=True, max_retries=2)
-def trigger_training_pipeline(self):
-    """
-    Full self-training cycle:
-    1. Check if enough new data exists
-    2. Export training JSONL
-    3. Upload to Together AI
-    4. Submit fine-tuning job
-    5. Store job ID for later polling
-    """
-    try:
-        from db import SessionLocal  # type: ignore
-        from learning import export_training_data, get_learning_stats  # type: ignore
-        from training_models import TrainingJob  # type: ignore
-    except ImportError:
-        from backend.db import SessionLocal  # type: ignore
-        from backend.learning import export_training_data, get_learning_stats  # type: ignore
-        from backend.training_models import TrainingJob  # type: ignore
 
-    db = SessionLocal()
-    try:
-        stats = get_learning_stats(db)
-        unexported = stats.get("unexported_samples", 0)
-
-        if unexported < MIN_SAMPLES_TO_TRAIN:
-            logger.info(f"[Trainer] Only {unexported} unexported samples, need {MIN_SAMPLES_TO_TRAIN}. Skipping.")
-            return {"status": "skipped", "reason": "insufficient_data", "samples": unexported}
-
-        # Export data
-        file_path, count = export_training_data(db, min_rating=4, limit=2000)
-        logger.info(f"[Trainer] Exported {count} samples for training")
-
-        # Upload file
-        file_id = upload_training_file(file_path)
-        if not file_id:
-            return {"status": "failed", "reason": "file_upload_failed"}
-
-        # Submit job
-        job_id = submit_finetuning_job(file_id, suffix=f"levi-{datetime.utcnow().strftime('%Y%m%d')}")
-        if not job_id:
-            return {"status": "failed", "reason": "job_submission_failed"}
-
-        # Record pending job
-        job = TrainingJob(
-            job_id=job_id,
-            file_id=file_id,
-            training_samples=count,
-            status="pending",
-            created_at=datetime.utcnow(),
-        )
-        db.add(job)
-        db.commit()
-
-        # Schedule polling
-        poll_training_job.apply_async(args=[job_id], countdown=FINETUNE_POLL_SEC)
-        logger.info(f"[Trainer] Training pipeline started. Job: {job_id}")
-        return {"status": "started", "job_id": job_id, "samples": count}
-
-    finally:
-        db.close()
-
-
-@celery_app.task(name="levi.poll_training_job", bind=True, max_retries=48)
-def poll_training_job(self, job_id: str):
-    """
-    Poll a fine-tuning job until it completes or fails.
-    Retries every 5 minutes, up to 4 hours.
-    """
-    try:
-        from db import SessionLocal  # type: ignore
-        from training_models import TrainingJob  # type: ignore
-    except ImportError:
-        from backend.db import SessionLocal  # type: ignore
-        from backend.training_models import TrainingJob  # type: ignore
-
-    db = SessionLocal()
-    try:
-        status_data = check_finetuning_job(job_id)
-        status = status_data.get("status")
-
-        job = db.query(TrainingJob).filter(TrainingJob.job_id == job_id).first()
-        if job:
-            job.status = status
-            db.commit()
-
-        logger.info(f"[Trainer] Job {job_id} status: {status}")
-
-        if status == "completed":
-            model_id = status_data.get("model_id")
-            if model_id:
-                # Evaluate before activating
-                eval_score = evaluate_candidate_model(model_id)
-                version = record_model_version(db, job_id, model_id, job.training_samples if job else 0)
-                version.eval_score = eval_score
-                db.commit()
-
-                if eval_score >= QUALITY_THRESHOLD:  # only activate if quality threshold met
-                    activate_model_version(db, model_id)
-                    logger.info(f"[Trainer] ✅ New model activated: {model_id} (score={eval_score:.2f})")
-                else:
-                    logger.warning(f"[Trainer] ⚠️  Model {model_id} eval score {eval_score:.2f} below threshold {QUALITY_THRESHOLD}. Not activating.")
-            return {"status": "completed", "model_id": model_id}
-
-        elif status == "failed":
-            err = status_data.get("error", "unknown error")
-            logger.error(f"[Trainer] ❌ Fine-tuning job failed: {err}")
-            return {"status": "failed", "error": err}
-
-        else:
-            # Still running — retry after delay
-            raise self.retry(countdown=FINETUNE_POLL_SEC)
-
-    finally:
-        db.close()
-
-
-@celery_app.task(name="levi.update_embeddings")
-def update_embeddings_task():
-    """
-    Recompute embeddings for any Quote rows that were added
-    to the knowledge base with placeholder/null embeddings.
-    Runs nightly.
-    """
-    try:
-        from db import SessionLocal  # type: ignore
-        from models import Quote  # type: ignore
-        from embeddings import embed_text  # type: ignore
-    except ImportError:
-        from backend.db import SessionLocal  # type: ignore
-        from backend.models import Quote  # type: ignore
-        from backend.embeddings import embed_text  # type: ignore
-
-    db = SessionLocal()
-    try:
-        missing = db.query(Quote).filter(Quote.embedding.is_(None)).limit(100).all()
-        updated = 0
-        for q in missing:
-            try:
-                q.embedding = embed_text(q.text)
-                updated = int(updated) + 1  # type: ignore
-            except Exception as e:
-                logger.warning(f"[Trainer] Embedding update failed for quote {q.id}: {e}")
-        db.commit()
-        logger.info(f"[Trainer] Updated embeddings for {updated} quotes")
-        return {"updated": updated}
-    finally:
-        db.close()
-
-
-# ─────────────────────────────────────────────
-# 5. PATCH generation.py TO USE FINE-TUNED MODEL
-# ─────────────────────────────────────────────
-def get_active_groq_model() -> str:
-    """
-    Returns the model ID to use for Groq requests.
-    Prefers fine-tuned model if available and active.
-    Note: Groq doesn't support custom model deployment yet —
-    this function returns the Together AI model ID which is
-    used via the Together API instead when a fine-tuned model
-    is active.
-    """
-    fine_tuned = get_active_model_id()
-    if fine_tuned:
-        logger.debug(f"[Trainer] Using fine-tuned model: {fine_tuned}")
-        return fine_tuned
-    return "llama-3.1-8b-instant"  # default Groq base model
-
-
-def generate_with_active_model(prompt: str, system_prompt: str, max_tokens: int = 150) -> Optional[str]:
-    """
-    Generate text using the currently active model.
-    Falls back from fine-tuned → Together base → Groq in that order.
-    """
+def generate_with_active_model(prompt: str, system_prompt: str,
+                                max_tokens: int = 200) -> Optional[str]:
+    """Generate text using active fine-tuned model, fall back to base Groq."""
     fine_tuned_id = get_active_model_id()
 
+    # Try fine-tuned model via Together AI
     if fine_tuned_id and TOGETHER_API_KEY:
-        # Use fine-tuned model via Together AI
         try:
             resp = requests.post(
                 "https://api.together.xyz/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {TOGETHER_API_KEY}",
-                    "Content-Type": "application/json",
-                },
+                headers=_headers(),
                 json={
                     "model": fine_tuned_id,
                     "messages": [
@@ -439,14 +306,16 @@ def generate_with_active_model(prompt: str, system_prompt: str, max_tokens: int 
                         {"role": "user", "content": prompt},
                     ],
                     "max_tokens": max_tokens,
-                    "temperature": 0.75,
+                    "temperature": 0.80,
+                    "frequency_penalty": 0.4,
+                    "presence_penalty": 0.3,
                 },
                 timeout=15,
             )
             resp.raise_for_status()
             return resp.json()["choices"][0]["message"]["content"].strip()
         except Exception as e:
-            logger.warning(f"[Trainer] Fine-tuned model call failed, falling back: {e}")
+            logger.warning(f"[Trainer] Fine-tuned model failed, falling back: {e}")
 
     # Fall back to Groq
     groq_key = os.getenv("GROQ_API_KEY")
@@ -456,35 +325,134 @@ def generate_with_active_model(prompt: str, system_prompt: str, max_tokens: int 
                 "https://api.groq.com/openai/v1/chat/completions",
                 headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
                 json={
-                    "model": "llama-3.1-8b-instant",
+                    "model": "llama3-8b-8192",
                     "messages": [
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": prompt},
                     ],
                     "max_tokens": max_tokens,
-                    "temperature": 0.8,
+                    "temperature": 0.85,
+                    "frequency_penalty": 0.4,
                 },
                 timeout=10,
             )
             resp.raise_for_status()
             return resp.json()["choices"][0]["message"]["content"].strip()
         except Exception as e:
-            logger.error(f"[Trainer] Groq fallback also failed: {e}")
+            logger.error(f"[Trainer] Groq fallback failed: {e}")
 
     return None
 
 
 # ─────────────────────────────────────────────
-# 6. CELERY BEAT SCHEDULE (add to tasks.py)
+# Celery Tasks
 # ─────────────────────────────────────────────
-# Add these to celery_app.conf.beat_schedule in tasks.py:
+
+if celery_app:
+    @celery_app.task(name="levi.trigger_training_pipeline", bind=True, max_retries=2)
+    def trigger_training_pipeline(self):
+        """Full self-training pipeline as Celery task."""
+        try:
+            from db import SessionLocal  # type: ignore
+            from learning import export_training_data as exp_data, get_learning_stats  # type: ignore
+            from training_models import TrainingJob  # type: ignore
+        except ImportError:
+            try:
+                from backend.db import SessionLocal  # type: ignore
+                from backend.learning import export_training_data as exp_data, get_learning_stats  # type: ignore
+                from backend.training_models import TrainingJob  # type: ignore
+            except ImportError:
+                return {"status": "failed", "reason": "imports_failed"}
+
+        db = SessionLocal()
+        try:
+            stats = get_learning_stats(db)
+            unexported = stats.get("unexported_samples", 0)
+
+            if unexported < MIN_SAMPLES_TO_TRAIN:
+                logger.info(f"[Trainer] Only {unexported} samples, need {MIN_SAMPLES_TO_TRAIN}")
+                return {"status": "skipped", "samples": unexported}
+
+            file_path, count = exp_data(db, min_rating=4, limit=2000)
+            logger.info(f"[Trainer] Exported {count} samples")
+
+            file_id = upload_training_file(file_path)
+            if not file_id:
+                return {"status": "failed", "reason": "upload_failed"}
+
+            suffix = f"levi-{datetime.utcnow().strftime('%Y%m%d')}"
+            job_id = submit_finetuning_job(file_id, suffix)
+            if not job_id:
+                return {"status": "failed", "reason": "job_submission_failed"}
+
+            # Record job
+            job = TrainingJob(
+                job_id=job_id,
+                file_id=file_id,
+                training_samples=count,
+                status="pending",
+                created_at=datetime.utcnow(),
+            )
+            db.add(job)
+            db.commit()
+
+            # Schedule polling
+            poll_training_job.apply_async(args=[job_id], countdown=300)
+
+            return {"status": "started", "job_id": job_id, "samples": count}
+        finally:
+            db.close()
+
+    @celery_app.task(name="levi.poll_training_job", bind=True, max_retries=48)
+    def poll_training_job(self, job_id: str):
+        """Poll fine-tuning job status every 5 minutes."""
+        try:
+            from db import SessionLocal  # type: ignore
+            from training_models import TrainingJob  # type: ignore
+        except ImportError:
+            from backend.db import SessionLocal  # type: ignore
+            from backend.training_models import TrainingJob  # type: ignore
+
+        db = SessionLocal()
+        try:
+            status_data = check_finetuning_job(job_id)
+            status = status_data.get("status")
+
+            job = db.query(TrainingJob).filter(TrainingJob.job_id == job_id).first()
+            if job:
+                job.status = status
+                db.commit()
+
+            if status == "completed":
+                model_id = status_data.get("model_id")
+                if model_id:
+                    eval_score = evaluate_model(model_id)
+                    version = record_model_version(
+                        db, job_id, model_id,
+                        job.training_samples if job else 0,
+                        eval_score
+                    )
+                    if eval_score >= QUALITY_THRESHOLD:
+                        activate_model_version(db, model_id)
+                        logger.info(f"[Trainer] ✅ Model activated: {model_id} (score={eval_score:.2f})")
+                    else:
+                        logger.warning(f"[Trainer] Model score {eval_score:.2f} below threshold. Not activating.")
+                return {"status": "completed", "model_id": model_id}
+
+            elif status == "failed":
+                logger.error(f"[Trainer] Job failed: {status_data.get('error')}")
+                return {"status": "failed"}
+
+            else:
+                raise self.retry(countdown=300)  # Retry in 5 min
+
+        finally:
+            db.close()
+
+# Beat schedule for training
 TRAINING_BEAT_SCHEDULE = {
-    "weekly-training-pipeline": {
+    "weekly-training": {
         "task": "levi.trigger_training_pipeline",
-        "schedule": 604800,  # every 7 days in seconds
-    },
-    "nightly-embedding-update": {
-        "task": "levi.update_embeddings",
-        "schedule": 86400,   # every 24 hours
+        "schedule": 604800,  # 7 days
     },
 }

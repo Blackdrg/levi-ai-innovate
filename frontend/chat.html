@@ -1,189 +1,485 @@
 <!DOCTYPE html>
 <html class="dark" lang="en">
+
 <head>
-<title>LEVI — AI Chat</title>
-<meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<script src="https://cdn.tailwindcss.com"></script>
-<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
-<script>tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#f2ca50","primary-container":"#d4af37","on-primary":"#3c2f00","secondary":"#c3c0ff","secondary-container":"#3626ce","on-secondary-container":"#b3b1ff","tertiary":"#d9c5ff","surface":"#131317","surface-container-lowest":"#0e0e12","surface-container-low":"#1b1b1f","surface-container":"#1f1f23","surface-container-high":"#2a292e","surface-container-highest":"#353439","on-surface":"#e5e1e7","on-surface-variant":"#d0c5af","outline":"#99907c","outline-variant":"#4d4635"},fontFamily:{headline:["Newsreader","serif"],body:["Plus Jakarta Sans","sans-serif"],label:["Plus Jakarta Sans","sans-serif"],sans:["Plus Jakarta Sans","sans-serif"]},borderRadius:{DEFAULT:"0.25rem",lg:"0.5rem",xl:"0.75rem","2xl":"1rem","3xl":"1.5rem",full:"9999px"}}}}</script>
-<style>
-.material-symbols-outlined{font-family:'Material Symbols Outlined';font-size:22px;line-height:1;font-variation-settings:'FILL' 0,'wght' 300,'GRAD' 0,'opsz' 24;-webkit-user-select:none;user-select:none}
-.icon-fill{font-variation-settings:'FILL' 1,'wght' 300,'GRAD' 0,'opsz' 24}.icon-sm{font-size:18px}.icon-lg{font-size:28px}
-.glass{background:rgba(19,19,23,.72);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px)}
-.glass-panel{background:rgba(27,27,31,.6);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)}
-.gold-text{background:linear-gradient(135deg,#f2ca50 0%,#fde68a 45%,#d4af37 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
-.btn-gold{background:linear-gradient(135deg,#f2ca50,#d4af37);color:#3c2f00;transition:all .25s}
-.btn-gold:hover{background:linear-gradient(135deg,#fde68a,#f2ca50);box-shadow:0 0 24px rgba(242,202,80,.3)}
-.ghost-border{border:.5px solid rgba(255,255,255,.08)}
-.nav-active{background:linear-gradient(90deg,rgba(242,202,80,.15),rgba(242,202,80,.02));border-left:2px solid #f2ca50;color:#f2ca50}
-.nav-inactive{border-left:2px solid transparent;color:#9ca3af;transition:all .2s}
-.nav-inactive:hover{background:rgba(255,255,255,.04);color:#e5e1e7}
-.msg-bot{background:rgba(27,27,31,.8);border:.5px solid rgba(255,255,255,.07);border-radius:12px 12px 12px 2px;max-width:78%}
-.msg-user{background:linear-gradient(135deg,rgba(242,202,80,.18),rgba(212,175,55,.1));border:.5px solid rgba(242,202,80,.2);border-radius:12px 12px 2px 12px;max-width:78%;margin-left:auto}
-.mood-chip{border:.5px solid rgba(255,255,255,.08);color:#9ca3af;cursor:pointer;transition:all .2s;border-radius:9999px}
-.mood-chip.active{background:rgba(242,202,80,.12);border-color:rgba(242,202,80,.45);color:#f2ca50}
-.mood-chip:not(.active):hover{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.14);color:#e5e1e7}
-.chat-input{background:rgba(14,14,18,.7);border:.5px solid rgba(255,255,255,.1);color:#e5e1e7;outline:none;transition:border-color .3s;resize:none;line-height:1.5}
-.chat-input:focus{border-color:rgba(242,202,80,.5)}
-.chat-input::placeholder{color:rgba(105,102,110,.55)}
-::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(242,202,80,.2);border-radius:2px}
-@keyframes dotBounce{0%,80%,100%{transform:translateY(0);opacity:.4}40%{transform:translateY(-5px);opacity:1}}
-.dot{display:inline-block;width:5px;height:5px;border-radius:50%;background:#f2ca50;animation:dotBounce 1.2s infinite}
-.dot:nth-child(2){animation-delay:.2s}.dot:nth-child(3){animation-delay:.4s}
-@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-.fade-in{animation:fadeUp .35s ease forwards}
-#toast{position:fixed;bottom:5rem;left:50%;transform:translateX(-50%) translateY(12px);opacity:0;transition:all .3s;z-index:999;pointer-events:none}
-#toast.show{transform:translateX(-50%) translateY(0);opacity:1}
-.h-full-screen{height:100vh}
-.orb-container{z-index:0}
-.orb-1{width:50vw;height:50vw;max-width:650px;max-height:650px;top:-15%;left:-12%;background:radial-gradient(circle,rgba(242,202,80,.05) 0%,transparent 68%);filter:blur(80px)}
-.orb-2{width:40vw;height:40vw;max-width:500px;max-height:500px;bottom:-12%;right:-10%;background:radial-gradient(circle,rgba(195,192,255,.04) 0%,transparent 68%);filter:blur(80px)}
-.z-50-nav{z-index:50}
-.mobile-menu-pad{padding-top:6rem}
-.sidebar-wrap{background:rgba(13,13,18,.7);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px);border-right:.5px solid rgba(255,255,255,.06)}
-.session-box{background:rgba(255,255,255,.03)}
-.chat-layout { height: 100vh; padding-top: 5.5rem; }
-.loading-spinner { width: 18px; height: 18px; border: 2px solid rgba(60,47,0,.2); border-top-color: rgba(60,47,0,.85); border-radius: 50%; animation: spin .75s linear infinite; }
-.mobile-nav-active { color: #f2ca50; }
-.mobile-nav-inactive { color: #9ca3af; }
-</style>
+  <title>LEVI — AI Chat</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+    rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+    rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      darkMode: "class", theme: {
+        extend: {
+          colors: {
+            "primary": "#f2ca50", "primary-container": "#d4af37", "on-primary": "#3c2f00",
+            "surface": "#131317", "surface-container-low": "#1b1b1f", "surface-container": "#1f1f23",
+            "on-surface": "#e5e1e7", "on-surface-variant": "#d0c5af",
+          }, fontFamily: { headline: ["Newsreader", "serif"], body: ["Plus Jakarta Sans", "sans-serif"], sans: ["Plus Jakarta Sans", "sans-serif"] }
+        }
+      }
+    }
+  </script>
+  <style>
+    .material-symbols-outlined {
+      font-family: 'Material Symbols Outlined';
+      font-size: 22px;
+      line-height: 1;
+      font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+      -webkit-user-select: none;
+      user-select: none
+    }
+
+    .icon-fill {
+      font-variation-settings: 'FILL' 1
+    }
+
+    .icon-sm {
+      font-size: 18px
+    }
+
+    .icon-lg {
+      font-size: 28px
+    }
+
+    .glass {
+      background: rgba(19, 19, 23, .72);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px)
+    }
+
+    .glass-panel {
+      background: rgba(27, 27, 31, .6);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px)
+    }
+
+    .gold-text {
+      background: linear-gradient(135deg, #f2ca50 0%, #fde68a 45%, #d4af37 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent
+    }
+
+    .btn-gold {
+      background: linear-gradient(135deg, #f2ca50, #d4af37);
+      color: #3c2f00;
+      transition: all .25s
+    }
+
+    .btn-gold:hover {
+      background: linear-gradient(135deg, #fde68a, #f2ca50);
+      box-shadow: 0 0 24px rgba(242, 202, 80, .3)
+    }
+
+    .ghost-border {
+      border: .5px solid rgba(255, 255, 255, .08)
+    }
+
+    .nav-active {
+      background: linear-gradient(90deg, rgba(242, 202, 80, .15), rgba(242, 202, 80, .02));
+      border-left: 2px solid #f2ca50;
+      color: #f2ca50
+    }
+
+    .nav-inactive {
+      border-left: 2px solid transparent;
+      color: #9ca3af;
+      transition: all .2s
+    }
+
+    .nav-inactive:hover {
+      background: rgba(255, 255, 255, .04);
+      color: #e5e1e7
+    }
+
+    .msg-bot {
+      background: rgba(27, 27, 31, .8);
+      border: .5px solid rgba(255, 255, 255, .07);
+      border-radius: 12px 12px 12px 2px;
+      max-width: 80%
+    }
+
+    .msg-user {
+      background: linear-gradient(135deg, rgba(242, 202, 80, .18), rgba(212, 175, 55, .1));
+      border: .5px solid rgba(242, 202, 80, .2);
+      border-radius: 12px 12px 2px 12px;
+      max-width: 80%;
+      margin-left: auto
+    }
+
+    .mood-chip {
+      border: .5px solid rgba(255, 255, 255, .08);
+      color: #9ca3af;
+      cursor: pointer;
+      transition: all .2s;
+      border-radius: 9999px;
+      padding: 4px 12px
+    }
+
+    .mood-chip.active {
+      background: rgba(242, 202, 80, .12);
+      border-color: rgba(242, 202, 80, .45);
+      color: #f2ca50
+    }
+
+    .mood-chip:not(.active):hover {
+      background: rgba(255, 255, 255, .05);
+      border-color: rgba(255, 255, 255, .14);
+      color: #e5e1e7
+    }
+
+    .chat-input {
+      background: rgba(14, 14, 18, .7);
+      border: .5px solid rgba(255, 255, 255, .1);
+      color: #e5e1e7;
+      outline: none;
+      transition: border-color .3s;
+      resize: none;
+      line-height: 1.5;
+      border-radius: 16px;
+      padding: 14px 48px 14px 16px
+    }
+
+    .chat-input:focus {
+      border-color: rgba(242, 202, 80, .5)
+    }
+
+    .chat-input::placeholder {
+      color: rgba(105, 102, 110, .55)
+    }
+
+    ::-webkit-scrollbar {
+      width: 4px
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: rgba(242, 202, 80, .2);
+      border-radius: 2px
+    }
+
+    .typing-dot {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #f2ca50;
+      animation: typingWave 1.2s infinite
+    }
+
+    .typing-dot:nth-child(2) {
+      animation-delay: .2s
+    }
+
+    .typing-dot:nth-child(3) {
+      animation-delay: .4s
+    }
+
+    @keyframes typingWave {
+
+      0%,
+      60%,
+      100% {
+        transform: translateY(0);
+        opacity: .4
+      }
+
+      30% {
+        transform: translateY(-5px);
+        opacity: 1
+      }
+    }
+
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(8px)
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0)
+      }
+    }
+
+    .animate-in {
+      animation: fadeUp .35s ease forwards
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg)
+      }
+    }
+
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(60, 47, 0, .2);
+      border-top-color: rgba(60, 47, 0, .85);
+      border-radius: 50%;
+      animation: spin .75s linear infinite
+    }
+
+    #toast {
+      position: fixed;
+      bottom: 5rem;
+      left: 50%;
+      transform: translateX(-50%) translateY(0);
+      opacity: 0;
+      z-index: 9999;
+      pointer-events: none;
+      transition: all .3s
+    }
+
+    .orb-1 {
+      position: fixed;
+      width: 55vw;
+      height: 55vw;
+      max-width: 700px;
+      top: -18%;
+      left: -14%;
+      background: radial-gradient(circle, rgba(242, 202, 80, .05) 0%, transparent 68%);
+      filter: blur(100px);
+      pointer-events: none;
+      z-index: 0
+    }
+
+    .orb-2 {
+      position: fixed;
+      width: 40vw;
+      height: 40vw;
+      max-width: 520px;
+      bottom: -12%;
+      right: -8%;
+      background: radial-gradient(circle, rgba(195, 192, 255, .04) 0%, transparent 68%);
+      filter: blur(80px);
+      pointer-events: none;
+      z-index: 0
+    }
+
+    .sidebar-wrap {
+      background: rgba(13, 13, 18, .7);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border-right: .5px solid rgba(255, 255, 255, .06)
+    }
+
+    .session-box {
+      background: rgba(255, 255, 255, .03)
+    }
+
+    .chat-layout {
+      height: 100vh;
+      padding-top: 5.5rem;
+      display: flex;
+      flex-direction: column
+    }
+
+    .messages-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 40px
+    }
+
+    .input-area {
+      border-top: .5px solid rgba(255, 255, 255, .05);
+      padding: 16px 40px
+    }
+
+    @media(max-width:1024px) {
+      .messages-container {
+        padding: 16px 20px
+      }
+
+      .input-area {
+        padding: 12px 16px
+      }
+    }
+
+    .message-wrap {
+      display: flex;
+      margin-bottom: 16px
+    }
+
+    .message-wrap.flex.justify-end {
+      justify-content: flex-end
+    }
+
+    .message-wrap.flex.justify-start {
+      justify-content: flex-start
+    }
+
+    .mobile-nav-active {
+      color: #f2ca50
+    }
+
+    .mobile-nav-inactive {
+      color: #9ca3af
+    }
+  </style>
 </head>
-<body class="bg-surface text-on-surface font-body min-h-screen overflow-hidden h-full-screen">
 
-<!-- Orbs -->
-<div class="fixed inset-0 pointer-events-none overflow-hidden orb-container">
-  <div class="absolute rounded-full orb-1"></div>
-  <div class="absolute rounded-full orb-2"></div>
-</div>
+<body class="bg-surface text-on-surface font-body min-h-screen" style="overflow:hidden">
 
-<!-- TOP NAV ISLAND -->
-<nav class="fixed top-0 left-0 right-0 z-50 pt-6 z-50-nav">
-  <div class="mx-auto w-[90%] max-w-5xl glass rounded-full ghost-border px-6 py-3 flex justify-between items-center shadow-[0_20px_60px_rgba(0,0,0,0.4)]">
-    <a href="index.html" class="text-2xl font-headline italic tracking-[-0.03em] gold-text">LEVI</a>
-    <div class="hidden md:flex items-center gap-8">
-      <a href="index.html"  class="text-zinc-400 hover:text-zinc-100 transition-colors text-sm">Home</a>
-      <a href="chat.html"   class="text-primary text-sm font-semibold border-b border-primary pb-0.5">Chat</a>
-      <a href="studio.html" class="text-zinc-400 hover:text-zinc-100 transition-colors text-sm">Studio</a>
-      <a href="feed.html"   class="text-zinc-400 hover:text-zinc-100 transition-colors text-sm">Feed</a>
-      <a href="quotes.html" class="text-zinc-400 hover:text-zinc-100 transition-colors text-sm">Explore</a>
-    </div>
-    <div class="flex items-center gap-3">
-      <div class="hidden md:flex items-center gap-1.5 text-[10px] text-zinc-500">
-        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400" id="status-dot"></span>
-        <span id="status-label">Online</span>
+  <div class="orb-1"></div>
+  <div class="orb-2"></div>
+
+  <!-- TOP NAV ISLAND -->
+  <nav class="fixed top-0 left-0 right-0 z-50 pt-6" style="z-index:50">
+    <div
+      class="mx-auto w-[90%] max-w-5xl glass rounded-full ghost-border px-6 py-3 flex justify-between items-center shadow-[0_20px_60px_rgba(0,0,0,0.4)]">
+      <a href="index.html" class="text-2xl font-headline italic tracking-[-0.03em] gold-text">LEVI</a>
+      <div class="hidden md:flex items-center gap-8">
+        <a href="index.html" class="text-zinc-400 hover:text-zinc-100 transition-colors text-sm">Home</a>
+        <a href="chat.html" class="text-primary text-sm font-semibold border-b border-primary pb-0.5">Chat</a>
+        <a href="studio.html" class="text-zinc-400 hover:text-zinc-100 transition-colors text-sm">Studio</a>
+        <a href="feed.html" class="text-zinc-400 hover:text-zinc-100 transition-colors text-sm">Feed</a>
+        <a href="quotes.html" class="text-zinc-400 hover:text-zinc-100 transition-colors text-sm">Explore</a>
       </div>
-      <a href="auth.html" id="nav-auth-btn" class="btn-gold text-xs font-semibold tracking-wider uppercase px-5 py-2 rounded-full">Sign In</a>
-      <button onclick="toggleMobileMenu()" class="md:hidden text-zinc-400"><span class="material-symbols-outlined">menu</span></button>
+      <div class="flex items-center gap-3">
+        <div class="hidden md:flex items-center gap-1.5 text-[10px] text-zinc-500">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400" id="status-dot"></span>
+          <span id="status-label">Checking…</span>
+        </div>
+        <a href="auth.html" id="nav-auth-btn"
+          class="btn-gold text-xs font-semibold tracking-wider uppercase px-5 py-2 rounded-full">Sign In</a>
+        <button onclick="toggleMobileMenu()" class="md:hidden text-zinc-400"><span
+            class="material-symbols-outlined">menu</span></button>
+      </div>
     </div>
-  </div>
-</nav>
-
-<!-- MOBILE MENU -->
-<div id="mobile-menu" class="hidden fixed inset-0 z-40 glass mobile-menu-pad">
-  <button onclick="toggleMobileMenu()" class="absolute top-8 right-6 text-zinc-400"><span class="material-symbols-outlined icon-lg">close</span></button>
-  <nav class="flex flex-col gap-2 px-8 pt-4">
-    <a onclick="toggleMobileMenu()" href="index.html"   class="text-xl font-headline italic text-on-surface py-3 border-b border-white/5">Home</a>
-    <a onclick="toggleMobileMenu()" href="chat.html"    class="text-xl font-headline italic gold-text py-3 border-b border-white/5">AI Chat</a>
-    <a onclick="toggleMobileMenu()" href="studio.html"  class="text-xl font-headline italic text-on-surface py-3 border-b border-white/5">Studio</a>
-    <a onclick="toggleMobileMenu()" href="feed.html"    class="text-xl font-headline italic text-on-surface py-3 border-b border-white/5">Feed</a>
-    <a onclick="toggleMobileMenu()" href="quotes.html"  class="text-xl font-headline italic text-on-surface py-3 border-b border-white/5">Explore</a>
   </nav>
-</div>
 
-<!-- SIDEBAR (desktop) -->
-<aside class="hidden lg:flex flex-col w-64 h-screen fixed left-0 top-0 z-40 sidebar-wrap">
-  <div class="pt-28 pb-8 flex flex-col h-full px-5">
-    <div class="px-4 mb-10">
-      <h2 class="font-headline italic gold-text text-xl">LEVI AI</h2>
-      <p class="text-[10px] uppercase tracking-[0.2em] text-zinc-500 mt-1">Celestial Muse</p>
-    </div>
-    <nav class="flex flex-col gap-1 flex-1">
-      <a href="index.html"   class="nav-inactive flex items-center gap-4 px-4 py-3 rounded-r-xl text-xs uppercase tracking-widest"><span class="material-symbols-outlined icon-sm">auto_awesome</span>Home</a>
-      <a href="chat.html"    class="nav-active flex items-center gap-4 px-4 py-3 rounded-r-xl text-xs uppercase tracking-widest font-bold"><span class="material-symbols-outlined icon-sm icon-fill">psychology</span>Chat</a>
-      <a href="studio.html"  class="nav-inactive flex items-center gap-4 px-4 py-3 rounded-r-xl text-xs uppercase tracking-widest"><span class="material-symbols-outlined icon-sm">auto_fix_high</span>Studio</a>
-      <a href="feed.html"    class="nav-inactive flex items-center gap-4 px-4 py-3 rounded-r-xl text-xs uppercase tracking-widest"><span class="material-symbols-outlined icon-sm">public</span>Feed</a>
-      <a href="quotes.html"  class="nav-inactive flex items-center gap-4 px-4 py-3 rounded-r-xl text-xs uppercase tracking-widest"><span class="material-symbols-outlined icon-sm">search</span>Explore</a>
-      <a href="my-gallery.html" class="nav-inactive flex items-center gap-4 px-4 py-3 rounded-r-xl text-xs uppercase tracking-widest"><span class="material-symbols-outlined icon-sm">photo_library</span>Gallery</a>
+  <!-- MOBILE MENU -->
+  <div id="mobile-menu" class="hidden fixed inset-0 z-40 glass" style="padding-top:6rem">
+    <button onclick="toggleMobileMenu()" class="absolute top-8 right-6 text-zinc-400"><span
+        class="material-symbols-outlined icon-lg">close</span></button>
+    <nav class="flex flex-col gap-2 px-8 pt-4">
+      <a onclick="toggleMobileMenu()" href="index.html"
+        class="text-xl font-headline italic text-on-surface py-3 border-b border-white/5">Home</a>
+      <a onclick="toggleMobileMenu()" href="chat.html"
+        class="text-xl font-headline italic gold-text py-3 border-b border-white/5">AI Chat</a>
+      <a onclick="toggleMobileMenu()" href="studio.html"
+        class="text-xl font-headline italic text-on-surface py-3 border-b border-white/5">Studio</a>
+      <a onclick="toggleMobileMenu()" href="feed.html"
+        class="text-xl font-headline italic text-on-surface py-3 border-b border-white/5">Feed</a>
     </nav>
-    <!-- Session info -->
-    <div class="mt-auto px-3 py-3 rounded-xl ghost-border session-box">
-      <p class="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">Session</p>
-      <p class="text-xs text-on-surface" id="session-info">Anonymous · Philosophical</p>
-      <button onclick="clearChat()" class="mt-2 text-[10px] text-zinc-500 hover:text-primary transition-colors uppercase tracking-wider">Clear History</button>
-    </div>
-  </div>
-</aside>
-
-<!-- MAIN CHAT LAYOUT -->
-<div class="lg:ml-64 flex flex-col chat-layout">
-
-  <!-- Chat header bar -->
-  <div class="px-6 lg:px-10 py-4 border-b border-white/5 flex items-center justify-between flex-shrink-0">
-    <div>
-      <h1 class="font-headline text-xl italic font-light text-on-surface">AI Philosopher</h1>
-      <p class="text-[10px] text-zinc-500 uppercase tracking-widest mt-0.5">Groq Llama 3 · Philosophical Mode</p>
-    </div>
-    <div class="flex items-center gap-3">
-      <button onclick="speakLast()" id="tts-btn" class="w-9 h-9 rounded-full ghost-border flex items-center justify-center text-zinc-500 hover:text-primary transition-colors" title="Speak last response">
-        <span class="material-symbols-outlined icon-sm">volume_up</span>
-      </button>
-      <button onclick="clearChat()" class="text-[10px] text-zinc-500 hover:text-primary transition-colors uppercase tracking-wider font-semibold hidden lg:block">Clear</button>
-    </div>
   </div>
 
-  <!-- Messages -->
-  <div id="messages" class="flex-1 overflow-y-auto px-6 lg:px-10 py-6 space-y-5">
-    <!-- Welcome message -->
-    <div class="msg-bot p-4 fade-in">
-      <p class="text-sm text-on-surface-variant font-light leading-relaxed">Greetings, seeker. I am LEVI — your philosophical companion. What mysteries shall we explore tonight? Ask me about consciousness, stoicism, the nature of reality, or any wisdom that calls to you.</p>
+  <!-- SIDEBAR (desktop) -->
+  <aside class="hidden lg:flex flex-col w-64 h-screen fixed left-0 top-0 z-40 sidebar-wrap" style="z-index:40">
+    <div class="pt-28 pb-8 flex flex-col h-full px-5">
+      <div class="px-4 mb-10">
+        <h2 class="font-headline italic gold-text text-xl">LEVI AI</h2>
+        <p class="text-[10px] uppercase tracking-[0.2em] text-zinc-500 mt-1">Celestial Muse</p>
+      </div>
+      <nav class="flex flex-col gap-1 flex-1">
+        <a href="index.html"
+          class="nav-inactive flex items-center gap-4 px-4 py-3 rounded-r-xl text-xs uppercase tracking-widest"><span
+            class="material-symbols-outlined icon-sm">auto_awesome</span>Home</a>
+        <a href="chat.html"
+          class="nav-active flex items-center gap-4 px-4 py-3 rounded-r-xl text-xs uppercase tracking-widest font-bold"><span
+            class="material-symbols-outlined icon-sm icon-fill">psychology</span>Chat</a>
+        <a href="studio.html"
+          class="nav-inactive flex items-center gap-4 px-4 py-3 rounded-r-xl text-xs uppercase tracking-widest"><span
+            class="material-symbols-outlined icon-sm">auto_fix_high</span>Studio</a>
+        <a href="feed.html"
+          class="nav-inactive flex items-center gap-4 px-4 py-3 rounded-r-xl text-xs uppercase tracking-widest"><span
+            class="material-symbols-outlined icon-sm">public</span>Feed</a>
+        <a href="quotes.html"
+          class="nav-inactive flex items-center gap-4 px-4 py-3 rounded-r-xl text-xs uppercase tracking-widest"><span
+            class="material-symbols-outlined icon-sm">search</span>Explore</a>
+        <a href="my-gallery.html"
+          class="nav-inactive flex items-center gap-4 px-4 py-3 rounded-r-xl text-xs uppercase tracking-widest"><span
+            class="material-symbols-outlined icon-sm">photo_library</span>Gallery</a>
+      </nav>
+      <div class="mt-auto px-3 py-3 rounded-xl ghost-border session-box">
+        <p class="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">Session</p>
+        <p class="text-xs text-on-surface" id="session-info">Anonymous · Philosophical</p>
+        <button onclick="clearChat()"
+          class="mt-2 text-[10px] text-zinc-500 hover:text-primary transition-colors uppercase tracking-wider">Clear
+          History</button>
+      </div>
     </div>
-  </div>
+  </aside>
 
-  <!-- Mood selector + input area -->
-  <div class="flex-shrink-0 border-t border-white/5 px-6 lg:px-10 py-4">
-    <!-- Mood chips -->
-    <div class="flex gap-2 mb-4 flex-wrap">
-      <button onclick="setMood(this,'inspiring')"     class="mood-chip active text-[10px] px-3 py-1.5 font-semibold uppercase tracking-widest">Inspiring</button>
-      <button onclick="setMood(this,'stoic')"         class="mood-chip text-[10px] px-3 py-1.5 font-semibold uppercase tracking-widest">Stoic</button>
-      <button onclick="setMood(this,'zen')"           class="mood-chip text-[10px] px-3 py-1.5 font-semibold uppercase tracking-widest">Zen</button>
-      <button onclick="setMood(this,'cyberpunk')"     class="mood-chip text-[10px] px-3 py-1.5 font-semibold uppercase tracking-widest">Cyberpunk</button>
-      <button onclick="setMood(this,'philosophical')" class="mood-chip text-[10px] px-3 py-1.5 font-semibold uppercase tracking-widest">Philosophical</button>
+  <!-- MAIN CHAT LAYOUT -->
+  <div class="lg:ml-64 chat-layout" style="position:relative;z-index:1">
+
+    <!-- Chat header bar -->
+    <div class="px-6 lg:px-10 py-4 border-b border-white/5 flex items-center justify-between flex-shrink-0">
+      <div>
+        <h1 class="font-headline text-xl italic font-light text-on-surface">AI Philosopher</h1>
+        <p class="text-[10px] text-zinc-500 uppercase tracking-widest mt-0.5">Groq Llama 3 · Context-Aware</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <button onclick="speakLast()"
+          class="w-9 h-9 rounded-full ghost-border flex items-center justify-center text-zinc-500 hover:text-primary transition-colors"
+          title="Speak last response">
+          <span class="material-symbols-outlined icon-sm">volume_up</span>
+        </button>
+        <button onclick="clearChat()"
+          class="text-[10px] text-zinc-500 hover:text-primary transition-colors uppercase tracking-wider font-semibold hidden lg:block">Clear</button>
+      </div>
     </div>
 
-    <!-- Input row -->
-    <div class="flex gap-3 items-end">
-      <div class="flex-1 relative">
-        <textarea id="chat-input" rows="1" placeholder="Ask about life, stoicism, the cosmos…"
-          class="chat-input w-full rounded-2xl px-5 py-3.5 text-sm pr-12"
-          onkeydown="handleKey(event)"
-          oninput="autoResize(this)"></textarea>
-        <button id="voice-btn" onclick="startVoice()" class="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center text-zinc-500 hover:text-primary transition-colors" title="Voice input">
-          <span class="material-symbols-outlined icon-sm">mic</span>
+    <!-- Messages -->
+    <div id="messages" class="messages-container space-y-1" style="flex:1;overflow-y:auto"></div>
+
+    <!-- Input area -->
+    <div class="input-area flex-shrink-0">
+      <!-- Mood chips -->
+      <div class="flex gap-2 mb-3 flex-wrap">
+        <button onclick="setMood(this,'inspiring')"
+          class="mood-chip text-[10px] font-semibold uppercase tracking-widest">Inspiring</button>
+        <button onclick="setMood(this,'stoic')"
+          class="mood-chip text-[10px] font-semibold uppercase tracking-widest">Stoic</button>
+        <button onclick="setMood(this,'zen')"
+          class="mood-chip text-[10px] font-semibold uppercase tracking-widest">Zen</button>
+        <button onclick="setMood(this,'cyberpunk')"
+          class="mood-chip text-[10px] font-semibold uppercase tracking-widest">Cyberpunk</button>
+        <button onclick="setMood(this,'philosophical')"
+          class="mood-chip active text-[10px] font-semibold uppercase tracking-widest">Philosophical</button>
+      </div>
+
+      <!-- Input row -->
+      <div class="flex gap-3 items-end">
+        <div class="flex-1 relative">
+          <textarea id="chat-input" rows="1" placeholder="Ask about life, stoicism, the cosmos…"
+            class="chat-input w-full text-sm" onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+          <button id="voice-btn" onclick="startVoice()"
+            class="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center text-zinc-500 hover:text-primary transition-colors"
+            title="Voice input">
+            <span class="material-symbols-outlined icon-sm">mic</span>
+          </button>
+        </div>
+        <button id="send-btn" onclick="sendMessage()"
+          class="btn-gold w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 shadow-[0_0_20px_rgba(242,202,80,.2)]"
+          style="transition:all .25s">
+          <span class="material-symbols-outlined icon-sm icon-fill" id="send-icon">send</span>
+          <div class="spinner hidden" id="send-loading"></div>
         </button>
       </div>
-      <button id="send-btn" onclick="sendMessage()" class="btn-gold w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 shadow-[0_0_20px_rgba(242,202,80,.2)]">
-        <span class="material-symbols-outlined icon-sm icon-fill" id="send-icon">send</span>
-        <div class="loading-spinner hidden" id="send-loading"></div>
-      </button>
     </div>
   </div>
-</div>
 
-<!-- Mobile bottom nav -->
-<nav class="md:hidden fixed bottom-5 left-1/2 -translate-x-1/2 w-[88%] z-50">
-  <div class="glass ghost-border rounded-full px-8 py-3 flex justify-around items-center shadow-2xl">
-    <a href="index.html"><span class="material-symbols-outlined mobile-nav-inactive">auto_awesome</span></a>
-    <a href="chat.html"><span class="material-symbols-outlined icon-fill mobile-nav-active">psychology</span></a>
-    <a href="studio.html"><span class="material-symbols-outlined mobile-nav-inactive">auto_fix_high</span></a>
-    <a href="feed.html"><span class="material-symbols-outlined mobile-nav-inactive">public</span></a>
-  </div>
-</nav>
+  <!-- Mobile bottom nav -->
+  <nav class="md:hidden fixed bottom-5 left-1/2 -translate-x-1/2 w-[88%]" style="z-index:50">
+    <div class="glass ghost-border rounded-full px-8 py-3 flex justify-around items-center shadow-2xl">
+      <a href="index.html"><span class="material-symbols-outlined mobile-nav-inactive">auto_awesome</span></a>
+      <a href="chat.html"><span class="material-symbols-outlined icon-fill mobile-nav-active">psychology</span></a>
+      <a href="studio.html"><span class="material-symbols-outlined mobile-nav-inactive">auto_fix_high</span></a>
+      <a href="feed.html"><span class="material-symbols-outlined mobile-nav-inactive">public</span></a>
+    </div>
+  </nav>
 
-<div id="toast"></div>
+  <div id="toast"></div>
 
-<script src="js/chat.js"></script>
-<script src="js/animations.js" type="module"></script>
-<script src="js/feedback.js" type="module"></script>
+  <script src="js/chat.js?v=2"></script>
 </body>
+
 </html>
