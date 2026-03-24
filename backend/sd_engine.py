@@ -107,7 +107,7 @@ def enhance_prompt(base_prompt: str, style: str = "default") -> str:
 
         client = groq.Groq(api_key=api_key)
         response = client.chat.completions.create(
-            model="llama3-8b-8192",
+            model="llama-3.1-8b-instant",
             messages=[
                 {
                     "role": "system",

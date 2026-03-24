@@ -14,15 +14,21 @@ def test_endpoint(name, method, endpoint, payload=None):
         else:
             response = requests.post(url, json=payload, timeout=10)
         
-        print(f"Status: {response.status_code}")
-        if response.status_code == 200:
-            print(f"Success! Sample response: {str(response.json())[:100]}...")  # type: ignore
-            return True
-        else:
-            print(f"Failed: {response.text}")
-            return False
+        with open("test_results_detailed.txt", "a", encoding="utf-8") as f:
+            f.write(f"\n--- Testing {name} ---\n")
+            f.write(f"Status: {response.status_code}\n")
+            if response.status_code == 200:
+                f.write(f"Success! Response: {response.text}\n")
+                print(f"Status: {response.status_code} (Success)")
+                return True
+            else:
+                f.write(f"Failed Body: {response.text}\n")
+                print(f"Status: {response.status_code} (Failed)")
+                return False
     except Exception as e:
-        print(f"Error: {e}")
+        with open("test_results_detailed.txt", "a", encoding="utf-8") as f:
+            f.write(f"\n--- Testing {name} ---\nError: {e}\n")
+        print(f"Status: Error ({e})")
         return False
 
 if __name__ == "__main__":

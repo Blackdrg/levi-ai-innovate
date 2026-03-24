@@ -271,7 +271,7 @@ def _generate_via_groq(system_prompt: str, user_prompt: str, max_tokens: int) ->
 
         client = groq.Groq(api_key=api_key)
         response = client.chat.completions.create(
-            model="llama3-8b-8192",
+            model="llama-3.1-8b-instant",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},

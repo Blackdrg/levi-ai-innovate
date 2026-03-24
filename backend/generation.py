@@ -48,7 +48,7 @@ def _generate_via_groq(prompt: str) -> Optional[str]:
             headers={"Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"},
             json={
-                "model": "llama3-8b-8192",
+                "model": "llama-3.1-8b-instant",
                 "messages": [{"role": "user", "content": prompt}],
                 "max_tokens": 120,
                 "temperature": 0.8
@@ -131,7 +131,7 @@ def generate_quote(prompt: str, mood: str = "", max_length: int = 60) -> str:
         try:
             system_prompt = f"You are LEVI, a philosophical AI companion. Mood: {mood or 'thought-provoking'}. Create a profound and original quote about '{prompt}'. Be deep, concise, poetic. Max 2 sentences."
             response = groq_client.chat.completions.create(
-                model="llama3-8b-8192",
+                model="llama-3.1-8b-instant",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": f"Give me a quote about {prompt}"}
@@ -287,7 +287,7 @@ def generate_response(prompt: str, history: Optional[List[dict]] = None, mood: s
             messages.append({"role": "user", "content": input_text})
 
             response = groq_client.chat.completions.create(
-                model="llama3-8b-8192",
+                model="llama-3.1-8b-instant",
                 messages=messages,
                 max_tokens=max_length
             )

@@ -412,7 +412,7 @@ def get_active_groq_model() -> str:
     if fine_tuned:
         logger.debug(f"[Trainer] Using fine-tuned model: {fine_tuned}")
         return fine_tuned
-    return "llama3-8b-8192"  # default Groq base model
+    return "llama-3.1-8b-instant"  # default Groq base model
 
 
 def generate_with_active_model(prompt: str, system_prompt: str, max_tokens: int = 150) -> Optional[str]:
@@ -455,7 +455,7 @@ def generate_with_active_model(prompt: str, system_prompt: str, max_tokens: int 
                 "https://api.groq.com/openai/v1/chat/completions",
                 headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
                 json={
-                    "model": "llama3-8b-8192",
+                    "model": "llama-3.1-8b-instant",
                     "messages": [
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": prompt},

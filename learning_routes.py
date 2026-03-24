@@ -140,7 +140,7 @@ async def get_model_versions(
     from trainer import get_model_history, get_active_model_id
     versions = get_model_history(db)
     return {
-        "active_model": get_active_model_id() or "groq/llama3-8b-8192 (base)",
+        "active_model": get_active_model_id() or "groq/llama-3.1-8b-instant (base)",
         "versions": versions,
     }
 
@@ -180,7 +180,7 @@ async def model_status(db: Session = Depends(get_db)):
     latest_job = db.query(TrainingJob).order_by(TrainingJob.created_at.desc()).first()
 
     return {
-        "active_model": active or "groq/llama3-8b-8192",
+        "active_model": active or "groq/llama-3.1-8b-instant",
         "is_fine_tuned": active is not None,
         "training_samples_collected": stats["total_training_samples"],
         "knowledge_base_entries":     stats["learned_quotes"],

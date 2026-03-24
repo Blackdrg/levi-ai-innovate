@@ -76,7 +76,7 @@ def start_services():
     env["PYTHONPATH"] = f"{root_dir};{backend_dir}" if os.name == 'nt' else f"{root_dir}:{backend_dir}"
     
     backend_proc = subprocess.Popen(
-        [venv_python, "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"],
+        [venv_python, "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"],
         env=env
     )
 
