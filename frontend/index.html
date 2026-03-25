@@ -8,7 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 <script>
-tailwnd.config={darkMode:"class",theme:{extend:{colors:{"primary":"#f2ca50","primary-container":"#d4af37","on-primary":"#3c2f00","secondary":"#c3c0ff","secondary-container":"#3626ce","on-secondary-container":"#b3b1ff","tertiary":"#d9c5ff","surface":"#131317","surface-container-lowest":"#0e0e12","surface-container-low":"#1b1b1f","surface-container":"#1f1f23","surface-container-high":"#2a292e","surface-container-highest":"#353439","on-surface":"#e5e1e7","on-surface-variant":"#d0c5af","outline":"#99907c","outline-variant":"#4d4635"},fontFamily:{headline:["Newsreader","serif"],body:["Plus Jakarta Sans","sans-serif"],label:["Plus Jakarta Sans","sans-serif"],sans:["Plus Jakarta Sans","sans-serif"]},borderRadius:{DEFAULT:"0.25rem",lg:"0.5rem",xl:"0.75rem","2xl":"1rem","3xl":"1.5rem",full:"9999px"}}}}
+tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#f2ca50","primary-container":"#d4af37","on-primary":"#3c2f00","secondary":"#c3c0ff","secondary-container":"#3626ce","on-secondary-container":"#b3b1ff","tertiary":"#d9c5ff","surface":"#131317","surface-container-lowest":"#0e0e12","surface-container-low":"#1b1b1f","surface-container":"#1f1f23","surface-container-high":"#2a292e","surface-container-highest":"#353439","on-surface":"#e5e1e7","on-surface-variant":"#d0c5af","outline":"#99907c","outline-variant":"#4d4635"},fontFamily:{headline:["Newsreader","serif"],body:["Plus Jakarta Sans","sans-serif"],label:["Plus Jakarta Sans","sans-serif"],sans:["Plus Jakarta Sans","sans-serif"]},borderRadius:{DEFAULT:"0.25rem",lg:"0.5rem",xl:"0.75rem","2xl":"1rem","3xl":"1.5rem",full:"9999px"}}}}
 </script>
 <!-- Firebase & Auth Init (Early) -->
 <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
@@ -460,7 +460,9 @@ function toggleLanguage(){showToast('Hindi translation coming soon','warning')}
 const u=localStorage.getItem('levi_user');if(u){try{const o=JSON.parse(u);const btn=document.getElementById('nav-auth-btn');btn.textContent=o.username||'Account';btn.href='my-gallery.html'}catch{}}
 
 // Load daily quote
-    fetch(window.API_BASE + '/daily_quote').then(r => r.json()).then(d => { if (d.quote) { document.getElementById('daily-quote').textContent = `"${d.quote}"`; if (d.author) document.getElementById('daily-author').textContent = `— ${d.author}` } }).catch(() => { })
+    window.waitForToken().then(() => {
+        fetch(window.API_BASE + '/daily_quote').then(r => r.json()).then(d => { if (d.quote) { document.getElementById('daily-quote').textContent = `"${d.quote}"`; if (d.author) document.getElementById('daily-author').textContent = `— ${d.author}` } }).catch(() => { })
+    });
 
 // Typing dots animation CSS
 const style=document.createElement('style');

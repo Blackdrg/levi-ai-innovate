@@ -120,6 +120,7 @@ async function sendMessage() {
     }
 
     try {
+        await window.waitForToken();
         const res = await fetch(window.API_BASE + "/chat", {
             method: "POST",
             body: JSON.stringify({
@@ -162,6 +163,7 @@ async function submitFeedback(msgId, score, btn) {
     parent.innerHTML = `<span class="text-[10px] text-emerald-400 uppercase tracking-widest"><span class="material-symbols-outlined icon-sm align-middle mr-1">check</span>Feedback saved</span>`;
     
     try {
+        await window.waitForToken();
         await fetch(window.API_BASE + "/feedback", {
             method: "POST",
             body: JSON.stringify({ message_id: msgId, score: score })

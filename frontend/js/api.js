@@ -37,6 +37,7 @@ export async function getHealth() {
 }
 
 async function apiFetch(endpoint, options = {}) {
+  if (window.waitForToken) await window.waitForToken();
   const url = `${API_BASE}${endpoint}`;
   const defaultOptions = {
     headers: { "Content-Type": "application/json" },

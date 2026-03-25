@@ -203,6 +203,7 @@ function shareItem(text,author){
 }
 
 async function loadGallery(){
+  await window.waitForToken();
   const token=localStorage.getItem('levi_token');
   if(!token){document.getElementById('loading-state').classList.add('hidden');document.getElementById('empty-state').classList.remove('hidden');document.getElementById('gallery-count').textContent='Please sign in to view your gallery';return}
   try{

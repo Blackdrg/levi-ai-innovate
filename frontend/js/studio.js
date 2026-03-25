@@ -33,6 +33,7 @@ async function synthesize(){
   if(!text){showToast('Enter some wisdom first','error');return}
   setLoading(true);
   try{
+    await window.waitForToken();
     const body={text,author:document.getElementById('author-input').value||'LEVI AI',mood:currentStyle,background:document.getElementById('bg-input').value};
     const r=await fetch(API_BASE+'/generate_image',{method:'POST',body:JSON.stringify(body)});
     if(!r.ok)throw new Error('HTTP '+r.status);
@@ -62,6 +63,7 @@ async function pollTask(id,text){
 
   const poll = async () => {
     try {
+      await window.waitForToken();
       const r = await fetch(`${API_BASE}/task_status/${id}`);
       const d = await r.json();
 
