@@ -12,9 +12,9 @@ const isLocalDev = (
   window.location.hostname === '::1'
 );
 
-const API_BASE = isLocalDev
+const API_BASE = window.API_BASE || (isLocalDev
   ? `http://${window.location.hostname}:8000`
-  : `${window.location.origin}/api`;
+  : `${window.location.origin}/api`);
 
 console.log(`[LEVI] API Base: ${API_BASE} | isLocalDev: ${isLocalDev}`);
 

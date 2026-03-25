@@ -44,14 +44,7 @@ class Users(Base):
     id: Mapped[int]                 = mapped_column(primary_key=True, index=True)
     username: Mapped[str]           = mapped_column(unique=True, index=True, nullable=False)
     email: Mapped[Optional[str]]    = mapped_column(unique=True, index=True, nullable=True)
-    password_hash: Mapped[str]      = mapped_column(nullable=False)
-    created_at: Mapped[dt_datetime]    = mapped_column(DateTime(timezone=True), server_default=func.now())
-
-    # ── Auth & Verification ──────────────────
-    is_verified: Mapped[int]        = mapped_column(default=0)          # 0=false, 1=true (using Integer for SQLite compatibility if needed, or Boolean)
-    verification_token: Mapped[Optional[str]] = mapped_column(nullable=True)
-    # Token expiry — tokens older than 24 h are rejected (fixes: plain UUID tokens with no expiry)
-    verification_token_expires_at: Mapped[Optional[dt_datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[dt_datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     # ── Subscription & Credits ──────────────────
     tier: Mapped[str]               = mapped_column(default="free")      # free / pro / creator
@@ -63,10 +56,6 @@ class Users(Base):
     mood_history: Mapped[list]      = mapped_column(JSON, default=list)          # ["zen","stoic"]
     share_count: Mapped[int]        = mapped_column(default=0)          # Viral reward loop progress
     bonus_credits: Mapped[int]      = mapped_column(default=0)
-    
-    # ── Password Reset ──────────────────────────
-    reset_password_token: Mapped[Optional[str]] = mapped_column(nullable=True)
-    reset_password_token_expires_at: Mapped[Optional[dt_datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class ChatHistory(Base):

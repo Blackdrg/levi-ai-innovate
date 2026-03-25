@@ -1,6 +1,6 @@
 """
-LEVI — Single-command launcher
-Starts: DB migrations → Backend (FastAPI :8000) → Frontend (static :8080)
+LEVI - Single-command launcher
+Starts: DB migrations -> Backend (FastAPI :8000) -> Frontend (static :8080)
 Usage:  python run_app.py
         python run_app.py --no-migrate   (skip Alembic on fast restarts)
         python run_app.py --port-api 8000 --port-ui 8080
@@ -109,7 +109,7 @@ def _kill_port(port: int):
 
 def _free_port(port: int, label: str):
     if not _port_free(port):
-        print(f"[ports] Freeing port {port} ({label})…")
+        print(f"[ports] Freeing port {port} ({label})...")
         _kill_port(port)
         for _ in range(10):
             time.sleep(0.5)
@@ -146,7 +146,7 @@ def _run_migrations():
     if not os.path.isfile(alembic_ini):
         print("[migrate] alembic.ini not found — skipping migrations")
         return
-    print("[migrate] Running Alembic migrations…")
+    print("[migrate] Running Alembic migrations...")
     result = subprocess.run(
         [PYTHON, "-m", "alembic", "-c", alembic_ini, "upgrade", "head"],
         cwd=backend_dir,
@@ -155,17 +155,17 @@ def _run_migrations():
     if result.returncode != 0:
         print("[migrate] WARNING: migrations returned non-zero exit code")
     else:
-        print("[migrate] ✓ Database schema up to date")
+        print("[migrate] [OK] Database schema up to date")
 
 # ─── DB seed ──────────────────────────────────────────────────────────────────
 def _run_seed():
     seed_script = os.path.join(backend_dir, "seed.py")
     if not os.path.isfile(seed_script):
         return
-    print("[seed] Seeding database…")
+    print("[seed] Seeding database...")
     result = subprocess.run([PYTHON, seed_script], cwd=backend_dir, env=env)
     if result.returncode == 0:
-        print("[seed] ✓ Done")
+        print("[seed] [OK] Done")
     else:
         print("[seed] WARNING: seed script returned non-zero (may be already seeded — OK)")
 
@@ -205,9 +205,9 @@ def _stream(proc, prefix: str):
 # ─── Main ─────────────────────────────────────────────────────────────────────
 def main():
     print("=" * 50)
-    print("  LEVI — Local Launcher")
-    print(f"  API  → http://localhost:{API_PORT}")
-    print(f"  UI   → http://localhost:{UI_PORT}")
+    print("  LEVI - Local Launcher")
+    print(f"  API  -> http://localhost:{API_PORT}")
+    print(f"  UI   -> http://localhost:{UI_PORT}")
     print("=" * 50)
 
     # 1. Free ports
@@ -221,7 +221,7 @@ def main():
         _run_seed()
 
     # 3. Start FastAPI backend
-    print(f"\n[api] Starting FastAPI on :{API_PORT}…")
+    print(f"\n[api] Starting FastAPI on :{API_PORT}...")
     api_proc = subprocess.Popen(
         [
             PYTHON, "-m", "uvicorn", "backend.main:app",
@@ -244,10 +244,10 @@ def main():
     if not ready:
         print(f"[api] ERROR: backend did not start within 60 s. Check logs above.")
         _cleanup()
-    print(f"[api] ✓ Backend ready at http://localhost:{API_PORT}")
+    print(f"[api] [OK] Backend ready at http://localhost:{API_PORT}")
 
     # 5. Start static frontend server
-    print(f"\n[ui] Starting frontend on :{UI_PORT}…")
+    print(f"\n[ui] Starting frontend on :{UI_PORT}...")
     frontend_dir = os.path.join(ROOT, "frontend")
     ui_proc = subprocess.Popen(
         [PYTHON, "-m", "http.server", str(UI_PORT),
@@ -265,9 +265,9 @@ def main():
     # 6. Done
     print()
     print("=" * 50)
-    print(f"  ✓ LEVI is running!")
-    print(f"  Open → http://localhost:{UI_PORT}")
-    print(f"  API  → http://localhost:{API_PORT}/docs")
+    print(f"  [OK] LEVI is running!")
+    print(f"  Open -> http://localhost:{UI_PORT}")
+    print(f"  API  -> http://localhost:{API_PORT}/docs")
     print("  Press Ctrl+C to stop")
     print("=" * 50)
 
@@ -275,7 +275,7 @@ def main():
     while True:
         time.sleep(5)
         if api_proc.poll() is not None:
-            print("[api] Process died — restarting…")
+            print("[api] Process died - restarting...")
             api_proc = subprocess.Popen(
                 [PYTHON, "-m", "uvicorn", "backend.main:app",
                  "--host", "0.0.0.0", "--port", str(API_PORT),
@@ -286,7 +286,7 @@ def main():
             processes[0] = api_proc
             _stream(api_proc, "api")
         if ui_proc.poll() is not None:
-            print("[ui] Process died — restarting…")
+            print("[ui] Process died - restarting...")
             ui_proc = subprocess.Popen(
                 [PYTHON, "-m", "http.server", str(UI_PORT),
                  "--bind", "0.0.0.0", "--directory", frontend_dir],

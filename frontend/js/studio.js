@@ -1,7 +1,7 @@
 function toggleMobileMenu(){const m=document.getElementById('mobile-menu');if(!m)return;m.classList.toggle('hidden');document.body.style.overflow=m.classList.contains('hidden')?'':'hidden'}
               function showToast(msg, type = 'success') { const t = document.getElementById('toast'); const bg = type === 'error' ? 'rgba(147,0,10,.85)' : type === 'warning' ? 'rgba(120,90,0,.85)' : 'rgba(19,19,23,.9)'; const border = type === 'error' ? 'rgba(255,180,171,.3)' : type === 'warning' ? 'rgba(242,202,80,.4)' : 'rgba(242,202,80,.35)'; const icon = type === 'error' ? 'error' : type === 'warning' ? 'warning' : 'check_circle'; t.innerHTML = `<div class="toast-inner-studio flex items-center gap-2.5 px-5 py-3 rounded-full shadow-2xl" style="background:${bg}; border-color:${border}"><span class="material-symbols-outlined icon-fill" style="font-size:16px;color:#f2ca50">${icon}</span><span class="toast-text-studio">${msg}</span></div>`; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 3200) }
 
-  const API_BASE = (['localhost', '127.0.0.1', '::1', '0.0.0.0'].includes(location.hostname)) ? `http://${location.hostname}:8000` : location.origin + '/api';
+const API_BASE = window.API_BASE;
 let currentStyle='philosophical';let currentImage=null;
 const insights={philosophical:{text:'prioritize ethereal lighting, high-contrast obsidian shadows, and golden particle dispersion.',stability:67},zen:{text:'evoke bamboo mist, still water reflections, and morning light through ancient forests.',stability:82},cyberpunk:{text:'generate neon-soaked cityscapes, rain-slicked streets, and holographic overlays.',stability:74},futuristic:{text:'render clean white surfaces, cosmic voids, and geometric precision with bioluminescent accents.',stability:91},stoic:{text:'depict marble columns, dawn light, classical architecture — austere and powerful.',stability:88},melancholic:{text:'create rain-washed cobblestones, blue hour, soft bokeh with poetic melancholy.',stability:79}};
 
@@ -33,9 +33,8 @@ async function synthesize(){
   if(!text){showToast('Enter some wisdom first','error');return}
   setLoading(true);
   try{
-    const headers={'Content-Type':'application/json'};
     const body={text,author:document.getElementById('author-input').value||'LEVI AI',mood:currentStyle,background:document.getElementById('bg-input').value};
-    const r=await fetch(API_BASE+'/generate_image',{method:'POST',headers,body:JSON.stringify(body)});
+    const r=await fetch(API_BASE+'/generate_image',{method:'POST',body:JSON.stringify(body)});
     if(!r.ok)throw new Error('HTTP '+r.status);
     const d=await r.json();
     if(d.task_id){setLoading(false);showToast('Synthesis queued — generating…');pollTask(d.task_id,text);return}

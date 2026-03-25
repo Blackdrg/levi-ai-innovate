@@ -8,6 +8,10 @@
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <script>tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#f2ca50","primary-container":"#d4af37","on-primary":"#3c2f00","secondary":"#c3c0ff","surface":"#131317","surface-container-lowest":"#0e0e12","surface-container-low":"#1b1b1f","surface-container":"#1f1f23","surface-container-high":"#2a292e","surface-container-highest":"#353439","on-surface":"#e5e1e7","on-surface-variant":"#d0c5af","outline":"#99907c","outline-variant":"#4d4635"},fontFamily:{headline:["Newsreader","serif"],body:["Plus Jakarta Sans","sans-serif"],label:["Plus Jakarta Sans","sans-serif"],sans:["Plus Jakarta Sans","sans-serif"]},borderRadius:{DEFAULT:"0.25rem",lg:"0.5rem",xl:"0.75rem","2xl":"1rem","3xl":"1.5rem",full:"9999px"}}}}</script>
+<!-- Firebase & Auth Init (Early) -->
+<script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
+<script src="js/auth-manager.js"></script>
 <style>
 .material-symbols-outlined{font-family:'Material Symbols Outlined';font-size:22px;line-height:1;font-variation-settings:'FILL' 0,'wght' 300,'GRAD' 0,'opsz' 24;-webkit-user-select:none;user-select:none}
 .icon-fill{font-variation-settings:'FILL' 1,'wght' 300,'GRAD' 0,'opsz' 24}.icon-sm{font-size:18px}
@@ -215,8 +219,6 @@ function toggleMobileMenu(){const m=document.getElementById('mobile-menu');if(!m
         if (window.showToast) window.showToast("Your credits have been spent. Choose a plan to continue your journey.", "warning");
       }, 500);
     }
-
-  const API_BASE = (['localhost', '127.0.0.1', '::1', '0.0.0.0'].includes(location.hostname)) ? `http://${location.hostname}:8000` : location.origin + '/api';
 const PLANS={pro:{amount:29900,name:'LEVI Pro',description:'100 credits per month'},creator:{amount:59900,name:'LEVI Creator',description:'500 credits per month'}};
 
 async function subscribe(plan){
@@ -227,7 +229,7 @@ async function subscribe(plan){
   document.getElementById(btnId).disabled=true;
   document.getElementById(btnId).textContent='Loading…';
   try{
-    const r=await fetch(API_BASE+'/create_order',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({plan})});
+    const r=await fetch(window.API_BASE+'/create_order',{method:'POST',body:JSON.stringify({plan})});
     if(!r.ok)throw new Error(await r.text());
     const d=await r.json();
     const options={
@@ -241,7 +243,7 @@ async function subscribe(plan){
       theme:{color:'#f2ca50'},
       handler:async function(response){
         try{
-          const vr=await fetch(API_BASE+'/verify_payment',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify(response)});
+          const vr=await fetch(window.API_BASE+'/verify_payment',{method:'POST',body:JSON.stringify(response)});
           const vd=await vr.json();
           if(vd.success||vr.ok){showToast('Payment successful! Your plan is now active.');if(vd.user)localStorage.setItem('levi_user',JSON.stringify(vd.user))}
           else showToast('Payment verification failed — contact support','error');
@@ -266,6 +268,5 @@ if(u){try{const o=JSON.parse(u);document.getElementById('nav-auth-btn').textCont
 </script>
 <script src="js/animations.js" type="module"></script>
 <script src="js/feedback.js" type="module"></script>
-<script src="js/auth-manager.js"></script>
 </body>
 </html>

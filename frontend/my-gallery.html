@@ -7,6 +7,10 @@
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 <script>tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#f2ca50","primary-container":"#d4af37","on-primary":"#3c2f00","secondary":"#c3c0ff","surface":"#131317","surface-container-lowest":"#0e0e12","surface-container-low":"#1b1b1f","surface-container":"#1f1f23","surface-container-high":"#2a292e","surface-container-highest":"#353439","on-surface":"#e5e1e7","on-surface-variant":"#d0c5af","outline":"#99907c","outline-variant":"#4d4635"},fontFamily:{headline:["Newsreader","serif"],body:["Plus Jakarta Sans","sans-serif"],label:["Plus Jakarta Sans","sans-serif"],sans:["Plus Jakarta Sans","sans-serif"]},borderRadius:{DEFAULT:"0.25rem",lg:"0.5rem",xl:"0.75rem","2xl":"1rem","3xl":"1.5rem",full:"9999px"}}}}</script>
+<!-- Firebase & Auth Init (Early) -->
+<script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
+<script src="js/auth-manager.js"></script>
 <style>
 .material-symbols-outlined{font-family:'Material Symbols Outlined';font-size:22px;line-height:1;font-variation-settings:'FILL' 0,'wght' 300,'GRAD' 0,'opsz' 24;-webkit-user-select:none;user-select:none}
 .icon-fill{font-variation-settings:'FILL' 1,'wght' 300,'GRAD' 0,'opsz' 24}.icon-sm{font-size:18px}
@@ -160,8 +164,6 @@ function toggleMobileMenu(){const m=document.getElementById('mobile-menu');if(!m
               function showToast(msg, type = 'success') { const t = document.getElementById('toast'); const bg = type === 'error' ? 'rgba(147,0,10,.85)' : 'rgba(19,19,23,.92)'; const border = type === 'error' ? 'rgba(255,180,171,.3)' : 'rgba(242,202,80,.35)'; t.innerHTML = `<div style="background:${bg};border:.5px solid ${border};-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)" class="flex items-center gap-2.5 px-5 py-3 rounded-full shadow-2xl"><span style="font-size:12px;color:#e5e1e7;font-family:'Plus Jakarta Sans',sans-serif;font-weight:600;letter-spacing:.04em">${msg}</span></div>`; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 3000) }
 function logout(){localStorage.removeItem('levi_token');localStorage.removeItem('levi_user');window.location.href='index.html'}
 
-  const API_BASE = (['localhost', '127.0.0.1', '::1', '0.0.0.0'].includes(location.hostname)) ? `http://${location.hostname}:8000` : location.origin + '/api';
-
 function cardHTML(item,i){
   const src=item.image_url||item.image_b64||item.url||'';
   const text=(item.text||'').replace(/'/g,"'");
@@ -204,7 +206,7 @@ async function loadGallery(){
   const token=localStorage.getItem('levi_token');
   if(!token){document.getElementById('loading-state').classList.add('hidden');document.getElementById('empty-state').classList.remove('hidden');document.getElementById('gallery-count').textContent='Please sign in to view your gallery';return}
   try{
-    const r=await fetch(API_BASE+'/my_gallery',{headers:{'Authorization':'Bearer '+token}});
+    const r=await fetch(window.API_BASE+'/my_gallery');
     if(!r.ok)throw new Error('HTTP '+r.status);
     const items=await r.json();
     document.getElementById('loading-state').classList.add('hidden');
@@ -226,6 +228,5 @@ loadGallery();
 </script>
 <script src="js/animations.js" type="module"></script>
 <script src="js/feedback.js" type="module"></script>
-<script src="js/auth-manager.js"></script>
 </body>
 </html>
