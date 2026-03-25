@@ -8,8 +8,12 @@
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 <script>
-tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#f2ca50","primary-container":"#d4af37","on-primary":"#3c2f00","secondary":"#c3c0ff","secondary-container":"#3626ce","on-secondary-container":"#b3b1ff","tertiary":"#d9c5ff","surface":"#131317","surface-container-lowest":"#0e0e12","surface-container-low":"#1b1b1f","surface-container":"#1f1f23","surface-container-high":"#2a292e","surface-container-highest":"#353439","on-surface":"#e5e1e7","on-surface-variant":"#d0c5af","outline":"#99907c","outline-variant":"#4d4635"},fontFamily:{headline:["Newsreader","serif"],body:["Plus Jakarta Sans","sans-serif"],label:["Plus Jakarta Sans","sans-serif"],sans:["Plus Jakarta Sans","sans-serif"]},borderRadius:{DEFAULT:"0.25rem",lg:"0.5rem",xl:"0.75rem","2xl":"1rem","3xl":"1.5rem",full:"9999px"}}}}
+tailwnd.config={darkMode:"class",theme:{extend:{colors:{"primary":"#f2ca50","primary-container":"#d4af37","on-primary":"#3c2f00","secondary":"#c3c0ff","secondary-container":"#3626ce","on-secondary-container":"#b3b1ff","tertiary":"#d9c5ff","surface":"#131317","surface-container-lowest":"#0e0e12","surface-container-low":"#1b1b1f","surface-container":"#1f1f23","surface-container-high":"#2a292e","surface-container-highest":"#353439","on-surface":"#e5e1e7","on-surface-variant":"#d0c5af","outline":"#99907c","outline-variant":"#4d4635"},fontFamily:{headline:["Newsreader","serif"],body:["Plus Jakarta Sans","sans-serif"],label:["Plus Jakarta Sans","sans-serif"],sans:["Plus Jakarta Sans","sans-serif"]},borderRadius:{DEFAULT:"0.25rem",lg:"0.5rem",xl:"0.75rem","2xl":"1rem","3xl":"1.5rem",full:"9999px"}}}}
 </script>
+<!-- Firebase & Auth Init (Early) -->
+<script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
+<script src="js/auth-manager.js"></script>
 <style>
 .material-symbols-outlined{font-family:'Material Symbols Outlined';font-size:22px;line-height:1;font-variation-settings:'FILL' 0,'wght' 300,'GRAD' 0,'opsz' 24;-webkit-user-select:none;user-select:none}
 .icon-fill{font-variation-settings:'FILL' 1,'wght' 300,'GRAD' 0,'opsz' 24}
@@ -447,8 +451,6 @@ tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#f2ca50","pr
 </script>
 
 <script>
-    const API_BASE = (['localhost', '127.0.0.1', '::1', '0.0.0.0'].includes(location.hostname)) ? `http://${location.hostname}:8000` : location.origin + '/api';
-
 // Shared helpers
 function toggleMobileMenu(){const m=document.getElementById('mobile-menu');if(!m)return;m.classList.toggle('hidden');document.body.style.overflow=m.classList.contains('hidden')?'':'hidden'}
                         function showToast(msg, type = 'success') { const t = document.getElementById('toast'); const bg = type === 'error' ? 'rgba(147,0,10,.85)' : type === 'warning' ? 'rgba(120,90,0,.85)' : 'rgba(19,19,23,.9)'; const border = type === 'error' ? 'rgba(255,180,171,.3)' : type === 'warning' ? 'rgba(242,202,80,.4)' : 'rgba(242,202,80,.35)'; const icon = type === 'error' ? 'error' : type === 'warning' ? 'warning' : 'check_circle'; t.innerHTML = `<div style="background:${bg};border:.5px solid ${border};-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)" class="flex items-center gap-2.5 px-5 py-3 rounded-full shadow-2xl"><span class="material-symbols-outlined icon-fill" style="font-size:16px;color:#f2ca50">${icon}</span><span style="font-size:12px;color:#e5e1e7;font-family:'Plus Jakarta Sans',sans-serif;font-weight:600;letter-spacing:.04em">${msg}</span></div>`; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 3200) }
@@ -458,7 +460,7 @@ function toggleLanguage(){showToast('Hindi translation coming soon','warning')}
 const u=localStorage.getItem('levi_user');if(u){try{const o=JSON.parse(u);const btn=document.getElementById('nav-auth-btn');btn.textContent=o.username||'Account';btn.href='my-gallery.html'}catch{}}
 
 // Load daily quote
-    fetch(API_BASE + '/daily_quote').then(r => r.json()).then(d => { if (d.quote) { document.getElementById('daily-quote').textContent = `"${d.quote}"`; if (d.author) document.getElementById('daily-author').textContent = `— ${d.author}` } }).catch(() => { })
+    fetch(window.API_BASE + '/daily_quote').then(r => r.json()).then(d => { if (d.quote) { document.getElementById('daily-quote').textContent = `"${d.quote}"`; if (d.author) document.getElementById('daily-author').textContent = `— ${d.author}` } }).catch(() => { })
 
 // Typing dots animation CSS
 const style=document.createElement('style');
@@ -473,6 +475,5 @@ document.addEventListener('DOMContentLoaded',()=>{
 </script>
 <script src="js/animations.js" type="module"></script>
 <script src="js/feedback.js" type="module"></script>
-<script src="js/auth-manager.js"></script>
 </body>
 </html>

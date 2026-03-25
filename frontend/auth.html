@@ -12,6 +12,10 @@
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
     rel="stylesheet" />
   <script>tailwind.config = { darkMode: "class", theme: { extend: { colors: { "primary": "#f2ca50", "primary-container": "#d4af37", "on-primary": "#3c2f00", "secondary": "#c3c0ff", "surface": "#131317", "surface-container-lowest": "#0e0e12", "surface-container-low": "#1b1b1f", "surface-container": "#1f1f23", "surface-container-highest": "#353439", "on-surface": "#e5e1e7", "on-surface-variant": "#d0c5af", "outline": "#99907c", "outline-variant": "#4d4635" }, fontFamily: { headline: ["Newsreader", "serif"], body: ["Plus Jakarta Sans", "sans-serif"], label: ["Plus Jakarta Sans", "sans-serif"], sans: ["Plus Jakarta Sans", "sans-serif"] }, borderRadius: { DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", "2xl": "1rem", "3xl": "1.5rem", full: "9999px" } } } }</script>
+  <!-- Firebase & Auth Init (Early) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
+  <script src="js/auth-manager.js"></script>
   <style>
     .material-symbols-outlined {
       font-family: 'Material Symbols Outlined';
@@ -279,17 +283,8 @@
   </div>
 
   <script>
-    // ── API base ──────────────────────────────────────────────────────────────────
-    const API_BASE = ['localhost', '127.0.0.1', '::1', '0.0.0.0'].includes(location.hostname)
-      ? `http://${location.hostname}:8000`
-      : `${location.origin}/api`;
-
-    window.API_BASE = API_BASE;
-    document.getElementById('google-btn').href = API_BASE + '/login/google';
-
-    // ── Auth state ────────────────────────────────────────────────────────────────
     let mode = 'login';
-
+    
     function switchMode(m) {
       mode = m;
       const isLogin = m === 'login';
@@ -332,115 +327,62 @@
       document.getElementById('submit-btn').disabled = on;
     }
 
-    // ── After a successful login: fetch profile and store it ─────────────────────
-    async function storeProfile() {
-      try {
-        const res = await fetch(API_BASE + '/users/me', { credentials: 'include' });
-        if (res.ok) {
-          const user = await res.json();
-          localStorage.setItem('levi_user', JSON.stringify(user));
+    // Connect Google Button to Firebase
+    document.getElementById('google-btn').addEventListener('click', async (e) => {
+        e.preventDefault();
+        const provider = new firebase.auth.GoogleAuthProvider();
+        try {
+            await firebase.auth().signInWithPopup(provider);
+            // onAuthStateChanged in auth-manager.js will auto-redirect on success
+        } catch (error) {
+            showMsg(error.message || 'Google authentication failed.');
         }
-      } catch { /* ignore – display only */ }
-    }
+    });
 
-    // ── Handle auth actions ───────────────────────────────────────────────────────
     async function handleAuth() {
       const username = document.getElementById('username-input').value.trim();
       const password = document.getElementById('password-input').value;
       const email = document.getElementById('email-input').value.trim();
 
+      // Firebase relies entirely on Email. Map the user's login text.
+      const targetEmail = (mode === 'register' && email) ? email : username;
+
       if (mode === 'forgot') {
-        if (!username) { showMsg('Enter your email address.'); return; }
+        if (!targetEmail) { showMsg('Enter your email address.'); return; }
         setLoading(true);
         try {
-          await fetch(API_BASE + '/forgot-password', {
-            method: 'POST', credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: username }),
-          });
-          showMsg('If this email is registered you will receive a reset link shortly.', 'success');
-        } catch { showMsg('Request failed. Please try again.'); }
-        finally { setLoading(false); }
+            await firebase.auth().sendPasswordResetEmail(targetEmail);
+            showMsg('If this email is registered you will receive a reset link shortly.', 'success');
+        } catch (error) {
+            showMsg(error.message || 'Reset request failed. Please try again.');
+        } finally {
+            setLoading(false);
+        }
         return;
       }
 
-      if (!username || !password) { showMsg('Please fill in all fields.'); return; }
+      if (!targetEmail || !password) { showMsg('Please fill in all fields.'); return; }
       if (mode === 'register' && password.length < 8) { showMsg('Password must be at least 8 characters.'); return; }
 
       setLoading(true);
       try {
-        const endpoint = mode === 'register' ? '/register' : '/login';
-        const body = mode === 'register'
-          ? { username, password, email: email || username }
-          : { username, password };
-
-        const res = await fetch(API_BASE + endpoint, {
-          method: 'POST',
-          credentials: 'include',                    // ← receive httpOnly cookie
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
-        const data = await res.json();
-
-        if (!res.ok) throw new Error(data.detail || 'Action failed');
-
-        if (mode === 'register') {
-          showMsg('Account created! Please check your email to verify, then sign in.', 'success');
-          setTimeout(() => switchMode('login'), 2000);
-          return;
-        }
-
-        // Login success — fetch profile for display
-        await storeProfile();
-        showMsg('Welcome back! Redirecting…', 'success');
-        setTimeout(() => { window.location.href = 'studio.html'; }, 800);
-
-      } catch (err) {
-        showMsg(err.message || 'Action failed. Please try again.');
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    // ── OAuth exchange (from Google redirect) ─────────────────────────────────────
-    const params = new URLSearchParams(location.search);
-    if (params.has('verified')) showMsg('Email verified! Please sign in.', 'success');
-    if (params.has('expired')) showMsg('Session expired. Please sign in again.');
-    if (params.has('code')) {
-      (async () => {
-        showMsg('Completing authentication…', 'info');
-        try {
-          const res = await fetch(API_BASE + '/auth/exchange', {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code: params.get('code') }),
-          });
-          const data = await res.json();
-          if (res.ok && data.status === 'success') {
-            await storeProfile();
-            showMsg('Authenticated! Redirecting…', 'success');
-            setTimeout(() => { window.location.href = 'studio.html'; }, 800);
+          if (mode === 'register') {
+              await firebase.auth().createUserWithEmailAndPassword(targetEmail, password);
+              showMsg('Account created successfully! Logging you in...', 'success');
           } else {
-            showMsg(data.detail || 'Authentication failed.');
+              await firebase.auth().signInWithEmailAndPassword(targetEmail, password);
+              showMsg('Welcome back! Redirecting...', 'success');
           }
-        } catch { showMsg('Connection error. Please try again.'); }
-      })();
-    }
-
-    // ── Already logged in? ────────────────────────────────────────────────────────
-    const existingUser = localStorage.getItem('levi_user');
-    if (existingUser) {
-      // Verify session is still valid
-      fetch(API_BASE + '/users/me', { credentials: 'include' })
-        .then(r => { if (r.ok) window.location.href = 'studio.html'; })
-        .catch(() => { /* not logged in */ });
+      } catch (error) {
+          showMsg(error.message || 'Authentication failed. Please verify credentials.');
+      } finally {
+          setLoading(false);
+      }
     }
 
     document.addEventListener('keydown', e => { if (e.key === 'Enter') handleAuth(); });
   </script>
   <script src="js/animations.js" type="module"></script>
-<script src="js/auth-manager.js"></script>
 </body>
 
 </html>

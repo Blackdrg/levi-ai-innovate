@@ -15,9 +15,9 @@ from sqlalchemy import text # type: ignore
 
 from pydantic import BaseModel, Field, validator  # type: ignore
 
-from jose import JWTError, jwt # type: ignore
+# from jose import JWTError, jwt # type: ignore
 
-from passlib.context import CryptContext # type: ignore
+# from passlib.context import CryptContext # type: ignore
 
 from datetime import datetime, timedelta, date
 
@@ -185,76 +185,58 @@ from concurrent.futures import ThreadPoolExecutor
 
 _executor = ThreadPoolExecutor(max_workers=4)
 
-SECRET_KEY = os.environ["SECRET_KEY"]
+SECRET_KEY = os.environ.get("SECRET_KEY", "fallback")
 CLIENT_KEY = os.getenv("CLIENT_KEY")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 10080  # 7 days for better user experience
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+import firebase_admin # type: ignore
+from firebase_admin import auth as firebase_auth # type: ignore
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials # type: ignore
 
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+if not firebase_admin._apps:
+    try:
+        firebase_admin.initialize_app()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Firebase init error: {e}")
 
-def get_password_hash(password):
-    return pwd_context.hash(password)
+security = HTTPBearer()
 
-import uuid
-
-# create_access_token and create_refresh_token live in auth.py.
-# Importing here so callers within main.py use the single authoritative implementation.
-try:
-    from backend.auth import create_access_token, create_refresh_token  # type: ignore
-except ImportError:
-    from auth import create_access_token, create_refresh_token  # type: ignore
-
-async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+async def get_current_user(cred: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM]) # type: ignore
-        jti = payload.get("jti")
-        if not jti:
-             raise credentials_exception
+        decoded_token = firebase_auth.verify_id_token(cred.credentials)
+        uid = decoded_token.get("uid")
+        email = decoded_token.get("email")
+        if not uid: raise credentials_exception
         
-        # Check JTI in Redis (whitelist)
-        from backend.redis_client import is_jti_blacklisted  # type: ignore
-        if is_jti_blacklisted(jti):
-             raise credentials_exception
-             
-    except JWTError:
+        user = db.query(Users).filter(Users.email == email).first()
+        if not user:
+            base_username = email.split('@')[0] if email else f"user_{uid[:8]}"
+            username = base_username
+            counter = 1
+            while db.query(Users).filter(Users.username == username).first():
+                username = f"{base_username}{counter}"
+                counter += 1
+            user = Users(username=username, email=email)
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        return user
+    except Exception:
         raise credentials_exception
-    username_val = payload.get("sub")
-    if username_val is None:
-        raise credentials_exception
-    username: str = str(username_val)
-    user = db.query(Users).filter(Users.username == username).first()
-    if user is None:
-        raise credentials_exception
-    return user
 
-async def get_current_user_optional(token: Optional[str] = Depends(OAuth2PasswordBearer(tokenUrl="token", auto_error=False)), db: Session = Depends(get_db)):
-    if not token:
-        return None
+async def get_current_user_optional(cred: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False)), db: Session = Depends(get_db)):
+    if not cred: return None
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM]) # type: ignore
-        jti = payload.get("jti")
-        if not jti:
-            return None
-            
-        from backend.redis_client import is_jti_blacklisted  # type: ignore
-        if is_jti_blacklisted(jti):
-            return None
-            
-        username_val = payload.get("sub")
-        if username_val is None:
-            return None
-        username: str = str(username_val)
-        return db.query(Users).filter(Users.username == username).first()
-    except JWTError:
+        decoded_token = firebase_auth.verify_id_token(cred.credentials)
+        email = decoded_token.get("email")
+        if not email: return None
+        return db.query(Users).filter(Users.email == email).first()
+    except Exception:
         return None
 
 async def verify_admin(request: Request):
@@ -440,206 +422,6 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Admin-Key", "X-Request-ID"],
 )
-
-# Essential Session Middleware for OAuth
-app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
-
-# OAuth Configuration
-oauth = OAuth()
-oauth.register(
-    name='google',
-    client_id=os.getenv("GOOGLE_CLIENT_ID"),
-    client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
-    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
-    client_kwargs={
-        'scope': 'openid email profile'
-    }
-)
-
-@app.get("/login/google")
-async def login_google(request: Request):
-    # Determine the redirect URI, ensuring HTTPS if not on localhost
-    is_local = request.url.hostname in ["localhost", "127.0.0.1"]
-    scheme = "http" if is_local else "https"
-    redirect_uri = str(request.url_for('auth_google')).replace("http://", f"{scheme}://")
-    
-    return await oauth.google.authorize_redirect(request, redirect_uri)
-
-@app.get("/auth/google")
-async def auth_google(request: Request, db: Session = Depends(get_db)):
-    try:
-        token = await oauth.google.authorize_access_token(request)
-        user_info = token.get('userinfo')
-        if not user_info:
-            raise HTTPException(status_code=400, detail="Failed to fetch user info from Google")
-
-        email = user_info.get('email')
-        username = email.split('@')[0]  # Simple username generation
-
-        # Upsert user
-        user = db.query(Users).filter(Users.username == username).first()
-        if not user:
-            user = Users(
-                username=username,
-                email=email,
-                password_hash=get_password_hash(os.urandom(16).hex()),
-                is_verified=1  # OAuth users are verified by Google
-            )
-            db.add(user)
-            db.commit()
-        elif not user.is_verified:
-            user.is_verified = 1
-            db.commit()
-
-        # ——————————————————————————————————————————————————————————
-        # SECURITY: do NOT embed the JWT in the redirect URL (?token=...).
-        # Tokens in URLs are logged by every proxy, CDN, and browser history.
-        # Instead, issue a short-lived one-time opaque code and exchange it via POST.
-        # ——————————————————————————————————————————————————————————
-        from backend.redis_client import _set  # type: ignore
-        one_time_code = uuid.uuid4().hex
-        _set(f"oauth_code:{one_time_code}", user.username, ex=60)  # 60-second TTL
-
-        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:8080")
-        # Frontend calls POST /auth/exchange with {"code": one_time_code} to get JWT
-        return RedirectResponse(url=f"{frontend_url}?code={one_time_code}")
-
-    except Exception as e:
-        logger.error(f"OAuth error: {e}")
-        raise HTTPException(status_code=400, detail="Authentication failed")
-
-
-class OAuthExchangeRequest(BaseModel):
-    code: str = Field(..., max_length=64)
-
-@app.post("/auth/exchange", response_model=Token)
-async def auth_exchange(body: OAuthExchangeRequest, db: Session = Depends(get_db)):
-    """
-    Exchange a short-lived one-time OAuth code for a JWT access + refresh token.
-    The code is consumed (deleted) on first use to prevent replay.
-    """
-    from backend.redis_client import _get, HAS_REDIS  # type: ignore
-    from backend.redis_client import _set as redis_set  # type: ignore
-    import redis as _redis  # type: ignore
-
-    username_raw = _get(f"oauth_code:{body.code}")
-    if not username_raw:
-        raise HTTPException(status_code=400, detail="Invalid or expired OAuth code")
-
-    # Consume the code (delete it) — one-time use
-    if HAS_REDIS:
-        try:
-            from backend.redis_client import r as _r  # type: ignore
-            _r.delete(f"oauth_code:{body.code}")
-        except Exception:
-            pass
-    else:
-        from backend.redis_client import _memory_cache  # type: ignore
-        _memory_cache.pop(f"oauth_code:{body.code}", None)
-
-    username = username_raw.decode() if isinstance(username_raw, bytes) else username_raw
-    user = db.query(Users).filter(Users.username == username).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    access_token = create_access_token(
-        data={"sub": user.username},
-        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    )
-    refresh_token = create_refresh_token(data={"sub": user.username})
-    
-    return {"access_token": access_token, "token_type": "bearer", "status": "success", "message": "Authenticated successfully"}
-
-@app.exception_handler(Exception)
-
-async def global_exception_handler(request: Request, exc: Exception):
-    import traceback
-    logger.error(f"Unhandled error on {request.url}: {exc}\n{traceback.format_exc()}")
-    return JSONResponse(status_code=500, content={"detail": "An internal error occurred."})
-
-
-
-
-
-@app.post("/logout")
-async def logout(token: str = Depends(oauth2_scheme)):
-    """
-    Logout by revoking the current JWT's JTI.
-    Requires Redis — returns 503 if Redis is unavailable (revocation would be silently non-functional).
-    """
-    from backend.redis_client import HAS_REDIS, delete_jti  # type: ignore
-    if not HAS_REDIS:
-        raise HTTPException(status_code=503, detail="Redis is required for session revocation")
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])  # type: ignore
-        jti = payload.get("jti")
-        if jti:
-            delete_jti(jti)
-        
-        response = JSONResponse(content={"status": "success", "message": "Logged out successfully"})
-        response.delete_cookie("access_token")
-        response.delete_cookie("refresh_token")
-        return response
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-
-class RefreshRequest(BaseModel):
-    refresh_token: str
-
-@app.post("/refresh", response_model=Token)
-async def refresh_access_token(body: RefreshRequest, db: Session = Depends(get_db)):
-    """
-    Exchange a valid refresh token for a new access token + rotated refresh token.
-    The old refresh JTI is revoked on use (rotation prevents replay).
-    """
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid or expired refresh token",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = jwt.decode(body.refresh_token, SECRET_KEY, algorithms=[ALGORITHM])  # type: ignore
-    except JWTError:
-        raise credentials_exception
-
-    if payload.get("type") != "refresh":
-        raise credentials_exception
-
-    jti = payload.get("jti")
-    if not jti:
-        raise credentials_exception
-
-    # Verify the refresh JTI exists in Redis
-    from backend.redis_client import _get, _set, HAS_REDIS  # type: ignore
-    if _get(f"refresh_jti:{jti}") is None:
-        raise credentials_exception
-
-    # Revoke the old refresh JTI (rotation — prevents replay)
-    if HAS_REDIS:
-        try:
-            from backend.redis_client import r as _r  # type: ignore
-            _r.delete(f"refresh_jti:{jti}")
-        except Exception:
-            pass
-    else:
-        from backend.redis_client import _memory_cache  # type: ignore
-        _memory_cache.pop(f"refresh_jti:{jti}", None)
-
-    username_val = payload.get("sub")
-    if not username_val:
-        raise credentials_exception
-
-    user = db.query(Users).filter(Users.username == str(username_val)).first()
-    if not user:
-        raise credentials_exception
-
-    new_access = create_access_token(
-        data={"sub": user.username},
-        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    )
-    new_refresh = create_refresh_token(data={"sub": user.username})
-    return {"access_token": new_access, "refresh_token": new_refresh, "token_type": "bearer"}
 
 @app.on_event("startup")
 async def startup_event():
@@ -1616,154 +1398,6 @@ async def get_profile(current_user: Users = Depends(get_current_user)):
         "bonus_credits": current_user.bonus_credits or 0,
         "created_at": current_user.created_at.isoformat()
     }
-
-@app.post("/register")
-@limiter.limit("5/minute")
-async def register(request: Request, user_in: UserIn, db: Session = Depends(get_db)):
-    if len(user_in.password) < 8:
-        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
-    
-    # Check if username looks like an email
-    if "@" not in user_in.username or "." not in user_in.username:
-         raise HTTPException(status_code=400, detail="Username must be a valid email address")
-
-    existing = db.query(Users).filter(Users.username == user_in.username).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    
-    # Generate verification token with 24-hour expiry
-    verification_token = str(uuid.uuid4())
-    token_expires_at = datetime.utcnow() + timedelta(hours=24)
-
-    user = Users(
-        username=user_in.username,
-        email=user_in.email or user_in.username,
-        password_hash=get_password_hash(user_in.password),
-        is_verified=0,
-        verification_token=verification_token,
-        verification_token_expires_at=token_expires_at,
-    )
-    db.add(user)
-    db.commit()
-
-    # Send verification email
-    from backend.email_service import send_verification_email  # type: ignore
-    send_verification_email(user.username, verification_token)
-
-    return JSONResponse(
-        status_code=201,
-        content={"message": "Registration successful. Please check your email to verify your account."}
-    )
-
-@app.get("/verify")
-async def verify_email(token: str, db: Session = Depends(get_db)):
-    user = db.query(Users).filter(Users.verification_token == token).first()
-    if not user:
-        raise HTTPException(status_code=400, detail="Invalid or expired verification token")
-
-    # Reject tokens older than 24 hours
-    if user.verification_token_expires_at and datetime.utcnow() > user.verification_token_expires_at:
-        # Clean up the stale token
-        user.verification_token = None
-        user.verification_token_expires_at = None
-        db.commit()
-        raise HTTPException(status_code=400, detail="Verification token has expired. Please register again.")
-
-    user.is_verified = 1
-    user.verification_token = None
-    user.verification_token_expires_at = None
-    db.commit()
-
-    # Redirect to login or success page
-    frontend_url = os.getenv("FRONTEND_URL", "https://levi-ai.create.app")
-    return RedirectResponse(url=f"{frontend_url}/auth.html?verified=true")
-
-@app.post("/token")
-@limiter.limit("10/minute")
-async def login_for_access_token(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = db.query(Users).filter(Users.username == form_data.username).first()
-    if not user or not verify_password(form_data.password, user.password_hash):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
-    
-    if not user.is_verified:
-        raise HTTPException(status_code=403, detail="Please verify your email address before logging in.")
-    
-    access_token = create_access_token(data={"sub": user.username},
-                                        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-    refresh_token = create_refresh_token(data={"sub": user.username})
-    response = JSONResponse(content={"status": "success", "message": "Logged in successfully"})
-    response.set_cookie(key="access_token", value=access_token, httponly=True, secure=True, samesite="lax", max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60)
-    response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=True, samesite="lax", max_age=30 * 24 * 3600)
-    return response
-
-@app.post("/login")
-@limiter.limit("10/minute")
-async def login_json(request: Request, user_in: UserIn, db: Session = Depends(get_db)):
-    """
-    Alternative login route that accepts JSON body instead of form-data.
-    Fixes 404/compatibility issues in some production environments.
-    """
-    user = db.query(Users).filter(Users.username == user_in.username).first()
-    if not user or not verify_password(user_in.password, user.password_hash):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
-    
-    if not user.is_verified:
-        raise HTTPException(status_code=403, detail="Please verify your email address before logging in.")
-        
-    access_token = create_access_token(data={"sub": user.username},
-                                        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-    refresh_token = create_refresh_token(data={"sub": user.username})
-    response = JSONResponse(content={"status": "success", "message": "Logged in successfully"})
-    response.set_cookie(key="access_token", value=access_token, httponly=True, secure=True, samesite="lax", max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60)
-    response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=True, samesite="lax", max_age=30 * 24 * 3600)
-    return response
-
-# ── Password Reset ───────────────────────────────────────────────────────────
-class ForgotPasswordRequest(BaseModel):
-    email: str = Field(..., max_length=100)
-
-class ResetPasswordRequest(BaseModel):
-    token: str = Field(..., max_length=100)
-    new_password: str = Field(..., min_length=8, max_length=100)
-
-@app.post("/forgot-password")
-@limiter.limit("3/minute")
-async def forgot_password(request: Request, req: ForgotPasswordRequest, db: Session = Depends(get_db)):
-    user = db.query(Users).filter(Users.username == req.email).first()
-    if not user:
-        # Security: Don't reveal if user exists
-        return {"message": "If this email is registered, you will receive a reset link shortly."}
-
-    token = str(uuid.uuid4())
-    user.reset_password_token = token
-    user.reset_password_token_expires_at = datetime.utcnow() + timedelta(hours=1)
-    db.commit()
-
-    from backend.email_service import send_password_reset_email  # type: ignore
-    send_password_reset_email(user.username, token)
-
-    return {"message": "If this email is registered, you will receive a reset link shortly."}
-
-@app.post("/reset-password")
-@limiter.limit("3/minute")
-async def reset_password(request: Request, req: ResetPasswordRequest, db: Session = Depends(get_db)):
-    user = db.query(Users).filter(Users.reset_password_token == req.token).first()
-    
-    if not user or not user.reset_password_token_expires_at:
-        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
-    
-    if datetime.utcnow() > user.reset_password_token_expires_at:
-        user.reset_password_token = None
-        user.reset_password_token_expires_at = None
-        db.commit()
-        raise HTTPException(status_code=400, detail="Reset token has expired")
-
-    user.password_hash = get_password_hash(req.new_password)
-    user.reset_password_token = None
-    user.reset_password_token_expires_at = None
-    db.commit()
-
-    return {"status": "success", "message": "Password updated successfully. You can now log in."}
 
 # Phase 2: Viral Loops & Engagement
 

@@ -120,14 +120,8 @@ async function sendMessage() {
     }
 
     try {
-        const token = localStorage.getItem("access_token");
-        const headers = { "Content-Type": "application/json" };
-        if (token) headers["Authorization"] = `Bearer ${token}`;
-
-        const baseUrl = window.location.port === "8080" ? "http://localhost:8000" : "";
-        const res = await fetch(baseUrl + "/chat", {
+        const res = await fetch(window.API_BASE + "/chat", {
             method: "POST",
-            headers: headers,
             body: JSON.stringify({
                 session_id: sessionId,
                 message: text,
@@ -168,14 +162,8 @@ async function submitFeedback(msgId, score, btn) {
     parent.innerHTML = `<span class="text-[10px] text-emerald-400 uppercase tracking-widest"><span class="material-symbols-outlined icon-sm align-middle mr-1">check</span>Feedback saved</span>`;
     
     try {
-        const token = localStorage.getItem("access_token") || localStorage.getItem("token");
-        const headers = { "Content-Type": "application/json" };
-        if (token) headers["Authorization"] = `Bearer ${token}`;
-        
-        const baseUrl = window.location.port === "8080" ? "http://localhost:8000" : "";
-        await fetch(baseUrl + "/feedback", {
+        await fetch(window.API_BASE + "/feedback", {
             method: "POST",
-            headers: headers,
             body: JSON.stringify({ message_id: msgId, score: score })
         });
     } catch (e) {

@@ -10,11 +10,11 @@ from sqlalchemy.orm import Session  # type: ignore
 try:
     from backend.db import get_db  # type: ignore
     from backend.models import Users  # type: ignore
-    from backend.auth import get_current_user  # type: ignore
+    # from backend.auth import get_current_user  # type: ignore
 except ImportError:
     from db import get_db  # type: ignore
     from models import Users  # type: ignore
-    from auth import get_current_user  # type: ignore
+    # from auth import get_current_user  # type: ignore
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/payments", tags=["payments"])
