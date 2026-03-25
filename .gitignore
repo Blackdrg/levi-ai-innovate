@@ -8,6 +8,7 @@ __pycache__/
 venv/
 env/
 ENV/
+.venv/
 
 # Databases
 *.db
@@ -41,3 +42,8 @@ rasa/__pycache__/
 node_modules/
 frontend/node_modules/
 
+# Temp files
+*.exe
+tts_install_log.txt
+vs_search.txt
+winget_search.txt

@@ -141,14 +141,17 @@ class TestContentEngineNewTypes:
         ce = self._import_engine()
         captured = {}
 
-        def mock_groq(system_prompt, user_prompt, max_tokens):
+        def mock_groq(*args, **kwargs):
+            system_prompt = kwargs.get("system_prompt")
+            if not system_prompt and args:
+                system_prompt = args[0]
             captured["system"] = system_prompt
             return "Contenido en español."
 
         with patch.object(ce, "_generate_via_groq", side_effect=mock_groq):
             ce.generate_content("quote", "life", language="Spanish")
 
-        assert "Spanish" in captured.get("system", "")
+        assert "Spanish" in (captured.get("system") or ""), f"Language not found in system prompt: {captured.get('system')}"
 
 
 # ===========================================================================

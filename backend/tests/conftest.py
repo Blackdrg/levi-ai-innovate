@@ -38,12 +38,31 @@ def setup_test_db():
 
 @pytest.fixture
 def db_session():
-    """Database session fixture that cleans up after each test."""
-    session = SessionLocal()
-    try:
-        yield session
-    finally:
-        session.close()
+    """Database session fixture that rolls back after each test."""
+    connection = engine.connect()
+    # start a transaction
+    transaction = connection.begin()
+    # bind a session to the connection
+    session = SessionLocal(bind=connection)
+    
+    # Create a nested transaction (SAVEPOINT) to handle any commits inside tests/routes
+    # session.begin_nested() is already covered if we rollback the connection-level transaction
+    # safely at the end, provided no full commits are pushed.
+    # However, to avoid 'SessionAlreadyActive' or issues on commit, we just use the session.
+    
+    yield session
+    
+    session.close()
+    transaction.rollback()
+    connection.close()
+
+@pytest.fixture(autouse=True)
+def override_get_db(db_session):
+    """Override FastAPI get_db dependency to use the transactional session."""
+    from backend.db import get_db
+    app.dependency_overrides[get_db] = lambda: db_session
+    yield
+    app.dependency_overrides.clear()
 
 @pytest.fixture
 def test_user(db_session):
