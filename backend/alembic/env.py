@@ -11,7 +11,12 @@ from dotenv import load_dotenv
 
 # add your model's directory to sys.path
 sys.path.append(os.getcwd())
-load_dotenv()
+if os.path.exists("../.env.local"):
+    load_dotenv("../.env.local")
+elif os.path.exists(".env.local"):
+    load_dotenv(".env.local")
+else:
+    load_dotenv()
 
 from db import Base  # type: ignore
 import models  # type: ignore # ensure all models are imported

@@ -1,293 +1,446 @@
 <!DOCTYPE html>
 <html class="dark" lang="en">
+
 <head>
-<title>LEVI — Sign In</title>
-<meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<script src="https://cdn.tailwindcss.com"></script>
-<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
-<script>tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#f2ca50","primary-container":"#d4af37","on-primary":"#3c2f00","secondary":"#c3c0ff","surface":"#131317","surface-container-lowest":"#0e0e12","surface-container-low":"#1b1b1f","surface-container":"#1f1f23","surface-container-highest":"#353439","on-surface":"#e5e1e7","on-surface-variant":"#d0c5af","outline":"#99907c","outline-variant":"#4d4635"},fontFamily:{headline:["Newsreader","serif"],body:["Plus Jakarta Sans","sans-serif"],label:["Plus Jakarta Sans","sans-serif"],sans:["Plus Jakarta Sans","sans-serif"]},borderRadius:{DEFAULT:"0.25rem",lg:"0.5rem",xl:"0.75rem","2xl":"1rem","3xl":"1.5rem",full:"9999px"}}}}</script>
-<style>
-.material-symbols-outlined{font-family:'Material Symbols Outlined';font-size:22px;line-height:1;font-variation-settings:'FILL' 0,'wght' 300,'GRAD' 0,'opsz' 24;-webkit-user-select:none;user-select:none}
-.icon-fill{font-variation-settings:'FILL' 1,'wght' 300,'GRAD' 0,'opsz' 24}.icon-sm{font-size:18px}
-.glass-panel{background:rgba(27,27,31,.65);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px)}
-.gold-gradient-text{background:linear-gradient(to right,#f2ca50,#d4af37);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
-.btn-gold{background:linear-gradient(135deg,#f2ca50,#d4af37);color:#3c2f00;transition:all .25s}
-.btn-gold:hover{background:linear-gradient(135deg,#fde68a,#f2ca50);box-shadow:0 0 30px rgba(242,202,80,.3)}
-.btn-gold:active{transform:scale(.97)}
-.ghost-border{border:.5px solid rgba(255,255,255,.09)}
-.levi-input{background:rgba(14,14,18,.6);border:.5px solid rgba(255,255,255,.1);color:#e5e1e7;outline:none;transition:border-color .3s;width:100%;border-radius:12px;padding:14px 16px;font-size:14px}
-.levi-input:focus{border-color:rgba(242,202,80,.5);background:rgba(14,14,18,.8)}
-.levi-input::placeholder{color:rgba(105,102,110,.5)}
-.divider{height:1px;background:linear-gradient(to right,transparent,rgba(255,255,255,.1),transparent)}
-@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
-.fade-in{animation:fadeUp .5s ease forwards}
-@keyframes spin{to{transform:rotate(360deg)}}
-#toast{position:fixed;bottom:5rem;left:50%;transform:translateX(-50%) translateY(12px);opacity:0;transition:all .3s;z-index:999;pointer-events:none}
-#toast.show{transform:translateX(-50%) translateY(0);opacity:1}
-.orb-container{z-index:0}
-.orb-1{width:60vw;height:60vw;max-width:750px;top:-20%;left:-15%;background:radial-gradient(circle,rgba(242,202,80,.06) 0%,transparent 68%);filter:blur(100px)}
-.orb-2{width:45vw;height:45vw;max-width:580px;bottom:-15%;right:-12%;background:radial-gradient(circle,rgba(195,192,255,.05) 0%,transparent 68%);filter:blur(80px)}
-.auth-card-wrap{z-index:1}
-.tab-switcher{background:rgba(14,14,18,.6)}
-.pw-input{padding-right:44px}
-.spinner{width:18px;height:18px;border:2px solid rgba(60,47,0,.2);border-top-color:rgba(60,47,0,.85);border-radius:50%;animation:spin .75s linear infinite}
-.tab-active{background:linear-gradient(135deg,#f2ca50,#d4af37);color:#3c2f00}
-.tab-inactive{background:transparent;color:#9ca3af}
-.google-btn{background:rgba(255,255,255,.03)}
-.toast-inner-auth{background:rgba(19,19,23,.92);border:.5px solid rgba(242,202,80,.35);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)}
-.toast-text-auth{font-size:12px;color:#e5e1e7;font-family:'Plus Jakarta Sans',sans-serif;font-weight:600;letter-spacing:.04em}
-.tab-active{background:linear-gradient(135deg,#f2ca50,#d4af37);color:#3c2f00}
-.tab-inactive{background:transparent;color:#9ca3af}
-.google-btn{background:rgba(255,255,255,.03)}
-.msg-success{background:rgba(52,211,153,.1);border:.5px solid rgba(52,211,153,.3);color:#6ee7b7}
-.msg-error{background:rgba(248,113,113,.1);border:.5px solid rgba(248,113,113,.3);color:#fca5a5}
-</style>
+  <title>LEVI — Sign In</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
+    rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+    rel="stylesheet" />
+  <script>tailwind.config = { darkMode: "class", theme: { extend: { colors: { "primary": "#f2ca50", "primary-container": "#d4af37", "on-primary": "#3c2f00", "secondary": "#c3c0ff", "surface": "#131317", "surface-container-lowest": "#0e0e12", "surface-container-low": "#1b1b1f", "surface-container": "#1f1f23", "surface-container-highest": "#353439", "on-surface": "#e5e1e7", "on-surface-variant": "#d0c5af", "outline": "#99907c", "outline-variant": "#4d4635" }, fontFamily: { headline: ["Newsreader", "serif"], body: ["Plus Jakarta Sans", "sans-serif"], label: ["Plus Jakarta Sans", "sans-serif"], sans: ["Plus Jakarta Sans", "sans-serif"] }, borderRadius: { DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", "2xl": "1rem", "3xl": "1.5rem", full: "9999px" } } } }</script>
+  <style>
+    .material-symbols-outlined {
+      font-family: 'Material Symbols Outlined';
+      font-size: 22px;
+      line-height: 1;
+      font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+      -webkit-user-select: none;
+      user-select: none
+    }
+
+    .icon-sm {
+      font-size: 18px
+    }
+
+    .glass-panel {
+      background: rgba(27, 27, 31, .65);
+      -webkit-backdrop-filter: blur(24px);
+      backdrop-filter: blur(24px)
+    }
+
+    .gold-gradient-text {
+      background: linear-gradient(to right, #f2ca50, #d4af37);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent
+    }
+
+    .btn-gold {
+      background: linear-gradient(135deg, #f2ca50, #d4af37);
+      color: #3c2f00;
+      transition: all .25s
+    }
+
+    .btn-gold:hover {
+      background: linear-gradient(135deg, #fde68a, #f2ca50);
+      box-shadow: 0 0 30px rgba(242, 202, 80, .3)
+    }
+
+    .btn-gold:active {
+      transform: scale(.97)
+    }
+
+    .ghost-border {
+      border: .5px solid rgba(255, 255, 255, .09)
+    }
+
+    .levi-input {
+      background: rgba(14, 14, 18, .6);
+      border: .5px solid rgba(255, 255, 255, .1);
+      color: #e5e1e7;
+      outline: none;
+      transition: border-color .3s;
+      width: 100%;
+      border-radius: 12px;
+      padding: 14px 16px;
+      font-size: 14px
+    }
+
+    .levi-input:focus {
+      border-color: rgba(242, 202, 80, .5);
+      background: rgba(14, 14, 18, .8)
+    }
+
+    .levi-input::placeholder {
+      color: rgba(105, 102, 110, .5)
+    }
+
+    .divider {
+      height: 1px;
+      background: linear-gradient(to right, transparent, rgba(255, 255, 255, .1), transparent)
+    }
+
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(14px)
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0)
+      }
+    }
+
+    .fade-in {
+      animation: fadeUp .5s ease forwards
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg)
+      }
+    }
+
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(60, 47, 0, .2);
+      border-top-color: rgba(60, 47, 0, .85);
+      border-radius: 50%;
+      animation: spin .75s linear infinite
+    }
+
+    .tab-active {
+      background: linear-gradient(135deg, #f2ca50, #d4af37);
+      color: #3c2f00
+    }
+
+    .tab-inactive {
+      background: transparent;
+      color: #9ca3af
+    }
+
+    .msg-success {
+      background: rgba(52, 211, 153, .1);
+      border: .5px solid rgba(52, 211, 153, .3);
+      color: #6ee7b7
+    }
+
+    .msg-error {
+      background: rgba(248, 113, 113, .1);
+      border: .5px solid rgba(248, 113, 113, .3);
+      color: #fca5a5
+    }
+
+    .msg-info {
+      background: rgba(242, 202, 80, .1);
+      border: .5px solid rgba(242, 202, 80, .3);
+      color: #f2ca50
+    }
+
+    .orb-1 {
+      width: 60vw;
+      height: 60vw;
+      max-width: 750px;
+      top: -20%;
+      left: -15%;
+      background: radial-gradient(circle, rgba(242, 202, 80, .06) 0%, transparent 68%);
+      filter: blur(100px)
+    }
+
+    .orb-2 {
+      width: 45vw;
+      height: 45vw;
+      max-width: 580px;
+      bottom: -15%;
+      right: -12%;
+      background: radial-gradient(circle, rgba(195, 192, 255, .05) 0%, transparent 68%);
+      filter: blur(80px)
+    }
+  </style>
 </head>
-<body class="bg-surface text-on-surface font-body min-h-screen flex items-center justify-center relative overflow-hidden">
 
-<!-- Orbs -->
-<div class="fixed inset-0 pointer-events-none overflow-hidden orb-container">
-  <div class="absolute rounded-full orb-1"></div>
-  <div class="absolute rounded-full orb-2"></div>
-</div>
+<body
+  class="bg-surface text-on-surface font-body min-h-screen flex items-center justify-center relative overflow-hidden">
 
-<!-- Back link -->
-<a href="index.html" class="fixed top-8 left-8 flex items-center gap-2 text-zinc-500 hover:text-primary transition-colors z-10 text-sm">
-  <span class="material-symbols-outlined icon-sm">arrow_back</span>
-  <span class="font-label uppercase tracking-wider text-xs">Back to Home</span>
-</a>
-
-<!-- Auth card -->
-<div class="relative w-full max-w-md mx-4 fade-in auth-card-wrap">
-
-  <!-- Logo -->
-  <div class="text-center mb-10">
-    <div class="text-4xl font-headline italic gold-gradient-text tracking-tight mb-2">LEVI</div>
-    <p class="text-[10px] text-zinc-500 uppercase tracking-[0.22em] font-semibold">AI Wisdom & Creative Muse</p>
+  <div class="fixed inset-0 pointer-events-none overflow-hidden">
+    <div class="absolute rounded-full orb-1"></div>
+    <div class="absolute rounded-full orb-2"></div>
   </div>
 
-  <!-- Card -->
-  <div class="glass-panel ghost-border rounded-3xl p-8 shadow-[0_32px_80px_rgba(0,0,0,0.5)]">
+  <a href="index.html"
+    class="fixed top-8 left-8 flex items-center gap-2 text-zinc-500 hover:text-primary transition-colors z-10 text-sm">
+    <span class="material-symbols-outlined icon-sm">arrow_back</span>
+    <span class="font-label uppercase tracking-wider text-xs">Back to Home</span>
+  </a>
 
-    <div class="flex ghost-border rounded-xl p-1 mb-8 tab-switcher">
-      <button id="tab-login" onclick="switchMode('login')"
-        class="flex-1 py-2.5 text-xs font-label font-semibold uppercase tracking-widest rounded-lg transition-all tab-active">Sign
-        In</button>
-      <button id="tab-register" onclick="switchMode('register')"
-        class="flex-1 py-2.5 text-xs font-label font-semibold uppercase tracking-widest rounded-lg text-zinc-500 transition-all hover:text-zinc-300 tab-inactive">Create
-        Account</button>
+  <div class="relative w-full max-w-md mx-4 fade-in" style="z-index:1">
+    <div class="text-center mb-10">
+      <div class="text-4xl font-headline italic gold-gradient-text tracking-tight mb-2">LEVI</div>
+      <p class="text-[10px] text-zinc-500 uppercase tracking-[0.22em] font-semibold">AI Wisdom & Creative Muse</p>
     </div>
 
-    <!-- Headline -->
-    <div class="mb-7">
-      <h1 id="auth-heading" class="font-headline text-3xl italic font-light text-on-surface">Welcome Back</h1>
-      <p id="auth-subheading" class="text-on-surface-variant text-sm font-light mt-1">Continue your philosophical journey.</p>
-    </div>
-
-    <!-- Error/success message -->
-    <div id="auth-msg" class="hidden mb-5 px-4 py-3 rounded-xl text-xs font-semibold"></div>
-
-    <!-- Form -->
-    <div class="space-y-4">
-      <div id="username-field">
-        <label class="block text-[10px] text-primary uppercase tracking-[0.2em] mb-2 font-semibold">Username</label>
-        <input id="username-input" type="text" class="levi-input" placeholder="seeker_name" autocomplete="username"/>
+    <div class="glass-panel ghost-border rounded-3xl p-8 shadow-[0_32px_80px_rgba(0,0,0,0.5)]">
+      <!-- Tabs -->
+      <div class="flex ghost-border rounded-xl p-1 mb-8" style="background:rgba(14,14,18,.6)">
+        <button id="tab-login" onclick="switchMode('login')"
+          class="flex-1 py-2.5 text-xs font-label font-semibold uppercase tracking-widest rounded-lg transition-all tab-active">Sign
+          In</button>
+        <button id="tab-register" onclick="switchMode('register')"
+          class="flex-1 py-2.5 text-xs font-label font-semibold uppercase tracking-widest rounded-lg text-zinc-500 transition-all hover:text-zinc-300 tab-inactive">Create
+          Account</button>
       </div>
-      <div id="email-field" class="hidden">
-        <label class="block text-[10px] text-primary uppercase tracking-[0.2em] mb-2 font-semibold">Email</label>
-        <input id="email-input" type="email" class="levi-input" placeholder="your@email.com" autocomplete="email"/>
+
+      <div class="mb-7">
+        <h1 id="auth-heading" class="font-headline text-3xl italic font-light">Welcome Back</h1>
+        <p id="auth-subheading" class="text-on-surface-variant text-sm font-light mt-1">Continue your philosophical
+          journey.</p>
       </div>
-      <div id="password-field">
-        <label class="block text-[10px] text-primary uppercase tracking-[0.2em] mb-2 font-semibold">Password</label>
-        <div class="relative">
-          <input id="password-input" type="password" class="levi-input pw-input" placeholder="••••••••" autocomplete="current-password" />
-          <button onclick="togglePassword()" class="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-primary transition-colors">
-            <span class="material-symbols-outlined icon-sm" id="pw-eye">visibility</span>
-          </button>
+
+      <div id="auth-msg" class="hidden mb-5 px-4 py-3 rounded-xl text-xs font-semibold"></div>
+
+      <div class="space-y-4">
+        <div>
+          <label class="block text-[10px] text-primary uppercase tracking-[0.2em] mb-2 font-semibold">Email /
+            Username</label>
+          <input id="username-input" type="text" class="levi-input" placeholder="your@email.com"
+            autocomplete="username" />
         </div>
-        <div id="forgot-link-wrap" class="flex justify-end mt-2">
-          <button onclick="switchMode('forgot')" class="text-[10px] text-zinc-500 hover:text-primary transition-colors font-semibold uppercase tracking-wider">Forgot Password?</button>
+        <div id="email-field" class="hidden">
+          <label class="block text-[10px] text-primary uppercase tracking-[0.2em] mb-2 font-semibold">Email</label>
+          <input id="email-input" type="email" class="levi-input" placeholder="your@email.com" autocomplete="email" />
+        </div>
+        <div id="password-field">
+          <label class="block text-[10px] text-primary uppercase tracking-[0.2em] mb-2 font-semibold">Password</label>
+          <div class="relative">
+            <input id="password-input" type="password" class="levi-input" style="padding-right:44px"
+              placeholder="••••••••" autocomplete="current-password" />
+            <button onclick="togglePw()"
+              class="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-primary transition-colors">
+              <span class="material-symbols-outlined icon-sm" id="pw-eye">visibility</span>
+            </button>
+          </div>
+          <div id="forgot-wrap" class="flex justify-end mt-2">
+            <button onclick="switchMode('forgot')"
+              class="text-[10px] text-zinc-500 hover:text-primary transition-colors font-semibold uppercase tracking-wider">Forgot
+              Password?</button>
+          </div>
         </div>
       </div>
+
+      <button id="submit-btn" onclick="handleAuth()"
+        class="btn-gold w-full py-4 rounded-full font-bold uppercase tracking-[0.25em] text-sm flex items-center justify-center gap-3 mt-8">
+        <span id="submit-label">Sign In →</span>
+        <div id="submit-spinner" class="hidden spinner"></div>
+      </button>
+
+      <div class="flex items-center gap-4 my-6">
+        <div class="flex-1 divider"></div>
+        <span class="text-[10px] text-zinc-600 uppercase tracking-widest">or</span>
+        <div class="flex-1 divider"></div>
+      </div>
+
+      <a id="google-btn" href="#"
+        class="flex items-center justify-center gap-3 ghost-border rounded-xl py-3.5 text-sm text-on-surface-variant hover:text-on-surface hover:border-white/15 transition-all"
+        style="background:rgba(255,255,255,.03)">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+          <path
+            d="M17.64 9.205c0-.639-.057-1.252-.164-1.841H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"
+            fill="#4285F4" />
+          <path
+            d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z"
+            fill="#34A853" />
+          <path
+            d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"
+            fill="#FBBC05" />
+          <path
+            d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z"
+            fill="#EA4335" />
+        </svg>
+        Continue with Google
+      </a>
+
+      <p class="text-center text-xs text-zinc-500 mt-6">
+        <span id="toggle-text">Don't have an account?</span>
+        <button onclick="switchMode(mode==='login'?'register':'login')" id="toggle-btn"
+          class="text-primary hover:underline ml-1 font-semibold">Create Account</button>
+      </p>
     </div>
 
-    <!-- Submit -->
-    <button id="submit-btn" onclick="handleAuth()" class="btn-gold w-full py-4 rounded-full font-bold uppercase tracking-[0.25em] text-sm flex items-center justify-center gap-3 mt-8">
-      <span id="submit-label">Sign In →</span>
-    <div id="submit-spinner" class="hidden spinner"></div>
-    </button>
-
-    <!-- Divider -->
-    <div class="flex items-center gap-4 my-6">
-      <div class="flex-1 divider"></div>
-      <span class="text-[10px] text-zinc-600 uppercase tracking-widest">or</span>
-      <div class="flex-1 divider"></div>
-    </div>
-
-    <!-- Google OAuth -->
-    <a id="google-login-link" href="#"
-      class="flex items-center justify-center gap-3 ghost-border rounded-xl py-3.5 text-sm text-on-surface-variant hover:text-on-surface hover:border-white/15 transition-all google-btn">
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M17.64 9.205c0-.639-.057-1.252-.164-1.841H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/><path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/><path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/><path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335"/></svg>
-      Continue with Google
-    </a>
-
-    <!-- Toggle -->
-    <p class="text-center text-xs text-zinc-500 mt-6">
-      <span id="toggle-text">Don't have an account?</span>
-      <button onclick="switchMode(mode==='login'?'register':'login')" id="toggle-btn"
-        class="text-primary hover:underline ml-1 font-semibold">Create Account</button>
+    <p class="text-center text-[10px] text-zinc-600 mt-5 leading-relaxed">
+      By continuing you agree to LEVI's <a href="terms.html" class="text-zinc-500 hover:text-primary">Terms</a> &amp; <a
+        href="privacy.html" class="text-zinc-500 hover:text-primary">Privacy Policy</a>.
     </p>
   </div>
 
-  <!-- Terms -->
-  <p class="text-center text-[10px] text-zinc-600 mt-5 leading-relaxed">
-    By continuing, you agree to LEVI's <a href="#" class="text-zinc-500 hover:text-primary">Terms</a> and <a href="#" class="text-zinc-500 hover:text-primary">Privacy Policy</a>.
-  </p>
-</div>
+  <script>
+    // ── API base ──────────────────────────────────────────────────────────────────
+    const API_BASE = ['localhost', '127.0.0.1', '::1', '0.0.0.0'].includes(location.hostname)
+      ? `http://${location.hostname}:8000`
+      : `${location.origin}/api`;
 
-<div id="toast"></div>
+    window.API_BASE = API_BASE;
+    document.getElementById('google-btn').href = API_BASE + '/login/google';
 
-<script>
-                function showToast(msg, type = 'success') { const t = document.getElementById('toast'); t.innerHTML = `<div style="background:rgba(19,19,23,.92);border:.5px solid rgba(242,202,80,.35);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)" class="flex items-center gap-2.5 px-5 py-3 rounded-full shadow-2xl"><span style="font-size:12px;color:#e5e1e7;font-family:'Plus Jakarta Sans',sans-serif;font-weight:600;letter-spacing:.04em">${msg}</span></div>`; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 3000) }
+    // ── Auth state ────────────────────────────────────────────────────────────────
+    let mode = 'login';
 
-  const API_BASE = (['localhost', '127.0.0.1', '::1', '0.0.0.0'].includes(location.hostname)) ? `http://${location.hostname}:8000` : location.origin + '/api';
-  document.getElementById('google-login-link').href = API_BASE + '/login/google';
-let mode='login';
+    function switchMode(m) {
+      mode = m;
+      const isLogin = m === 'login';
+      const isRegister = m === 'register';
+      const isForgot = m === 'forgot';
+      const tL = document.getElementById('tab-login');
+      const tR = document.getElementById('tab-register');
+      [tL, tR].forEach(t => { t.className = 'flex-1 py-2.5 text-xs font-label font-semibold uppercase tracking-widest rounded-lg transition-all tab-inactive'; });
+      if (isLogin) tL.className += ' tab-active';
+      if (isRegister) tR.className += ' tab-active';
 
-function switchMode(newMode){
-  mode=newMode;
-  const isLogin=mode==='login';
-  const isRegister=mode==='register';
-  const isForgot=mode==='forgot';
-  
-  const tL = document.getElementById('tab-login');
-  const tR = document.getElementById('tab-register');
-  
-  if (isForgot) {
-    tL.className = 'flex-1 py-2.5 text-xs font-label font-semibold uppercase tracking-widest rounded-lg transition-all tab-inactive';
-    tR.className = 'flex-1 py-2.5 text-xs font-label font-semibold uppercase tracking-widest rounded-lg transition-all tab-inactive';
-  } else {
-    tL.className = 'flex-1 py-2.5 text-xs font-label font-semibold uppercase tracking-widest rounded-lg transition-all ' + (isLogin ? 'tab-active' : 'tab-inactive');
-    tR.className = 'flex-1 py-2.5 text-xs font-label font-semibold uppercase tracking-widest rounded-lg transition-all ' + (isRegister ? 'tab-active' : 'tab-inactive');
-  }
-  
-  document.getElementById('auth-heading').textContent=isForgot?'Reset Path':(isLogin?'Welcome Back':'Join the Seekers');
-  document.getElementById('auth-subheading').textContent=isForgot?'Enter your email to receive a reset link.':(isLogin?'Continue your philosophical journey.':'Create your LEVI account — it\'s free.');
-  document.getElementById('submit-label').textContent=isForgot?'Send Reset Link →':(isLogin?'Sign In →':'Create Account →');
-  
-  document.getElementById('username-field').classList.toggle('hidden', isForgot);
-  document.getElementById('email-field').classList.toggle('hidden', isLogin);
-  document.getElementById('password-field').classList.toggle('hidden', isForgot);
-  
-  document.getElementById('toggle-text').textContent=isForgot?'Remembered it?':'Don\'t have an account?';
-  if (isForgot) {
-      document.getElementById('toggle-text').textContent = 'Back to ';
-      document.getElementById('toggle-btn').textContent = 'Sign In';
-  } else {
-      document.getElementById('toggle-text').textContent = isLogin ? 'Don\'t have an account?' : 'Already a seeker?';
-      document.getElementById('toggle-btn').textContent = isLogin ? 'Create Account' : 'Sign In';
-  }
-  
-  document.getElementById('auth-msg').classList.add('hidden');
-  document.getElementById('password-input').autocomplete=isLogin?'current-password':'new-password';
-}
+      document.getElementById('auth-heading').textContent = isForgot ? 'Reset Password' : isLogin ? 'Welcome Back' : 'Join the Seekers';
+      document.getElementById('auth-subheading').textContent = isForgot ? 'Enter your email to receive a reset link.' : isLogin ? 'Continue your philosophical journey.' : 'Create your LEVI account — free forever.';
+      document.getElementById('submit-label').textContent = isForgot ? 'Send Reset Link →' : isLogin ? 'Sign In →' : 'Create Account →';
+      document.getElementById('email-field').classList.toggle('hidden', !isRegister);
+      document.getElementById('password-field').classList.toggle('hidden', isForgot);
+      document.getElementById('forgot-wrap').classList.toggle('hidden', !isLogin);
+      document.getElementById('toggle-text').textContent = isForgot ? 'Back to' : isLogin ? "Don't have an account?" : 'Already a seeker?';
+      document.getElementById('toggle-btn').textContent = isForgot ? 'Sign In' : isLogin ? 'Create Account' : 'Sign In';
+      document.getElementById('auth-msg').classList.add('hidden');
+    }
 
-function togglePassword(){
-  const inp=document.getElementById('password-input');
-  const eye=document.getElementById('pw-eye');
-  if(inp.type==='password'){inp.type='text';eye.textContent='visibility_off'}else{inp.type='password';eye.textContent='visibility'}
-}
+    function togglePw() {
+      const i = document.getElementById('password-input');
+      const e = document.getElementById('pw-eye');
+      i.type = i.type === 'password' ? 'text' : 'password';
+      e.textContent = i.type === 'password' ? 'visibility' : 'visibility_off';
+    }
 
-function showMsg(msg,ok){
-  const el=document.getElementById('auth-msg');
-  el.textContent=msg;
-  el.className = 'mb-5 px-4 py-3 rounded-xl text-xs font-semibold ' + (ok ? 'msg-success' : 'msg-error');
-  el.classList.remove('hidden');
-}
+    function showMsg(txt, type = 'error') {
+      const el = document.getElementById('auth-msg');
+      el.textContent = txt;
+      el.className = `mb-5 px-4 py-3 rounded-xl text-xs font-semibold msg-${type}`;
+      el.classList.remove('hidden');
+    }
 
-async function handleAuth(){
-  const username=document.getElementById('username-input').value.trim();
-  const password=document.getElementById('password-input').value;
-  const email=document.getElementById('email-input').value.trim();
-  if(!username||!password){showMsg('Please fill in all fields.'); return}
-  if(mode==='register'&&password.length<6){showMsg('Password must be at least 6 characters.');return}
+    function setLoading(on) {
+      document.getElementById('submit-label').classList.toggle('hidden', on);
+      document.getElementById('submit-spinner').classList.toggle('hidden', !on);
+      document.getElementById('submit-btn').disabled = on;
+    }
 
-  document.getElementById('submit-label').classList.add('hidden');
-  document.getElementById('submit-spinner').classList.remove('hidden');
-  document.getElementById('submit-btn').disabled=true;
+    // ── After a successful login: fetch profile and store it ─────────────────────
+    async function storeProfile() {
+      try {
+        const res = await fetch(API_BASE + '/users/me', { credentials: 'include' });
+        if (res.ok) {
+          const user = await res.json();
+          localStorage.setItem('levi_user', JSON.stringify(user));
+        }
+      } catch { /* ignore – display only */ }
+    }
 
-  try{
-    let endpoint = '/login';
-    if (mode === 'register') endpoint = '/register';
-    if (mode === 'forgot') endpoint = '/forgot-password';
-    
-    let body = {};
-    if (mode === 'login') body = {username, password};
-    if (mode === 'register') body = {username, password, email: email || undefined};
-    if (mode === 'forgot') body = {email};
-    
-    const r=await fetch(API_BASE+endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-    const d=await r.json();
-    if(!r.ok)throw new Error(d.detail||d.message||'Action failed');
-    
-    if (mode === 'forgot') {
-        showMsg('Success! Check your email for the reset link.', true);
+    // ── Handle auth actions ───────────────────────────────────────────────────────
+    async function handleAuth() {
+      const username = document.getElementById('username-input').value.trim();
+      const password = document.getElementById('password-input').value;
+      const email = document.getElementById('email-input').value.trim();
+
+      if (mode === 'forgot') {
+        if (!username) { showMsg('Enter your email address.'); return; }
+        setLoading(true);
+        try {
+          await fetch(API_BASE + '/forgot-password', {
+            method: 'POST', credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: username }),
+          });
+          showMsg('If this email is registered you will receive a reset link shortly.', 'success');
+        } catch { showMsg('Request failed. Please try again.'); }
+        finally { setLoading(false); }
         return;
-    }
-    
-    if(d.status === 'success'){
-      showMsg('Success! Welcome!', true);
-      setTimeout(() => window.location.href = 'studio.html', 1000);
-    } else {
-      throw new Error(d.detail || 'Action failed');
-    }
-  } catch (e) {
-    showMsg(e.message || 'Action failed. Please try again.');
-  } finally {
-    document.getElementById('submit-label').classList.remove('hidden');
-    document.getElementById('submit-spinner').classList.add('hidden');
-    document.getElementById('submit-btn').disabled = false;
-  }
-}
-
-// Check for existing session (cookie-based). 
-// Since we can't read httpOnly cookies in JS, we just rely on first API call or skip redirect 
-// if we want to stay on the login page.
-// Previous code: if(localStorage.getItem('levi_token')) window.location.href='studio.html';
-
-  // Check for query params
-  const params = new URLSearchParams(window.location.search);
-  if (params.has('verified')) {
-    showMsg("Email verified successfully! Please sign in.", true);
-  }
-  if (params.has('expired')) {
-    showMsg("Your session has expired. Please sign in again.", false);
-  }
-  if (params.has('code')) {
-    const code = params.get('code');
-    showMsg("Completing authentication...", true);
-    fetch(API_BASE + '/auth/exchange', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code })
-    })
-    .then(r => r.json())
-    .then(d => {
-      if (d.status === 'success') {
-        showMsg("Authenticated! Redirecting...", true);
-        setTimeout(() => window.location.href = 'studio.html', 1000);
-      } else {
-        showMsg(d.detail || "Authentication failed.");
       }
-    })
-    .catch(e => showMsg("Connection error."));
-  }
 
-// Enter key
-document.addEventListener('keydown',e=>{if(e.key==='Enter')handleAuth()});
-</script>
-<script src="js/animations.js" type="module"></script>
-<script src="js/feedback.js" type="module"></script>
+      if (!username || !password) { showMsg('Please fill in all fields.'); return; }
+      if (mode === 'register' && password.length < 8) { showMsg('Password must be at least 8 characters.'); return; }
+
+      setLoading(true);
+      try {
+        const endpoint = mode === 'register' ? '/register' : '/login';
+        const body = mode === 'register'
+          ? { username, password, email: email || username }
+          : { username, password };
+
+        const res = await fetch(API_BASE + endpoint, {
+          method: 'POST',
+          credentials: 'include',                    // ← receive httpOnly cookie
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.detail || 'Action failed');
+
+        if (mode === 'register') {
+          showMsg('Account created! Please check your email to verify, then sign in.', 'success');
+          setTimeout(() => switchMode('login'), 2000);
+          return;
+        }
+
+        // Login success — fetch profile for display
+        await storeProfile();
+        showMsg('Welcome back! Redirecting…', 'success');
+        setTimeout(() => { window.location.href = 'studio.html'; }, 800);
+
+      } catch (err) {
+        showMsg(err.message || 'Action failed. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    // ── OAuth exchange (from Google redirect) ─────────────────────────────────────
+    const params = new URLSearchParams(location.search);
+    if (params.has('verified')) showMsg('Email verified! Please sign in.', 'success');
+    if (params.has('expired')) showMsg('Session expired. Please sign in again.');
+    if (params.has('code')) {
+      (async () => {
+        showMsg('Completing authentication…', 'info');
+        try {
+          const res = await fetch(API_BASE + '/auth/exchange', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: params.get('code') }),
+          });
+          const data = await res.json();
+          if (res.ok && data.status === 'success') {
+            await storeProfile();
+            showMsg('Authenticated! Redirecting…', 'success');
+            setTimeout(() => { window.location.href = 'studio.html'; }, 800);
+          } else {
+            showMsg(data.detail || 'Authentication failed.');
+          }
+        } catch { showMsg('Connection error. Please try again.'); }
+      })();
+    }
+
+    // ── Already logged in? ────────────────────────────────────────────────────────
+    const existingUser = localStorage.getItem('levi_user');
+    if (existingUser) {
+      // Verify session is still valid
+      fetch(API_BASE + '/users/me', { credentials: 'include' })
+        .then(r => { if (r.ok) window.location.href = 'studio.html'; })
+        .catch(() => { /* not logged in */ });
+    }
+
+    document.addEventListener('keydown', e => { if (e.key === 'Enter') handleAuth(); });
+  </script>
+  <script src="js/animations.js" type="module"></script>
+<script src="js/auth-manager.js"></script>
 </body>
+
 </html>
