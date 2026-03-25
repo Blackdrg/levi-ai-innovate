@@ -7,9 +7,7 @@
 
 'use strict';
 
-const API_BASE = (['localhost','127.0.0.1','::1','0.0.0.0'].includes(location.hostname))
-  ? `http://${location.hostname}:8000`
-  : location.origin + '/api';
+const API_BASE = window.API_BASE;
 
 // ─────────────────────────────────────────────
 // Feedback panel factory
@@ -67,6 +65,7 @@ function createFeedbackPanel(userMessage, botResponse, mood, sessionId) {
 
       // Submit to backend
       try {
+        await window.waitForToken();
         const token = localStorage.getItem('levi_token');
         const headers = { 'Content-Type': 'application/json' };
         if (token) headers['Authorization'] = 'Bearer ' + token;
@@ -224,6 +223,7 @@ function createThumbsWidget(userMessage, botResponse, mood, sessionId) {
       btn.style.borderColor = idx === 0 ? 'rgba(242,202,80,0.4)' : 'rgba(248,113,113,0.3)';
 
       try {
+        await window.waitForToken();
         const token = localStorage.getItem('levi_token');
         const headers = { 'Content-Type': 'application/json' };
         if (token) headers['Authorization'] = 'Bearer ' + token;

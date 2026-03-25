@@ -38,6 +38,8 @@ services:
         sync: false
       - key: TOGETHER_API_KEY
         sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        sync: false
       - key: RESEND_API_KEY
         sync: false
       - key: WEB_CONCURRENCY
@@ -67,6 +69,8 @@ services:
       - key: GROQ_API_KEY
         sync: false
       - key: TOGETHER_API_KEY
+        sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
         sync: false
       - key: RESEND_API_KEY # Sync RESEND_API_KEY for emails in tasks
         sync: false

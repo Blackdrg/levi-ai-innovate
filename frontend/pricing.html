@@ -229,6 +229,7 @@ async function subscribe(plan){
   document.getElementById(btnId).disabled=true;
   document.getElementById(btnId).textContent='Loading…';
   try{
+    await window.waitForToken();
     const r=await fetch(window.API_BASE+'/create_order',{method:'POST',body:JSON.stringify({plan})});
     if(!r.ok)throw new Error(await r.text());
     const d=await r.json();
@@ -243,6 +244,7 @@ async function subscribe(plan){
       theme:{color:'#f2ca50'},
       handler:async function(response){
         try{
+          await window.waitForToken();
           const vr=await fetch(window.API_BASE+'/verify_payment',{method:'POST',body:JSON.stringify(response)});
           const vd=await vr.json();
           if(vd.success||vr.ok){showToast('Payment successful! Your plan is now active.');if(vd.user)localStorage.setItem('levi_user',JSON.stringify(vd.user))}

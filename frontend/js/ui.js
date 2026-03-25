@@ -127,6 +127,7 @@ export async function subscribeToPush(vapidPublicKey) {
     }
 
     const token = localStorage.getItem('levi_token');
+    if (window.waitForToken) await window.waitForToken();
     const res = await fetch(`${window.location.origin.includes('localhost') ? 'http://localhost:8000' : ''}/push/subscribe`, {
       method: 'POST',
       headers: { 

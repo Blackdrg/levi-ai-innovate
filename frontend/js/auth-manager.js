@@ -56,6 +56,33 @@ firebase.auth().onAuthStateChanged(async (user) => {
     }
 });
 
+// Helper to wait for Firebase auth to initialize
+window.waitForToken = () => new Promise((resolve) => {
+    // If we already have a token, resolve immediately
+    if (window.levi_user_token) return resolve(window.levi_user_token);
+    
+    // Check if Firebase is even initialized
+    if (!firebase.apps.length) return resolve(null);
+
+    // Watch for the state change
+    const unsub = firebase.auth().onAuthStateChanged(async (user) => {
+        if (user) {
+            window.levi_user_token = await user.getIdToken();
+            unsub();
+            resolve(window.levi_user_token);
+        } else {
+            unsub();
+            resolve(null);
+        }
+    });
+
+    // Safety timeout: don't hang if firebase takes too long
+    setTimeout(() => {
+        unsub();
+        resolve(window.levi_user_token);
+    }, 5000);
+});
+
 // ==========================================
 // 3. Fetch API Interceptor for Firebase Admin
 // ==========================================
@@ -66,6 +93,9 @@ window.fetch = async function () {
     
     // Intercept if it's hitting our backend (port 8000 locally or /api in prod)
     if (url.startsWith(window.API_BASE) || url.includes(':8000/') || (url.includes('/api/') && !url.startsWith('http'))) {
+        // Wait for auth to settle
+        await window.waitForToken();
+        
         if (!config) config = {};
         if (!config.headers) config.headers = {};
         
