@@ -194,7 +194,16 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials # type: ig
 
 if not firebase_admin._apps:
     try:
-        firebase_admin.initialize_app()
+        cred_json = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
+        if cred_json:
+            import tempfile
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+                f.write(cred_json)
+                cred_path = f.name
+            cred = firebase_admin.credentials.Certificate(cred_path)
+        else:
+            cred = firebase_admin.credentials.ApplicationDefault()
+        firebase_admin.initialize_app(cred)
     except Exception as e:
         import logging
         logging.getLogger(__name__).error(f"Firebase init error: {e}")
