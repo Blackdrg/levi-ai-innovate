@@ -16,6 +16,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Install Dependencies
+        run: npm install
+        working-directory: frontend
+
+      - name: Build Assets
+        run: npm run build
+        working-directory: frontend
+
       - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
@@ -23,3 +31,4 @@ jobs:
           firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_LEVI_AI_C23C6 }}'
           channelId: live
           projectId: levi-ai-c23c6
+          entryPoint: frontend
