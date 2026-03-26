@@ -53,15 +53,19 @@ async function apiFetch(endpoint, options = {}) {
       }
 
       const errorData = await res.json().catch(() => ({}));
-      throw new Error(errorData.detail || `API error: ${res.status}`);
+      const errorMessage = errorData.error || errorData.detail || `API error: ${res.status}`;
+      throw new Error(errorMessage);
     }
     return await res.json();
   } catch (error) {
     console.error(`[LEVI] Fetch error for ${url}:`, error);
+    
+    // Improved Toast notifications for errors
+    const errorMsg = error.message || "Network error";
     if (typeof showToast === 'function') {
-      showToast("Network error", "error");
+      showToast(errorMsg, "error");
     } else if (window.ui && window.ui.showToast) {
-      window.ui.showToast("Network error", "error");
+      window.ui.showToast(errorMsg, "error");
     }
     throw error;
   }

@@ -6,11 +6,8 @@ import hmac
 import hashlib
 import logging
 from fastapi import APIRouter, HTTPException, Depends, Request  # type: ignore
-from sqlalchemy.orm import Session  # type: ignore
-try:
-    from backend.firestore_db import db as firestore_db # type: ignore
-except ImportError:
-    from firestore_db import db as firestore_db # type: ignore
+from backend.firestore_db import db as firestore_db  # type: ignore
+from backend.redis_client import _get, _set, HAS_REDIS  # type: ignore
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/payments", tags=["payments"])

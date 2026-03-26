@@ -24,12 +24,8 @@ try:
 except ImportError:
     HAS_WEBPUSH = False
 
-try:
-    from backend.db import SessionLocal  # type: ignore
-    from backend.models import FeedItem, Users, PushSubscription  # type: ignore
-except ImportError:
-    from db import SessionLocal  # type: ignore
-    from models import FeedItem, Users, PushSubscription  # type: ignore
+from backend.db import SessionLocal  # type: ignore
+from backend.models import FeedItem, Users, PushSubscription  # type: ignore
 
 logger = logging.getLogger(__name__)
 

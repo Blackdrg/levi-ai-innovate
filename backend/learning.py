@@ -11,10 +11,11 @@ import logging
 import hashlib
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any, Tuple
-try:
-    from backend.firestore_db import db as firestore_db # type: ignore
-except ImportError:
-    from firestore_db import db as firestore_db # type: ignore
+from backend.firestore_db import db as firestore_db  # type: ignore
+from backend.embeddings import embed_text, HAS_MODEL  # type: ignore
+from backend.redis_client import (  # type: ignore
+    get_cached_user_memory, cache_user_memory, invalidate_user_memory
+)
 
 logger = logging.getLogger(__name__)
 
@@ -134,11 +135,6 @@ def _augment_knowledge_base(question: str, answer: str, mood: str):
             if oldest:
                 oldest[0].reference.delete()
 
-        try:
-             from backend.embeddings import embed_text  # type: ignore
-        except ImportError:
-             from embeddings import embed_text  # type: ignore
-        
         emb = embed_text(answer)
         firestore_db.collection("quotes").add({
             "text": answer,
