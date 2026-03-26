@@ -13,28 +13,16 @@ const isLocalDev = (
 );
 
 const API_BASE = window.API_BASE || (isLocalDev
-  ? `http://${window.location.hostname}:8000`
-  : `${window.location.origin}/api`);
+  ? "http://localhost:8000"
+  : "/api");
 
 console.log(`[LEVI] API Base: ${API_BASE} | isLocalDev: ${isLocalDev}`);
 
-// ✅ Added wake-up snippet for Render free tier sleep fix
-async function wakeUpBackend() {
-  if (isLocalDev) return;
-  try {
-    console.log('[LEVI] Waking up Render backend...');
-    const res = await fetch(`${API_BASE}/health`, { method: 'GET' });
-    const data = await res.json();
-    console.log('[LEVI] Backend awake:', data.status);
-  } catch (e) {
-    console.warn('[LEVI] Backend wake-up ping failed:', e.message);
-  }
-}
-wakeUpBackend();
 
-export async function getHealth() {
+async function getHealth() {
   return apiFetch("/health");
 }
+
 
 async function apiFetch(endpoint, options = {}) {
   if (window.waitForToken) await window.waitForToken();

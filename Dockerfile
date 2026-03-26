@@ -14,6 +14,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
     curl \
+    imagemagick \
+    && sed -i 's/pixel, ghostscript, PDF, XPS, PS/pixel, ghostscript, XPS, PS/' /etc/ImageMagick-6/policy.xml \
     && rm -rf /var/lib/apt/lists/*
 
 RUN python -m venv /opt/venv
@@ -26,12 +28,10 @@ RUN mkdir -p /app/model_cache && chmod 777 /app/model_cache
 
 COPY backend/ .
 
-EXPOSE 10000
+EXPOSE 8080
 
-# --timeout-keep-alive gives Render's port scanner time to detect the port
-# before background model threads finish loading
 CMD uvicorn main:app \
     --host 0.0.0.0 \
-    --port ${PORT:-10000} \
-    --workers 1 \
+    --port ${PORT:-8080} \
+    --workers 2 \
     --timeout-keep-alive 75

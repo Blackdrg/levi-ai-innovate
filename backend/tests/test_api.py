@@ -2,7 +2,9 @@
 """API Tests."""
 import sys
 import os
+import pytest
 from unittest.mock import patch, MagicMock
+
 
 # conftest.py in the same directory will automatically provide fixtures
 # but we still need basic imports for mocking
@@ -11,6 +13,16 @@ try:
     from backend.main import app, get_current_user  # type: ignore
 except ImportError:
     from main import app, get_current_user  # type: ignore
+
+# Globally mock get_current_user for all tests in this file
+@pytest.fixture(autouse=True)
+def mock_auth(test_user):
+    with patch('backend.main.firebase_auth.verify_id_token') as mock_verify:
+        mock_verify.return_value = {"uid": "test_uid", "email": "test@example.com"}
+        with patch('backend.main.get_current_user') as mock_get_user:
+            mock_get_user.return_value = test_user
+            yield
+
 
 def test_health(app_client):
     """Test health."""

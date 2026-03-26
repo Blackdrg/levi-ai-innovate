@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient  # type: ignore
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Set environment variables BEFORE any backend imports
-os.environ["RENDER"] = "true"
+os.environ["ENVIRONMENT"] = "production"
 os.environ["SECRET_KEY"] = "9342502788e0ef3e86f80907a78370de86121f0084323e0ef3e86f8c407a7837"
 os.environ["DATABASE_URL"] = "sqlite:///./test.db"
 os.environ["RAZORPAY_KEY_ID"] = "test"
@@ -19,14 +19,15 @@ os.environ["ADMIN_KEY"] = "test"
 
 try:
     from backend import models, db, main  # type: ignore
-    from backend.main import app, create_access_token  # type: ignore
+    from backend.main import app  # type: ignore
     from backend.models import Users, Base  # type: ignore
     from backend.db import engine, SessionLocal  # type: ignore
 except ImportError:
     import models, db, main  # type: ignore
-    from main import app, create_access_token  # type: ignore
+    from main import app  # type: ignore
     from models import Users, Base  # type: ignore
     from db import engine, SessionLocal  # type: ignore
+
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_test_db():
@@ -73,11 +74,11 @@ def test_user(db_session):
         user = Users(
             id=1,
             username="testuser",
-            password_hash="fakehash",
+            email="test@example.com",
             tier="free",
-            credits=10,
-            is_verified=1
+            credits=10
         )
+
         db_session.add(user)
         db_session.commit()
         db_session.refresh(user)
@@ -85,9 +86,9 @@ def test_user(db_session):
 
 @pytest.fixture
 def auth_headers(test_user):
-    """Return valid JWT headers for the test user."""
-    access_token = create_access_token(data={"sub": test_user.username})
-    return {"Authorization": f"Bearer {access_token}"}
+    """Return valid mock headers for the test user."""
+    return {"Authorization": "Bearer fake_firebase_token"}
+
 
 @pytest.fixture
 def app_client(db_session, test_user):

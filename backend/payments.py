@@ -8,13 +8,9 @@ import logging
 from fastapi import APIRouter, HTTPException, Depends, Request  # type: ignore
 from sqlalchemy.orm import Session  # type: ignore
 try:
-    from backend.db import get_db  # type: ignore
-    from backend.models import Users  # type: ignore
-    # from backend.auth import get_current_user  # type: ignore
+    from backend.firestore_db import db as firestore_db # type: ignore
 except ImportError:
-    from db import get_db  # type: ignore
-    from models import Users  # type: ignore
-    # from auth import get_current_user  # type: ignore
+    from firestore_db import db as firestore_db # type: ignore
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/payments", tags=["payments"])
@@ -46,7 +42,7 @@ def get_tier_credits(tier: str) -> int:
     return TIER_CREDITS.get(tier, 10)
 
 
-def create_order(amount: int, currency: str = "INR", receipt: str = "order_1", user_id: Optional[int] = None, plan: str = "pro"):
+def create_order(amount: int, currency: str = "INR", receipt: str = "order_1", user_id: Optional[str] = None, plan: str = "pro"):
     """
     Create a Razorpay order. Amount in paise (₹1 = 100 paise).
     """
@@ -84,19 +80,24 @@ def verify_razorpay_signature(order_id: str, payment_id: str, signature: str) ->
     expected = hmac.new(secret_bytes, msg.encode(), hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected, signature)
 
-def upgrade_user_tier(user_id: int, plan: str, db: Session):
+def upgrade_user_tier(user_id: str, plan: str):
     """
-    Upgrades a user's tier in the database after successful payment.
+    Upgrades a user's tier in Firestore after successful payment.
     """
-    user = db.query(Users).filter(Users.id == user_id).first()
-    if user:
-        user.tier = plan
-        # Grant bonus credits for upgrading
-        if plan == "pro":
-            user.credits = (user.credits or 0) + 100
-        elif plan == "creator":
-            user.credits = (user.credits or 0) + 500
-        db.commit()
+    user_ref = firestore_db.collection("users").document(user_id)
+    user_doc = user_ref.get()
+    
+    if user_doc.exists:
+        data = user_doc.to_dict()
+        current_credits = data.get("credits", 0)
+        
+        bonus = 100 if plan == "pro" else 500 if plan == "creator" else 0
+        new_credits = current_credits + bonus
+        
+        user_ref.update({
+            "tier": plan,
+            "credits": new_credits
+        })
         logger.info(f"User {user_id} upgraded to {plan}")
         return True
     return False
@@ -107,39 +108,44 @@ def verify_payment_signature(order_id: str, payment_id: str, signature: str) -> 
     """
     return verify_razorpay_signature(order_id, payment_id, signature)
 
-def use_credits(user_id: int, amount: int, db: Session):
+def use_credits(user_id: str, amount: int):
     """
-    Deducts credits from a user's account.
+    Deducts credits from a user's account in Firestore.
     """
-    user: Optional[Users] = db.query(Users).filter(Users.id == user_id).first()
-    if not user:
+    user_ref = firestore_db.collection("users").document(user_id)
+    user_doc = user_ref.get()
+    
+    if not user_doc.exists:
         raise HTTPException(status_code=404, detail="User not found")
         
-    current_credits = int(user.credits or 0)
-    if user.tier == "free" and current_credits < amount:
+    data = user_doc.to_dict()
+    current_credits = int(data.get("credits", 0))
+    tier = data.get("tier", "free")
+    
+    if tier == "free" and current_credits < amount:
         raise HTTPException(status_code=402, detail="Insufficient credits. Upgrade to Pro for more generations.")
     
-    user.credits = current_credits - amount
-    db.commit()
-    return int(user.credits)
+    new_credits = current_credits - amount
+    user_ref.update({"credits": new_credits})
+    return new_credits
 
-def process_subscription_lapse(user_id: int, db: Session):
+def process_subscription_lapse(user_id: str):
     """
-    Downgrade a user to 'free' tier and cap credits at 10.
-    Called when a subscription.charged webhook fails or a billing period ends.
+    Downgrade a user to 'free' tier and cap credits at 10 in Firestore.
     """
     try:
-        from models import Users  # type: ignore
-        user = db.query(Users).filter(Users.id == user_id).first()
-        if user and user.tier != "free":
-            logger.info(f"Subscription lapsed for user {user_id}. Downgrading to free tier.")
-            user.tier = "free"
-            # Cap credits at 10 for free tier if they had more
-            if user.credits > 10:
-                user.credits = 10
-            db.commit()
-            return True
+        user_ref = firestore_db.collection("users").document(user_id)
+        user_doc = user_ref.get()
+        
+        if user_doc.exists:
+            data = user_doc.to_dict()
+            if data.get("tier") != "free":
+                logger.info(f"Subscription lapsed for user {user_id}. Downgrading to free tier.")
+                update_data = {"tier": "free"}
+                if data.get("credits", 0) > 10:
+                    update_data["credits"] = 10
+                user_ref.update(update_data)
+                return True
     except Exception as e:
         logger.error(f"Failed to process subscription lapse for user {user_id}: {e}")
-        db.rollback()
     return False

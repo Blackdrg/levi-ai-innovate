@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # pyright: reportMissingImports=false
 """
-LEVI Self-Training Pipeline v3.0
-- Exports high-quality conversation data
+LEVI Self-Training Pipeline v3.0 (Firestore-Native)
+- Exports high-quality conversation data from Firestore
 - Submits fine-tuning jobs to Together AI
-- Monitors job progress
+- Monitors job progress and records status in Firestore
 - Activates improved models automatically
 - Weekly automated training cycle
 """
@@ -27,13 +27,14 @@ MAX_TRAINING_EPOCHS = 2
 QUALITY_THRESHOLD = 0.62  # Minimum eval score to activate model
 
 try:
-    from tasks import celery_app  # type: ignore
+    from backend.firestore_db import db as firestore_db # type: ignore
+    from backend.tasks import celery_app # type: ignore
 except ImportError:
+    from firestore_db import db as firestore_db # type: ignore
     try:
-        from backend.tasks import celery_app  # type: ignore
+        from tasks import celery_app # type: ignore
     except ImportError:
         celery_app = None
-
 
 def _headers() -> Dict:
     return {
@@ -41,52 +42,19 @@ def _headers() -> Dict:
         "Content-Type": "application/json",
     }
 
-
 # ─────────────────────────────────────────────
 # Training Data Export
 # ─────────────────────────────────────────────
 
-def export_training_data(db, output_path: str = "/tmp/levi_training.jsonl",
+def export_training_data(output_path: str = "/tmp/levi_training.jsonl",
                           min_rating: int = 4, limit: int = 2000) -> tuple:
-    """Export high-quality conversation pairs as JSONL."""
+    """Export high-quality conversation pairs from Firestore."""
     try:
-        from training_models import TrainingData  # type: ignore
+        from backend.learning import export_training_data as exp_logic  # type: ignore
     except ImportError:
-        from backend.training_models import TrainingData  # type: ignore
-
-    samples = (
-        db.query(TrainingData)
-        .filter(
-            TrainingData.rating >= min_rating,
-            TrainingData.is_exported == False,
-        )
-        .order_by(TrainingData.rating.desc(), TrainingData.created_at.desc())
-        .limit(limit)
-        .all()
-    )
-
-    if not samples:
-        logger.info("[Trainer] No new training samples to export.")
-        return output_path, 0
-
-    count = 0
-    with open(output_path, "w", encoding="utf-8") as f:
-        for s in samples:
-            # Together AI instruction format
-            record = {
-                "text": (
-                    f"<human>: {s.user_message}\n"
-                    f"<bot>: {s.bot_response}"
-                ),
-            }
-            f.write(json.dumps(record, ensure_ascii=False) + "\n")
-            s.is_exported = True
-            count += 1
-
-    db.commit()
-    logger.info(f"[Trainer] Exported {count} training samples to {output_path}")
-    return output_path, count
-
+        from learning import export_training_data as exp_logic # type: ignore
+    
+    return exp_logic(output_path=output_path, min_rating=min_rating, limit=limit)
 
 # ─────────────────────────────────────────────
 # Together AI File & Job Management
@@ -114,7 +82,6 @@ def upload_training_file(file_path: str) -> Optional[str]:
         logger.error(f"[Trainer] Upload failed: {e}")
         return None
 
-
 def submit_finetuning_job(file_id: str, suffix: str = "levi") -> Optional[str]:
     """Submit fine-tuning job. Returns job_id."""
     if not TOGETHER_API_KEY:
@@ -138,9 +105,8 @@ def submit_finetuning_job(file_id: str, suffix: str = "levi") -> Optional[str]:
         logger.error(f"[Trainer] Job submission failed: {e}")
         return None
 
-
 def check_finetuning_job(job_id: str) -> Dict[str, Any]:
-    """Poll fine-tuning job status."""
+    """Poll fine-tuning job status from Together AI."""
     if not TOGETHER_API_KEY:
         return {"status": "error"}
     try:
@@ -160,69 +126,65 @@ def check_finetuning_job(job_id: str) -> Dict[str, Any]:
         logger.error(f"[Trainer] Status check failed: {e}")
         return {"status": "error", "message": str(e)}
 
-
 # ─────────────────────────────────────────────
-# Model Version Management
+# Model Version Management (Firestore)
 # ─────────────────────────────────────────────
 
-def record_model_version(db, job_id: str, model_id: str, training_samples: int, eval_score: float = 0.0):
-    """Save trained model version to DB."""
-    try:
-        from training_models import ModelVersion  # type: ignore
-    except ImportError:
-        from backend.training_models import ModelVersion  # type: ignore
+def record_model_version(job_id: str, model_id: str, training_samples: int, eval_score: float = 0.0):
+    """Save trained model version to Firestore."""
+    version_data = {
+        "job_id": job_id,
+        "model_id": model_id,
+        "training_samples": training_samples,
+        "eval_score": eval_score,
+        "is_active": False,
+        "created_at": datetime.utcnow(),
+    }
+    firestore_db.collection("model_versions").document(model_id).set(version_data)
+    logger.info(f"[Trainer] Recorded model version in Firestore: {model_id}")
+    return model_id
 
-    version = ModelVersion(
-        job_id=job_id,
-        model_id=model_id,
-        training_samples=training_samples,
-        eval_score=eval_score,
-        is_active=False,
-        created_at=datetime.utcnow(),
-    )
-    db.add(version)
-    db.commit()
-    return version
-
-
-def activate_model_version(db, model_id: str):
-    """Set a model as active."""
-    try:
-        from training_models import ModelVersion  # type: ignore
-    except ImportError:
-        from backend.training_models import ModelVersion  # type: ignore
-
-    db.query(ModelVersion).update({"is_active": False})
-    db.query(ModelVersion).filter(ModelVersion.model_id == model_id).update({"is_active": True})
-    db.commit()
+def activate_model_version(model_id: str):
+    """Set a model as active in Firestore."""
+    # Deactivate currently active models
+    active_docs = firestore_db.collection("model_versions").where("is_active", "==", True).get()
+    for doc in active_docs:
+        doc.reference.update({"is_active": False})
+    
+    # Activate the target model
+    firestore_db.collection("model_versions").document(model_id).update({"is_active": True})
 
     os.environ["LEVI_ACTIVE_MODEL"] = model_id
-    logger.info(f"[Trainer] Activated model: {model_id}")
-
+    logger.info(f"[Trainer] Activated model version: {model_id}")
 
 def get_active_model_id() -> Optional[str]:
-    return os.environ.get("LEVI_ACTIVE_MODEL")
+    """Get active model ID from environment or Firestore."""
+    env_model = os.environ.get("LEVI_ACTIVE_MODEL")
+    if env_model:
+        return env_model
+    
+    # Fallback to Firestore lookup
+    active_docs = firestore_db.collection("model_versions").where("is_active", "==", True).limit(1).get()
+    if active_docs:
+        model_id = active_docs[0].to_dict().get("model_id")
+        os.environ["LEVI_ACTIVE_MODEL"] = model_id # type: ignore
+        return model_id
+    return None
 
-
-def get_model_history(db) -> List[Dict]:
-    try:
-        from training_models import ModelVersion  # type: ignore
-    except ImportError:
-        from backend.training_models import ModelVersion  # type: ignore
-
-    versions = db.query(ModelVersion).order_by(ModelVersion.created_at.desc()).all()
+def get_model_history() -> List[Dict]:
+    """Retrieve all model versions from Firestore."""
+    docs = firestore_db.collection("model_versions").order_by("created_at", direction="DESCENDING").get()
     return [
         {
-            "job_id": v.job_id,
-            "model_id": v.model_id,
-            "is_active": v.is_active,
-            "training_samples": v.training_samples,
-            "eval_score": v.eval_score,
-            "created_at": v.created_at.isoformat() if v.created_at else None,
+            "job_id": d.to_dict().get("job_id"),
+            "model_id": d.id,
+            "is_active": d.to_dict().get("is_active"),
+            "training_samples": d.to_dict().get("training_samples"),
+            "eval_score": d.to_dict().get("eval_score"),
+            "created_at": d.to_dict().get("created_at").isoformat() if d.to_dict().get("created_at") else None,
         }
-        for v in versions
+        for d in docs
     ]
-
 
 # ─────────────────────────────────────────────
 # Model Evaluation
@@ -235,7 +197,6 @@ EVAL_PROMPTS = [
     "What does silence teach us that words cannot?",
     "How does one find meaning in suffering?",
 ]
-
 
 def evaluate_model(model_id: str) -> float:
     """Evaluate a fine-tuned model. Returns 0-1 score."""
@@ -276,13 +237,12 @@ def evaluate_model(model_id: str) -> float:
                 score += 0.05
             scores.append(min(1.0, score))
         except Exception as e:
-            logger.warning(f"[Eval] Prompt failed: {e}")
+            logger.warning(f"[Eval] Prompt failed for {model_id}: {e}")
             scores.append(0.3)
 
     avg = sum(scores) / len(scores) if scores else 0.5
     logger.info(f"[Eval] Model {model_id} score: {avg:.3f}")
     return avg
-
 
 # ─────────────────────────────────────────────
 # Generation with Active Model
@@ -343,37 +303,25 @@ def generate_with_active_model(prompt: str, system_prompt: str,
 
     return None
 
-
 # ─────────────────────────────────────────────
-# Celery Tasks
+# Celery Tasks (Firestore-Native)
 # ─────────────────────────────────────────────
 
 if celery_app:
     @celery_app.task(name="levi.trigger_training_pipeline", bind=True, max_retries=2)
     def trigger_training_pipeline(self):
-        """Full self-training pipeline as Celery task."""
+        """Full self-training pipeline as Celery task using Firestore."""
         try:
-            from db import SessionLocal  # type: ignore
-            from learning import export_training_data as exp_data, get_learning_stats  # type: ignore
-            from training_models import TrainingJob  # type: ignore
-        except ImportError:
-            try:
-                from backend.db import SessionLocal  # type: ignore
-                from backend.learning import export_training_data as exp_data, get_learning_stats  # type: ignore
-                from backend.training_models import TrainingJob  # type: ignore
-            except ImportError:
-                return {"status": "failed", "reason": "imports_failed"}
-
-        db = SessionLocal()
-        try:
-            stats = get_learning_stats(db)
+            from backend.learning import get_learning_stats, export_training_data as exp_data # type: ignore
+            
+            stats = get_learning_stats()
             unexported = stats.get("unexported_samples", 0)
 
             if unexported < MIN_SAMPLES_TO_TRAIN:
                 logger.info(f"[Trainer] Only {unexported} samples, need {MIN_SAMPLES_TO_TRAIN}")
                 return {"status": "skipped", "samples": unexported}
 
-            file_path, count = exp_data(db, min_rating=4, limit=2000)
+            file_path, count = exp_data(min_rating=4, limit=2000)
             logger.info(f"[Trainer] Exported {count} samples")
 
             file_id = upload_training_file(file_path)
@@ -385,69 +333,60 @@ if celery_app:
             if not job_id:
                 return {"status": "failed", "reason": "job_submission_failed"}
 
-            # Record job
-            job = TrainingJob(
-                job_id=job_id,
-                file_id=file_id,
-                training_samples=count,
-                status="pending",
-                created_at=datetime.utcnow(),
-            )
-            db.add(job)
-            db.commit()
+            # Record job in Firestore
+            firestore_db.collection("training_jobs").document(job_id).set({
+                "job_id": job_id,
+                "file_id": file_id,
+                "training_samples": count,
+                "status": "pending",
+                "created_at": datetime.utcnow(),
+            })
 
             # Schedule polling
             poll_training_job.apply_async(args=[job_id], countdown=300)
 
             return {"status": "started", "job_id": job_id, "samples": count}
-        finally:
-            db.close()
+        except Exception as e:
+            logger.error(f"[Trainer] Pipeline failed: {e}")
+            return {"status": "error", "error": str(e)}
 
     @celery_app.task(name="levi.poll_training_job", bind=True, max_retries=48)
     def poll_training_job(self, job_id: str):
-        """Poll fine-tuning job status every 5 minutes."""
-        try:
-            from db import SessionLocal  # type: ignore
-            from training_models import TrainingJob  # type: ignore
-        except ImportError:
-            from backend.db import SessionLocal  # type: ignore
-            from backend.training_models import TrainingJob  # type: ignore
-
-        db = SessionLocal()
+        """Poll fine-tuning job status from Firestore every 5 minutes."""
         try:
             status_data = check_finetuning_job(job_id)
             status = status_data.get("status")
 
-            job = db.query(TrainingJob).filter(TrainingJob.job_id == job_id).first()
-            if job:
-                job.status = status
-                db.commit()
+            job_ref = firestore_db.collection("training_jobs").document(job_id)
+            job_doc = job_ref.get()
+            
+            if job_doc.exists:
+                job_ref.update({"status": status})
 
             if status == "completed":
                 model_id = status_data.get("model_id")
                 if model_id:
                     eval_score = evaluate_model(model_id)
-                    version = record_model_version(
-                        db, job_id, model_id,
-                        job.training_samples if job else 0,
-                        eval_score
-                    )
+                    samples_count = job_doc.to_dict().get("training_samples", 0) if job_doc.exists else 0
+                    record_model_version(job_id, model_id, samples_count, eval_score)
+                    
                     if eval_score >= QUALITY_THRESHOLD:
-                        activate_model_version(db, model_id)
-                        logger.info(f"[Trainer] ✅ Model activated: {model_id} (score={eval_score:.2f})")
+                        activate_model_version(model_id)
+                        logger.info(f"[Trainer] ✅ Model activated in Firestore: {model_id} (score={eval_score:.2f})")
                     else:
                         logger.warning(f"[Trainer] Model score {eval_score:.2f} below threshold. Not activating.")
                 return {"status": "completed", "model_id": model_id}
 
             elif status == "failed":
-                logger.error(f"[Trainer] Job failed: {status_data.get('error')}")
+                logger.error(f"[Trainer] Job failed for {job_id}: {status_data.get('error')}")
                 return {"status": "failed"}
 
             else:
-                raise self.retry(countdown=300)  # Retry in 5 min
+                raise self.retry(countdown=300)
 
-        finally:
-            db.close()
+        except Exception as e:
+            logger.error(f"[Trainer] Polling failed for {job_id}: {e}")
+            raise self.retry(countdown=300)
 
 # Beat schedule for training
 TRAINING_BEAT_SCHEDULE = {

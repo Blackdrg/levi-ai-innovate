@@ -8,13 +8,11 @@
 'use strict';
 
 // ─── API Base Detection ──────────────────────────────────────────────────────
-const _isLocal =
-  ['localhost', '127.0.0.1', '::1', '0.0.0.0'].includes(location.hostname) ||
-  location.hostname === '';
+const _isLocal = window.location.hostname === "localhost";
 
 window.API_BASE = _isLocal
-  ? `http://${location.hostname}:8000`
-  : `${location.origin}/api`;
+  ? "http://localhost:8000"
+  : "/api";
 
 // ─── Fetch wrapper (always sends cookies) ───────────────────────────────────
 async function apiFetch(endpoint, options = {}) {

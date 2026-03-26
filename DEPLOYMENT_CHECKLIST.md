@@ -46,7 +46,7 @@ Follow these phases in order to launch LEVI with real payments, AI generation, a
 
 ## Phase D: Environment Variables
 
-Add these to your Render/Production environment:
+Add these to your Google Cloud Run / Firebase environment:
 
 * `DATABASE_URL`: Your production Postgres URL.
 * `REDIS_URL`: Your production Redis URL.
@@ -81,7 +81,7 @@ Add these to your Render/Production environment:
 
 1. **Frontend Build**: Run `cd frontend && npm run build` to generate the production CSS.
 2. **Push Code**: `git push origin main`.
-3. **Verify**: Check Render logs for "Database tables ready" and "Uvicorn running".
+3. **Verify**: Check Cloud Run logs for "Database tables ready" and "Uvicorn running".
 4. **Test**: Perform a test purchase and verify credits in the Studio.
 
 ---
@@ -97,4 +97,4 @@ Add these to your Render/Production environment:
 ✅ Daily email system (Resend)
 ✅ Web Push notifications (pywebpush)
 ✅ Celery background tasks
-✅ Frontend ↔ Backend connected (Vercel → Render)
+✅? Frontend + Backend connected (Firebase Hosting + Cloud Run)

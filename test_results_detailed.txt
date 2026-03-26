@@ -46,3 +46,21 @@ Failed Body: {"detail":"An internal error occurred."}
 --- Testing Quote Generation ---
 Status: 200
 Success! Response: {"generated_quote":"\"Weave the tapestry of your dreams, and in every thread of resilience, let the beauty of success unfold – for it is not the destination, but the canvas of your journey that reveals the masterpiece you were born to create.\" - Aria Winters"}
+
+--- Testing Health Check ---
+Error: HTTPConnectionPool(host='localhost', port=8000): Max retries exceeded with url: /health (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x00000165A793B8C0>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))
+
+--- Testing Daily Quote ---
+Error: HTTPConnectionPool(host='localhost', port=8000): Max retries exceeded with url: /daily_quote (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x00000165A7A460D0>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))
+
+--- Testing Analytics ---
+Error: HTTPConnectionPool(host='localhost', port=8000): Max retries exceeded with url: /analytics (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x00000165A7A45810>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))
+
+--- Testing English Chat ---
+Error: HTTPConnectionPool(host='localhost', port=8000): Max retries exceeded with url: /chat (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x00000165A7A2B490>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))
+
+--- Testing Hindi Chat ---
+Error: HTTPConnectionPool(host='localhost', port=8000): Max retries exceeded with url: /chat (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x00000165A7A2BCE0>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))
+
+--- Testing Quote Generation ---
+Error: HTTPConnectionPool(host='localhost', port=8000): Max retries exceeded with url: /generate (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x00000165A7AACA70>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))

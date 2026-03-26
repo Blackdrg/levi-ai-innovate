@@ -11,8 +11,10 @@ import logging
 import hashlib
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session  # type: ignore
-from sqlalchemy import func  # type: ignore
+try:
+    from backend.firestore_db import db as firestore_db # type: ignore
+except ImportError:
+    from firestore_db import db as firestore_db # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -29,55 +31,48 @@ MAX_KNOWLEDGE_ENTRIES = 2000  # cap on learned responses in DB
 # 1. DATA COLLECTION
 # ─────────────────────────────────────────────
 def collect_training_sample(
-    db: Session,
     user_message: str,
     bot_response: str,
     mood: str,
     rating: Optional[int],       # 1-5 from user, None if not rated
     session_id: str,
-    user_id: Optional[int] = None,
+    user_id: Optional[str] = None,
 ) -> Any:
     """
-    Store a conversation turn as a training sample.
-    Automatically infers quality from response characteristics
-    when no explicit rating is given.
+    Store a conversation turn as a training sample in Firestore.
     """
-    try:
-        from training_models import TrainingData  # type: ignore
-    except ImportError:
-        from backend.training_models import TrainingData  # type: ignore
-
     # Auto-score if no rating provided
     if rating is None:
         rating = _auto_score_response(user_message, bot_response)
 
-    sample = TrainingData(
-        user_message=user_message,
-        bot_response=bot_response,
-        mood=mood or "philosophical",
-        rating=rating,
-        session_id=session_id,
-        user_id=user_id,
-        fingerprint=_fingerprint(user_message, bot_response),
-        is_exported=False,
-        created_at=datetime.utcnow(),
-    )
-    db.add(sample)
+    sample_data = {
+        "user_message": user_message,
+        "bot_response": bot_response,
+        "mood": mood or "philosophical",
+        "rating": rating,
+        "session_id": session_id,
+        "user_id": user_id,
+        "fingerprint": _fingerprint(user_message, bot_response),
+        "is_exported": False,
+        "created_at": datetime.utcnow(),
+    }
+    
+    # Add to Firestore collection
+    update_time, doc_ref = firestore_db.collection("training_data").add(sample_data)
 
     # If high quality, augment the quote knowledge base
     if rating >= MIN_QUALITY_SCORE:
-        _augment_knowledge_base(db, user_message, bot_response, mood)
+        _augment_knowledge_base(user_message, bot_response, mood)
 
     # Update Structured Memory Graph
     if user_id:
         try:
-            update_memory_graph(user_id, user_message, db)
+            update_memory_graph(user_id, user_message)
         except Exception as e:
             logger.warning(f"[Learning] Memory graph update failed: {e}")
 
-    db.commit()
     logger.info(f"[Learning] Collected sample rating={rating} mood={mood} user={user_id}")
-    return sample
+    return doc_ref.id
 
 
 def _auto_score_response(user_msg: str, bot_response: str) -> int:
@@ -121,44 +116,39 @@ def _fingerprint(msg: str, response: str) -> str:
     return hashlib.md5(combined.encode()).hexdigest()
 
 
-def _augment_knowledge_base(db: Session, question: str, answer: str, mood: str):
+def _augment_knowledge_base(question: str, answer: str, mood: str):
     """
-    Add a high-quality AI response to the quotes table
-    so future semantic searches can retrieve it.
+    Add a high-quality AI response to the quotes collection in Firestore.
     """
     try:
-        try:
-            from models import Quote  # type: ignore
-            from embeddings import embed_text  # type: ignore
-        except ImportError:
-            from backend.models import Quote  # type: ignore
-            from backend.embeddings import embed_text  # type: ignore
-
         # Avoid exact duplicates
-        existing = db.query(Quote).filter(Quote.text == answer).first()
-        if existing:
+        existing = firestore_db.collection("quotes").where("text", "==", answer).limit(1).get()
+        if len(existing) > 0:
             return
 
-        # Cap knowledge base size
-        count = db.query(func.count(Quote.id)).filter(Quote.topic == "__learned__").scalar()
-        if count >= MAX_KNOWLEDGE_ENTRIES:
-            # Remove the oldest learned entry
-            oldest = db.query(Quote).filter(
-                Quote.topic == "__learned__"
-            ).order_by(Quote.created_at.asc()).first()
+        # Cap knowledge base size (naive count)
+        learned_quotes = firestore_db.collection("quotes").where("topic", "==", "__learned__").get()
+        if len(learned_quotes) >= MAX_KNOWLEDGE_ENTRIES:
+            # Remove oldest
+            oldest = firestore_db.collection("quotes").where("topic", "==", "__learned__").order_by("created_at").limit(1).get()
             if oldest:
-                db.delete(oldest)
+                oldest[0].reference.delete()
 
+        try:
+             from backend.embeddings import embed_text  # type: ignore
+        except ImportError:
+             from embeddings import embed_text  # type: ignore
+        
         emb = embed_text(answer)
-        new_q = Quote(
-            text=answer,
-            author="LEVI AI",
-            topic="__learned__",
-            mood=mood,
-            embedding=emb,
-            likes=0,
-        )
-        db.add(new_q)
+        firestore_db.collection("quotes").add({
+            "text": answer,
+            "author": "LEVI AI",
+            "topic": "__learned__",
+            "mood": mood,
+            "embedding": emb,
+            "likes": 0,
+            "created_at": datetime.utcnow()
+        })
         logger.info(f"[Learning] Added learned response to knowledge base (mood={mood})")
 
     except Exception as e:
@@ -174,8 +164,7 @@ class UserPreferenceModel:
     sent to Groq on every request.
     """
 
-    def __init__(self, db: Session, user_id: int):
-        self.db = db
+    def __init__(self, user_id: str):
         self.user_id = user_id
         self._profile: Optional[Dict[str, Any]] = None
 
@@ -184,48 +173,34 @@ class UserPreferenceModel:
         if p is not None:
             return p
 
-        try:
-            from training_models import TrainingData  # type: ignore
-        except ImportError:
-            from backend.training_models import TrainingData  # type: ignore
-
-        # Fetch last 40 rated interactions for this user
-        samples = (
-            self.db.query(TrainingData)
-            .filter(TrainingData.user_id == self.user_id, TrainingData.rating.isnot(None))
-            .order_by(TrainingData.created_at.desc())
-            .limit(40)
-            .all()
-        )
+        # Fetch last 40 rated interactions for this user from Firestore
+        samples_ref = firestore_db.collection("training_data")
+        query = samples_ref.where("user_id", "==", self.user_id).order_by("created_at", direction="DESCENDING").limit(40)
+        samples_docs = query.get()
+        
+        samples = [doc.to_dict() for doc in samples_docs if doc.to_dict().get("rating") is not None]
 
         if not samples:
             prof = _default_profile()
-            # Fetch structured memory even for new users if it exists
-            try:
-                from models import UserMemory  # type: ignore
-            except ImportError:
-                from backend.models import UserMemory  # type: ignore
-            memory = self.db.query(UserMemory).filter(UserMemory.user_id == self.user_id).first()
-            prof["structured_memory"] = memory.structured_memory if memory else {}
+            # Fetch structured memory
+            memory_doc = firestore_db.collection("user_memory").document(self.user_id).get()
+            prof["structured_memory"] = memory_doc.to_dict().get("structured_memory", {}) if memory_doc.exists else {}
             self._profile = prof
             return prof
-
         # Preferred moods (weight by rating)
         mood_scores: Dict[str, List[int]] = {}
         for s in samples:
-            mood_scores.setdefault(s.mood, []).append(s.rating)
+            mood_scores.setdefault(s.get("mood", "philosophical"), []).append(s.get("rating", 3))
 
         preferred_moods_sorted = sorted(
             mood_scores.keys(),
             key=lambda m: sum(mood_scores[m]) / len(mood_scores[m]),
             reverse=True
         )
-        preferred_moods = []
-        for i, m in enumerate(preferred_moods_sorted):
-            if i < 3: preferred_moods.append(m)
+        preferred_moods = preferred_moods_sorted[:3]
 
         # Preferred response length
-        lengths = [len(s.bot_response.split()) for s in samples if s.rating >= 4]
+        lengths = [len(s.get("bot_response", "").split()) for s in samples if s.get("rating", 0) >= 4]
         avg_len = int(sum(lengths) / len(lengths)) if lengths else 40
         if avg_len < 20:   style = "extremely concise, one-line"
         elif avg_len < 50: style = "concise, 2-3 sentences"
@@ -233,8 +208,8 @@ class UserPreferenceModel:
         else:              style = "detailed and expansive"
 
         # High-rated topics keywords
-        high_rated = [s for s in samples if s.rating >= 4]
-        all_words = " ".join(s.user_message for s in high_rated).lower().split()
+        high_rated = [s for s in samples if s.get("rating", 0) >= 4]
+        all_words = " ".join(s.get("user_message", "") for s in high_rated).lower().split()
         stop = {'the','a','an','is','are','to','of','and','or','in','it','you','i','me','my','can','do'}
         topic_words = [w for w in all_words if w not in stop and len(w) > 3]
         from collections import Counter
@@ -244,12 +219,11 @@ class UserPreferenceModel:
             "preferred_moods": preferred_moods,
             "response_style": style,
             "top_topics": top_topics,
-            "avg_rating": round(float(sum(s.rating for s in samples) / len(samples)), 2),  # type: ignore
+            "avg_rating": round(float(sum(s.get("rating", 0) for s in samples) / len(samples)), 2) if samples else 3.0,
             "total_interactions": len(samples),
         }
 
         # Fetch structured memory graph
-        try:
             from models import UserMemory  # type: ignore
         except ImportError:
             from backend.models import UserMemory  # type: ignore
@@ -343,66 +317,46 @@ Return in STRICT JSON ONLY:
         return {}
 
 
-def update_memory_graph(user_id: int, text: str, db: Session):
+def update_memory_graph(user_id: str, text: str):
     """
-    Extracts insights from text and merges them into the UserMemory table.
+    Extracts insights from text and merges them into the user_memory collection in Firestore.
     """
     try:
-        from models import UserMemory  # type: ignore
-    except ImportError:
-        from backend.models import UserMemory  # type: ignore
-
-    try:
-        memory = db.query(UserMemory).filter(UserMemory.user_id == user_id).first()
-        if not memory:
-            memory = UserMemory(user_id=user_id, structured_memory={})
-            db.add(memory)
+        memory_ref = firestore_db.collection("user_memory").document(user_id)
+        memory_doc = memory_ref.get()
+        
+        if not memory_doc.exists:
+            memory_ref.set({"user_id": user_id, "structured_memory": {}})
+            current = {}
+        else:
+            current = memory_doc.to_dict().get("structured_memory", {})
 
         extracted = _extract_memory_insights(text)
         if not extracted:
             return
 
-        current = dict(memory.structured_memory) if memory.structured_memory else {}
-        curr_entities = dict(current.get("entities", {}))
-        new_entities = dict(extracted.get("entities", {}))
+        curr_entities = current.get("entities", {})
+        new_entities = extracted.get("entities", {})
 
         updated_entities = {}
         for key in ["interests", "goals", "facts"]:
-            list_curr = list(curr_entities.get(key, []))
-            list_new = list(new_entities.get(key, []))
+            list_curr = curr_entities.get(key, [])
+            list_new = new_entities.get(key, [])
             
-            # Merge and stringify items using loop
             merged_set = set()
             for item in (list_curr + list_new):
                 if item:
                     merged_set.add(str(item))
 
-            # Pyre2-safe cap instead of list[:15]
-            capped_list = []
-            for m_item in merged_set:
-                if len(capped_list) >= 15:
-                    break
-                capped_list.append(m_item)
+            capped_list = list(merged_set)[:15]
             updated_entities[key] = capped_list
 
-        # Reconstruct to satisfy Pyre2 type dictionary assignment
-        from typing import Dict, Any  # type: ignore
-        updated_current: Dict[str, Any] = {}
-        for c_key, c_val in current.items():
-            updated_current[str(c_key)] = c_val
-        updated_current["entities"] = updated_entities
+        current["entities"] = updated_entities
+        memory_ref.update({"structured_memory": current})
         
-        memory.structured_memory = updated_current
-        
-        # Explicitly mark as modified for SQLAlchemy with JSON columns
-        from sqlalchemy.orm.attributes import flag_modified  # type: ignore
-        flag_modified(memory, "structured_memory")
-        
-        db.commit()
         logger.info(f"[MemoryGraph] Updated memory graph for user {user_id}")
     except Exception as e:
         logger.warning(f"[MemoryGraph] Failed to update memory for user {user_id}: {e}")
-        db.rollback()
 
 
 # ─────────────────────────────────────────────
@@ -423,12 +377,11 @@ class AdaptivePromptManager:
         "You are LEVI, a visionary AI. Frame insights as discoveries, not pronouncements.",
     ]
 
-    def __init__(self, db: Session):
-        self.db = db
+    def __init__(self):
         self._scores: Optional[Dict[int, float]] = None
 
     def get_best_variant(self, mood: str) -> str:
-        """Return the highest-performing prompt variant for a given mood."""
+        """Return the highest-performing prompt variant for a given mood via Firestore."""
         scores = self._load_scores()
         if not scores:
             # Default by mood
@@ -444,41 +397,39 @@ class AdaptivePromptManager:
         return self.PROMPT_VARIANTS[best_idx]
 
     def record_outcome(self, variant_idx: int, rating: int):
-        """Update the running average score for a variant."""
+        """Update the running average score for a variant in Firestore."""
         try:
-            from training_models import PromptPerformance  # type: ignore
-        except ImportError:
-            from backend.training_models import PromptPerformance  # type: ignore
+            record_ref = firestore_db.collection("prompt_performance").document(str(variant_idx))
+            record_doc = record_ref.get()
 
-        record = self.db.query(PromptPerformance).filter(
-            PromptPerformance.variant_idx == variant_idx
-        ).first()
-
-        if record:
-            # Exponential moving average
-            record.avg_score = record.avg_score * 0.85 + rating * 0.15
-            record.sample_count += 1
-        else:
-            record = PromptPerformance(
-                variant_idx=variant_idx,
-                avg_score=float(rating),
-                sample_count=1,
-            )
-            self.db.add(record)
-        self.db.commit()
-        self._scores = None  # invalidate cache
+            if record_doc.exists:
+                record_data = record_doc.to_dict()
+                avg_score = record_data.get("avg_score", 0.0)
+                sample_count = record_data.get("sample_count", 0)
+                # Exponential moving average
+                new_avg_score = avg_score * 0.85 + rating * 0.15
+                new_sample_count = sample_count + 1
+                record_ref.update({
+                    "avg_score": new_avg_score,
+                    "sample_count": new_sample_count,
+                })
+            else:
+                record_ref.set({
+                    "variant_idx": variant_idx,
+                    "avg_score": float(rating),
+                    "sample_count": 1,
+                })
+            self._scores = None  # invalidate cache
+        except Exception as e:
+            logger.warning(f"[PromptManager] Failed to record outcome for variant {variant_idx}: {e}")
 
     def _load_scores(self) -> Dict[int, float]:
         s = self._scores
         if s is not None:
             return s
-        try:
-            from training_models import PromptPerformance  # type: ignore
-        except ImportError:
-            from backend.training_models import PromptPerformance  # type: ignore
-
-        records = self.db.query(PromptPerformance).all()
-        self._scores = {r.variant_idx: r.avg_score for r in records if r.sample_count >= 5}
+        
+        records = firestore_db.collection("prompt_performance").get()
+        self._scores = {int(r.id): r.to_dict()["avg_score"] for r in records if r.to_dict().get("sample_count", 0) >= 5}
         return self._scores  # type: ignore
 
 
@@ -486,51 +437,38 @@ class AdaptivePromptManager:
 # 4. EXPORT TRAINING DATA (for Together AI fine-tuning)
 # ─────────────────────────────────────────────
 def export_training_data(
-    db: Session,
     output_path: str = "/tmp/levi_training.jsonl",
     min_rating: int = 4,
     limit: int = 2000,
 ) -> Tuple[str, int]:
     """
-    Export high-quality conversation pairs as JSONL in Together AI's
+    Export high-quality conversation pairs from Firestore as JSONL in Together AI's
     fine-tuning format (instruction-following).
 
     Returns (file_path, record_count).
     """
-    try:
-        from training_models import TrainingData  # type: ignore
-    except ImportError:
-        from backend.training_models import TrainingData  # type: ignore
+    samples_ref = firestore_db.collection("training_data")
+    query = samples_ref.where("rating", ">=", min_rating).where("is_exported", "==", False).order_by("rating", direction="DESCENDING").limit(limit)
+    samples_docs = query.get()
 
-    samples = (
-        db.query(TrainingData)
-        .filter(
-            TrainingData.rating >= min_rating,
-            TrainingData.is_exported == False,
-        )
-        .order_by(TrainingData.rating.desc(), TrainingData.created_at.desc())
-        .limit(limit)
-        .all()
-    )
-
-    if not samples:
+    if not samples_docs:
         logger.info("[Learning] No new training samples to export.")
         return output_path, 0
 
     count = 0
     with open(output_path, "w", encoding="utf-8") as f:
-        for s in samples:
+        for doc in samples_docs:
+            s = doc.to_dict()
             record = {
                 "text": (
-                    f"<human>: {s.user_message}\n"
-                    f"<bot>: {s.bot_response}"
+                    f"<human>: {s.get('user_message')}\n"
+                    f"<bot>: {s.get('bot_response')}"
                 ),
             }
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
-            s.is_exported = True
+            doc.reference.update({"is_exported": True})
             count += 1
 
-    db.commit()
     logger.info(f"[Learning] Exported {count} training samples to {output_path}")
     return output_path, count
 
@@ -538,19 +476,6 @@ def export_training_data(
 # ─────────────────────────────────────────────
 # 5. LEARNING ANALYTICS
 # ─────────────────────────────────────────────
-def get_learning_stats(db: Session) -> Dict[str, Any]:
-    """Return a summary of the learning system's state."""
-    try:
-        from training_models import TrainingData, PromptPerformance  # type: ignore
-        from models import Quote  # type: ignore
-    except ImportError:
-        from backend.training_models import TrainingData, PromptPerformance  # type: ignore
-        from backend.models import Quote  # type: ignore
-
-    total_samples = db.query(func.count(TrainingData.id)).scalar() or 0
-    high_quality  = db.query(func.count(TrainingData.id)).filter(TrainingData.rating >= 4).scalar() or 0
-    avg_rating    = db.query(func.avg(TrainingData.rating)).scalar()
-    learned_quotes = db.query(func.count(Quote.id)).filter(Quote.topic == "__learned__").scalar() or 0
     unexported    = db.query(func.count(TrainingData.id)).filter(TrainingData.is_exported == False, TrainingData.rating >= 4).scalar() or 0
 
     prompt_perf = db.query(PromptPerformance).order_by(PromptPerformance.avg_score.desc()).first()

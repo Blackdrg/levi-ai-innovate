@@ -80,3 +80,4 @@ tenacity>=8.0.0
 diffusers>=0.27.0
 accelerate>=0.30.0
 TTS>=0.22.0
+firebase-admin>=6.5.0

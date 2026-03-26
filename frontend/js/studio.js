@@ -38,7 +38,6 @@ async function synthesize(){
     const r=await fetch(API_BASE+'/generate_image',{method:'POST',body:JSON.stringify(body)});
     if(!r.ok)throw new Error('HTTP '+r.status);
     const d=await r.json();
-    if(d.task_id){setLoading(false);showToast('Synthesis queued — generating…');pollTask(d.task_id,text);return}
     if(d.image_url||d.image_b64){displayImage(d.image_url||d.image_b64,text)}
     else throw new Error('No image in response');
   }catch(e){

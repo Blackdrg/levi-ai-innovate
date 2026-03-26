@@ -19,10 +19,11 @@ if (!firebase.apps.length) {
     firebase.initializeApp(firebaseConfig);
 }
 
-const isLocal = ['localhost', '127.0.0.1', '::1', '0.0.0.0'].includes(window.location.hostname) || window.location.port === '8080' || window.location.port === '5500';
+const isLocal = window.location.hostname === "localhost";
 
-// In Firebase production, we use /api relative path which is proxied via firebase.json
-window.API_BASE = isLocal ? `http://${window.location.hostname}:8000` : `${window.location.origin}/api`;
+window.API_BASE = isLocal
+  ? "http://localhost:8000"
+  : "/api";   // ✅ Firebase rewrite handles routing
 
 console.log(`[LEVI] API_BASE initialized: ${window.API_BASE}`);
 

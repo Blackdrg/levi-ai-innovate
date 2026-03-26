@@ -12,6 +12,11 @@ from dotenv import load_dotenv  # type: ignore
 
 load_dotenv()
 
+try:
+    from backend.firestore_db import db as firestore_db # type: ignore
+except ImportError:
+    from firestore_db import db as firestore_db # type: ignore
+
 
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
@@ -93,18 +98,38 @@ def get_cached_embedding(quote_id: int):
 
 
 def get_conversation(session_id: str) -> list:
+    # 1. Try Redis cache
     raw = _get(f"conv:{session_id}")
-    if not raw:
-        return []
-    return json.loads(cast(Any, raw))
+    if raw:
+        return json.loads(cast(Any, raw))
+    
+    # 2. Try Firestore
+    try:
+        doc = firestore_db.collection("conversations").document(session_id).get()
+        if doc.exists:
+            conv = doc.to_dict().get("history", [])
+            # Re-cache in Redis
+            _set(f"conv:{session_id}", json.dumps(conv), ex=3600)
+            return conv
+    except Exception as e:
+        print(f"[Firestore] Error loading conversation {session_id}: {e}")
+        
+    return []
 
-
-
-
-
-def save_conversation(session_id: str, conversation: list):
-
+def save_conversation(session_id: str, conversation: list, user_id: str = None):
+    # 1. Save to Redis
     _set(f"conv:{session_id}", json.dumps(conversation), ex=3600)
+    
+    # 2. Save to Firestore for durability
+    try:
+        firestore_db.collection("conversations").document(session_id).set({
+            "session_id": session_id,
+            "user_id": user_id,
+            "history": conversation,
+            "updated_at": os.environ.get("TIMESTAMP", "") # Optional: use real timestamp
+        }, merge=True)
+    except Exception as e:
+        print(f"[Firestore] Error saving conversation {session_id}: {e}")
 
 
 

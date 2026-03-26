@@ -105,7 +105,7 @@ REQUIRED_ENV_VARS = [
 
 def validate_env():
     missing = [var for var in REQUIRED_ENV_VARS if not os.getenv(var)]
-    is_prod = os.getenv("RENDER") or os.getenv("DIGITALOCEAN") or os.getenv("ENVIRONMENT") == "production"
+    is_prod = os.getenv("ENVIRONMENT") == "production"
 
     if missing:
         error_msg = f"CRITICAL: Missing required environment variables: {', '.join(missing)}"
@@ -183,6 +183,8 @@ from sqlalchemy import func  # type: ignore
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
+from backend.firestore_db import db as firestore_db, get_document, set_document, query_documents, add_document # type: ignore
+
 _executor = ThreadPoolExecutor(max_workers=4)
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "fallback")
@@ -193,24 +195,12 @@ from firebase_admin import auth as firebase_auth # type: ignore
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials # type: ignore
 
 if not firebase_admin._apps:
-    try:
-        cred_json = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
-        if cred_json:
-            import tempfile
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-                f.write(cred_json)
-                cred_path = f.name
-            cred = firebase_admin.credentials.Certificate(cred_path)
-        else:
-            cred = firebase_admin.credentials.ApplicationDefault()
-        firebase_admin.initialize_app(cred)
-    except Exception as e:
-        import logging
-        logging.getLogger(__name__).error(f"Firebase init error: {e}")
+    cred = firebase_admin.credentials.ApplicationDefault()
+    firebase_admin.initialize_app(cred)
 
 security = HTTPBearer()
 
-async def get_current_user(cred: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
+async def get_current_user(cred: HTTPAuthorizationCredentials = Depends(security)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -222,29 +212,55 @@ async def get_current_user(cred: HTTPAuthorizationCredentials = Depends(security
         email = decoded_token.get("email")
         if not uid: raise credentials_exception
         
-        user = db.query(Users).filter(Users.email == email).first()
-        if not user:
+        # Firestore-native user lookup
+        users_ref = firestore_db.collection("users")
+        user_docs = users_ref.where("email", "==", email).limit(1).get()
+        
+        if not list(user_docs):
+            # Create user in Firestore if not exists
             base_username = email.split('@')[0] if email else f"user_{uid[:8]}"
             username = base_username
+            
+            # Check for username uniqueness in Firestore
+            existing_usernames = users_ref.where("username", "==", username).limit(1).get()
             counter = 1
-            while db.query(Users).filter(Users.username == username).first():
+            while list(existing_usernames):
                 username = f"{base_username}{counter}"
+                existing_usernames = users_ref.where("username", "==", username).limit(1).get()
                 counter += 1
-            user = Users(username=username, email=email)
-            db.add(user)
-            db.commit()
-            db.refresh(user)
+            
+            user_data = {
+                "uid": uid,
+                "username": username,
+                "email": email,
+                "created_at": datetime.utcnow(),
+                "tier": "free",
+                "credits": 10
+            }
+            users_ref.document(uid).set(user_data)
+            return user_data
+            
+        user = list(user_docs)[0].to_dict()
+        user["id"] = list(user_docs)[0].id
         return user
-    except Exception:
+    except Exception as e:
+        logger.error(f"Auth error: {e}")
         raise credentials_exception
 
-async def get_current_user_optional(cred: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False)), db: Session = Depends(get_db)):
+async def get_current_user_optional(cred: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False))):
     if not cred: return None
     try:
         decoded_token = firebase_auth.verify_id_token(cred.credentials)
         email = decoded_token.get("email")
         if not email: return None
-        return db.query(Users).filter(Users.email == email).first()
+        
+        users_ref = firestore_db.collection("users")
+        user_docs = users_ref.where("email", "==", email).limit(1).get()
+        if not list(user_docs): return None
+        
+        user = list(user_docs)[0].to_dict()
+        user["id"] = list(user_docs)[0].id
+        return user
     except Exception:
         return None
 
@@ -346,7 +362,7 @@ def get_user_or_ip(request: Request):
 
 limiter = Limiter(key_func=get_user_or_ip)
 
-is_prod = os.getenv("RENDER") or os.getenv("DIGITALOCEAN") or os.getenv("ENVIRONMENT") == "production"
+is_prod = os.getenv("ENVIRONMENT") == "production"
 
 app = FastAPI(
     title="LEVI Quotes API",
@@ -413,6 +429,8 @@ origins = [
     "https://levi-ai-daksh-mehats-projects.vercel.app",
     "https://levi-ai.create.app",
     "https://levi-ai-create.com",
+    "https://levi-ai-c23c6.web.app",
+    "https://levi-ai-c23c6.firebaseapp.com",
 ]
 
 for o in env_origins:
@@ -434,33 +452,22 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup_event():
-    logger.info("Starting LEVI backend...")
+    logger.info("Starting LEVI backend (Firestore-Native)...")
 
     if not HAS_REDIS:
-
         logger.warning("Redis unavailable — using in-memory fallback.")
-
     else:
-
         masked = REDIS_URL.split('@')[-1] if '@' in REDIS_URL else REDIS_URL
-
         logger.info(f"Redis connected: {masked}")
 
     try:
-
-        # Base.metadata.create_all(bind=engine) # Removed - using Alembic migrations instead
-        logger.info("Database connection verified.")
-
+        # Simple connectivity check for Firestore
+        firestore_db.collection("health_check").document("status").get()
+        logger.info("Firestore connection verified.")
     except Exception as e:
-
-        logger.error(f"Error creating tables: {e}")
-
-    logger.info(f"DB scheme: {DATABASE_URL.split('://')[0] if DATABASE_URL else 'None'}")
+        logger.error(f"Error connecting to Firestore: {e}")
 
     logger.info(f"CLIENT_KEY: {'SET' if CLIENT_KEY else 'NOT SET'}")
-
-
-
 
 
 @app.api_route("/", methods=["GET", "HEAD"])
@@ -468,11 +475,8 @@ def root():
     return {"status": "ok", "message": "LEVI backend is running", "docs": "/docs", "health": "/health"}
 
 
-
-
-
 @app.get("/health")
-async def health(db: Session = Depends(get_db)):
+async def health():
     """
     Enhanced health check with dependency verification.
     """
@@ -480,17 +484,18 @@ async def health(db: Session = Depends(get_db)):
         "status": "ok",
         "timestamp": datetime.utcnow().isoformat(),
         "dependencies": {
-            "database": "unhealthy",
+            "firestore": "unhealthy",
             "redis": "unhealthy" if HAS_REDIS else "unavailable"
         }
     }
     
-    # Check Database
+    # Check Firestore
     try:
-        db.execute(text("SELECT 1"))
-        status_info["dependencies"]["database"] = "healthy"
+        # Simple read to check connectivity
+        firestore_db.collection("health_check").document("status").get()
+        status_info["dependencies"]["firestore"] = "healthy"
     except Exception as e:
-        logger.error(f"Health Check: Database unreachable: {e}")
+        logger.error(f"Health Check: Firestore unreachable: {e}")
         status_info["status"] = "error"
 
     # Check Redis
@@ -512,32 +517,23 @@ async def health(db: Session = Depends(get_db)):
     return status_info
 
 
+class FallbackQuote:
+    text = "The only true wisdom is in knowing you know nothing."
+    author = "Socrates"
 
-
+today_quote = FallbackQuote()
 
 @app.get("/daily_quote")
-
-def daily_quote(db: Session = Depends(get_db)):
-
+def daily_quote():
     try:
-
         from backend.generation import fetch_open_source_quote  # type: ignore
-
     except ImportError:
-
         from generation import fetch_open_source_quote  # type: ignore
 
     os_quote = fetch_open_source_quote()
-
     if os_quote:
-
         return {"quote": os_quote['quote'], "author": os_quote['author']}
 
-    today_quote = db.query(Quote).order_by(func.random()).first()
-
-    if not today_quote:
-
-        return {"quote": "The only way to do great work is to love what you do.", "author": "Steve Jobs"}
 
     return {"quote": today_quote.text, "author": today_quote.author}
 
@@ -546,104 +542,87 @@ def daily_quote(db: Session = Depends(get_db)):
 
 
 @app.get("/analytics")
-def get_analytics(db: Session = Depends(get_db)):
+async def get_analytics():
     try:
-        total_chats = db.query(func.sum(Analytics.chats_count)).scalar() or 0
-        total_likes = db.query(func.sum(Analytics.likes_count)).scalar() or 0
-        total_users = db.query(func.sum(Analytics.daily_users)).scalar() or 0
+        # For simplicity, we'll sum from the 'analytics' collection
+        analytics_ref = firestore_db.collection("analytics")
+        docs = analytics_ref.stream()
+        
+        total_chats = 0
+        total_likes = 0
+        total_users = 0
+        
+        for doc in docs:
+            data = doc.to_dict()
+            total_chats += data.get("chats_count", 0)
+            total_likes += data.get("likes_count", 0)
+            total_users += data.get("daily_users", 0)
+            
     except Exception as e:
         logger.warning(f"Analytics query failed: {e}")
         total_chats = 0
         total_likes = 0
         total_users = 0
 
-    popular_topics = []
-    try:
-        popular_topics = (
-            db.query(Quote.topic, func.count(Quote.id))
-            .group_by(Quote.topic).order_by(func.count(Quote.id).desc()).limit(5).all()
-        )
-    except Exception as e:
-        logger.warning(f"Popular topics query failed: {e}")
-
     return {
         "total_chats": total_chats,
         "daily_users": total_users,
-        "popular_topics": [t for t, _ in popular_topics if t],
+        "popular_topics": ["philosophy", "success", "wisdom"], # Placeholder or implement top topics logic
         "likes_count": total_likes,
     }
 
 
-
-
-
 @app.post("/search_quotes", response_model=List[dict])
-
-def search_quotes(query: Query, db: Session = Depends(get_db)):
-
+def search_quotes(query: Query):
     query_hash = hashlib.md5(f"{query.text}:{query.mood}:{query.topic}".encode()).hexdigest()
-
     cached = get_cached_search(query_hash)
-
     if cached:
-
         return cached
 
+    quotes_ref = firestore_db.collection("quotes")
+    
     if not query.text:
-        results = db.query(Quote).order_by(func.random()).limit(query.top_k).all()
+        # Use simple limit for random-ish results
+        docs = list(quotes_ref.limit(query.top_k).stream())
+        results = [d.to_dict() for d in docs]
     elif not HAS_MODEL:
-        # Keyword fallback for Render free tier
-        base_q = db.query(Quote)
+        # Keyword-ish fallback
         if query.mood:
-            base_q = base_q.filter(Quote.mood == query.mood)
-        results = base_q.filter(Quote.text.ilike(f"%{query.text}%")).limit(query.top_k).all()
-        # If no keyword matches, fallback to random
+            docs = list(quotes_ref.where("mood", "==", query.mood).limit(100).stream())
+        else:
+            docs = list(quotes_ref.limit(100).stream())
+            
+        results = [d.to_dict() for d in docs if query.text.lower() in d.to_dict().get("text", "").lower()]
         if not results:
-            results = base_q.order_by(func.random()).limit(query.top_k).all()
+            results = [d.to_dict() for d in docs[:query.top_k]]
     else:
         query_embedding = embed_text(query.text)
-
-        if "postgresql" in DATABASE_URL:
-
-            base_q = db.query(Quote)
-
-            if query.mood:
-
-                base_q = base_q.filter(Quote.mood == query.mood)
-
-            results = base_q.order_by(Quote.embedding.l2_distance(query_embedding)).limit(query.top_k).all()
-
+        # Stream and score (Naive Vector Search)
+        if query.mood:
+            docs = list(quotes_ref.where("mood", "==", query.mood).limit(200).stream())
         else:
-            all_q = db.query(Quote)
-            if query.mood:
-                all_q = all_q.filter(Quote.mood == query.mood)
-            all_quotes = all_q.all()
-            q_emb = np.array(query_embedding)
+            docs = list(quotes_ref.limit(200).stream())
             
-            scored = []
-            for q in all_quotes:
-                cached_emb = get_cached_embedding(q.id)
-                if cached_emb:
-                    emb = np.array(cached_emb)
-                elif q.embedding is not None:
-                    emb = np.array(q.embedding)
-                    cache_quote_embedding(q.id, q.embedding)
-                else:
-                    continue
-                scored.append((q, cosine_sim(q_emb, emb)))
-
-            scored.sort(key=lambda x: x[1], reverse=True)
-            results = [s[0] for s in scored[:query.top_k]]  # type: ignore
+        q_emb = np.array(query_embedding)
+        scored = []
+        for d in docs:
+            data = d.to_dict()
+            emb = data.get("embedding")
+            if emb:
+                score = cosine_sim(q_emb, np.array(emb))
+                scored.append((data, score))
+        
+        scored.sort(key=lambda x: x[1], reverse=True)
+        results = [s[0] for s in scored[:query.top_k]]
 
     formatted = [
-        {"quote": q.text, "author": q.author, "topic": q.topic, "mood": q.mood,
-         "similarity": 1.0 if not HAS_MODEL and query.text and query.text.lower() in q.text.lower() else 0.9,
-         "search_mode": "semantic" if HAS_MODEL else ("keyword" if query.text and results else "random_fallback")}
+        {"quote": q.get("text"), "author": q.get("author"), "topic": q.get("topic"), "mood": q.get("mood"),
+         "similarity": 0.9,
+         "search_mode": "semantic" if HAS_MODEL else "keyword"}
         for q in results
     ]
 
     cache_search(query_hash, formatted)
-
     return formatted
 
 
@@ -732,7 +711,7 @@ async def list_image_styles():
 
 @app.post("/generate_image")
 @limiter.limit("5/minute")
-async def gen_image(request: Request, req: Query, db: Session = Depends(get_db), current_user: Optional[Users] = Depends(get_current_user_optional)):
+async def gen_image(request: Request, req: Query, current_user: Optional[dict] = Depends(get_current_user_optional)):
     try:
         # ── Cost Protection Layer ──────────────────────────
         from backend.redis_client import get_daily_ai_spend, incr_daily_ai_spend  # type: ignore
@@ -741,8 +720,8 @@ async def gen_image(request: Request, req: Query, db: Session = Depends(get_db),
             raise HTTPException(status_code=429, detail="Daily AI usage limit reached. Try again tomorrow.")
         incr_daily_ai_spend(1.0)
 
-        user_id = current_user.id if current_user else None
-        user_tier = current_user.tier if current_user else "free"
+        user_id = current_user.get("uid") if current_user else None
+        user_tier = current_user.get("tier", "free") if current_user else "free"
         
         # Security: Validate custom_bg if provided
         if req.custom_bg:
@@ -755,8 +734,7 @@ async def gen_image(request: Request, req: Query, db: Session = Depends(get_db),
             if not any(req.custom_bg.startswith(t) for t in allowed_types): # type: ignore
                 raise HTTPException(status_code=400, detail="Invalid image format. Only JPEG, PNG and WEBP are allowed.")
         
-        # Check if we should use Celery for async processing (Scale Infrastructure)
-        # Default to True in production (Render/DigitalOcean)
+        # Check if we should use Celery for async processing
         USE_CELERY = os.getenv("USE_CELERY", "true").lower() == "true"
 
         if USE_CELERY:
@@ -771,7 +749,7 @@ async def gen_image(request: Request, req: Query, db: Session = Depends(get_db),
             # Credit System: Deduct AFTER successful dispatch
             if current_user:
                 from backend.payments import use_credits  # type: ignore
-                use_credits(current_user.id, amount=1, db=db)
+                use_credits(user_id, amount=1)
                 logger.info(f"Deducted 1 credit for user {user_id} after task dispatch")
 
             return JSONResponse(status_code=202, content={"task_id": task.id, "status": "processing", "message": "Image generation started in background."})
@@ -789,53 +767,42 @@ async def gen_image(request: Request, req: Query, db: Session = Depends(get_db),
         )
 
         img_b64 = base64.b64encode(bio.getvalue()).decode()
-
         img_data = f"data:image/png;base64,{img_b64}"
 
-        # No deduction here anymore (moved to upfront)
-
-        new_feed = FeedItem(
-            user_id=user_id,
-            text=req.text,
-            author=req.author or "Unknown",
-            mood=req.mood or "neutral",
-            image_b64=img_data,
-            likes=0
-        )
-
-        db.add(new_feed)
-
-        db.commit()
-
-        db.refresh(new_feed)
-
-        return {"id": new_feed.id, "image_b64": img_data}
+        # Save to Firestore
+        feed_ref = firestore_db.collection("feed_items")
+        new_feed_data = {
+            "user_id": user_id,
+            "text": req.text,
+            "author": req.author or "Unknown",
+            "mood": req.mood or "neutral",
+            "image_b64": img_data,
+            "likes": 0,
+            "timestamp": datetime.utcnow()
+        }
+        update_time, doc_ref = feed_ref.add(new_feed_data)
+        return {"id": doc_ref.id, "image_b64": img_data}
 
     except Exception as e:
-
         import traceback
-
         logger.error(f"Image generation error: {e}\n{traceback.format_exc()}")
-
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/generate_video")
 @limiter.limit("2/minute")
-async def gen_video(request: Request, req: Query, db: Session = Depends(get_db), current_user: Optional[Users] = Depends(get_current_user_optional)):
+async def gen_video(request: Request, req: Query, current_user: Optional[dict] = Depends(get_current_user_optional)):
     """Generate or queue video generation for a quote."""
     try:
-        # ── Cost Protection Layer ──────────────────────────
         from backend.redis_client import get_daily_ai_spend, incr_daily_ai_spend  # type: ignore
         daily_limit = float(os.getenv("DAILY_AI_LIMIT", "500"))
         if get_daily_ai_spend() >= daily_limit:
             raise HTTPException(status_code=429, detail="Daily AI usage limit reached. Try again tomorrow.")
-        incr_daily_ai_spend(2.0)  # Videos might cost more
+        incr_daily_ai_spend(2.0)
 
-        user_id = current_user.id if current_user else None
-        user_tier = current_user.tier if current_user else "free"
+        user_id = current_user.get("uid") if current_user else None
+        user_tier = current_user.get("tier", "free") if current_user else "free"
 
-        # Check if we should use Celery for async processing (Scale Infrastructure)
         USE_CELERY = os.getenv("USE_CELERY", "true").lower() == "true"
 
         if USE_CELERY:
@@ -847,24 +814,23 @@ async def gen_video(request: Request, req: Query, db: Session = Depends(get_db),
                 user_id,
                 user_tier
             )
-            # Credit System: Deduct AFTER successful dispatch
             if current_user:
                 from backend.payments import use_credits  # type: ignore
-                use_credits(current_user.id, amount=2, db=db)
+                # user_id here is the uid string
+                use_credits(user_id, amount=2)
                 logger.info(f"Deducted 2 credits for user {user_id} after task dispatch")
 
             return JSONResponse(status_code=202, content={"task_id": task.id, "status": "processing", "message": "Video generation started in background."})
 
-        # Fallback inline processing (not recommended for video)
         loop = asyncio.get_event_loop()
-        from backend.video_gen import generate_quote_video  # type: ignore
         video_bytes_io = await loop.run_in_executor(
             _executor,
-            generate_quote_video,
-            req.text,
-            req.author or "Unknown",
-            req.mood or "neutral",
-            user_tier
+            lambda: generate_quote_video(
+                req.text,
+                req.author or "Unknown",
+                req.mood or "neutral",
+                user_tier
+            )
         )
         
         # Upload to s3 if available, or error since video is too large for inline responses
@@ -885,49 +851,68 @@ async def gen_video(request: Request, req: Query, db: Session = Depends(get_db),
 
 
 @app.post("/like/{item_type}/{item_id}")
+async def like_item(item_type: str, item_id: str):
+    try:
+        if item_type == "quote":
+            collection = "quotes"
+        elif item_type == "feed":
+            collection = "feed_items"
+        else:
+            raise HTTPException(status_code=400, detail="Invalid item type")
 
-def like_item(item_type: str, item_id: int, db: Session = Depends(get_db)):
+        item_ref = firestore_db.collection(collection).document(item_id)
+        item_doc = item_ref.get()
 
-    if item_type == "quote":
+        if not item_doc.exists:
+            raise HTTPException(status_code=404, detail="Item not found")
 
-        item = db.query(Quote).filter(Quote.id == item_id).first()
+        # Atomic increment for likes
+        from google.cloud import firestore # type: ignore
+        item_ref.update({"likes": firestore.Increment(1)})
+        
+        # Update analytics
+        today_str = date.today().isoformat()
+        analytics_ref = firestore_db.collection("analytics").document(today_str)
+        analytics_doc = analytics_ref.get()
+        
+        if analytics_doc.exists:
+            analytics_ref.update({"likes_count": firestore.Increment(1)})
+        else:
+            analytics_ref.set({"date": today_str, "likes_count": 1, "chats_count": 0, "daily_users": 0})
 
-    elif item_type == "feed":
-
-        item = db.query(FeedItem).filter(FeedItem.id == item_id).first()
-
-    else:
-
-        raise HTTPException(status_code=400, detail="Invalid item type")
-
-    if not item:
-
-        raise HTTPException(status_code=404, detail="Item not found")
-
-    item.likes = (item.likes or 0) + 1
-
-    today = date.today()
-
-    analytics = db.query(Analytics).filter(Analytics.date == today).first()
-
-    if analytics:
-
-        analytics.likes_count = (analytics.likes_count or 0) + 1
-
-    db.commit()
-
-    return {"status": "success", "new_likes": item.likes}
-
-
-
+        # Return updated likes (requires a re-fetch or just incrementing the cached value)
+        new_likes = (item_doc.to_dict().get("likes", 0)) + 1
+        return {"status": "success", "new_likes": new_likes}
+    except Exception as e:
+        logger.error(f"Like error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/feed", response_model=List[dict])
-def get_feed(db: Session = Depends(get_db), limit: int = 20, offset: int = 0):
-    items = db.query(FeedItem).order_by(FeedItem.timestamp.desc()).offset(offset).limit(limit).all()
-    return [{"id": i.id, "text": i.text, "author": i.author, "mood": i.mood,
-            "image": i.image_url or i.image_b64, "likes": i.likes or 0, "time": i.timestamp.isoformat()}
-            for i in items]
+async def get_feed(limit: int = 20, offset: int = 0):
+    try:
+        feed_ref = firestore_db.collection("feed_items")
+        # Note: Firestore offset is expensive (skips items), but for small feeds it's okay.
+        # Better to use cursor-based pagination for large feeds.
+        query = feed_ref.order_by("timestamp", direction=firestore_db.DESCENDING).limit(limit).offset(offset)
+        docs = query.get()
+        
+        results = []
+        for doc in docs:
+            d = doc.to_dict()
+            results.append({
+                "id": doc.id,
+                "text": d.get("text"),
+                "author": d.get("author"),
+                "mood": d.get("mood"),
+                "image": d.get("image_url") or d.get("image_b64"),
+                "likes": d.get("likes", 0),
+                "time": d.get("timestamp").isoformat() if d.get("timestamp") else None
+            })
+        return results
+    except Exception as e:
+        logger.error(f"Feed error: {e}")
+        return []
 
 
 
@@ -938,10 +923,9 @@ def get_feed(db: Session = Depends(get_db), limit: int = 20, offset: int = 0):
 async def chat(
     request: Request,
     msg: ChatMessage,
-    db: Session = Depends(get_db),
-    current_user: Optional[Users] = Depends(get_current_user_optional),
+    current_user: Optional[dict] = Depends(get_current_user_optional),
 ):
-    user_id = current_user.id if current_user else None
+    user_id = current_user.get("uid") if current_user else None
     msg_text_snip = _safe_truncate(str(msg.message), 60)
     logger.info(f"Chat [{msg.session_id}] (User: {user_id}): '{msg_text_snip}'")
 
@@ -953,52 +937,54 @@ async def chat(
     incr_daily_ai_spend(1.0)
 
     # Analytics
-    today = date.today()
-    analytics = db.query(Analytics).filter(Analytics.date == today).first()
-    if not analytics:
-        analytics = Analytics(date=today, chats_count=1)
-        db.add(analytics)
-    else:
-        analytics.chats_count = (analytics.chats_count or 0) + 1
+    try:
+        from google.cloud import firestore # type: ignore
+        today_str = date.today().isoformat()
+        analytics_ref = firestore_db.collection("analytics").document(today_str)
+        if not analytics_ref.get().exists:
+            analytics_ref.set({"date": today_str, "chats_count": 1, "likes_count": 0, "daily_users": 1})
+        else:
+            analytics_ref.update({"chats_count": firestore.Increment(1)})
+    except Exception as e:
+        logger.warning(f"Analytics update failed: {e}")
 
     # User memory — Redis-cached (TTL = 10 min)
     user_mem = None
     if user_id:
         from backend.redis_client import get_cached_user_memory, cache_user_memory  # type: ignore
         cached = get_cached_user_memory(user_id)
+        
+        memory_ref = firestore_db.collection("user_memory").document(user_id)
         if cached:
-            user_mem = db.query(UserMemory).filter(UserMemory.user_id == user_id).first()
-            if not user_mem:
-                user_mem = UserMemory(user_id=user_id, mood_history=cached.get("mood_history", []),
-                                      liked_topics=cached.get("liked_topics", []),
-                                      interaction_count=cached.get("interaction_count", 0))
-                db.add(user_mem)
+            user_mem_data = cached
         else:
-            user_mem = db.query(UserMemory).filter(UserMemory.user_id == user_id).first()
-            if not user_mem:
-                user_mem = UserMemory(user_id=user_id, mood_history=[], liked_topics=[], interaction_count=0)
-                db.add(user_mem)
-        user_mem.interaction_count += 1
-        # Update cache
-        cache_user_memory(user_id, {
-            "mood_history": user_mem.mood_history or [],
-            "liked_topics": user_mem.liked_topics or [],
-            "interaction_count": user_mem.interaction_count,
-        })
-
-    db.commit()
+            memory_doc = memory_ref.get()
+            if memory_doc.exists:
+                user_mem_data = memory_doc.to_dict()
+            else:
+                user_mem_data = {"user_id": user_id, "mood_history": [], "liked_topics": [], "interaction_count": 0}
+                memory_ref.set(user_mem_data)
+        
+        user_mem_data["interaction_count"] = user_mem_data.get("interaction_count", 0) + 1
+        
+        # Update Firestore and cache
+        memory_ref.update({"interaction_count": user_mem_data["interaction_count"]})
+        cache_user_memory(user_id, user_mem_data)
 
     # Load history
     history = get_conversation(msg.session_id)
 
     # Infer implicit feedback from previous turn
     try:
-        from learning import infer_implicit_feedback, collect_training_sample  # type: ignore
+        try:
+            from backend.learning import infer_implicit_feedback, collect_training_sample # type: ignore
+        except ImportError:
+            def infer_implicit_feedback(*args, **kwargs): return None
+            def collect_training_sample(*args, **kwargs): return None
         implicit_rating = infer_implicit_feedback(history, msg.message)
         if implicit_rating and len(history) >= 1:
             prev = history[-1]
             collect_training_sample(
-                db=db,
                 user_message=prev.get("user", ""),
                 bot_response=prev.get("bot", ""),
                 mood=msg.mood or "philosophical",
@@ -1020,9 +1006,9 @@ async def chat(
          if intent in ["generate_image", "generate_video", "generate_content"]:
               credits_needed = 2 if intent == "generate_video" else 1
               if current_user:
-                   from backend.payments import use_credits  # type: ignore
                    try:
-                        use_credits(current_user.id, amount=credits_needed, db=db)
+                        from backend.payments import use_credits  # type: ignore
+                        use_credits(user_id, amount=credits_needed)
                    except HTTPException as he:
                         return {"response": f"❌ [Router] Credits exhausted. {he.detail}"}
                    except Exception:
@@ -1049,123 +1035,104 @@ async def chat(
          logger.warning(f"RouterAgent failed: {e}")
          # Graceful fallback to normal chat flow
 
-    # Build personalised system prompt for authenticated users
+    # Build personalised system prompt
     personalized_system = None
     try:
-        if True:  # Run for all users to enable personas, but skip prefers if not logged in
-            from learning import UserPreferenceModel, AdaptivePromptManager  # type: ignore
-            
-            base = "You are LEVI, a philosophical AI muse."
-            if user_id:
-                 base = AdaptivePromptManager(db).get_best_variant(msg.mood or "philosophical")
-            
-            # ─── Load Custom Persona ───
-            if msg.persona_id:
-                try:
-                    from models import Persona  # type: ignore
-                except ImportError:
-                    from backend.models import Persona  # type: ignore
-                persona = db.query(Persona).filter(Persona.id == msg.persona_id).first()
-                if persona:
-                    base = persona.system_prompt
+        from backend.learning import UserPreferenceModel, AdaptivePromptManager  # type: ignore
+        base = AdaptivePromptManager().get_best_variant(msg.mood or "philosophical")
+        
+        # ─── Load Custom Persona ───
+        if msg.persona_id:
+            persona_doc = firestore_db.collection("personas").document(msg.persona_id).get()
+            if persona_doc.exists:
+                base = persona_doc.to_dict().get("system_prompt", base)
 
-            if user_id:
-                pref = UserPreferenceModel(db, user_id)
-                personalized_system = pref.build_system_prompt(base, msg.mood or "philosophical")
-            else:
-                personalized_system = base
+        if user_id:
+            pref = UserPreferenceModel(user_id)
+            personalized_system = pref.build_system_prompt(base, msg.mood or "philosophical")
+        else:
+            personalized_system = base
     except Exception as e:
         logger.warning(f"Failed to build personalised prompt: {e}")
-        pass  # graceful degradation
 
     # ── Vector Memory Retrieval ──
     if user_id:
         try:
             from backend.embeddings import embed_text, cosine_sim  # type: ignore
-            from backend.models import UserMemoryLog  # type: ignore
+            import numpy as np
             q_emb = embed_text(msg.message)
             
-            if "postgresql" in DATABASE_URL:
-                 past_mem = db.query(UserMemoryLog).filter(UserMemoryLog.user_id == user_id).order_by(UserMemoryLog.embedding.l2_distance(q_emb)).limit(3).all()
-            else:
-                 import numpy as np  # type: ignore
-                 all_mem = db.query(UserMemoryLog).filter(UserMemoryLog.user_id == user_id).all()
-                 scored = []
-                 for m in all_mem:
-                      if m.embedding:
-                           emb = m.embedding
-                           if not isinstance(emb, list):
-                                import pickle
-                                try: emb = pickle.loads(emb)
-                                except: continue
-                           if isinstance(emb, list):
-                                scored.append((m, cosine_sim(np.array(q_emb), np.array(emb))))
-                 scored.sort(key=lambda x: x[1], reverse=True)
-                 past_mem = [s[0] for i, s in enumerate(scored) if i < 3]
+            # Simple Firestore retrieval + in-memory similarity (until Vector Search)
+            mem_ref = firestore_db.collection("user_memory_logs").where("user_id", "==", user_id)
+            docs = mem_ref.limit(50).get() # cap search space
+            
+            scored = []
+            for doc in docs:
+                m = doc.to_dict()
+                if m.get("embedding"):
+                    scored.append((m, cosine_sim(np.array(q_emb), np.array(m["embedding"]))))
+            
+            scored.sort(key=lambda x: x[1], reverse=True)
+            past_mem = [s[0] for i, s in enumerate(scored) if i < 3]
 
             if past_mem:
-                 memory_context = "\n\n[Relevant past memories]:\n" + "\n".join([f"- User: {m.text}\n  LEVI: {m.response}" for m in past_mem if m.response])
+                 memory_context = "\n\n[Relevant past memories]:\n" + "\n".join([f"- User: {m.get('text')}\n  LEVI: {m.get('response')}" for m in past_mem if m.get('response')])
                  if personalized_system:
-                      personalized_system += memory_context
+                      personalized_system = personalized_system + memory_context
                  else:
                       personalized_system = memory_context
         except Exception as e:
              logger.warning(f"Vector memory retrieval failed: {e}")
 
-    # Use fine-tuned model if available
+    # AI Generation
     try:
-        from trainer import generate_with_active_model  # type: ignore
-        if generate_with_active_model.__module__:  # check it imported
-            bot_response = generate_with_active_model(
-                prompt=msg.message,
-                system_prompt=personalized_system or "You are LEVI, a philosophical AI muse.",
-                max_tokens=150,
-            )
-            if not bot_response:
-                raise ValueError("Empty response from active model")
+        from backend.trainer import generate_with_active_model  # type: ignore
+        bot_response = generate_with_active_model(
+            prompt=msg.message,
+            system_prompt=personalized_system or "You are LEVI, a philosophical AI muse.",
+            max_tokens=150,
+        )
+        if not bot_response:
+            raise ValueError("Empty response")
     except Exception:
-        # Fall back to standard generation
         bot_response = generate_response(
             msg.message,
             history=history,
             mood=msg.mood or "",
             lang=msg.lang or "en",
-            user_memory=user_mem,
         )
 
-    # Store this turn as training data (auto-scored)
+    # Store turn for training
     try:
-        from learning import collect_training_sample  # type: ignore
+        from backend.learning import collect_training_sample  # type: ignore
         collect_training_sample(
-            db=db,
             user_message=msg.message,
             bot_response=bot_response,
             mood=msg.mood or "philosophical",
-            rating=None,         # will be auto-scored or updated via /feedback
+            rating=None,
             session_id=msg.session_id,
             user_id=user_id,
         )
     except Exception as e:
         logger.warning(f"Training data collection failed: {e}")
 
-    # Save conversation history
+    # Save history
     history.append({"user": msg.message, "bot": bot_response})
-    save_conversation(msg.session_id, history)
+    save_conversation(msg.session_id, history, user_id=user_id)
 
     # ── Vector Memory Storage ──
     if user_id:
         try:
             from backend.embeddings import embed_text  # type: ignore
-            from backend.models import UserMemoryLog  # type: ignore
             emb_to_save = embed_text(msg.message)
-            new_mem_log = UserMemoryLog(
-                user_id=user_id,
-                text=msg.message,
-                response=bot_response,
-                embedding=emb_to_save
-            )
-            db.add(new_mem_log)
-            db.commit()
+            
+            firestore_db.collection("user_memory_logs").add({
+                "user_id": user_id,
+                "text": msg.message,
+                "response": bot_response,
+                "embedding": emb_to_save,
+                "created_at": datetime.utcnow()
+            })
         except Exception as e:
             logger.warning(f"Vector memory storage failed: {e}")
 
@@ -1184,26 +1151,21 @@ class FeedbackRequest(BaseModel):
 @app.post("/feedback")
 async def submit_feedback(
     req: FeedbackRequest,
-    db: Session = Depends(get_db),
-    current_user: Optional[Users] = Depends(get_current_user_optional),
+    current_user: Optional[dict] = Depends(get_current_user_optional),
 ):
     """
-    User rates a response 1-5.
-    Immediately stores the conversation as training data with the given rating.
-    High-rated responses are added to the knowledge base in real-time.
+    User rates a response 1-5 in Firestore.
     """
     if req.rating < 1 or req.rating > 5:
         raise HTTPException(status_code=400, detail="Rating must be 1-5")
 
-    user_id = current_user.id if current_user else None
+    user_id = current_user.get("uid") if current_user else None
 
     try:
-        from learning import collect_training_sample  # type: ignore
-        from training_models import ResponseFeedback  # type: ignore
+        from backend.learning import collect_training_sample  # type: ignore
 
-        # Store training sample
-        sample = collect_training_sample(
-            db=db,
+        # Store training sample (upsert if exists via fingerprint or just add new)
+        sample_id = collect_training_sample(
             user_message=req.user_message,
             bot_response=req.bot_response,
             mood=req.mood or "philosophical",
@@ -1212,19 +1174,18 @@ async def submit_feedback(
             user_id=user_id,
         )
 
-        # Store explicit feedback record
-        fb = ResponseFeedback(
-            training_data_id=sample.id,
-            user_id=user_id,
-            session_id=req.session_id,
-            message_hash=req.message_hash,
-            rating=req.rating,
-            feedback_type=req.feedback_type,
-        )
-        db.add(fb)
-        db.commit()
+        # Store explicit feedback record in Firestore
+        firestore_db.collection("response_feedback").add({
+            "training_data_id": sample_id,
+            "user_id": user_id,
+            "session_id": req.session_id,
+            "message_hash": req.message_hash,
+            "rating": req.rating,
+            "feedback_type": req.feedback_type,
+            "created_at": datetime.utcnow()
+        })
 
-        return {"status": "success", "sample_id": sample.id, "rating": req.rating}
+        return {"status": "success", "sample_id": sample_id, "rating": req.rating}
 
     except Exception as e:
         logger.error(f"Feedback submission error: {e}")
@@ -1234,15 +1195,15 @@ async def submit_feedback(
 # ── Learning: Get personalised system prompt preview ─────────────────────────
 @app.get("/learning/my_profile")
 async def get_my_learning_profile(
-    db: Session = Depends(get_db),
-    current_user: Users = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user),
 ):
-    """Returns the AI's current learned profile for this user."""
-    from learning import UserPreferenceModel  # type: ignore
-    model = UserPreferenceModel(db, current_user.id)
+    """Returns the AI's current learned profile for this user from Firestore."""
+    from backend.learning import UserPreferenceModel  # type: ignore
+    uid = current_user.get("uid")
+    model = UserPreferenceModel(uid)
     profile = model.get_profile()
     return {
-        "user_id": current_user.id,
+        "user_id": uid,
         "profile": profile,
         "system_prompt_preview": model.build_system_prompt(
             "You are LEVI, a philosophical AI.", "philosophical"
@@ -1253,24 +1214,24 @@ async def get_my_learning_profile(
 # ── Learning: Admin stats ─────────────────────────────────────────────────────
 @app.get("/learning/stats")
 async def get_learning_stats_route(
-    db: Session = Depends(get_db),
-    current_user: Users = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user),
 ):
-    """Returns learning system statistics. Admin-level endpoint."""
-    from learning import get_learning_stats  # type: ignore
-    stats = get_learning_stats(db)
+    """Returns learning system statistics via Firestore. Admin-level endpoint."""
+    if current_user.get("tier") not in ("creator", "admin"):
+         raise HTTPException(status_code=403, detail="Requires admin access")
+    from backend.learning import get_learning_stats  # type: ignore
+    stats = get_learning_stats()
     return stats
 
 
 # ── Training: Model history ───────────────────────────────────────────────────
 @app.get("/model/versions")
 async def get_model_versions(
-    db: Session = Depends(get_db),
-    current_user: Users = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user),
 ):
-    """Returns all fine-tuned model versions."""
-    from trainer import get_model_history, get_active_model_id  # type: ignore
-    versions = get_model_history(db)
+    """Returns all fine-tuned model versions from Firestore."""
+    from backend.trainer import get_model_history, get_active_model_id  # type: ignore
+    versions = get_model_history()
     return {
         "active_model": get_active_model_id() or "groq/llama-3.1-8b-instant (base)",
         "versions": versions,
@@ -1280,15 +1241,14 @@ async def get_model_versions(
 # ── Training: Manually trigger a training run (admin only) ───────────────────
 @app.post("/model/trigger_training")
 async def trigger_training_manually(
-    db: Session = Depends(get_db),
-    current_user: Users = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user),
 ):
-    """Manually trigger a fine-tuning run. Admin use only."""
+    """Manually trigger a fine-tuning run via Firestore. Admin use only."""
     # Basic admin check: only creator-tier users can trigger training
-    if current_user.tier not in ("creator", "admin"):
+    if current_user.get("tier") not in ("creator", "admin"):
         raise HTTPException(status_code=403, detail="Requires creator tier")
 
-    from trainer import trigger_training_pipeline  # type: ignore
+    from backend.trainer import trigger_training_pipeline  # type: ignore
     task = trigger_training_pipeline.delay()
     return {
         "status": "queued",
@@ -1299,17 +1259,18 @@ async def trigger_training_manually(
 
 # ── Training: Current model status ───────────────────────────────────────────
 @app.get("/model/status")
-async def model_status(db: Session = Depends(get_db)):
+async def get_model_status():
     """Public endpoint: returns which model is powering LEVI right now."""
     from trainer import get_active_model_id  # type: ignore
-    from training_models import TrainingJob  # type: ignore
     from learning import get_learning_stats  # type: ignore
 
     active = get_active_model_id()
-    stats  = get_learning_stats(db)
+    stats  = get_learning_stats()
 
-    # Latest training job
-    latest_job = db.query(TrainingJob).order_by(TrainingJob.created_at.desc()).first()
+    # Latest training job from Firestore
+    jobs_ref = firestore_db.collection("training_jobs")
+    latest_jobs = jobs_ref.order_by("created_at", direction=firestore_db.DESCENDING).limit(1).get()
+    latest_job = latest_jobs[0].to_dict() if latest_jobs else None
 
     return {
         "active_model": active or "groq/llama-3.1-8b-instant",
@@ -1317,50 +1278,31 @@ async def model_status(db: Session = Depends(get_db)):
         "training_samples_collected": stats["total_training_samples"],
         "knowledge_base_entries":     stats["learned_quotes"],
         "latest_training_job": {
-            "status": latest_job.status if latest_job else "none",
-            "created_at": latest_job.created_at.isoformat() if latest_job else None,
+            "status": latest_job.get("status", "none"),
+            "created_at": latest_job.get("created_at").isoformat() if latest_job.get("created_at") else None,
         } if latest_job else None,
     }
 @app.get("/export_my_data")
-async def export_my_data(db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
+async def export_my_data(current_user: dict = Depends(get_current_user)):
     """
-    GDPR Compliance: Export all data associated with the current user.
+    GDPR Compliance: Export all data associated with the current user via Firestore.
     """
     try:
-        # Fetch user profile
-        profile = {
-            "id": current_user.id,
-            "username": current_user.username,
-            "email": current_user.email,
-            "tier": current_user.tier,
-            "credits": current_user.credits,
-            "created_at": current_user.created_at.isoformat() if current_user.created_at else None
-        }
+        uid = current_user.get("uid")
         
-        # Fetch chat history
-        chats = db.query(ChatHistory).filter(ChatHistory.user_id == current_user.id).all()
-        chat_data = [
-            {"message": c.message, "response": c.response, "timestamp": c.timestamp.isoformat()}
-            for c in chats
-        ]
+        # Fetch chat history from sessions
+        convs = firestore_db.collection("conversations").where("user_id", "==", uid).get()
+        chats = []
+        for c in convs:
+            chats.extend(c.to_dict().get("history", []))
         
         # Fetch feed items (generations)
-        items = db.query(FeedItem).filter(FeedItem.user_id == current_user.id).all()
-        item_data = [
-            {
-                "text": i.text,
-                "author": i.author,
-                "mood": i.mood,
-                "image_url": i.image_url,
-                "video_url": i.video_url,
-                "timestamp": i.timestamp.isoformat()
-            }
-            for i in items
-        ]
+        items = firestore_db.collection("feed_items").where("user_id", "==", uid).get()
+        item_data = [i.to_dict() for i in items]
         
         export = {
-            "profile": profile,
-            "chats": chat_data,
+            "profile": current_user,
+            "chats": chats,
             "generations": item_data,
             "exported_at": datetime.utcnow().isoformat()
         }
@@ -1371,42 +1313,40 @@ async def export_my_data(db: Session = Depends(get_db), current_user: Users = De
         raise HTTPException(status_code=500, detail="Failed to export data.")
 
 @app.delete("/delete_account")
-async def delete_account(db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
+async def delete_account(current_user: dict = Depends(get_current_user)):
     """
-    GDPR/Legal Compliance: Delete user account and all associated data.
+    GDPR/Legal Compliance: Delete user account and associated data from Firestore.
     """
     try:
-        # Delete related records first (cascade should handle some but being explicit is safer)
-        db.query(ChatHistory).filter(ChatHistory.user_id == current_user.id).delete()
-        db.query(UserMemory).filter(UserMemory.user_id == current_user.id).delete()
+        uid = current_user.get("uid")
         
-        # Keep FeedItems but anonymize them (or delete them if preferred)
-        # For now, we'll keep the art but remove the link to the user
-        db.query(FeedItem).filter(FeedItem.user_id == current_user.id).update({"user_id": None})
+        # Delete conversations
+        convs = firestore_db.collection("conversations").where("user_id", "==", uid).get()
+        for c in convs: c.reference.delete()
         
-        # Finally delete the user
-        db.delete(current_user)
-        db.commit()
+        # Delete memory
+        firestore_db.collection("user_memory").document(uid).delete()
+        firestore_db.collection("user_memory_logs").where("user_id", "==", uid).get() # Needs batch delete logic or similar
+        # Add deletion for user_memory_logs
+        m_logs = firestore_db.collection("user_memory_logs").where("user_id", "==", uid).get()
+        for l in m_logs: l.reference.delete()
         
-        logger.info(f"Account deleted for user: {current_user.username}")
+        # Anonymize feed items
+        items = firestore_db.collection("feed_items").where("user_id", "==", uid).get()
+        for i in items: i.reference.update({"user_id": None})
+        
+        # Delete user
+        firestore_db.collection("users").document(uid).delete()
+        
+        logger.info(f"Account deleted in Firestore for user: {uid}")
         return {"status": "success", "message": "Account and all personal data deleted."}
     except Exception as e:
-        db.rollback()
         logger.error(f"Account deletion failed: {e}")
         raise HTTPException(status_code=500, detail="Failed to delete account.")
 
 @app.get("/profile")
-async def get_profile(current_user: Users = Depends(get_current_user)):
-    return {
-        "id": current_user.id,
-        "username": current_user.username,
-        "email": current_user.email,
-        "tier": current_user.tier,
-        "credits": current_user.credits,
-        "share_count": current_user.share_count or 0,
-        "bonus_credits": current_user.bonus_credits or 0,
-        "created_at": current_user.created_at.isoformat()
-    }
+async def get_profile(current_user: dict = Depends(get_current_user)):
+    return current_user
 
 # Phase 2: Viral Loops & Engagement
 
@@ -1443,94 +1383,133 @@ async def get_task_status(task_id: str):
     return {"status": "pending"}
 
 @app.post("/track_share")
-async def track_share(db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
+async def track_share(current_user: dict = Depends(get_current_user)):
     """
-    Track when a user shares content. Reward them after 5 shares.
+    Track when a user shares content. Reward them after 5 shares in Firestore.
     """
-    current_user.share_count = (current_user.share_count or 0) + 1
+    uid = current_user.get("uid")
+    user_ref = firestore_db.collection("users").document(uid)
+    
+    from google.cloud import firestore # type: ignore
+    user_ref.update({"share_count": firestore.Increment(1)})
+    
+    # Logic for reward: we use the value from current_user + 1
+    new_shares = current_user.get("share_count", 0) + 1
     rewarded = False
-    if current_user.share_count % 5 == 0:
-        current_user.bonus_credits = (current_user.bonus_credits or 0) + 10
+    bonus_credits = current_user.get("bonus_credits", 0)
+    
+    if new_shares > 0 and new_shares % 5 == 0:
+        user_ref.update({"bonus_credits": firestore.Increment(10)})
         rewarded = True
-    db.commit()
+        bonus_credits += 10
+        
     return {
         "status": "success", 
-        "share_count": current_user.share_count, 
+        "share_count": new_shares, 
         "rewarded": rewarded,
-        "bonus_credits": current_user.bonus_credits
+        "bonus_credits": bonus_credits
     }
 
 @app.get("/my_gallery")
-async def get_my_gallery(db: Session = Depends(get_db), current_user: Users = Depends(get_current_user), limit: int = 20, offset: int = 0):
-    """Fetch all generated items for the current user."""
-    items = db.query(FeedItem).filter(FeedItem.user_id == current_user.id).order_by(FeedItem.timestamp.desc()).offset(offset).limit(limit).all()
-    return [
-        {
-            "id": i.id,
-            "text": i.text,
-            "author": i.author,
-            "mood": i.mood,
-            "image": getattr(i, 'image_url', None) or i.image_b64,
-            "video": getattr(i, 'video_url', None),
-            "likes": i.likes or 0,
-            "time": i.timestamp.isoformat()
-        }
-        for i in items
-    ]
+async def get_my_gallery(current_user: dict = Depends(get_current_user), limit: int = 20, offset: int = 0):
+    """Fetch all generated items for the current user from Firestore."""
+    uid = current_user.get("uid")
+    try:
+        feed_ref = firestore_db.collection("feed_items")
+        query = feed_ref.where("user_id", "==", uid).order_by("timestamp", direction=firestore_db.DESCENDING).limit(limit).offset(offset)
+        docs = query.get()
+        
+        results = []
+        for doc in docs:
+            i = doc.to_dict()
+            results.append({
+                "id": doc.id,
+                "text": i.get("text"),
+                "author": i.get("author"),
+                "mood": i.get("mood"),
+                "image": i.get("image_url") or i.get("image_b64"),
+                "video": i.get("video_url"),
+                "likes": i.get("likes", 0),
+                "time": i.get("timestamp").isoformat() if i.get("timestamp") else None
+            })
+        return results
+    except Exception as e:
+        logger.error(f"Gallery error: {e}")
+        return []
 
 # ─────────────────────────────────────────────────────────────
 # Admin Endpoints
 # ─────────────────────────────────────────────────────────────
 
 @app.get("/admin/users")
-@limiter.limit("5/minute")  # Brute-force protection for admin key
-async def admin_list_users(request: Request, db: Session = Depends(get_db), _admin: bool = Depends(verify_admin)):
-    users = db.query(Users).order_by(Users.created_at.desc()).all()
-    return [{
-        "id": u.id,
-        "username": u.username,
-        "email": u.email,
-        "tier": u.tier,
-        "credits": u.credits,
-        "is_verified": u.is_verified,
-        "created_at": u.created_at.isoformat() if u.created_at else None
-    } for u in users]
+@limiter.limit("5/minute")
+async def admin_list_users(request: Request, _admin: bool = Depends(verify_admin)):
+    try:
+        users_ref = firestore_db.collection("users")
+        docs = users_ref.order_by("created_at", direction=firestore_db.DESCENDING).get()
+        
+        results = []
+        for doc in docs:
+            u = doc.to_dict()
+            results.append({
+                "id": doc.id,
+                "username": u.get("username") or u.get("email"),
+                "email": u.get("email"),
+                "tier": u.get("tier"),
+                "credits": u.get("credits"),
+                "is_verified": u.get("is_verified"),
+                "created_at": u.get("created_at").isoformat() if u.get("created_at") else None
+            })
+        return results
+    except Exception as e:
+        logger.error(f"Admin users list error: {e}")
+        return []
 
 @app.get("/admin/feed")
 @limiter.limit("5/minute")
-async def admin_list_feed(request: Request, db: Session = Depends(get_db), limit: int = 50, offset: int = 0, _admin: bool = Depends(verify_admin)):
-    items = db.query(FeedItem).order_by(FeedItem.timestamp.desc()).offset(offset).limit(limit).all()
-    return [{
-        "id": i.id,
-        "user_id": i.user_id,
-        "text": i.text,
-        "author": i.author,
-        "mood": i.mood,
-        "image_url": i.image_url,
-        "video_url": i.video_url,
-        "likes": i.likes,
-        "timestamp": i.timestamp.isoformat()
-    } for i in items]
+async def admin_list_feed(request: Request, limit: int = 50, offset: int = 0, _admin: bool = Depends(verify_admin)):
+    try:
+        feed_ref = firestore_db.collection("feed_items")
+        query = feed_ref.order_by("timestamp", direction=firestore_db.DESCENDING).limit(limit).offset(offset)
+        docs = query.get()
+        
+        return [{
+            "id": doc.id,
+            "user_id": doc.to_dict().get("user_id"),
+            "text": doc.to_dict().get("text"),
+            "author": doc.to_dict().get("author"),
+            "mood": doc.to_dict().get("mood"),
+            "image_url": doc.to_dict().get("image_url"),
+            "video_url": doc.to_dict().get("video_url"),
+            "likes": doc.to_dict().get("likes"),
+            "timestamp": doc.to_dict().get("timestamp").isoformat() if doc.to_dict().get("timestamp") else None
+        } for doc in docs]
+    except Exception as e:
+        logger.error(f"Admin feed list error: {e}")
+        return []
 
 @app.delete("/admin/feed/{item_id}")
 @limiter.limit("5/minute")
-async def admin_delete_feed_item(request: Request, item_id: int, db: Session = Depends(get_db), _admin: bool = Depends(verify_admin)):
-    item = db.query(FeedItem).filter(FeedItem.id == item_id).first()
-    if not item:
-        raise HTTPException(status_code=404, detail="Item not found")
-    db.delete(item)
-    db.commit()
-    return {"status": "success", "message": f"Item {item_id} deleted"}
+async def admin_delete_feed_item(request: Request, item_id: str, _admin: bool = Depends(verify_admin)):
+    try:
+        firestore_db.collection("feed_items").document(item_id).delete()
+        return {"status": "success", "message": f"Item {item_id} deleted from Firestore"}
+    except Exception as e:
+        logger.error(f"Admin delete error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete item")
 
 @app.post("/admin/adjust_credits")
 @limiter.limit("5/minute")
-async def admin_adjust_credits(request: Request, adj: AdminAdjustCredits, db: Session = Depends(get_db), _admin: bool = Depends(verify_admin)):
-    user = db.query(Users).filter(Users.id == adj.user_id).first()
-    if not user:
+async def admin_adjust_credits(request: Request, adj: AdminAdjustCredits, _admin: bool = Depends(verify_admin)):
+    user_ref = firestore_db.collection("users").document(adj.user_id)
+    user_doc = user_ref.get()
+    if not user_doc.exists:
         raise HTTPException(status_code=404, detail="User not found")
-    user.credits = (user.credits or 0) + adj.amount
-    db.commit()
-    return {"status": "success", "new_credits": user.credits}
+    
+    from google.cloud import firestore # type: ignore
+    user_ref.update({"credits": firestore.Increment(adj.amount)})
+    
+    return {"status": "success", "new_credits": (user_doc.to_dict().get("credits", 0)) + adj.amount}
 
 @app.get("/admin/payments")
 @limiter.limit("5/minute")
@@ -1545,39 +1524,47 @@ async def admin_list_payments(request: Request, _admin: bool = Depends(verify_ad
 # ─────────────────────────────────────────────────────────────
 
 @app.post("/test_daily_email")
-async def test_daily_email(db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
+async def test_daily_email(current_user: dict = Depends(get_current_user)):
     """
-    Test sending a daily wisdom email to the current user.
+    Test sending a daily wisdom email to the current user via Firestore.
     """
-    user_mem = db.query(UserMemory).filter(UserMemory.user_id == current_user.id).first()
-    topics = user_mem.liked_topics if user_mem else ["wisdom"]
-    mood = user_mem.mood_history[-1] if user_mem and user_mem.mood_history else "philosophical"
-    
-    success = send_daily_quote(
-        user_email=current_user.username, # Assuming username is an email for now
-        user_name=current_user.username.split('@')[0],
-        liked_topics=topics,
-        last_mood=mood
-    )
-    
-    if not success:
-        raise HTTPException(status_code=500, detail="Failed to send email. Check API key.")
-    
-    return {"status": "success", "message": "Daily wisdom email sent!"}
+    uid = current_user.get("uid")
+    try:
+        memory_doc = firestore_db.collection("user_memory").document(uid).get()
+        user_mem = memory_doc.to_dict() if memory_doc.exists else {}
+        
+        topics = user_mem.get("liked_topics", ["wisdom"])
+        mood = user_mem.get("mood_history", ["philosophical"])[-1] if user_mem.get("mood_history") else "philosophical"
+        
+        from backend.email_service import send_daily_quote # type: ignore
+        success = send_daily_quote(
+            user_email=current_user.get("email") or current_user.get("username"),
+            user_name=(current_user.get("email") or "User").split('@')[0],
+            liked_topics=topics,
+            last_mood=mood
+        )
+        
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to send email. Check API key.")
+        
+        return {"status": "success", "message": "Daily wisdom email sent!"}
+    except Exception as e:
+        logger.error(f"Test email failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/users/me")
-async def get_me(current_user: Users = Depends(get_current_user)):
+async def get_me(current_user: dict = Depends(get_current_user)):
     """
-    Get the current authenticated user's profile.
+    Get the current authenticated user's profile from Firestore.
     """
     return {
-        "id": current_user.id,
-        "username": current_user.username,
-        "email": current_user.email,
-        "tier": current_user.tier,
-        "credits": current_user.credits,
-        "share_count": current_user.share_count,
-        "created_at": current_user.created_at.isoformat() if current_user.created_at else None
+        "id": current_user.get("uid"),
+        "username": current_user.get("username") or current_user.get("email"),
+        "email": current_user.get("email"),
+        "tier": current_user.get("tier"),
+        "credits": current_user.get("credits"),
+        "share_count": current_user.get("share_count"),
+        "created_at": current_user.get("created_at").isoformat() if current_user.get("created_at") else None
     }
 
 class OrderRequest(BaseModel):
@@ -1598,9 +1585,12 @@ async def get_vapid_public_key():
     return {"public_key": os.getenv("VAPID_PUBLIC_KEY")}
 
 @app.post("/push/subscribe")
-async def subscribe_push(sub: PushSubscriptionSchema, db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
-    # Check if subscription already exists for this endpoint
-    existing = db.query(PushSubscription).filter(PushSubscription.endpoint == sub.endpoint).first()
+async def subscribe_push(sub: PushSubscriptionSchema, current_user: dict = Depends(get_current_user)):
+    uid = current_user.get("uid")
+    
+    # Check if subscription already exists for this endpoint in Firestore
+    subs_ref = firestore_db.collection("push_subscriptions")
+    existing_docs = subs_ref.where("endpoint", "==", sub.endpoint).limit(1).get()
     
     p256dh = str(sub.keys.get("p256dh", ""))
     auth = str(sub.keys.get("auth", ""))
@@ -1608,43 +1598,50 @@ async def subscribe_push(sub: PushSubscriptionSchema, db: Session = Depends(get_
     if not p256dh or not auth:
         raise HTTPException(status_code=400, detail="Invalid push subscription keys")
 
-    if existing:
-        existing.user_id = current_user.id
-        existing.p256dh = p256dh
-        existing.auth = auth
+    if existing_docs:
+        doc_ref = existing_docs[0].reference
+        doc_ref.update({
+            "user_id": uid,
+            "p256dh": p256dh,
+            "auth": auth,
+            "updated_at": datetime.utcnow()
+        })
     else:
-        new_sub = PushSubscription(
-            user_id=current_user.id,
-            endpoint=sub.endpoint,
-            p256dh=p256dh,
-            auth=auth
-        )
-        db.add(new_sub)
+        subs_ref.add({
+            "user_id": uid,
+            "endpoint": sub.endpoint,
+            "p256dh": p256dh,
+            "auth": auth,
+            "created_at": datetime.utcnow()
+        })
     
-    db.commit()
-    return {"status": "success", "message": "Subscribed to push notifications"}
+    return {"status": "success", "message": "Subscribed to push notifications in Firestore"}
 
 @app.post("/push/send_test")
-async def send_test_push(current_user: Users = Depends(get_current_user), db: Session = Depends(get_db)):
+async def send_test_push(current_user: dict = Depends(get_current_user)):
     from backend.tasks import send_push_notification_task  # type: ignore
-    subs = db.query(PushSubscription).filter(PushSubscription.user_id == current_user.id).all()
+    uid = current_user.get("uid")
+    
+    subs = firestore_db.collection("push_subscriptions").where("user_id", "==", uid).get()
     if not subs:
         raise HTTPException(status_code=404, detail="No push subscriptions found for this user")
     
-    for s in subs:
+    for s_doc in subs:
+        s = s_doc.to_dict()
         send_push_notification_task.delay(
-            s.id,
-            s.endpoint,
-            s.p256dh,
-            s.auth,
+            s_doc.id,
+            s.get("endpoint"),
+            s.get("p256dh"),
+            s.get("auth"),
             "LEVI Wisdom",
             "This is a test notification from your daily wisdom guide. ✨"
         )
-    return {"status": "success", "message": f"Sent {len(subs)} test notifications"}
+    return {"status": "success", "message": f"Sent {len(subs)} test notifications via Firestore"}
 
 @app.post("/create_order")
-def new_order(req: OrderRequest, db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
+async def new_order(req: OrderRequest, current_user: dict = Depends(get_current_user)):
     from backend.payments import create_order  # type: ignore
+    uid = current_user.get("uid")
     amounts = {
         "pro": int(os.getenv("RAZORPAY_PRO_PLAN_AMOUNT", 29900)),
         "creator": int(os.getenv("RAZORPAY_CREATOR_PLAN_AMOUNT", 59900))
@@ -1652,13 +1649,14 @@ def new_order(req: OrderRequest, db: Session = Depends(get_db), current_user: Us
     amount = amounts.get(req.plan)
     if not amount:
         raise HTTPException(status_code=400, detail="Invalid plan")
-    order = create_order(amount, receipt=f"levi_{req.plan}_{current_user.id}", user_id=current_user.id, plan=req.plan)
+    order = create_order(amount, receipt=f"levi_{req.plan}_{uid}", user_id=uid, plan=req.plan)
     return {"order_id": order["id"], "amount": amount, "currency": "INR", 
             "key": os.getenv("RAZORPAY_KEY_ID")}
 
 @app.post("/verify_payment")
-def confirm_payment(data: PaymentVerify, db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
+async def confirm_payment(data: PaymentVerify, current_user: dict = Depends(get_current_user)):
     from backend import payments  # type: ignore
+    uid = current_user.get("uid")
     valid = payments.verify_razorpay_signature(
         data.razorpay_order_id,
         data.razorpay_payment_id,
@@ -1667,15 +1665,15 @@ def confirm_payment(data: PaymentVerify, db: Session = Depends(get_db), current_
     if not valid:
         raise HTTPException(status_code=400, detail="Payment verification failed")
     
-    # Upgrade user tier in DB
-    payments.upgrade_user_tier(current_user.id, data.plan or "pro", db) 
+    # Upgrade user tier in Firestore
+    payments.upgrade_user_tier(uid, data.plan or "pro") 
     
     return {"status": "success", "message": f"Payment confirmed and account upgraded to {data.plan}"}
 
 @app.post("/razorpay_webhook")
-async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
+async def razorpay_webhook(request: Request):
     """
-    Handle Razorpay webhooks for payment.captured events.
+    Handle Razorpay webhooks for payment.captured events in Firestore.
     """
     payload = await request.body()
     signature = request.headers.get("X-Razorpay-Signature")
@@ -1686,15 +1684,13 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
         logger.warning("Razorpay webhook missing secret or signature")
         return {"status": "ignored"}
 
-    # Ensure secret exists and is a string
-    _secret_str = str(webhook_secret) if webhook_secret else ""
+    _secret_str = str(webhook_secret)
     expected_signature = hmac.new(
         _secret_str.encode(), 
         payload, 
         hashlib.sha256
     ).hexdigest()
     
-    # Ensure signature is a string for comparison
     actual_signature = signature.decode() if isinstance(signature, bytes) else signature
     
     if not hmac.compare_digest(expected_signature, actual_signature):
@@ -1702,9 +1698,8 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
 
     import json
     try:
-        data = json.loads(payload) # type: ignore
+        data = json.loads(payload)
     except json.JSONDecodeError:
-        logger.error("Failed to parse Razorpay webhook payload as JSON")
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
     event = data.get("event")
@@ -1714,26 +1709,19 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
         payment_id = payment_entity.get("id")
 
         if not payment_id:
-            logger.error("Razorpay webhook missing payment_id")
             return {"status": "error", "message": "Missing payment_id"}
 
-        # Idempotency check: prevent double-crediting using DB-backed events
-        existing_event = db.query(PaymentEvent).filter(PaymentEvent.payment_id == payment_id).first()
-        if existing_event:
+        # Idempotency check: prevent double-crediting using Firestore
+        event_ref = firestore_db.collection("payment_events").document(payment_id)
+        if event_ref.get().exists:
             logger.info(f"Payment {payment_id} already processed. Skipping.")
             return {"status": "success", "message": "Already processed"}
         
-        # Create a new payment event recor
         order_id = payment_entity.get("order_id")
         amount_paise = payment_entity.get("amount", 0)
         amount_inr = amount_paise / 100
         notes = payment_entity.get("notes", {})
         
-        # Placeholder for user identification logic (will update below)
-        user_id_val = notes.get("user_id")
-        plan_val = notes.get("plan", "pro")
-        
-        # Security: Re-derive user and plan from notes/receipt (verified by signature)
         user_id = notes.get("user_id")
         plan = notes.get("plan", "pro")
         
@@ -1744,27 +1732,26 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
                 plan = parts[1]
                 user_id = parts[2]
 
-        if user_id_val:
-            # Create the event in DB before upgrading to ensure persistence
-            new_event = PaymentEvent(
-                payment_id=payment_id,
-                order_id=order_id,
-                user_id=int(user_id_val),
-                amount=amount_inr,
-                status="captured"
-            )
-            db.add(new_event)
+        if user_id:
+            # Create the event in Firestore before upgrading
+            event_ref.set({
+                "payment_id": payment_id,
+                "order_id": order_id,
+                "user_id": user_id,
+                "amount": amount_inr,
+                "status": "captured",
+                "created_at": datetime.utcnow()
+            })
             
-            from backend.payments import upgrade_user_tier  # type: ignore
-            upgrade_user_tier(int(user_id_val), str(plan_val), db)
+            from backend.payments import upgrade_user_tier
+            upgrade_user_tier(user_id, str(plan))
             
-            # Audit Trail: Log payment success
-            logger.info(f"[PAYMENT_SUCCESS] User: {user_id_val} | Amount: {amount_inr} INR | Plan: {plan_val} | Order: {order_id} | Payment: {payment_id}")
+            logger.info(f"[PAYMENT_SUCCESS] User: {user_id} | Amount: {amount_inr} INR | Plan: {plan}")
 
-            # Send Receipt Email
-            user = db.query(Users).filter(Users.id == int(user_id_val)).first()
-            if user and user.email:
-                send_payment_receipt(user.email, str(plan_val), amount_inr)
+            # Send Receipt Email (assuming user fetch)
+            user_doc = firestore_db.collection("users").document(user_id).get()
+            if user_doc.exists and user_doc.to_dict().get("email"):
+                send_payment_receipt(user_doc.to_dict()["email"], str(plan), amount_inr)
         else:
             logger.warning(f"[PAYMENT_ORPHAN] Received payment but could not identify user. Payment ID: {payment_id}")
 
@@ -1773,14 +1760,14 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
 # Phase 3: Monetization (Razorpay)
 
 @app.get("/credits")
-async def get_user_credits(current_user: Users = Depends(get_current_user)):
+async def get_user_credits(current_user: dict = Depends(get_current_user)):
     """
-    Get current user's credits and tier.
+    Get current user's credits and tier from Firestore.
     """
     return {
-        "credits": current_user.credits,
-        "tier": current_user.tier,
-        "share_count": current_user.share_count
+        "credits": current_user.get("credits"),
+        "tier": current_user.get("tier"),
+        "share_count": current_user.get("share_count")
     }
 
 
@@ -1788,16 +1775,15 @@ async def get_user_credits(current_user: Users = Depends(get_current_user)):
 
 
 @app.post("/downgrade")
-async def downgrade_tier(db: Session = Depends(get_db), current_user: Users = Depends(get_current_user)):
+async def downgrade_tier(current_user: dict = Depends(get_current_user)):
     """
-    Allow users to downgrade to the free tier.
-    Note: Credits remain as they were, but the tier changes.
+    Allow users to downgrade to the free tier in Firestore.
     """
-    if current_user.tier == "free":
+    uid = current_user.get("uid")
+    if current_user.get("tier") == "free":
         return {"status": "ignored", "message": "Already on free tier"}
     
-    current_user.tier = "free"
-    db.commit()
+    firestore_db.collection("users").document(uid).update({"tier": "free"})
     return {"status": "success", "message": "Subscription cancelled. Downgraded to free tier."}
 
 
@@ -1828,7 +1814,7 @@ class ContentGenerateRequest(BaseModel):
 async def api_content_generate(
     request: Request,
     body: ContentGenerateRequest,
-    current_user: Users = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Generate a piece of content using the LEVI content engine.
@@ -1894,39 +1880,54 @@ async def api_content_tones():
 
 # \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 # Image Engine API Routes
-# \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-
-@app.get("/api/image/styles")
-async def api_image_styles():
-    """Return all available Stable Diffusion image style presets."""
+# \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u@app.post("/api/personas")
+async def api_create_persona(
+    body: PersonaCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Create a new AI Persona system template in Firestore.
+    """
     try:
-        try:
-            from backend.sd_engine import get_available_styles  # type: ignore
-        except ImportError:
-            from sd_engine import get_available_styles  # type: ignore
-        return {"styles": get_available_styles()}
+        uid = current_user.get("uid")
+        persona_data = {
+            "user_id": uid,
+            "name": body.name,
+            "description": body.description,
+            "system_prompt": body.system_prompt,
+            "avatar_url": body.avatar_url,
+            "is_public": body.is_public,
+            "created_at": datetime.utcnow()
+        }
+        
+        update_time, doc_ref = firestore_db.collection("personas").add(persona_data)
+        persona_data["id"] = doc_ref.id
+        
+        return {"status": "success", "message": "Persona created in Firestore", "persona": persona_data}
     except Exception as e:
-        logger.error(f"[SDEngine] Failed to fetch styles: {e}")
-# ──────────────────────────────────────────────────────────────────────
-# AI Personas Marketplace API Routes
-# ──────────────────────────────────────────────────────────────────────
+        logger.error(f"[Personas] Failed to create persona in Firestore: {e}")
+        raise HTTPException(status_code=500, detail="Could not create AI persona.")
+─────────────────────────────────
 
 @app.get("/api/personas")
-async def api_get_personas(db: Session = Depends(get_db)):
+async def api_get_personas():
     """
-    List all available AI Personas (Public system templates and created variants).
+    List all available AI Personas from Firestore.
     """
     try:
-        try:
-             from backend.models import Persona  # type: ignore
-        except ImportError:
-             from models import Persona  # type: ignore
-             
-        personas = db.query(Persona).filter(Persona.is_public == True).all()
-        return {"personas": personas}
+        personas_ref = firestore_db.collection("personas")
+        docs = personas_ref.where("is_public", "==", True).get()
+        
+        results = []
+        for doc in docs:
+            p = doc.to_dict()
+            p["id"] = doc.id
+            results.append(p)
+            
+        return {"personas": results}
     except Exception as e:
-        logger.error(f"[Personas] Failed to fetch personas: {e}")
-        raise HTTPException(status_code=500, detail="Could not retrieve AI personas.")
+        logger.error(f"[Personas] Failed to fetch personas from Firestore: {e}")
+        return {"personas": []}
 
 
 @app.post("/api/personas")

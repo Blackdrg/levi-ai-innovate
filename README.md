@@ -8,19 +8,19 @@ LEVI is a full-stack AI app for philosophical quotes, contextual chat, and artis
 Frontend (Tailwind/Vanilla JS) ↔ FastAPI Backend ↔ AI Models + DB
 ├── Theme: Celestial (Newsreader font, Gold/Dark palette)
 ├── Worker: Celery (background task processing)
-├── Deploy: Render (backend/worker) + Vercel (frontend)
+├── Deploy: Google Cloud Run (backend/worker) + Firebase Hosting (frontend)
 └── Stack: FastAPI, SQLAlchemy, Alembic, Redis, DistilGPT2, SentenceTransformers
 ```
 
 ## ✅ Status (Diagnosed & Fixed)
 
-| Component | Status | Notes |
-| :--- | :--- | :--- |
-| Frontend | 🟢 Fixed | Migrated to **Celestial Design System** (Newsreader/Gold) |
-| Auth | 🟢 Fixed | Added **SessionMiddleware** + `POST /login` JSON support |
-| Backend API | 🟢 Fixed | All imports resolved, modular backend structure |
-| DB | 🟢 Ready | Alembic migrations synced (Analytics/PushSubscription) |
-| Worker | 🟢 Ready | Dedicated **Celery worker** service in `render.yaml` |
+| Component | Stack | Deployment |
+|-----------|-------|------------|
+| Frontend | HTML/JS/CSS | **Firebase Hosting** |
+| Backend | FastAPI (Python) | **Google Cloud Run** |
+| Database | Firestore | Firebase Native |
+| Auth | Firebase Auth | Firebase Native |
+| Worker | Celery | Cloud Run (Job/Service) |
 | ML Models | 🟡 Graceful Fallback | CPU models load async, mock if fail |
 
 **Startup Chain Fixed**: All imports resolve, `uvicorn main:app` runs cleanly.
@@ -68,6 +68,6 @@ frontend/
 ✅ All endpoints tested
 ```
 
-**Production**: Use `render.yaml` + `vercel.json`.
+**Production**: Use `firebase-deploy.ps1` for Cloud Run + Firebase Hosting.
 
 All systems operational.

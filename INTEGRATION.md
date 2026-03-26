@@ -93,15 +93,15 @@ python run_app.py
 
 ---
 
-## Production (Render + Vercel)
+## Production (Firebase + Cloud Run)
 
-1. **Backend** → Render Web Service, Docker, `backend/Dockerfile.prod`
-   - Set all env vars from `.env.example`
-   - `PORT=10000`, `RENDER=true`
+1. **Backend** → Google Cloud Run, Docker, `backend/Dockerfile.prod`
+   - Use `./firebase-deploy.ps1` or `./firebase-deploy.sh` to automate.
+   - Env vars are set via `gcloud` or GCP Console.
 
-2. **Frontend** → Vercel
-   - `vercel.json` rewrites `/api/*` → your Render backend URL
-   - The `API_BASE` in `auth-manager.js` auto-detects this
+2. **Frontend** → Firebase Hosting
+   - `firebase.json` rewrites `/api/*` → your Cloud Run backend service.
+   - The `API_BASE` in `auth-manager.js` auto-detects this via `${window.location.origin}/api`.
 
 ---
 

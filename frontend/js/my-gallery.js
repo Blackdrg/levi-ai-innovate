@@ -105,7 +105,7 @@ function downloadItem(src, ext, text) {
 }
 window.downloadItem = downloadItem;
 
-function shareItem(text, author) {
+async function shareItem(text, author) {
   const str = text ? `"${text}" — ${author}` : `Made with LEVI AI`;
   if (navigator.share) {
     navigator.share({ title: 'LEVI AI Wisdom', text: str, url: location.origin });
@@ -113,7 +113,7 @@ function shareItem(text, author) {
     navigator.clipboard.writeText(str).then(() => showToast('Copied!'));
   }
 
-  const token = localStorage.getItem('levi_token');
+  const token = await window.waitForToken();
   if (token) {
     fetch(`${API_BASE}/track_share`, {
       method: 'POST',
@@ -133,9 +133,10 @@ function visualizeAgain(text, author, mood) {
 window.visualizeAgain = visualizeAgain;
 
 function logout() {
-  localStorage.removeItem('levi_token');
-  localStorage.removeItem('levi_user');
-  window.location.href = 'index.html';
+  firebase.auth().signOut().then(() => {
+    localStorage.removeItem('levi_user');
+    window.location.href = 'index.html';
+  });
 }
 window.logout = logout;
 
@@ -145,7 +146,7 @@ async function loadGallery() {
   const grid = $('gallery-grid');
   const galleryCount = $('gallery-count');
 
-  const token = localStorage.getItem('levi_token');
+  const token = await window.waitForToken();
   if (!token) {
     if (loadingState) loadingState.classList.add('hidden');
     if (emptyState) emptyState.classList.remove('hidden');
