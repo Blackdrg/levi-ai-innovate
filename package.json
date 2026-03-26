@@ -7,7 +7,8 @@
     "client": "python -m http.server 8080 --bind 127.0.0.1 --directory frontend",
     "tailwind": "npm run --prefix frontend watch",
     "dev": "concurrently \"npm run server\" \"npm run client\" \"npm run tailwind\"",
-    "dev:simple": "concurrently \"npm run server\" \"npm run client\""
+    "dev:simple": "concurrently \"npm run server\" \"npm run client\"",
+    "build:frontend": "npm run --prefix frontend build"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
