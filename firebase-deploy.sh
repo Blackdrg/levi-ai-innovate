@@ -16,14 +16,20 @@ gcloud services enable artifactregistry.googleapis.com run.googleapis.com --proj
 echo "📦 Ensuring Artifact Registry exists..."
 gcloud artifacts repositories create levi-repo --repository-format=docker --location="$REGION" --project "$PROJECT_ID" 2>/dev/null || true
 
-# 3. Build and Push
+# 3. Build Frontend
+echo "🎨 Building Frontend (Tailwind)..."
+npm run --prefix frontend build || { echo "❌ Frontend build failed"; exit 1; }
+
+# 4. Build and Push Backend
 IMAGE_URL="$REGION-docker.pkg.dev/$PROJECT_ID/levi-repo/$SERVICE_NAME:latest"
 echo "🛠️ Building image: $IMAGE_URL"
 docker build -t "$IMAGE_URL" -f backend/Dockerfile.prod .
 echo "📤 Pushing image..."
 docker push "$IMAGE_URL"
 
-# 4. Deploy to Cloud Run
+# 5. Deploy to Cloud Run
+# IMPORTANT: Include ALL required environment variables here.
+# You can set these in GCP Console or via Secret Manager for better security.
 echo "☁️ Deploying to Cloud Run..."
 gcloud run deploy "$SERVICE_NAME" \
   --image "$IMAGE_URL" \
@@ -31,7 +37,8 @@ gcloud run deploy "$SERVICE_NAME" \
   --platform managed \
   --allow-unauthenticated \
   --project "$PROJECT_ID" \
-  --set-env-vars "ENVIRONMENT=production,RENDER=true"
+  --set-env-vars "ENVIRONMENT=production,RENDER=true" \
+  --update-env-vars "SECRET_KEY=REPLACE_ME,DATABASE_URL=REPLACE_ME,RAZORPAY_KEY_ID=REPLACE_ME,RAZORPAY_KEY_SECRET=REPLACE_ME,RAZORPAY_WEBHOOK_SECRET=REPLACE_ME,ADMIN_KEY=REPLACE_ME"
 
 # 5. Deploy Frontend to Firebase Hosting
 echo "🌐 Deploying Frontend to Firebase Hosting..."
