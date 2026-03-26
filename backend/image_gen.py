@@ -14,6 +14,10 @@ import random
 import textwrap
 import logging
 import uuid
+from backend.firestore_db import db as firestore_db  # type: ignore
+from backend.redis_client import cache_search, get_cached_search, HAS_REDIS  # type: ignore
+from backend.embeddings import embed_text  # type: ignore
+from backend.sd_engine import sd_gen_image  # type: ignore
 from io import BytesIO
 from typing import Optional, Any, Tuple
 import requests  # type: ignore

@@ -12,10 +12,7 @@ from dotenv import load_dotenv  # type: ignore
 
 load_dotenv()
 
-try:
-    from backend.firestore_db import db as firestore_db # type: ignore
-except ImportError:
-    from firestore_db import db as firestore_db # type: ignore
+from backend.firestore_db import db as firestore_db # type: ignore
 
 
 

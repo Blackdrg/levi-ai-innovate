@@ -35,20 +35,31 @@ async function synthesize(){
   try{
     await window.waitForToken();
     const body={text,author:document.getElementById('author-input').value||'LEVI AI',mood:currentStyle,background:document.getElementById('bg-input').value};
-    const r=await fetch(`${window.API_BASE}/generate_image`,{method:'POST',body:JSON.stringify(body)});
+    const r=await fetch(`${window.API_BASE}/generate_image`,{method:'POST',body:JSON.stringify(body),headers:{'Content-Type':'application/json'}});
+    
+    const d=await r.json();
     if(!r.ok){
-      showToast("Generation failed", "error");
+      showToast(d.error || "Generation failed", "error");
       displayDemo(text);
       return;
     }
-    const d=await r.json();
+
+    if (d.status === 'queued') {
+      showToast("Synthesis started...", "info");
+      pollTask(d.task_id, text);
+      return; // pollTask handles setLoading(false) indirectly or we need to manage it
+    }
+
     if(d.image_url||d.image_b64){displayImage(d.image_url||d.image_b64,text)}
     else throw new Error('No image in response');
   }catch(e){
     console.error("Synthesize error:", e);
-    showToast('Showing demo preview (connection error)','warning');
+    showToast(e.message || 'Generation error','error');
     displayDemo(text);
-  }finally{setLoading(false)}
+  }finally{
+    // If queued, we don't want to hide the loader yet as pollTask will manage the UI
+    // But synthesize() itself is done. Maybe pollTask should call setLoading(false)
+  }
 }
 
 function setLoading(on){
@@ -64,42 +75,37 @@ function setLoading(on){
 
 async function pollTask(id,text){
   let retryCount = 0;
-  const maxRetries = 40; // Increased max retries for longer tasks
-  let pollInterval = 2000; // Initial poll interval
+  const maxRetries = 60; 
+  let pollInterval = 3000; 
 
   const poll = async () => {
     try {
       await window.waitForToken();
-      const r = await fetch(`${API_BASE}/task_status/${id}`);
+      const r = await fetch(`${window.API_BASE}/task_status/${id}`);
       const d = await r.json();
 
       if (d.status === 'completed' && d.result) {
-        displayImage(d.result.url || d.result.image_b64 || d.result, text);
-        document.getElementById('loading-overlay').classList.add('hidden');
+        setLoading(false);
+        const res = d.result;
+        displayImage(res.url || res.image_b64 || res.image || res, text);
       } else if (d.status === 'failed') {
-        showToast('Synthesis failed', 'error');
-        document.getElementById('loading-overlay').classList.add('hidden');
+        setLoading(false);
+        showToast('Synthesis failed: ' + (d.error || 'Unknown error'), 'error');
       } else {
-        // Pending, keep polling with exponential backoff
         retryCount++;
         if (retryCount >= maxRetries) {
+          setLoading(false);
           showToast('Task timeout', 'error');
-          document.getElementById('loading-overlay').classList.add('hidden');
           return;
         }
-
-        // Exponential backoff: increase delay, cap at 10s
-        pollInterval = Math.min(pollInterval * 1.2, 10000);
         setTimeout(poll, pollInterval);
       }
     } catch (error) {
       console.error("Polling error:", error);
-      // On network error, retry with a fixed delay (e.g., 5s)
       setTimeout(poll, 5000);
     }
   };
 
-  document.getElementById('loading-overlay').classList.remove('hidden');
   poll();
 }
 
@@ -155,7 +161,23 @@ function shareImg(){
   else{navigator.clipboard.writeText(t);showToast('Quote copied to clipboard')}
 }
 function regenerate(){if(document.getElementById('wisdom-input').value.trim())synthesize()}
-function makeVideo(){showToast('Video generation queued — check My Gallery')}
+async function makeVideo(){
+  const text=document.getElementById('wisdom-input').value.trim();
+  if(!text){showToast('Enter some wisdom first','error');return}
+  showToast('Video generation queued...', 'info');
+  try {
+    const body={text,author:document.getElementById('author-input').value||'LEVI AI',mood:currentStyle};
+    const r=await fetch(`${window.API_BASE}/generate_video`,{method:'POST',body:JSON.stringify(body),headers:{'Content-Type':'application/json'}});
+    const d=await r.json();
+    if(d.status === 'queued') {
+        showToast('Synthesis in progress...', 'info');
+        // Video might take longer, but we can poll for it too
+        // For now, My Gallery is the intended place to see it, but we can use pollTask if we update it to handle videos
+    }
+  } catch(e) {
+      showToast('Video request failed', 'error');
+  }
+}
 function newCanvas(){
   currentImage=null;
   document.getElementById('preview-container').classList.add('hidden');

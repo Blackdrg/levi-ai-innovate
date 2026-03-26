@@ -15,6 +15,8 @@ class RouterAgent:
         self.api_key = os.getenv("GROQ_API_KEY")
         self.client = None
         if self.api_key:
+            from backend.firestore_db import db as firestore_db  # type: ignore
+            from backend.embeddings import embed_text  # type: ignore
             try:
                 import groq  # type: ignore
                 self.client = groq.Groq(api_key=self.api_key)

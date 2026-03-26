@@ -2,6 +2,7 @@
 import os
 import resend  # type: ignore
 import logging
+from backend.firestore_db import db as firestore_db  # type: ignore
 try:
     from backend.generation import generate_quote  # type: ignore
 except ImportError:

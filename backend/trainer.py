@@ -26,11 +26,11 @@ MIN_SAMPLES_TO_TRAIN = 150
 MAX_TRAINING_EPOCHS = 2
 QUALITY_THRESHOLD = 0.62  # Minimum eval score to activate model
 
+from backend.firestore_db import db as firestore_db  # type: ignore
+from backend.redis_client import cache_search, get_cached_search, HAS_REDIS  # type: ignore
 try:
-    from backend.firestore_db import db as firestore_db # type: ignore
     from backend.tasks import celery_app # type: ignore
 except ImportError:
-    from firestore_db import db as firestore_db # type: ignore
     try:
         from tasks import celery_app # type: ignore
     except ImportError:
