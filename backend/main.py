@@ -129,41 +129,42 @@ validate_env()
 # ─────────────────────────────────────────────────────────────
 
 try:
-    from backend.db import SessionLocal, engine, get_db, DATABASE_URL  # type: ignore
-    from backend.models import Quote, Analytics, FeedItem, Base, Users, UserMemory, ChatHistory, PushSubscription, PaymentEvent  # type: ignore
+    # from backend.db import SessionLocal, engine, get_db, DATABASE_URL  # Removed
+    # from backend.models import Quote, Analytics, FeedItem, Base, Users, UserMemory, ChatHistory, PushSubscription, PaymentEvent  # Removed
     from backend.embeddings import embed_text, cosine_sim, HAS_MODEL  # type: ignore
     from backend.redis_client import (  # type: ignore
         get_cached_search, cache_search, get_conversation, save_conversation, 
-        HAS_REDIS, REDIS_URL, cache_quote_embedding, get_cached_embedding
+        HAS_REDIS, REDIS_URL, cache_quote_embedding, get_cached_embedding,
+        get_daily_ai_spend, incr_daily_ai_spend
     )
     from backend.generation import generate_quote, generate_response  # type: ignore
     from backend.image_gen import generate_quote_image  # type: ignore
     from backend.video_gen import generate_quote_video  # type: ignore
     from backend.email_service import send_daily_quote, send_payment_receipt  # type: ignore
     from backend.payments import router as payments_router, use_credits, verify_payment_signature, verify_razorpay_signature, upgrade_user_tier  # type: ignore
-    from backend.tasks import generate_video_task as generate_video_async  # type: ignore
+    # from backend.tasks import generate_video_task as generate_video_async  # Removed
     from backend.learning import (  # type: ignore
         collect_training_sample, UserPreferenceModel,
         AdaptivePromptManager, get_learning_stats, infer_implicit_feedback
     )
     from backend.trainer import trigger_training_pipeline, get_model_history, get_active_model_id, generate_with_active_model  # type: ignore
     from backend.training_models import TrainingData, ResponseFeedback, ModelVersion, TrainingJob  # type: ignore
-except (ImportError, ModuleNotFoundError) as e:
-    logger.warning(f"Could not import from backend.*: {e}. Falling back to local imports.")
-    try:
-        from db import SessionLocal, engine, get_db, DATABASE_URL  # type: ignore
-        from models import Quote, Analytics, FeedItem, Base, Users, UserMemory, ChatHistory, PushSubscription, PaymentEvent  # type: ignore
+    except (ImportError, ModuleNotFoundError) as e:
+        logger.warning(f"Could not import from backend.*: {e}. Falling back to local imports.")
+        # from db import SessionLocal, engine, get_db, DATABASE_URL  # Removed
+        # from models import Quote, Analytics, FeedItem, Base, Users, UserMemory, ChatHistory, PushSubscription, PaymentEvent  # Removed
         from embeddings import embed_text, cosine_sim, HAS_MODEL  # type: ignore
         from redis_client import (  # type: ignore
             get_cached_search, cache_search, get_conversation, save_conversation, 
-            HAS_REDIS, REDIS_URL, cache_quote_embedding, get_cached_embedding
+            HAS_REDIS, REDIS_URL, cache_quote_embedding, get_cached_embedding,
+            get_daily_ai_spend, incr_daily_ai_spend
         )
         from generation import generate_quote, generate_response  # type: ignore
         from image_gen import generate_quote_image  # type: ignore
         from video_gen import generate_quote_video  # type: ignore
         from email_service import send_daily_quote, send_payment_receipt  # type: ignore
         from payments import router as payments_router, use_credits, verify_payment_signature, verify_razorpay_signature, upgrade_user_tier  # type: ignore
-        from tasks import generate_video_task as generate_video_async  # type: ignore
+        # from tasks import generate_video_task as generate_video_async  # Removed
         from learning import (  # type: ignore
             collect_training_sample, UserPreferenceModel,
             AdaptivePromptManager, get_learning_stats, infer_implicit_feedback
@@ -190,13 +191,18 @@ _executor = ThreadPoolExecutor(max_workers=4)
 SECRET_KEY = os.environ.get("SECRET_KEY", "fallback")
 CLIENT_KEY = os.getenv("CLIENT_KEY")
 
-import firebase_admin # type: ignore
-from firebase_admin import auth as firebase_auth # type: ignore
+import firebase_admin
+from firebase_admin import credentials, auth as firebase_auth
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials # type: ignore
 
 if not firebase_admin._apps:
-    cred = firebase_admin.credentials.ApplicationDefault()
-    firebase_admin.initialize_app(cred)
+    try:
+        cred = credentials.ApplicationDefault()
+        firebase_admin.initialize_app(cred)
+        print("✅ Firebase initialized")
+    except Exception as e:
+        print(f"❌ Firebase init failed: {e}")
+        raise e  # MUST crash if fails
 
 security = HTTPBearer()
 
@@ -363,6 +369,7 @@ def get_user_or_ip(request: Request):
 limiter = Limiter(key_func=get_user_or_ip)
 
 is_prod = os.getenv("ENVIRONMENT") == "production"
+USE_CELERY = False # Explicitly disabled as per Task 4 requirements
 
 app = FastAPI(
     title="LEVI Quotes API",
@@ -652,8 +659,7 @@ class ContentRequest(BaseModel):
 async def gen_content(
     request: Request,
     req: ContentRequest,
-    db: Session = Depends(get_db),
-    current_user: Optional[Users] = Depends(get_current_user_optional),
+    current_user: Optional[dict] = Depends(get_current_user_optional),
 ):
     """Generate content of any type (quote, essay, story, script, etc.)."""
     # Cost protection
@@ -666,7 +672,7 @@ async def gen_content(
     # Credit check for non-quote types
     if req.type != "quote" and current_user:
         from backend.payments import use_credits  # type: ignore
-        use_credits(current_user.id, amount=1, db=db)
+        use_credits(current_user["uid"], amount=1)
 
     try:
         from backend.content_engine import generate_content  # type: ignore
@@ -734,26 +740,7 @@ async def gen_image(request: Request, req: Query, current_user: Optional[dict] =
             if not any(req.custom_bg.startswith(t) for t in allowed_types): # type: ignore
                 raise HTTPException(status_code=400, detail="Invalid image format. Only JPEG, PNG and WEBP are allowed.")
         
-        # Check if we should use Celery for async processing
-        USE_CELERY = os.getenv("USE_CELERY", "true").lower() == "true"
-
-        if USE_CELERY:
-            from backend.tasks import generate_image_task  # type: ignore
-            task = generate_image_task.delay(
-                req.text, 
-                req.author or "Unknown",
-                req.mood or "neutral",
-                user_id,
-                user_tier
-            )
-            # Credit System: Deduct AFTER successful dispatch
-            if current_user:
-                from backend.payments import use_credits  # type: ignore
-                use_credits(user_id, amount=1)
-                logger.info(f"Deducted 1 credit for user {user_id} after task dispatch")
-
-            return JSONResponse(status_code=202, content={"task_id": task.id, "status": "processing", "message": "Image generation started in background."})
-
+        # Synchronous generation (Task 4: Celery removed)
         loop = asyncio.get_event_loop()
         bio = await loop.run_in_executor(
             _executor,
@@ -803,25 +790,7 @@ async def gen_video(request: Request, req: Query, current_user: Optional[dict] =
         user_id = current_user.get("uid") if current_user else None
         user_tier = current_user.get("tier", "free") if current_user else "free"
 
-        USE_CELERY = os.getenv("USE_CELERY", "true").lower() == "true"
-
-        if USE_CELERY:
-            from backend.tasks import generate_video_task  # type: ignore
-            task = generate_video_task.delay(
-                req.text,
-                req.author or "Unknown",
-                req.mood or "neutral",
-                user_id,
-                user_tier
-            )
-            if current_user:
-                from backend.payments import use_credits  # type: ignore
-                # user_id here is the uid string
-                use_credits(user_id, amount=2)
-                logger.info(f"Deducted 2 credits for user {user_id} after task dispatch")
-
-            return JSONResponse(status_code=202, content={"task_id": task.id, "status": "processing", "message": "Video generation started in background."})
-
+        # Synchronous generation (Task 4: Celery removed)
         loop = asyncio.get_event_loop()
         video_bytes_io = await loop.run_in_executor(
             _executor,
@@ -1086,21 +1055,25 @@ async def chat(
 
     # AI Generation
     try:
-        from backend.trainer import generate_with_active_model  # type: ignore
-        bot_response = generate_with_active_model(
-            prompt=msg.message,
-            system_prompt=personalized_system or "You are LEVI, a philosophical AI muse.",
-            max_tokens=150,
-        )
-        if not bot_response:
-            raise ValueError("Empty response")
-    except Exception:
-        bot_response = generate_response(
-            msg.message,
-            history=history,
-            mood=msg.mood or "",
-            lang=msg.lang or "en",
-        )
+        try:
+            from backend.trainer import generate_with_active_model  # type: ignore
+            bot_response = generate_with_active_model(
+                prompt=msg.message,
+                system_prompt=personalized_system or "You are LEVI, a philosophical AI muse.",
+                max_tokens=150,
+            )
+            if not bot_response:
+                raise ValueError("Empty response")
+        except Exception:
+            bot_response = generate_response(
+                msg.message,
+                history=history,
+                mood=msg.mood or "",
+                lang=msg.lang or "en",
+            )
+    except Exception as e:
+        logger.error(f"Chatbot generation failed: {e}")
+        bot_response = "⚠️ AI is temporarily unavailable. Try again."
 
     # Store turn for training
     try:
@@ -1198,7 +1171,13 @@ async def get_my_learning_profile(
     current_user: dict = Depends(get_current_user),
 ):
     """Returns the AI's current learned profile for this user from Firestore."""
-    from backend.learning import UserPreferenceModel  # type: ignore
+    try:
+        from backend.learning import UserPreferenceModel  # type: ignore
+    except ImportError:
+        class UserPreferenceModel:
+            def __init__(self, *args, **kwargs): pass
+            def get_profile(self): return {}
+            def build_system_prompt(self, base, *args, **kwargs): return base
     uid = current_user.get("uid")
     model = UserPreferenceModel(uid)
     profile = model.get_profile()
@@ -1219,7 +1198,10 @@ async def get_learning_stats_route(
     """Returns learning system statistics via Firestore. Admin-level endpoint."""
     if current_user.get("tier") not in ("creator", "admin"):
          raise HTTPException(status_code=403, detail="Requires admin access")
-    from backend.learning import get_learning_stats  # type: ignore
+    try:
+        from backend.learning import get_learning_stats  # type: ignore
+    except ImportError:
+        def get_learning_stats(): return {"status": "learning system offline"}
     stats = get_learning_stats()
     return stats
 

@@ -44,5 +44,14 @@ jobs:
             --region ${{ env.REGION }} \
             --platform managed \
             --allow-unauthenticated \
-            --set-env-vars "ENVIRONMENT=production,RENDER=true" \
-            --update-env-vars "SECRET_KEY=${{ secrets.SECRET_KEY }},DATABASE_URL=${{ secrets.DATABASE_URL }},RAZORPAY_KEY_ID=${{ secrets.RAZORPAY_KEY_ID }},RAZORPAY_KEY_SECRET=${{ secrets.RAZORPAY_KEY_SECRET }},RAZORPAY_WEBHOOK_SECRET=${{ secrets.RAZORPAY_WEBHOOK_SECRET }},ADMIN_KEY=${{ secrets.ADMIN_KEY }},GROQ_API_KEY=${{ secrets.GROQ_API_KEY }},TOGETHER_API_KEY=${{ secrets.TOGETHER_API_KEY }},RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}"
+            --set-env-vars "ENVIRONMENT=production" \
+            --set-env-vars "RENDER=true" \
+            --set-env-vars "SECRET_KEY=${{ secrets.SECRET_KEY }}" \
+            --set-env-vars "DATABASE_URL=${{ secrets.DATABASE_URL }}" \
+            --set-env-vars "RAZORPAY_KEY_ID=${{ secrets.RAZORPAY_KEY_ID }}" \
+            --set-env-vars "RAZORPAY_KEY_SECRET=${{ secrets.RAZORPAY_KEY_SECRET }}" \
+            --set-env-vars "RAZORPAY_WEBHOOK_SECRET=${{ secrets.RAZORPAY_WEBHOOK_SECRET }}" \
+            --set-env-vars "ADMIN_KEY=${{ secrets.ADMIN_KEY }}" \
+            --set-env-vars "GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}" \
+            --set-env-vars "TOGETHER_API_KEY=${{ secrets.TOGETHER_API_KEY }}" \
+            --set-env-vars "RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}"

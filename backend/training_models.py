@@ -6,8 +6,13 @@ try:
 except ImportError:
     from db import Base # type: ignore
 
-class TrainingData(Base): pass
-class PromptPerformance(Base): pass
-class ModelVersion(Base): pass
-class TrainingJob(Base): pass
-class ResponseFeedback(Base): pass
+class TrainingData(Base):
+    __tablename__ = 'training_data'
+class PromptPerformance(Base):
+    __tablename__ = 'prompt_performance'
+class ModelVersion(Base):
+    __tablename__ = 'model_versions'
+class TrainingJob(Base):
+    __tablename__ = 'training_jobs'
+class ResponseFeedback(Base):
+    __tablename__ = 'response_feedback'

@@ -461,7 +461,7 @@ const u=localStorage.getItem('levi_user');if(u){try{const o=JSON.parse(u);const 
 
 // Load daily quote
     window.waitForToken().then(() => {
-        fetch(window.API_BASE + '/daily_quote').then(r => r.json()).then(d => { if (d.quote) { document.getElementById('daily-quote').textContent = `"${d.quote}"`; if (d.author) document.getElementById('daily-author').textContent = `— ${d.author}` } }).catch(() => { })
+        fetch(`${window.API_BASE}/daily_quote`).then(r => r.json()).then(d => { if (d.quote) { document.getElementById('daily-quote').textContent = `"${d.quote}"`; if (d.author) document.getElementById('daily-author').textContent = `— ${d.author}` } }).catch(() => { })
     });
 
 // Typing dots animation CSS

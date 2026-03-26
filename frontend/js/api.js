@@ -1,22 +1,11 @@
-// Detect environment and set base URL
-if (window.location.protocol === 'file:') {
-  console.error('[LEVI] Website cannot run via file:// protocol. Please use a local server.');
-  alert('LEVI Error: You cannot open index.html directly. Run "python run_app.py" and visit http://localhost:8080');
-}
-
-const isLocalDev = (
-  window.location.hostname === 'localhost' ||
-  window.location.hostname === '127.0.0.1' ||
-  window.location.hostname === '0.0.0.0' ||
-  window.location.hostname === '[::1]' ||
-  window.location.hostname === '::1'
+// Use global API_BASE defined in auth-manager.js
+const API_BASE = window.API_BASE || (
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  ? "http://localhost:8000"
+  : "/api"
 );
 
-const API_BASE = window.API_BASE || (isLocalDev
-  ? "http://localhost:8000"
-  : "/api");
-
-console.log(`[LEVI] API Base: ${API_BASE} | isLocalDev: ${isLocalDev}`);
+console.log(`[LEVI] API Base: ${API_BASE}`);
 
 
 async function getHealth() {
@@ -69,6 +58,11 @@ async function apiFetch(endpoint, options = {}) {
     return await res.json();
   } catch (error) {
     console.error(`[LEVI] Fetch error for ${url}:`, error);
+    if (typeof showToast === 'function') {
+      showToast("Network error", "error");
+    } else if (window.ui && window.ui.showToast) {
+      window.ui.showToast("Network error", "error");
+    }
     throw error;
   }
 }

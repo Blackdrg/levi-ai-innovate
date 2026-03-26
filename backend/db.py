@@ -6,9 +6,10 @@ def get_db():
     """Mock get_db for legacy components."""
     yield None
 
+from sqlalchemy import MetaData
+
 class Base:
-    """Mock Base for legacy components."""
-    pass
+    metadata = MetaData()
 
 DATABASE_URL = "firestore://native"
 engine = None

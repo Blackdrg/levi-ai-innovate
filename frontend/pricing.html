@@ -222,15 +222,17 @@ function toggleMobileMenu(){const m=document.getElementById('mobile-menu');if(!m
 const PLANS={pro:{amount:29900,name:'LEVI Pro',description:'100 credits per month'},creator:{amount:59900,name:'LEVI Creator',description:'500 credits per month'}};
 
 async function subscribe(plan){
-  const token=localStorage.getItem('levi_token');
+  await window.waitForToken();
+  const token = window.levi_user_token;
   if(!token){showToast('Please sign in to subscribe','warning');setTimeout(()=>window.location.href='auth.html',1400);return}
   const user=JSON.parse(localStorage.getItem('levi_user')||'{}');
   const btnId=plan+'-btn';
   document.getElementById(btnId).disabled=true;
   document.getElementById(btnId).textContent='Loading…';
+  if (window.ui && window.ui.showLoader) window.ui.showLoader();
   try{
     await window.waitForToken();
-    const r=await fetch(window.API_BASE+'/create_order',{method:'POST',body:JSON.stringify({plan})});
+    const r=await fetch(`${window.API_BASE}/create_order`,{method:'POST',body:JSON.stringify({plan})});
     if(!r.ok)throw new Error(await r.text());
     const d=await r.json();
     const options={
@@ -243,13 +245,19 @@ async function subscribe(plan){
       prefill:{name:user.username||'',email:user.email||''},
       theme:{color:'#f2ca50'},
       handler:async function(response){
+        if (window.ui && window.ui.showLoader) window.ui.showLoader();
         try{
           await window.waitForToken();
-          const vr=await fetch(window.API_BASE+'/verify_payment',{method:'POST',body:JSON.stringify(response)});
+          const vr=await fetch(`${window.API_BASE}/verify_payment`,{method:'POST',body:JSON.stringify(response)});
           const vd=await vr.json();
           if(vd.success||vr.ok){showToast('Payment successful! Your plan is now active.');if(vd.user)localStorage.setItem('levi_user',JSON.stringify(vd.user))}
           else showToast('Payment verification failed — contact support','error');
-        }catch{showToast('Payment received — please refresh','warning')}
+        }catch(e){
+          console.error("Payment verification failed:", e);
+          showToast('Network error — please refresh','error');
+        } finally {
+          if (window.ui && window.ui.hideLoader) window.ui.hideLoader();
+        }
       }
     };
     const rzp=new Razorpay(options);
@@ -261,6 +269,7 @@ async function subscribe(plan){
     const btn=document.getElementById(btnId);
     btn.disabled=false;
     btn.textContent=plan==='pro'?'Upgrade to Pro':'Become Creator';
+    if (window.ui && window.ui.hideLoader) window.ui.hideLoader();
   }
 }
 

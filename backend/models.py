@@ -7,13 +7,23 @@ try:
 except ImportError:
     from db import Base # type: ignore
 
-class Quote(Base): pass
-class Users(Base): pass
-class ChatHistory(Base): pass
-class UserMemory(Base): pass
-class UserMemoryLog(Base): pass
-class FeedItem(Base): pass
-class Analytics(Base): pass
-class PushSubscription(Base): pass
-class PaymentEvent(Base): pass
-class Persona(Base): pass
+class Quote(Base):
+    __tablename__ = 'quotes'
+class Users(Base):
+    __tablename__ = 'users'
+class ChatHistory(Base):
+    __tablename__ = 'chat_history'
+class UserMemory(Base):
+    __tablename__ = 'user_memory'
+class UserMemoryLog(Base):
+    __tablename__ = 'user_memory_log'
+class FeedItem(Base):
+    __tablename__ = 'feed_items'
+class Analytics(Base):
+    __tablename__ = 'analytics'
+class PushSubscription(Base):
+    __tablename__ = 'push_subscriptions'
+class PaymentEvent(Base):
+    __tablename__ = 'payment_events'
+class Persona(Base):
+    __tablename__ = 'personas'

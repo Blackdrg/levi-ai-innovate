@@ -223,12 +223,9 @@ class UserPreferenceModel:
             "total_interactions": len(samples),
         }
 
-        # Fetch structured memory graph
-            from models import UserMemory  # type: ignore
-        except ImportError:
-            from backend.models import UserMemory  # type: ignore
-        memory = self.db.query(UserMemory).filter(UserMemory.user_id == self.user_id).first()
-        prof["structured_memory"] = memory.structured_memory if memory else {}
+        # Fetch structured memory graph from Firestore
+        memory_doc = firestore_db.collection("user_memory").document(self.user_id).get()
+        prof["structured_memory"] = memory_doc.to_dict().get("structured_memory", {}) if memory_doc.exists else {}
 
         self._profile = prof
         return prof
@@ -476,20 +473,48 @@ def export_training_data(
 # ─────────────────────────────────────────────
 # 5. LEARNING ANALYTICS
 # ─────────────────────────────────────────────
-    unexported    = db.query(func.count(TrainingData.id)).filter(TrainingData.is_exported == False, TrainingData.rating >= 4).scalar() or 0
+def get_learning_stats():
+    """Returns learning system statistics from Firestore."""
+    try:
+        # Firestore counts (Safe-access)
+        total_samples = 0
+        high_quality = 0
+        avg_rating = 0
+        learned_quotes = 0
+        
+        try:
+            total_samples = len(firestore_db.collection("training_data").get())
+            hq_docs = firestore_db.collection("training_data").where("rating", ">=", 4).get()
+            high_quality = len(hq_docs)
+            if high_quality > 0:
+                avg_rating = sum(d.to_dict().get("rating", 0) for d in hq_docs) / high_quality
+            learned_quotes = len(firestore_db.collection("quotes").where("topic", "==", "__learned__").get())
+        except Exception as e:
+            logger.warning(f"Firestore stats failed: {e}")
 
-    prompt_perf = db.query(PromptPerformance).order_by(PromptPerformance.avg_score.desc()).first()
+        # Prompt Performance from Firestore
+        best_variant = 0
+        best_score = 0.0
+        try:
+            perf_docs = firestore_db.collection("prompt_performance").order_by("avg_score", direction="DESCENDING").limit(1).get()
+            if perf_docs:
+                best_variant = int(perf_docs[0].id)
+                best_score = perf_docs[0].to_dict().get("avg_score", 0.0)
+        except Exception:
+            pass
 
-    return {
-        "total_training_samples": total_samples,
-        "high_quality_samples":   high_quality,
-        "avg_response_rating":    round(float(avg_rating or 0), 2),  # type: ignore
-        "learned_quotes":         learned_quotes,
-        "unexported_samples":     unexported,
-        "best_prompt_variant":    prompt_perf.variant_idx if prompt_perf else 0,
-        "best_prompt_score":      round(prompt_perf.avg_score, 2) if prompt_perf else 0.0,
-        "knowledge_base_health":  "good" if learned_quotes > 50 else "growing",
-    }
+        return {
+            "total_training_samples": total_samples,
+            "high_quality_samples":   high_quality,
+            "avg_response_rating":    round(float(avg_rating or 0), 2),
+            "learned_quotes":         learned_quotes,
+            "best_prompt_variant":    best_variant,
+            "best_prompt_score":      round(best_score, 2),
+            "knowledge_base_health":  "good" if learned_quotes > 50 else "growing",
+        }
+    except Exception as e:
+        logger.error(f"Critical stats failure: {e}")
+        return {"status": "error", "message": str(e)}
 
 
 # ─────────────────────────────────────────────

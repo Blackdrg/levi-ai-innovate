@@ -32,7 +32,9 @@ if config.config_file_name is not None:
 
 # add your model's MetaData object here
 # for 'autogenerate' support
-target_metadata = Base.metadata
+# Use None to allow migrations to run based on migration files alone
+# since the Python models are deprecated/broken.
+target_metadata = None
 
 def get_url() -> str:
     url = os.getenv("DATABASE_URL")
