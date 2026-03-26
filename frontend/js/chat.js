@@ -119,9 +119,10 @@ async function sendMessage() {
         sessionStorage.setItem("chat_session_id", sessionId);
     }
 
+    if (window.ui && window.ui.showLoader) window.ui.showLoader();
     try {
         await window.waitForToken();
-        const res = await fetch(window.API_BASE + "/chat", {
+        const res = await fetch(`${window.API_BASE}/chat`, {
             method: "POST",
             body: JSON.stringify({
                 session_id: sessionId,
@@ -141,19 +142,24 @@ async function sendMessage() {
         const data = await res.json();
         messageCount++;
         
-        // Try to get message_id if backend provides it for RLHF
         const msgId = data.id || `msg_${Date.now()}`; 
+        const finalReply = data.response || data.reply || "";
         
-        appendMessage('bot', data.response || data.reply || "A profound silence.", msgId);
+        if (!finalReply) {
+            if (typeof showToast === 'function') showToast("Chat failed - empty response", "error");
+        }
         
-        // Update history
-        chatHistory[chatHistory.length - 1].bot = data.response;
+        appendMessage('bot', finalReply || "A profound silence.", msgId);
+        chatHistory[chatHistory.length - 1].bot = finalReply;
         
     } catch (err) {
+        console.error("Chat error:", err);
+        if (typeof showToast === 'function') showToast("Network error", "error");
         appendMessage('bot', "Connection to the cosmic ether was lost. (Error connecting to server)");
     } finally {
         if(sendIcon) sendIcon.classList.remove("hidden");
         if(spinner) spinner.classList.add("hidden");
+        if (window.ui && window.ui.hideLoader) window.ui.hideLoader();
     }
 }
 
@@ -164,7 +170,7 @@ async function submitFeedback(msgId, score, btn) {
     
     try {
         await window.waitForToken();
-        await fetch(window.API_BASE + "/feedback", {
+        await fetch(`${window.API_BASE}/feedback`, {
             method: "POST",
             body: JSON.stringify({ message_id: msgId, score: score })
         });

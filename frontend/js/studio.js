@@ -35,18 +35,25 @@ async function synthesize(){
   try{
     await window.waitForToken();
     const body={text,author:document.getElementById('author-input').value||'LEVI AI',mood:currentStyle,background:document.getElementById('bg-input').value};
-    const r=await fetch(API_BASE+'/generate_image',{method:'POST',body:JSON.stringify(body)});
-    if(!r.ok)throw new Error('HTTP '+r.status);
+    const r=await fetch(`${window.API_BASE}/generate_image`,{method:'POST',body:JSON.stringify(body)});
+    if(!r.ok){
+      showToast("Generation failed", "error");
+      displayDemo(text);
+      return;
+    }
     const d=await r.json();
     if(d.image_url||d.image_b64){displayImage(d.image_url||d.image_b64,text)}
     else throw new Error('No image in response');
   }catch(e){
-    showToast('Showing demo preview (backend offline)','warning');
-    displayDemo(document.getElementById('wisdom-input').value.trim());
+    console.error("Synthesize error:", e);
+    showToast('Showing demo preview (connection error)','warning');
+    displayDemo(text);
   }finally{setLoading(false)}
 }
 
 function setLoading(on){
+  if (on && window.ui && window.ui.showLoader) window.ui.showLoader();
+  if (!on && window.ui && window.ui.hideLoader) window.ui.hideLoader();
   document.getElementById('synth-icon').classList.toggle('hidden',on);
   document.getElementById('synth-spinner').classList.toggle('hidden',!on);
   document.getElementById('synth-btn').disabled=on;

@@ -66,7 +66,7 @@ function createFeedbackPanel(userMessage, botResponse, mood, sessionId) {
       // Submit to backend
       try {
         await window.waitForToken();
-        const token = localStorage.getItem('levi_token');
+        const token = window.levi_user_token;
         const headers = { 'Content-Type': 'application/json' };
         if (token) headers['Authorization'] = 'Bearer ' + token;
 
@@ -85,6 +85,7 @@ function createFeedbackPanel(userMessage, botResponse, mood, sessionId) {
         });
       } catch (e) {
         console.warn('[LEVI Feedback] Submit failed:', e);
+        if (typeof showToast === 'function') showToast("Network error", "error");
       }
 
       // Collapse panel after 2.5s
@@ -224,7 +225,7 @@ function createThumbsWidget(userMessage, botResponse, mood, sessionId) {
 
       try {
         await window.waitForToken();
-        const token = localStorage.getItem('levi_token');
+        const token = window.levi_user_token;
         const headers = { 'Content-Type': 'application/json' };
         if (token) headers['Authorization'] = 'Bearer ' + token;
         await fetch(`${API_BASE}/feedback`, {

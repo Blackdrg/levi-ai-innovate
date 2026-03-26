@@ -88,25 +88,32 @@
     import './js/ui.js';
 
     async function init() {
-      const token = localStorage.getItem('levi_token');
-                    if (!token) {
-                      window.location.href = 'auth.html';
-                      return;
-                    }
+      await window.waitForToken();
+      const token = window.levi_user_token;
+      if (!token) {
+        window.location.href = 'auth.html';
+        return;
+      }
 
-                    try {
-                      // Refresh profile to update credits in local state
-                      const profile = await getProfile(token);
-                      localStorage.setItem('levi_user', profile.username);
-                      localStorage.setItem('levi_credits', profile.credits);
-                      localStorage.setItem('levi_tier', profile.tier);
+      try {
+        // Refresh profile to update credits in local state
+        const profile = await getProfile();
+        localStorage.setItem('levi_user', JSON.stringify({
+          uid: profile.uid || profile.id,
+          username: profile.username,
+          email: profile.email,
+          credits: profile.credits,
+          tier: profile.tier
+        }));
 
-                      window.ui.showToast("Account upgraded successfully! ✨");
-                    } catch (err) {
-                      console.error("Profile refresh failed:", err);
-                    }
-                  }
-                  init();
+        if (window.ui && window.ui.showToast) {
+          window.ui.showToast("Account upgraded successfully! ✨");
+        }
+      } catch (err) {
+        console.error("Profile refresh failed:", err);
+      }
+    }
+    init();
                 </script>
 <script src="js/animations.js" type="module"></script>
 <script src="js/feedback.js" type="module"></script>

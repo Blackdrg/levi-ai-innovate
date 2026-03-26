@@ -313,7 +313,10 @@ if celery_app:
         """Full self-training pipeline as Celery task using Firestore."""
         try:
             from backend.learning import get_learning_stats, export_training_data as exp_data # type: ignore
-            
+        except ImportError:
+            return {"status": "skipped", "reason": "learning module missing"}
+        
+        try:
             stats = get_learning_stats()
             unexported = stats.get("unexported_samples", 0)
 

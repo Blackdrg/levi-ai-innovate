@@ -23,6 +23,8 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 
 logger = logging.getLogger(__name__)
 
+from backend.s3_utils import upload_image_to_s3 # type: ignore
+
 TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY")
 TOGETHER_API_URL = "https://api.together.xyz/v1/images/generations"
 AWS_S3_BUCKET = os.getenv("AWS_S3_BUCKET")
@@ -469,43 +471,7 @@ def add_watermark(img: Image.Image, user_tier: str = "free") -> Image.Image:
 # S3 UPLOAD
 # ─────────────────────────────────────────────
 
-def upload_image_to_s3(img_bytes: bytes, user_id: Optional[int] = None) -> Optional[str]:
-    """Upload image to AWS S3 and return public URL."""
-    bucket = os.getenv("AWS_S3_BUCKET")
-    if not bucket:
-        return None
-    try:
-        import boto3  # type: ignore
-        s3 = boto3.client(
-            "s3",
-            aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
-            aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
-            region_name=os.getenv("AWS_REGION", "us-east-1"),
-        )
-        uid_str = str(user_id) if user_id else "anon"
-        filename = f"images/{uid_str}/{uuid.uuid4().hex}.png"
-
-        s3.put_object(
-            Bucket=bucket,
-            Key=filename,
-            Body=img_bytes,
-            ContentType="image/png",
-        )
-
-        cloudfront = os.getenv("CLOUDFRONT_DOMAIN")
-        if cloudfront:
-            return f"https://{cloudfront}/{filename}"
-
-        # Pre-signed URL fallback
-        url = s3.generate_presigned_url(
-            "get_object",
-            Params={"Bucket": bucket, "Key": filename},
-            ExpiresIn=604800  # 7 days
-        )
-        return url
-    except Exception as e:
-        logger.error(f"S3 upload failed: {e}")
-        return None
+# S3 upload moved to s3_utils.py
 
 
 # ─────────────────────────────────────────────

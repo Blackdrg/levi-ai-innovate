@@ -6,8 +6,13 @@ from datetime import datetime
 
 # Initialize Firebase Admin if not already initialized
 if not firebase_admin._apps:
-    cred = credentials.ApplicationDefault()
-    firebase_admin.initialize_app(cred)
+    try:
+        cred = credentials.ApplicationDefault()
+        firebase_admin.initialize_app(cred)
+        print("✅ Firebase initialized")
+    except Exception as e:
+        print(f"❌ Firebase init failed: {e}")
+        raise e  # MUST crash if fails
 
 db = firestore.client()
 

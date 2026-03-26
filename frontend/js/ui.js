@@ -3,7 +3,7 @@
 import { trackShare, getHealth } from './api.js';
 
 let favorites = JSON.parse(localStorage.getItem('levi_favorites')) || [];
-let token = localStorage.getItem('levi_token') || null;
+let token = window.levi_user_token || null;
 let currentMoods = [];
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -70,7 +70,8 @@ function toggleFavorite(quote) {
 }
 
 function getAuthHeaders() {
-  return token ? { 'Authorization': `Bearer ${token}` } : {};
+  const t = window.levi_user_token || null;
+  return t ? { 'Authorization': `Bearer ${t}` } : {};
 }
 
 let typingMessages = [];
@@ -126,8 +127,8 @@ export async function subscribeToPush(vapidPublicKey) {
       });
     }
 
-    const token = localStorage.getItem('levi_token');
-    if (window.waitForToken) await window.waitForToken();
+    await window.waitForToken();
+    const token = window.levi_user_token;
     const res = await fetch(`${window.API_BASE}/push/subscribe`, {
       method: 'POST',
       headers: { 
@@ -164,7 +165,8 @@ function selectMood(mood, targetBtn) {
 
 async function shareContent(title, text, url) {
   const shareData = { title, text, url };
-  const token = localStorage.getItem('levi_token');
+  await window.waitForToken();
+  const token = window.levi_user_token;
 
   try {
     if (navigator.share) {
@@ -257,6 +259,58 @@ async function checkSystemStatus() {
   }
 }
 
+function injectLoader() {
+  if (document.getElementById('global-loader')) return;
+  const style = document.createElement('style');
+  style.id = 'loader-style';
+  style.innerHTML = `
+    #global-loader {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(14, 14, 18, 0.75);
+      backdrop-filter: blur(12px);
+      z-index: 10000;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.3s;
+    }
+    .leviloader-spinner {
+      width: 48px;
+      height: 48px;
+      border: 3px solid rgba(242, 202, 80, 0.1);
+      border-top-color: #f2ca50;
+      border-radius: 50%;
+      animation: spin-loader 0.8s linear infinite;
+      box-shadow: 0 0 20px rgba(242, 202, 80, 0.15);
+    }
+    @keyframes spin-loader { to { transform: rotate(360deg); } }
+  `;
+  document.head.appendChild(style);
+
+  const loader = document.createElement('div');
+  loader.id = 'global-loader';
+  loader.innerHTML = '<div class="leviloader-spinner"></div>';
+  document.body.appendChild(loader);
+}
+
+function showLoader() {
+  injectLoader();
+  const l = document.getElementById('global-loader');
+  if (l) {
+    l.style.display = 'flex';
+    l.style.opacity = '1';
+  }
+}
+
+function hideLoader() {
+  const l = document.getElementById('global-loader');
+  if (l) {
+    l.style.opacity = '0';
+    setTimeout(() => { l.style.display = 'none'; }, 300);
+  }
+}
+
 // Attach to window for module access
 window.ui = {
   toggleDarkMode,
@@ -271,6 +325,8 @@ window.ui = {
   showError: (msg) => showToast(msg, "error"),
   injectOfflineBanner,
   checkSystemStatus,
+  showLoader,
+  hideLoader,
   currentMoods
 };
 

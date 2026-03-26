@@ -264,17 +264,22 @@
 }
 
   async function loadQuotes(query = '', mood = 'all') {
+    if (window.ui && window.ui.showLoader) window.ui.showLoader();
     try {
       await window.waitForToken();
-      const r = await fetch(window.API_BASE + '/search_quotes', {
+      const r = await fetch(`${window.API_BASE}/search_quotes`, {
         method: 'POST',
         body: JSON.stringify({ text: query || 'wisdom', mood: mood === 'all' ? null : mood, limit: 12 })
       });
       const d = await r.json();
       const items = Array.isArray(d) ? d : d.quotes || d.results || [];
       allQuotes = items.length ? items : DEMO;
-    } catch {
+    } catch (e) {
+      console.error("Quotes load failed:", e);
+      if (typeof showToast === 'function') showToast("Network error", "error");
       allQuotes = DEMO;
+    } finally {
+      if (window.ui && window.ui.hideLoader) window.ui.hideLoader();
     }
   renderGrid(allQuotes);
 }

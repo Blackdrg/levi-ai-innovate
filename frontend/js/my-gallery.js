@@ -5,8 +5,7 @@
 
 'use strict';
 
-const isLocal = ['localhost', '127.0.0.1', '0.0.0.0'].includes(location.hostname);
-const API_BASE = isLocal ? `http://${location.hostname}:8000` : `${location.origin}/api`;
+const API_BASE = window.API_BASE;
 
 const $ = id => document.getElementById(id);
 
@@ -163,7 +162,6 @@ async function loadGallery() {
     if (loadingState) loadingState.classList.add('hidden');
 
     if (res.status === 401) {
-      localStorage.removeItem('levi_token');
       if (emptyState) emptyState.classList.remove('hidden');
       if (galleryCount) galleryCount.textContent = 'Session expired — please sign in';
       return;
@@ -189,6 +187,7 @@ async function loadGallery() {
     if (loadingState) loadingState.classList.add('hidden');
     if (emptyState) emptyState.classList.remove('hidden');
     if (galleryCount) galleryCount.textContent = 'Could not load gallery';
+    if (typeof showToast === 'function') showToast("Network error", "error");
     console.error('Gallery load error:', err);
   }
 }
