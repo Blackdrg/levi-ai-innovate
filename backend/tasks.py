@@ -197,9 +197,20 @@ def generate_image_task(
             "timestamp": datetime.utcnow()
         }
         update_time, doc_ref = feed_ref.add(new_item_data)
-
         return {
-            "status": "do# ─────────────────────────────────────────────
+            "status": "done",
+            "feed_id": doc_ref.id,
+            "image_url": image_url or image_b64
+        }
+
+    except Exception as e:
+        logger.error(f"[ImageTask] Failed: {e}")
+        if self.request.retries >= self.max_retries:
+            # Refund logic if needed
+            return {"status": "failed", "error": str(e)}
+        raise self.retry(exc=e, countdown=30)
+
+# ─────────────────────────────────────────────
 # Task 2: Video Generation
 # ─────────────────────────────────────────────
 
