@@ -43,4 +43,6 @@ jobs:
             --image us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/levi-repo/${{ env.SERVICE_NAME }}:${{ github.sha }} \
             --region ${{ env.REGION }} \
             --platform managed \
-            --allow-unauthenticated
+            --allow-unauthenticated \
+            --set-env-vars "ENVIRONMENT=production,RENDER=true" \
+            --update-env-vars "SECRET_KEY=${{ secrets.SECRET_KEY }},DATABASE_URL=${{ secrets.DATABASE_URL }},RAZORPAY_KEY_ID=${{ secrets.RAZORPAY_KEY_ID }},RAZORPAY_KEY_SECRET=${{ secrets.RAZORPAY_KEY_SECRET }},RAZORPAY_WEBHOOK_SECRET=${{ secrets.RAZORPAY_WEBHOOK_SECRET }},ADMIN_KEY=${{ secrets.ADMIN_KEY }},GROQ_API_KEY=${{ secrets.GROQ_API_KEY }},TOGETHER_API_KEY=${{ secrets.TOGETHER_API_KEY }},RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}"
