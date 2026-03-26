@@ -1,18 +1,22 @@
 #!/bin/bash
-# Exit on error
+# entrypoint.sh — run migrations, seed, then start server
 set -e
 
-# Run migrations (Safe to run multiple times)
-echo "Running database migrations..."
-alembic upgrade head || echo "Migrations failed, continuing..."
+echo "=== LEVI Backend Startup ==="
 
-# Seed database if needed
-echo "Seeding database..."
-python seed.py || echo "Seeding failed or already seeded, continuing..."
+# 1. Run DB migrations
+echo "[1/3] Running Alembic migrations..."
+alembic upgrade head || echo "  Migrations failed or already up to date — continuing..."
 
-# Note: Celery worker and beat are managed separately (e.g., in render.yaml or docker-compose)
-# to avoid orphaned processes and duplicate execution.
+# 2. Seed initial quote data
+echo "[2/3] Seeding database..."
+python seed.py || echo "  Seeding skipped (already seeded or failed) — continuing..."
 
-# Start the application
-echo "Starting application..."
-exec uvicorn main:app --host 0.0.0.0 --port "${PORT:-10000}" --workers 1
+# 3. Start application
+echo "[3/3] Starting Uvicorn..."
+exec uvicorn main:app \
+  --host 0.0.0.0 \
+  --port "${PORT:-10000}" \
+  --workers 1 \
+  --timeout-keep-alive 75 \
+  --access-log

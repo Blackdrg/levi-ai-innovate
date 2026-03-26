@@ -114,19 +114,19 @@ window.pingBackend = pingBackend;
 
 function updateNavUI() {
   const user = getCurrentUser();
-  const btn  = document.getElementById('nav-auth-btn');
+  const btn = document.getElementById('nav-auth-btn');
   if (!btn) return;
 
   if (user) {
-    btn.textContent  = user.username || 'Account';
-    btn.href         = 'my-gallery.html';
-    btn.onclick      = null;
+    btn.textContent = user.username || 'Account';
+    btn.href = 'my-gallery.html';
+    btn.onclick = null;
     // Update sidebar items
     document.querySelectorAll('[data-user-name]').forEach(el => { el.textContent = user.username; });
     document.querySelectorAll('[data-credits]').forEach(el => { el.textContent = `${user.credits ?? 0} credits`; });
   } else {
     btn.textContent = 'Sign In';
-    btn.href        = 'auth.html';
+    btn.href = 'auth.html';
   }
 }
 window.updateNavUI = updateNavUI;
