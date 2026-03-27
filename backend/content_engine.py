@@ -12,6 +12,7 @@ import os
 import logging
 import random
 from typing import Optional
+from backend.utils.retries import standard_retry, DEFAULT_TIMEOUT
 
 logger = logging.getLogger(__name__)
 
@@ -258,6 +259,7 @@ TONE_MODIFIERS = {
 }
 
 
+@standard_retry
 def _generate_via_groq(system_prompt: str, user_prompt: str, max_tokens: int,
                         temperature: float = 0.82) -> Optional[str]:
     """Call Groq API for content generation."""

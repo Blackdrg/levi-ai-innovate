@@ -144,9 +144,9 @@ def validate_env():
             if not os.path.exists(_fs_secret):
                 json.loads(_fs_secret)
         except Exception as e:
-            logger.error(f"FIREBASE_SERVICE_ACCOUNT_JSON is invalid: {e}")
-            import sys
-            sys.exit(1)
+            error_msg = f"FIREBASE_SERVICE_ACCOUNT_JSON is invalid: {e}"
+            logger.critical(error_msg)
+            raise RuntimeError(error_msg)
 
 validate_env()
 # ────────────────────────────# ─────────────────────────────────
@@ -651,9 +651,8 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Error connecting to Firestore: {e}")
         if is_prod:
-            import sys
             logger.critical("FATAL: Could not connect to Firestore during startup. Exiting.")
-            sys.exit(1)
+            raise RuntimeError("Firestore connection failed on startup")
     logger.info(f"CLIENT_KEY: {'SET' if CLIENT_KEY else 'NOT SET'}")
     yield
 
@@ -812,6 +811,7 @@ async def health():
     status_info["status"] = overall_status
     
     if overall_status != "ok":
+        logger.error(f"Health check failed: {status_info}")
         return JSONResponse(status_code=503, content=status_info)
         
     return status_info
@@ -1027,6 +1027,15 @@ async def gen_image(
         user_id = current_user.get("uid") if current_user else None
         user_tier = current_user.get("tier", "free") if current_user else "free"
         
+        # Concurrency Guard: Check for existing active jobs for this user
+        if user_id:
+            active_jobs = firestore_db.collection("jobs") \
+                .where("user_id", "==", user_id) \
+                .where("status", "in", ["queued", "processing"]) \
+                .limit(1).get(timeout=5)
+            if list(active_jobs):
+                raise HTTPException(status_code=429, detail="A generation task is already in progress for your account.")
+        
         # Always use Async Job Pattern for better reliability
         job_id = f"job_{uuid.uuid4().hex[:12]}"
         job_data = {
@@ -1057,14 +1066,6 @@ async def gen_image(
         raise HTTPException(status_code=500, detail={"error": str(e), "status": "failed"})
 
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        import traceback
-        logger.error(f"Image generation error: {e}\n{traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail={"error": str(e), "status": "failed"})
-
-
 @app.post("/generate_video")
 @limiter.limit("2/minute")
 async def gen_video(
@@ -1083,6 +1084,15 @@ async def gen_video(
 
         user_id = current_user.get("uid") if current_user else None
         user_tier = current_user.get("tier", "free") if current_user else "free"
+
+        # Concurrency Guard: Check for existing active jobs for this user
+        if user_id:
+            active_jobs = firestore_db.collection("jobs") \
+                .where("user_id", "==", user_id) \
+                .where("status", "in", ["queued", "processing"]) \
+                .limit(1).get(timeout=5)
+            if list(active_jobs):
+                raise HTTPException(status_code=429, detail="A video synthesis task is already in progress.")
 
         # Async Job Pattern
         job_id = f"vjob_{uuid.uuid4().hex[:12]}"

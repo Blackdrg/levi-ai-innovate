@@ -23,7 +23,7 @@ from typing import Optional, Any, Tuple
 import requests  # type: ignore
 
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance  # type: ignore
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type  # type: ignore
+from backend.utils.retries import standard_retry, DEFAULT_TIMEOUT, safe_request
 
 try:
     from backend.circuit_breaker import groq_breaker, together_breaker # type: ignore
@@ -77,12 +77,7 @@ STYLE_ENHANCERS = {
 }
 
 
-@retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=2, max=10),
-    retry=retry_if_exception_type((requests.exceptions.RequestException, Exception)),
-    reraise=True # Hardening: Don't fall back silently in the core prompting layer
-)
+@standard_retry
 def _enhance_prompt_with_groq(base_prompt: str, mood: str, style: str = "") -> Tuple[str, Optional[str]]:
     """Use Groq to expand a short prompt. Returns (enhanced_prompt, warning)."""
     api_key = os.getenv("GROQ_API_KEY")
@@ -91,7 +86,8 @@ def _enhance_prompt_with_groq(base_prompt: str, mood: str, style: str = "") -> T
 
     try:
         resp = groq_breaker.call(
-            requests.post,
+            safe_request,
+            "POST",
             "https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
             json={
@@ -112,7 +108,7 @@ def _enhance_prompt_with_groq(base_prompt: str, mood: str, style: str = "") -> T
                 "max_tokens": 150,
                 "temperature": 0.7,
             },
-            timeout=20 # Standardized timeout
+            timeout=DEFAULT_TIMEOUT
         )
         if resp.status_code == 200:
             enhanced = resp.json()["choices"][0]["message"]["content"].strip()
@@ -255,12 +251,7 @@ def generate_quote_image(
 # TOGETHER AI — Primary Image Generation
 # ─────────────────────────────────────────────
 
-@retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=2, max=15),
-    retry=retry_if_exception_type((requests.exceptions.RequestException, Exception)),
-    reraise=True
-)
+@standard_retry
 def generate_via_together(prompt: str, size: Tuple[int, int] = (1024, 1024),
                           model: str = "black-forest-labs/FLUX.1-schnell") -> Image.Image:
     """Call Together AI to generate a background image."""
@@ -283,11 +274,12 @@ def generate_via_together(prompt: str, size: Tuple[int, int] = (1024, 1024),
     }
 
     resp = together_breaker.call(
-        requests.post,
+        safe_request,
+        "POST",
         TOGETHER_API_URL, 
         json=payload, 
         headers=headers, 
-        timeout=90
+        timeout=DEFAULT_TIMEOUT * 3 # Image gen takes longer
     )
 
     if resp.status_code == 429:

@@ -15,7 +15,7 @@ import threading
 import hashlib
 from mtranslate import translate  # type: ignore
 import groq  # type: ignore
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type  # type: ignore
+from backend.utils.retries import standard_retry, DEFAULT_TIMEOUT, safe_request
 
 from typing import Optional, Any, List, Dict
 
@@ -220,12 +220,7 @@ def _build_dynamic_system_prompt(persona: Dict, user_memory: Any = None,
     return base + memory_layer + depth_instruction + anti_repeat
 
 
-@retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=2, max=10),
-    retry=retry_if_exception_type((requests.exceptions.RequestException, Exception)),
-    reraise=True # Let the caller handle it or fall back
-)
+@standard_retry
 def _call_groq_api(messages: List[Dict], temperature: float = 0.85,
                    max_tokens: int = 300, model: str = "llama-3.1-8b-instant") -> Optional[str]:
     """Raw Groq API call with retry logic."""
@@ -242,7 +237,8 @@ def _call_groq_api(messages: List[Dict], temperature: float = 0.85,
             groq_breaker = MockBreaker()
 
         resp = groq_breaker.call(
-            requests.post,
+            safe_request,
+            "POST",
             "https://api.groq.com/openai/v1/chat/completions",
             headers={
                 "Authorization": f"Bearer {api_key}",
@@ -257,7 +253,7 @@ def _call_groq_api(messages: List[Dict], temperature: float = 0.85,
                 "frequency_penalty": 0.4,
                 "presence_penalty": 0.3,
             },
-            timeout=20 # Standardized timeout
+            timeout=DEFAULT_TIMEOUT
         )
         if resp.status_code == 429:
             logger.warning(f"Groq rate limit hit for model {model}")

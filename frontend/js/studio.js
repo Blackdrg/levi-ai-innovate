@@ -1,6 +1,7 @@
 // Use global API_BASE defined in auth-manager.js
 const API_BASE = window.API_BASE;
 let currentStyle='philosophical';let currentImage=null;
+let isGenerating = false;
 const insights={philosophical:{text:'prioritize ethereal lighting, high-contrast obsidian shadows, and golden particle dispersion.',stability:67},zen:{text:'evoke bamboo mist, still water reflections, and morning light through ancient forests.',stability:82},cyberpunk:{text:'generate neon-soaked cityscapes, rain-slicked streets, and holographic overlays.',stability:74},futuristic:{text:'render clean white surfaces, cosmic voids, and geometric precision with bioluminescent accents.',stability:91},stoic:{text:'depict marble columns, dawn light, classical architecture — austere and powerful.',stability:88},melancholic:{text:'create rain-washed cobblestones, blue hour, soft bokeh with poetic melancholy.',stability:79}};
 
 function updateChar(el){const n=el.value.length;document.getElementById('char-count').textContent=n;const cc=document.getElementById('char-count');cc.style.color=n>260?'#f87171':n>200?'#f2ca50':''}
@@ -27,6 +28,7 @@ function prefill(text,author,style){
 window.prefill=prefill;
 
 async function synthesize(){
+  if (isGenerating) return;
   const text=document.getElementById('wisdom-input').value.trim();
   if(!text){showToast('Enter some wisdom first','error');return}
   setLoading(true);
@@ -69,6 +71,7 @@ async function synthesize(){
 }
 
 function setLoading(on){
+  isGenerating = on;
   if (on && window.ui && window.ui.showLoader) window.ui.showLoader();
   if (!on && window.ui && window.ui.hideLoader) window.ui.hideLoader();
   document.getElementById('synth-icon').classList.toggle('hidden',on);
@@ -101,11 +104,10 @@ async function pollTask(id,text){
             displayImage(imgSrc, text);
         } else {
             showToast('Generation completed but no image returned', 'error');
-            setLoading(false);
         }
       } else if (d.status === 'failed') {
-        setLoading(false);
         showToast('Synthesis failed: ' + (d.error || 'Unknown error'), 'error');
+        setLoading(false);
       } else {
         retryCount++;
         if (retryCount >= maxRetries) {
@@ -117,7 +119,13 @@ async function pollTask(id,text){
       }
     } catch (error) {
       console.error("Polling error:", error);
-      setTimeout(poll, 5000);
+      retryCount++;
+      if (retryCount >= maxRetries) {
+        setLoading(false);
+        showToast('Connection lost', 'error');
+      } else {
+        setTimeout(poll, 5000);
+      }
     }
   };
 
@@ -160,8 +168,13 @@ function shareImg(){
 }
 function regenerate(){if(document.getElementById('wisdom-input').value.trim())synthesize()}
 async function makeVideo(){
+  if (isGenerating) {
+    showToast('Synthesis already in progress', 'warning');
+    return;
+  }
   const text=document.getElementById('wisdom-input').value.trim();
   if(!text){showToast('Enter some wisdom first','error');return}
+  setLoading(true);
   showToast('Video generation queued...', 'info');
   try {
     const body={text,author:document.getElementById('author-input').value||'LEVI AI',mood:currentStyle};
@@ -175,6 +188,8 @@ async function makeVideo(){
     }
   } catch(e) {
       showToast('Video request failed', 'error');
+  } finally {
+      if (!currentImage) setLoading(false);
   }
 }
 function newCanvas(){

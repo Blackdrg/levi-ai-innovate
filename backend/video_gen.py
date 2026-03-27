@@ -19,7 +19,7 @@ from io import BytesIO
 from typing import Optional, Any, List, Tuple
 
 import requests # type: ignore
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type # type: ignore
+from backend.utils.retries import standard_retry, DEFAULT_TIMEOUT, safe_request
 
 logger = logging.getLogger(__name__)
 
@@ -73,12 +73,7 @@ except ImportError:
 # SCRIPT GENERATION (Groq-powered)
 # ─────────────────────────────────────────────
 
-@retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=2, max=10),
-    retry=retry_if_exception_type((requests.exceptions.RequestException, Exception)),
-    reraise=True
-)
+@standard_retry
 def generate_narration_script(quote: str, author: str, mood: str,
                                style: str = "reflective") -> str:
     """Generate a rich narration script using Groq with retries."""
@@ -97,7 +92,8 @@ def generate_narration_script(quote: str, author: str, mood: str,
 
     try:
         resp = groq_breaker.call(
-            requests.post,
+            safe_request,
+            "POST",
             "https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
             json={
@@ -120,7 +116,7 @@ def generate_narration_script(quote: str, author: str, mood: str,
                 "max_tokens": 100,
                 "temperature": 0.75,
             },
-            timeout=20
+            timeout=DEFAULT_TIMEOUT
         )
         if resp.status_code == 200:
             return resp.json()["choices"][0]["message"]["content"].strip()
