@@ -261,3 +261,58 @@ def get_daily_ai_spend() -> float:
     if raw is None:
         return 0.0
     return float(raw)
+
+
+# ── Global Concurrency Control ──────────────────────────────
+
+def acquire_concurrency_slot(limit_key: str, max_concurrent: int) -> bool:
+    """
+    Try to acquire a concurrency slot globally via Redis.
+    Returns True if successful, False if limit reached.
+    """
+    if not HAS_REDIS:
+        return True
+    
+    # We use a simple counter. To prevent leaks from crashes, 
+    # we could use a set of job IDs with TTLs, but for now 
+    # a counter with a periodic reset or a long TTL on the key is a start.
+    # Better: Use INCR and set an expiry if it's the first hit.
+    
+    count = r.incr(limit_key)
+    if count == 1:
+        r.expire(limit_key, 3600)  # Reset counter every hour to prevent permanent leaks
+        
+    if count > max_concurrent:
+        r.decr(limit_key)
+        return False
+    return True
+
+
+def release_concurrency_slot(limit_key: str):
+    """Release a concurrency slot."""
+    if HAS_REDIS:
+        # Ensure we don't go below zero
+        val = int(r.get(limit_key) or 0)
+        if val > 0:
+            r.decr(limit_key)
+
+
+# ── Generic Rate Limiting ───────────────────────────────────
+
+def is_rate_limited(user_id: str, limit: int = 5, window: int = 60) -> bool:
+    """
+    Check if a user is rate limited globally via Redis.
+    Default: 5 requests per 60 seconds.
+    """
+    if not HAS_REDIS:
+        return False
+    
+    key = f"rate_limit:{user_id}"
+    try:
+        count = r.incr(key)
+        if count == 1:
+            r.expire(key, window)
+        return count > limit
+    except Exception as e:
+        print(f"[Redis] Rate limit check failed: {e}")
+        return False

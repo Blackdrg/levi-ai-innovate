@@ -18,11 +18,8 @@ import random
 from io import BytesIO
 from typing import Optional, Any, List, Tuple
 
-import requests # type: ignore
-from backend.utils.network import safe_request, standard_retry, ai_service_breaker, DEFAULT_TIMEOUT
-
-# Use the centralized breaker for all AI services
-groq_breaker = ai_service_breaker
+from backend.utils.network import safe_request, standard_retry, DEFAULT_TIMEOUT
+from backend.circuit_breaker import groq_breaker
 
 # ── Dependency Availability Checks ──
 HAS_MOVIEPY = False
