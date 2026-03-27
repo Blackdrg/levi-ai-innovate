@@ -54,4 +54,13 @@ jobs:
             --set-env-vars "TOGETHER_API_KEY=${{ secrets.TOGETHER_API_KEY }}" \
             --set-env-vars "RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}" \
             --set-env-vars "FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID }}" \
-            --set-env-vars "FIREBASE_MESSAGING_SENDER_ID=${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}"
+            --set-env-vars "FIREBASE_MESSAGING_SENDER_ID=${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}" \
+            --set-env-vars "FIREBASE_SERVICE_ACCOUNT_JSON=${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}"
+
+      - name: Post-Deploy Health Check
+        run: |
+          echo "Verifying deployment..."
+          # Give Cloud Run a few seconds to stabilize
+          sleep 10
+          curl -v -f https://levi-ai-c23c6.web.app/api/health || (echo "Backend health check FAILED" && exit 1)
+          echo "Backend is healthy! ✅"
