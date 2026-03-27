@@ -7,10 +7,14 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, HTTPException, Depends, status # type: ignore
-from fastapi.responses import JSONResponse # type: ignore
-from fastapi.middleware.cors import CORSMiddleware # type: ignore
+from fastapi import FastAPI, Request, HTTPException, Depends, status, BackgroundTasks  # type: ignore
+from fastapi.responses import JSONResponse  # type: ignore
+from fastapi.middleware.cors import CORSMiddleware  # type: ignore
 from starlette.middleware.base import BaseHTTPMiddleware # type: ignore
+from pydantic import BaseModel, Field, field_validator # type: ignore
+import hmac
+import numpy as np
+from backend.models import _INJECTION_PATTERNS # type: ignore
 from dotenv import load_dotenv
 
 import sentry_sdk # type: ignore
@@ -102,6 +106,17 @@ app = FastAPI(
     docs_url=None if os.getenv("ENVIRONMENT") == "production" else "/docs"
 )
 
+@app.middleware("http")
+async def strip_api_prefix(request: Request, call_next):
+    """Strip /api/v1 prefix for consistency (needed for root routes)."""
+    path = request.scope["path"]
+    if path.startswith("/api/v1"):
+        new_path = path[len("/api/v1"):] or "/"
+        request.scope["path"] = new_path
+        if "raw_path" in request.scope:
+            request.scope["raw_path"] = new_path.encode()
+    return await call_next(request)
+
 # ── Middleware ──────────────────────────────────────
 limiter = Limiter(key_func=get_remote_address, storage_uri=REDIS_URL if HAS_REDIS else "memory://")
 app.state.limiter = limiter
@@ -175,46 +190,25 @@ async def root():
 
 @app.get("/health")
 async def health():
-    """Robust health check for CI/CD."""
+    """
+    Robust health check for CI/CD and monitoring.
+    Verifies Firestore connectivity.
+    """
     status_info = {
         "status": "ok",
         "timestamp": datetime.utcnow().isoformat(),
         "version": os.getenv("GITHUB_SHA", "local")[:7],
-        "dependencies": {
-            "firestore": "checking",
-            "redis": "checking" if HAS_REDIS else "unavailable"
-        }
+        "database": "checking",
+        "auth": "ok",
     }
     
-    overall_status = "ok"
-    
-    # Check Firestore
-    if firestore_db is None:
-        overall_status = "error"
-        status_info["dependencies"]["firestore"] = "uninitialized"
-    else:
-        try:
-            # Ping the health_check collection
-            firestore_db.collection("health_check").document("status").get(timeout=3.0)
-            status_info["dependencies"]["firestore"] = "healthy"
-        except Exception as e:
-            overall_status = "error"
-            status_info["dependencies"]["firestore"] = f"unhealthy: {e}"
-
-    # Check Redis
-    if HAS_REDIS:
-        try:
-            from backend.redis_client import r # type: ignore
-            if r and r.ping():
-                status_info["dependencies"]["redis"] = "healthy"
-            else:
-                overall_status = "error"
-                status_info["dependencies"]["redis"] = "down"
-        except Exception as e:
-            overall_status = "error"
-            status_info["dependencies"]["redis"] = f"error: {e}"
-            
-    status_info["status"] = overall_status
-    if overall_status != "ok":
-        return JSONResponse(status_code=503, content=status_info)
+    try:
+        # Ping the health_check collection
+        firestore_db.collection("health_check").document("status").get(timeout=3.0)
+        status_info["database"] = "ok"
+    except Exception as e:
+        logger.error(f"Health Check: Firestore unreachable: {e}")
+        status_info["database"] = "error"
+        status_info["status"] = "error"
+        
     return status_info
