@@ -149,6 +149,51 @@ from backend.learning import (  # type: ignore
 from backend.trainer import trigger_training_pipeline, get_model_history, get_active_model_id, generate_with_active_model  # type: ignore
 from backend.training_models import TrainingData, ResponseFeedback, ModelVersion, TrainingJob  # type: ignore
 
+# ─────────────────────────────────
+# Middleware & Health Checks
+# ─────────────────────────────────
+
+@app.middleware("http")
+async def db_session_check(request: Request, call_next):
+    """Check Firestore connectivity periodically."""
+    # Only check every 60 seconds to avoid overhead
+    now = time.time()
+    last_check = getattr(app.state, "last_db_check", 0)
+    
+    if now - last_check > 60:
+        try:
+            # Simple ping to Firestore
+            firestore_db.collection("health").document("ping").get(timeout=2.0)
+            app.state.last_db_check = now
+        except Exception as e:
+            logger.error(f"Firestore connectivity check failed: {e}")
+            
+    response = await call_next(request)
+    return response
+
+@app.get("/health")
+async def health():
+    """Detailed health check for CI/CD and monitoring."""
+    health_status = {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+    try:
+        # Check Firestore
+        start = time.time()
+        firestore_db.collection("health").document("ping").get(timeout=2.0)
+        health_status["firestore"] = {"latency": f"{time.time() - start:.3f}s", "status": "connected"}
+        
+        # Check Redis (Optional)
+        if HAS_REDIS:
+            from backend.redis_client import redis_client
+            redis_client.ping()
+            health_status["redis"] = "connected"
+            
+    except Exception as e:
+        health_status["status"] = "unhealthy"
+        health_status["error"] = str(e)
+        return JSONResponse(status_code=503, content=health_status)
+        
+    return health_status
+
 import numpy as np  # type: ignore
 import hashlib
 import base64
@@ -305,10 +350,30 @@ class ErrorResponse(BaseModel):
 
 def standardized_error_handler(request: Request, exc: Exception):
     request_id = getattr(request.state, "request_id", "unknown")
-    logger.error(f"Unhandled exception [ID: {request_id}]: {exc}", exc_info=True)
+    
+    # Detailed logging for internal errors
+    error_msg = str(exc)
+    stack_trace = None
+    if not isinstance(exc, HTTPException) or (isinstance(exc, HTTPException) and exc.status_code >= 500):
+        import traceback
+        stack_trace = traceback.format_exc()
+        logger.error(f"Unhandled exception [ID: {request_id}]: {error_msg}\n{stack_trace}")
+    
+    status_code = 500
+    detail = "Internal Server Error"
+    
+    if isinstance(exc, HTTPException):
+        status_code = exc.status_code
+        detail = exc.detail
+
     return JSONResponse(
-        status_code=500,
-        content={"error": "Server error", "request_id": request_id}
+        status_code=status_code,
+        content={
+            "error": detail,
+            "status": "failed",
+            "request_id": request_id,
+            "timestamp": datetime.utcnow().isoformat()
+        }
     )
 
 @app.exception_handler(Exception)
@@ -768,7 +833,7 @@ async def gen_image(request: Request, req: Query, current_user: Optional[dict] =
         
         # Legacy synchronous fallback if Celery fails to load (optional)
         loop = asyncio.get_event_loop()
-        bio = await loop.run_in_executor(
+        gen_result = await loop.run_in_executor(
             _executor,
             lambda: generate_quote_image(
                 req.text,
@@ -778,30 +843,46 @@ async def gen_image(request: Request, req: Query, current_user: Optional[dict] =
                 user_tier=user_tier
             ),
         )
-        if isinstance(bio, dict):
-            image_url = bio.get("url")
-            bio_obj = bio.get("bio")
+        
+        # gen_result is now a dict: {"data": ..., "engine": ..., "success": ..., "warnings": ...}
+        img_data = gen_result.get("data")
+        engine_used = gen_result.get("engine")
+        warnings = gen_result.get("warnings", [])
+        
+        if isinstance(img_data, dict):
+            image_url = img_data.get("url")
+            bio_obj = img_data.get("bio")
             img_bytes = bio_obj.getvalue() if bio_obj else b""
+        elif hasattr(img_data, "getvalue"):
+            img_bytes = img_data.getvalue()
+            image_url = None
         else:
-            img_bytes = bio.getvalue() if hasattr(bio, 'getvalue') else b""
+            img_bytes = b""
             image_url = None
 
+        response_data = {
+            "status": "completed" if gen_result.get("success") else "failed",
+            "engine": engine_used,
+            "warnings": warnings
+        }
+
         if image_url:
-            return {"status": "completed", "url": image_url}
-        
-        if img_bytes:
+            response_data["url"] = image_url
+        elif img_bytes:
             import base64
-            img_b64 = "data:image/png;base64," + base64.b64encode(img_bytes).decode()
-            return {"status": "completed", "image_b64": img_b64}
+            response_data["image_b64"] = "data:image/png;base64," + base64.b64encode(img_bytes).decode()
             
-        return {"status": "failed", "error": "Image generation produced no valid data."}
+        if not response_data.get("url") and not response_data.get("image_b64"):
+             return {"status": "failed", "error": "Image generation produced no valid data.", "warnings": warnings}
+
+        return response_data
 
     except HTTPException:
         raise
     except Exception as e:
         import traceback
         logger.error(f"Image generation error: {e}\n{traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail={"error": str(e), "status": "failed"})
 
 
 @app.post("/generate_video")
@@ -831,7 +912,7 @@ async def gen_video(request: Request, req: Query, current_user: Optional[dict] =
 
         # Legacy synchronous fallback
         loop = asyncio.get_event_loop()
-        video_bytes_io = await loop.run_in_executor(
+        video_result = await loop.run_in_executor(
             _executor,
             lambda: generate_quote_video(
                 req.text,
@@ -841,25 +922,47 @@ async def gen_video(request: Request, req: Query, current_user: Optional[dict] =
             ),
         )
         
+        # video_result is now a dict: {"data": ..., "engine": ..., "success": ..., "warnings": ...}
+        video_data_io = video_result.get("data")
+        warnings = video_result.get("warnings", [])
+
+        if not video_result.get("success") or not video_data_io:
+             logger.warning(f"Video generation failed, falling back to image. Warnings: {warnings}")
+             img_fallback = await gen_image(request, req, current_user)
+             if isinstance(img_fallback, dict):
+                 img_fallback["warnings"] = warnings + img_fallback.get("warnings", [])
+                 img_fallback["fallback_from"] = "video"
+             return img_fallback
+
         # Upload to s3 if available
         if os.getenv("AWS_S3_BUCKET"):
              from backend.tasks import upload_video_to_s3 # type: ignore
-             video_url = upload_video_to_s3(video_bytes_io.getvalue(), user_id)
-             return {"status": "completed", "url": video_url}
+             video_url = upload_video_to_s3(video_data_io.getvalue(), user_id)
+             return {
+                 "status": "completed", 
+                 "url": video_url, 
+                 "engine": video_result.get("engine"),
+                 "warnings": warnings
+             }
         else:
-             raise HTTPException(status_code=400, detail="Celery required for video or AWS S3 must be configured.")
+             # Fallback if S3 not configured but local gen worked - return base64 or error
+             # For video, base64 is heavy, but let's at least try if it's small or just error
+             raise HTTPException(status_code=400, detail="Cloud storage (S3) required for video results.")
 
     except HTTPException:
         raise
     except Exception as e:
         import traceback
-        logger.warning(f"Video generation failed, falling back to image: {e}")
-        # Graceful fallback to image generation
+        logger.warning(f"Video generation failed with exception, falling back to image: {e}")
         try:
-             return await gen_image(request, req, current_user)
+             img_fallback = await gen_image(request, req, current_user)
+             if isinstance(img_fallback, dict):
+                 img_fallback["warnings"] = [str(e)] + img_fallback.get("warnings", [])
+                 img_fallback["fallback_from"] = "video_exception"
+             return img_fallback
         except Exception as e2:
              logger.error(f"Fallback image generation also failed: {e2}\n{traceback.format_exc()}")
-             raise HTTPException(status_code=500, detail=f"Video and fallback image generation failed: {str(e)}")
+             raise HTTPException(status_code=500, detail=f"Generation failed: {str(e)}")
 
 
 

@@ -38,24 +38,33 @@ async function synthesize(){
     const d=await r.json();
     if(!r.ok){
       showToast(d.error || "Generation failed", "error");
+      setLoading(false);
       return;
     }
 
     if (d.status === 'queued') {
       showToast("Synthesis started...", "info");
       pollTask(d.task_id, text);
-      return; // pollTask handles setLoading(false) indirectly or we need to manage it
+      return;
     }
 
-    if(d.image_url||d.image_b64){displayImage(d.image_url||d.image_b64,text)}
+    if(d.warnings && d.warnings.length > 0) {
+      console.warn("[LEVI] Generation warnings:", d.warnings);
+      if (d.warnings.some(w => w.toLowerCase().includes("fallback"))) {
+         showToast("AI busy, used high-quality fallback", "info");
+      }
+    }
+
+    const imgSrc = d.url || d.image_url || d.image_b64;
+    if(imgSrc){ displayImage(imgSrc, text); }
     else throw new Error('No image in response');
   }catch(e){
     console.error("Synthesize error:", e);
     showToast(e.message || 'Generation error','error');
     setLoading(false);
   }finally{
-     // setLoading(false) is called in pollTask if queued, 
-     // or above if it failed immediately.
+     // Loading is handled in displayImage or catch
+    if(!currentImage) setLoading(false);
   }
 }
 
@@ -84,6 +93,9 @@ async function pollTask(id,text){
       if ((d.status === 'completed' || d.status === 'done') && d.result) {
         setLoading(false);
         const res = d.result;
+        if(res.warnings && res.warnings.length > 0) {
+           showToast("Render complete with optimization", "info");
+        }
         const imgSrc = res.url || res.image_url || res.image_b64 || res.image;
         if (imgSrc) {
             displayImage(imgSrc, text);
@@ -156,9 +168,10 @@ async function makeVideo(){
     const r=await fetch(`${window.API_BASE}/generate_video`,{method:'POST',body:JSON.stringify(body),headers:{'Content-Type':'application/json'}});
     const d=await r.json();
     if(d.status === 'queued') {
-        showToast('Synthesis in progress...', 'info');
-        // Video might take longer, but we can poll for it too
-        // For now, My Gallery is the intended place to see it, but we can use pollTask if we update it to handle videos
+        showToast('Video synthesis in progress...', 'info');
+    } else if (d.status === 'completed' || d.url || d.image_b64) {
+        showToast('Video heavy, rendered as high-quality image fallback', 'info');
+        displayImage(d.url || d.image_b64, text);
     }
   } catch(e) {
       showToast('Video request failed', 'error');

@@ -357,6 +357,7 @@ def generate_quote_video(
 
     tmp_files = []
     scene_clips = []
+    warnings = []
 
     try:
         # ── Step 1: Generate narration script ──
@@ -475,11 +476,11 @@ def generate_quote_video(
             video_data = f.read()
 
         logger.info(f"[Video] Generated: {len(video_data)} bytes")
-        return BytesIO(video_data)
+        return {"data": BytesIO(video_data), "engine": "moviepy_together", "success": True, "warnings": warnings}
 
     except Exception as e:
         logger.error(f"[Video] Generation failed: {e}")
-        raise
+        return {"data": None, "engine": "moviepy", "success": False, "warnings": warnings + [str(e)]}
     finally:
         for path in tmp_files:
             try:
