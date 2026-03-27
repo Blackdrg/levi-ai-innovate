@@ -19,16 +19,10 @@ from io import BytesIO
 from typing import Optional, Any, List, Tuple
 
 import requests # type: ignore
-from backend.utils.retries import standard_retry, DEFAULT_TIMEOUT, safe_request
+from backend.utils.network import safe_request, standard_retry, ai_service_breaker, DEFAULT_TIMEOUT
 
-logger = logging.getLogger(__name__)
-
-try:
-    from backend.circuit_breaker import groq_breaker # type: ignore
-except ImportError:
-    class MockBreaker:
-        def call(self, f, *a, **k): return f(*a, **k)
-    groq_breaker = MockBreaker()
+# Use the centralized breaker for all AI services
+groq_breaker = ai_service_breaker
 
 # ── Dependency Availability Checks ──
 HAS_MOVIEPY = False

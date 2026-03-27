@@ -70,18 +70,38 @@ jobs:
 
           echo "SERVICE_URL=$(cat service_url.txt)" >> $GITHUB_ENV
 
-      - name: Post-Deploy Health Check
+      - name: Post-Deploy Health Check (Extended)
         run: |
           echo "Verifying deployment at $SERVICE_URL..."
-          # Max retries: 10, Wait: 5s -> Total 50s
-          for i in {1..10}; do
+          # Max retries: 15, Wait: 6s -> Total 90s (Firestore init + Server boot)
+          for i in {1..15}; do
             echo "Attempt $i..."
-            # Check for literal "status":"ok" in response
-            curl -v -s -f "$SERVICE_URL/health" | grep -q '"status":"ok"' && exit 0
-            echo "Health check failed (status not ok), retrying in 5 seconds..."
-            sleep 5
+            # 1. Fetch health JSON
+            HEALTH_JSON=$(curl -s -f "$SERVICE_URL/health")
+            
+            # 2. Check for overall status, database, and auth
+            echo "Health Response: $HEALTH_JSON"
+            
+            STATUS=$(echo $HEALTH_JSON | grep -o '"status":"[^"]*"' | cut -d'"' -f4)
+            DB_STATUS=$(echo $HEALTH_JSON | grep -o '"database":"[^"]*"' | cut -d'"' -f4)
+            AUTH_STATUS=$(echo $HEALTH_JSON | grep -o '"auth":"[^"]*"' | cut -d'"' -f4)
+            REMOTE_SHA=$(echo $HEALTH_JSON | grep -o '"version":"[^"]*"' | cut -d'"' -f4)
+
+            if [ "$STATUS" = "ok" ] && [ "$DB_STATUS" = "ok" ] && [ "$AUTH_STATUS" = "ok" ]; then
+              echo "✅ Backend is healthy."
+              if [ "$REMOTE_SHA" = "${{ github.sha }}" ]; then
+                echo "✅ Version matches: $REMOTE_SHA"
+                exit 0
+              else
+                echo "⚠️ Version mismatch (Old: $REMOTE_SHA, New: ${{ github.sha }}). Waiting for propagation..."
+              fi
+            else
+              echo "❌ Health check failed: STATUS=$STATUS, DB=$DB_STATUS, AUTH=$AUTH_STATUS"
+            fi
+            
+            sleep 6
           done
-          echo "Backend health check FAILED after multiple attempts"
+          echo "❌ Backend health check FAILED after 15 attempts."
           exit 1
 
       - name: Failure Diagnostics (Monitoring)

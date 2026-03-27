@@ -19,10 +19,20 @@ if (!firebase.apps.length) {
 const isLocal = window.location.hostname === "localhost";
 
 window.API_BASE = isLocal
-  ? "http://localhost:8000"
-    : `${window.location.origin}/api`;   // ✅ Firebase rewrite handles routing
+  ? "http://localhost:8000/api/v1"
+    : `${window.location.origin}/api/v1`;   // ✅ Gateway handles routing
 
 console.log(`[LEVI] API_BASE initialized: ${window.API_BASE}`);
+
+// Global error handling for unhandled rejections (Phase 4/5)
+window.addEventListener("unhandledrejection", (event) => {
+    console.error("[LEVI] Unhandled Rejection:", event.reason);
+    if (window.ui && window.ui.showToast) {
+        window.ui.showToast("Something went wrong. Please try again.", "error");
+    } else if (window.showToast) {
+        window.showToast("Something went wrong. Please try again.", "error");
+    }
+});
 
 window.levi_user_token = null;
 

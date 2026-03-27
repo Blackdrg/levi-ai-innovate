@@ -1,50 +1,31 @@
 # pyright: reportMissingImports=false
 
-from fastapi import FastAPI, Depends, HTTPException, status, Request, Response  # type: ignore
-from contextlib import asynccontextmanager
-from starlette.middleware.sessions import SessionMiddleware  # type: ignore
-from starlette.routing import Route  # type: ignore
-
+from fastapi import FastAPI, Depends, HTTPException, status, Request, Response, Body  # type: ignore
+from fastapi.responses import JSONResponse  # type: ignore
 from fastapi.middleware.cors import CORSMiddleware  # type: ignore
-
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm  # type: ignore
-
-from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse  # type: ignore
-
-# from sqlalchemy.orm import Session  # type: ignore
-# from sqlalchemy import text # type: ignore
-
-from pydantic import BaseModel, Field, field_validator  # type: ignore
-
-# from jose import JWTError, jwt # type: ignore
-
-# from passlib.context import CryptContext # type: ignore
-
-from datetime import datetime, timedelta, date
-
-from slowapi import Limiter  # type: ignore
-
-from slowapi.util import get_remote_address  # type: ignore
-
-from slowapi.errors import RateLimitExceeded  # type: ignore
-
-from slowapi import _rate_limit_exceeded_handler  # type: ignore
-from authlib.integrations.starlette_client import OAuth # type: ignore
+from contextlib import asynccontextmanager
 import os
+import hashlib
+from typing import List, Optional, Dict, Any
 from dotenv import load_dotenv
+
 if os.path.exists(".env.local"):
     load_dotenv(".env.local")
 else:
     load_dotenv()
-import sentry_sdk  # type: ignore
 
+import sentry_sdk  # type: ignore
 import logging
 import json
-from pythonjsonlogger.json import JsonFormatter  # type: ignore
 import time
 import uuid
-import hmac
-import hashlib
+from datetime import datetime, timedelta, date
+from slowapi import Limiter  # type: ignore
+from slowapi.util import get_remote_address  # type: ignore
+from slowapi.errors import RateLimitExceeded  # type: ignore
+from slowapi import _rate_limit_exceeded_handler  # type: ignore
+from pythonjsonlogger.json import JsonFormatter  # type: ignore
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 # Structured JSON logging
 class CustomJsonFormatter(JsonFormatter):
@@ -64,704 +45,200 @@ formatter = CustomJsonFormatter(fmt='%(timestamp)s %(level)s %(name)s %(message)
 logHandler.setFormatter(formatter)
 logger.addHandler(logHandler)
 logger.setLevel(logging.INFO)
-logger.propagate = False # Prevent double logging
-
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
-from google.cloud import firestore as google_firestore
-
-
-
-def _safe_truncate(text: str, limit: int = 60) -> str:
-    """Safe character-based truncation to bypass strict type-checker slicing errors."""
-    if not text: return ""
-    res = ""
-    for i, char in enumerate(text):
-        if i >= limit: break
-        res += char
-    return res
+logger.propagate = False
 
 # Sentry Initialization
 SENTRY_DSN = os.getenv("SENTRY_DSN")
 if SENTRY_DSN:
     sentry_sdk.init(
         dsn=SENTRY_DSN,
-        # Set traces_sample_rate to 1.0 to capture 100%
-        # of transactions for performance monitoring.
         traces_sample_rate=1.0,
-        # Set profiles_sample_rate to 1.0 to profile 100%
-        # of transactions.
         profiles_sample_rate=1.0,
         enable_tracing=True,
         environment=os.getenv("ENVIRONMENT", "production"),
-        send_default_pii=True, # Enable data like request headers and IP
+        send_default_pii=True,
     )
-    logger.info("Sentry initialized with performance monitoring.")
+    logger.info("Sentry initialized.")
 
-# ────────────────────────────# ─────────────────────────────────
+# ─────────────────────────────────
 # Environment Validation
-# ────────────────────────────# ─────────────────────────────────
+# ─────────────────────────────────
 REQUIRED_ENV_VARS = [
-    "SECRET_KEY",
-    "RAZORPAY_KEY_ID",
-    "RAZORPAY_KEY_SECRET",
-    "RAZORPAY_WEBHOOK_SECRET",
-    "ADMIN_KEY",
-    "FIREBASE_PROJECT_ID",
-    "FIREBASE_MESSAGING_SENDER_ID",
-    "FIREBASE_SERVICE_ACCOUNT_JSON"
+    "SECRET_KEY", "RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET",
+    "RAZORPAY_WEBHOOK_SECRET", "ADMIN_KEY", "FIREBASE_PROJECT_ID",
+    "FIREBASE_MESSAGING_SENDER_ID", "FIREBASE_SERVICE_ACCOUNT_JSON"
 ]
 
 def validate_env():
     missing = [var for var in REQUIRED_ENV_VARS if not os.getenv(var)]
     is_prod = os.getenv("ENVIRONMENT") == "production"
-
     if missing:
-        error_msg = f"CRITICAL: Missing required environment variables: {', '.join(missing)}"
+        error_msg = f"CRITICAL: Missing environment variables: {', '.join(missing)}"
         logger.error(error_msg)
-        if is_prod:
-            import sys
-            sys.exit(1)
-        else:
-            print(f"\n[WARNING] {error_msg}\n")
+        if is_prod: exit(1)
 
-    # ── SECRET_KEY entropy guard ────────────# ─────────────────────────────────
-    # A short or guessable key allows JWT forgery. Require at least 32 raw bytes.
-    # Generate a safe key with: python -c "import secrets; print(secrets.token_hex(32))"
     _secret = os.getenv("SECRET_KEY", "")
-    if len(_secret.encode()) < 32:
-        if is_prod:
-            logger.error("SECRET_KEY is too short.")
-            import sys
-            sys.exit(1)
-        else:
-            print("[WARNING] SECRET_KEY is too short.")
-
-    # ── Firebase Secret Validation ──────────
-    # Ensure it's not just present, but valid JSON (if string) or existing file path
-    _fs_secret = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON", "")
-    if is_prod:
-        if not _fs_secret:
-             logger.error("FIREBASE_SERVICE_ACCOUNT_JSON is missing in production.")
-             import sys
-             sys.exit(1)
-        import json
-        try:
-            if not os.path.exists(_fs_secret):
-                json.loads(_fs_secret)
-            # AI API KEY CHECKS (Fail-Fast)
-            critical_keys = [
-                "GROQ_API_KEY",
-                "TOGETHER_API_KEY",
-                "FIREBASE_SERVICE_ACCOUNT_JSON"
-            ]
-            missing = [k for k in critical_keys if not os.getenv(k)]
-            if missing:
-                error_msg = f"CRITICAL: Missing required environment variables: {', '.join(missing)}"
-                logger.critical(error_msg)
-                raise RuntimeError(error_msg)
-                
-        except Exception as e:
-            error_msg = f"Initialization failed: {e}"
-            logger.critical(error_msg)
-            raise RuntimeError(error_msg)
+    if len(_secret.encode()) < 32 and is_prod:
+         logger.error("SECRET_KEY too short.")
+         exit(1)
 
 validate_env()
-# ────────────────────────────# ─────────────────────────────────
 
-# Standard imports from current package
-from backend.embeddings import embed_text, cosine_sim, HAS_MODEL  # type: ignore
-from backend.redis_client import (  # type: ignore
+# Centralized Module Imports
+from backend.models import Query, ChatMessage, PersonaCreate, ContentRequest, FeedbackRequest  # type: ignore
+from backend.auth import get_current_user, get_current_user_optional, verify_admin # type: ignore
+from backend.utils.network import safe_request, standard_retry, ai_service_breaker # type: ignore
+from backend.firestore_db import db as firestore_db, update_document, add_document, get_document, update_analytics # type: ignore
+from backend.redis_client import ( # type: ignore
     get_cached_search, cache_search, get_conversation, save_conversation, 
     HAS_REDIS, REDIS_URL, cache_quote_embedding, get_cached_embedding,
-    get_daily_ai_spend, incr_daily_ai_spend
+    get_daily_ai_spend, incr_daily_ai_spend, r as redis_client
 )
+
 from backend.generation import generate_quote, generate_response  # type: ignore
 from backend.image_gen import generate_quote_image  # type: ignore
 from backend.video_gen import generate_quote_video  # type: ignore
 from backend.email_service import send_daily_quote, send_payment_receipt  # type: ignore
-from backend.payments import router as payments_router, use_credits, verify_payment_signature, verify_razorpay_signature, upgrade_user_tier  # type: ignore
-from backend.learning import (  # type: ignore
-    collect_training_sample, UserPreferenceModel,
-    AdaptivePromptManager, get_learning_stats, infer_implicit_feedback
-)
-from backend.trainer import trigger_training_pipeline, get_model_history, get_active_model_id, generate_with_active_model  # type: ignore
-from backend.training_models import TrainingData, ResponseFeedback, ModelVersion, TrainingJob  # type: ignore
+from backend.payments import router as payments_router, use_credits  # type: ignore
+from backend.learning import collect_training_sample, UserPreferenceModel, AdaptivePromptManager # type: ignore
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting LEVI backend (Firestore-Native)...")
-    if not HAS_REDIS:
-        logger.warning("Redis unavailable \u2014 using in-memory fallback.")
-    else:
-        masked = REDIS_URL.split('@')[-1] if '@' in REDIS_URL else REDIS_URL
-        logger.info(f"Redis connected: {masked}")
     try:
         firestore_db.collection("health_check").document("status").get(timeout=5.0)
         logger.info("Firestore connection verified.")
+        
+        # Cleanup zombie tasks on startup
+        zombie_jobs = firestore_db.collection("jobs") \
+            .where("status", "==", "processing").get()
+        for doc in zombie_jobs:
+            logger.info(f"Cleaning up zombie job: {doc.id}")
+            doc.reference.update({
+                "status": "failed", 
+                "error": "Server restarted during processing",
+                "completed_at": datetime.utcnow()
+            })
     except Exception as e:
-        logger.error(f"Error connecting to Firestore: {e}")
-        if is_prod:
-            logger.critical("FATAL: Could not connect to Firestore during startup. Exiting.")
-            raise RuntimeError("Firestore connection failed on startup")
-    logger.info(f"CLIENT_KEY: {'SET' if CLIENT_KEY else 'NOT SET'}")
+        logger.critical(f"Startup check/cleanup failed: {e}")
+        if os.getenv("ENVIRONMENT") == "production": raise RuntimeError("STARTUP FAIL")
     yield
 
 app = FastAPI(
     title="LEVI Quotes API",
     docs_url=None if os.getenv("ENVIRONMENT") == "production" else "/docs",
-    redoc_url=None if os.getenv("ENVIRONMENT") == "production" else "/redoc",
-    openapi_url=None if os.getenv("ENVIRONMENT") == "production" else "/openapi.json",
     lifespan=lifespan
 )
 
-
 # ─────────────────────────────────
-# Middleware & Health Checks
+# Middleware & Rate Limiting
 # ─────────────────────────────────
-
-@app.middleware("http")
-async def db_session_check(request: Request, call_next):
-    """Check Firestore connectivity periodically."""
-    # Only check every 60 seconds to avoid overhead
-    now = time.time()
-    last_check = getattr(app.state, "last_db_check", 0)
-    
-    if now - last_check > 60:
-        try:
-            # Simple ping to Firestore
-            firestore_db.collection("health").document("ping").get(timeout=2.0)
-            app.state.last_db_check = now
-        except Exception as e:
-            logger.error(f"Firestore connectivity check failed: {e}")
-            
-    response = await call_next(request)
-    return response
-
-# ─────────────────────────────────────────────
-# ANTI-CRASH: Rate Limiting (In-Memory Fallback)
-# ─────────────────────────────────────────────
-user_requests = {}
-RATE_LIMIT = 5   # requests
-WINDOW = 60      # seconds
-
-def is_rate_limited(user_id: str) -> bool:
-    """Check if a user is exceeding the rate limit."""
-    if not user_id: return False
-    now = time.time()
-    user_requests.setdefault(user_id, [])
-    # Remove old requests
-    user_requests[user_id] = [t for t in user_requests[user_id] if now - t < WINDOW]
-    if len(user_requests[user_id]) >= RATE_LIMIT:
-        return True
-    user_requests[user_id].append(now)
-    return False
-
-# ─────────────────────────────────────────────
-# ─────────────────────────────────────────────
-# Health check endpoint combined below (line 576)
-
-import numpy as np  # type: ignore
-import hashlib
-import base64
-from io import BytesIO
-from typing import List, Optional
-from sqlalchemy import func  # type: ignore
-import asyncio
-from concurrent.futures import ThreadPoolExecutor
-
-from backend.firestore_db import db as firestore_db, get_document, set_document, query_documents, add_document, update_document # type: ignore
-
-from fastapi import BackgroundTasks # type: ignore
-
-_executor = ThreadPoolExecutor(max_workers=8) # Increased for better concurrency
-
-# ─────────────────────────────────────────────
-# Studio Background Task Handler
-# ─────────────────────────────────────────────
-
-# Concurrency limits for AI generation to prevent overloading or rate limits
-# Use Redis-based global semaphores if available, fallback to local ones
-_image_semaphore = asyncio.Semaphore(3)
-_video_semaphore = asyncio.Semaphore(1)
-
-class RedisSemaphore:
-    def __init__(self, key: str, value: int):
-        from backend.redis_client import r as redis_client, HAS_REDIS
-        self.r = redis_client
-        self.has_redis = HAS_REDIS
-        self.key = f"sema:{key}"
-        self.value = value
-        self.local_sema = asyncio.Semaphore(value)
-
-    async def __aenter__(self):
-        if not self.has_redis:
-            return await self.local_sema.__aenter__()
-        
-        # Simple Redis-based semaphore logic
-        while True:
-            # Atomic check and increment
-            current = self.r.get(self.key)
-            if not current or int(current) < self.value:
-                # Try to increment
-                val = self.r.incr(self.key)
-                if val <= self.value:
-                    return self
-                else:
-                    self.r.decr(self.key)
-            await asyncio.sleep(1) # Polling (could use BLPOP for better efficiency but this is simpler)
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        if not self.has_redis:
-            return await self.local_sema.__aexit__(exc_type, exc_val, exc_tb)
-        self.r.decr(self.key)
-
-_global_image_sema = RedisSemaphore("image", 3)
-_global_video_sema = RedisSemaphore("video", 1)
-
-@retry(
-    stop=stop_after_attempt(2),
-    wait=wait_exponential(multiplier=1, min=4, max=20),
-    retry=retry_if_exception_type(Exception),
-    reraise=False
-)
-async def _execute_gen_task(task_type: str, params: dict, user_id: str, user_tier: str):
-    """Internal helper to execute generation with thread executor."""
-    loop = asyncio.get_event_loop()
-    if task_type == "image":
-        async with _global_image_sema:
-            return await loop.run_in_executor(
-                _executor,
-                lambda: generate_quote_image(
-                    params["text"],
-                    author=params.get("author", "Unknown"),
-                    mood=params.get("mood", "neutral"),
-                    custom_bg=params.get("custom_bg", ""),
-                    user_tier=user_tier,
-                    user_id=user_id,
-                    upload_to_s3=bool(os.getenv("AWS_S3_BUCKET"))
-                )
-            )
-    elif task_type == "video":
-        async with _global_video_sema:
-            return await loop.run_in_executor(
-                _executor,
-                lambda: generate_quote_video(
-                    params["text"],
-                    params.get("author", "Unknown"),
-                    params.get("mood", "neutral"),
-                    user_tier
-                )
-            )
-    return {"success": False, "warnings": ["Invalid task type"]}
-
-def _increment_analytics(field: str, amount: int = 1):
-    """Atomic daily analytics increment using transaction."""
-    try:
-        from google.cloud import firestore # type: ignore
-        today_str = date.today().isoformat()
-        analytics_ref = firestore_db.collection("analytics").document(today_str)
-
-        @firestore.transactional
-        def update_in_transaction(transaction, analytics_ref):
-            snapshot = analytics_ref.get(transaction=transaction)
-            if snapshot.exists:
-                transaction.update(analytics_ref, {field: google_firestore.Increment(amount)})
-
-            else:
-                initial_data = {
-                    "date": today_str,
-                    "chats_count": 0,
-                    "likes_count": 0,
-                    "shares_count": 0,
-                    "daily_users": 0,
-                    "generations_count": 0
-                }
-                initial_data[field] = amount
-                transaction.set(analytics_ref, initial_data)
-
-        update_in_transaction(firestore_db.transaction(), analytics_ref)
-    except Exception as e:
-        logger.warning(f"Analytics update failed for {field}: {e}")
-
-
-async def run_studio_task(job_id: str, task_type: str, params: dict, user_id: Optional[str], user_tier: str):
-    """Background worker for image/video generation with reliability and concurrency control."""
-    try:
-        # Update analytics
-        _increment_analytics("generations_count")
-        
-        # 1. Update status to processing
-        update_document("jobs", job_id, {
-            "status": "processing", 
-            "started_at": datetime.utcnow(),
-            "attempts": google_firestore.Increment(1)
-        })
-
-        
-        # Execute with internal retry and semaphore
-        gen_result = await _execute_gen_task(task_type, params, user_id or "anon", user_tier)
-
-        # 2. Check result
-        if gen_result and gen_result.get("success"):
-            img_data = gen_result.get("data")
-            result_payload = {
-                "status": "completed",
-                "completed_at": datetime.utcnow(),
-                "engine": gen_result.get("engine"),
-                "warnings": gen_result.get("warnings", [])
-            }
-            
-            # Handle result data (URL or B64)
-            if isinstance(img_data, str) and (img_data.startswith("http") or img_data.startswith("data:")):
-                 result_payload["url"] = img_data
-            elif hasattr(img_data, "getvalue"):
-                 # If S3 failed or not configured, fall back to B64 in the job doc (limited)
-                 import base64
-                 result_payload["image_b64"] = "data:image/png;base64," + base64.b64encode(img_data.getvalue()).decode()
-            
-            # 3. Add to Feed automatically if successful
-            try:
-                feed_item = {
-                    "user_id": user_id,
-                    "text": params["text"],
-                    "author": params.get("author", "Unknown"),
-                    "mood": params.get("mood", "neutral"),
-                    "image_url": result_payload.get("url") if task_type == "image" else None,
-                    "video_url": result_payload.get("url") if task_type == "video" else None,
-                    "image_b64": result_payload.get("image_b64") if not result_payload.get("url") else None,
-                    "likes": 0,
-                    "timestamp": datetime.utcnow(),
-                    "job_id": job_id
-                }
-                add_document("feed_items", feed_item)
-            except Exception as fe:
-                logger.warning(f"Failed to add task result to feed: {fe}")
-
-            update_document("jobs", job_id, result_payload)
-            logger.info(f"Studio Task {job_id} [{task_type}] completed successfully.")
-        else:
-            error_msg = "Generation returned no result"
-            if gen_result and gen_result.get("warnings"):
-                error_msg = gen_result.get("warnings")[0]
-            
-            update_document("jobs", job_id, {
-                "status": "failed", 
-                "error": error_msg, 
-                "completed_at": datetime.utcnow()
-            })
-            logger.error(f"Studio Task {job_id} failed: {error_msg}")
-
-    except Exception as e:
-        import traceback
-        full_error = traceback.format_exc()
-        logger.error(f"Background generation error (Job ID: {job_id}): {e}\n{full_error}")
-        update_document("jobs", job_id, {
-            "status": "failed", 
-            "error": str(e), 
-            "error_detail": full_error if not is_prod else "Hidden in production",
-            "completed_at": datetime.utcnow()
-        })
-
-
-SECRET_KEY = os.environ.get("SECRET_KEY", "fallback")
-CLIENT_KEY = os.getenv("CLIENT_KEY")
-
-import firebase_admin
-from firebase_admin import credentials, auth as firebase_auth
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials # type: ignore
-
-# Firebase is initialized in backend/firestore_db.py, which is imported above.
-
-security = HTTPBearer()
-
-async def get_current_user(cred: HTTPAuthorizationCredentials = Depends(security)):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        token = cred.credentials
-        # Check Redis cache first
-        from backend.redis_client import r as redis_client, HAS_REDIS # type: ignore
-        cache_key = f"user_token:{hashlib.md5(token.encode()).hexdigest()}"
-        
-        if HAS_REDIS:
-            cached_user = redis_client.get(cache_key)
-            if cached_user:
-                return json.loads(cached_user)
-
-        decoded_token = firebase_auth.verify_id_token(token)
-        uid = decoded_token.get("uid")
-        email = decoded_token.get("email")
-        if not uid: raise credentials_exception
-        
-        # Firestore-native user lookup
-        users_ref = firestore_db.collection("users")
-        user_docs = users_ref.where("email", "==", email).limit(1).get(timeout=5)
-        
-        user_data = None
-        user_list = list(user_docs)
-        if not user_list:
-            # Create user in Firestore if not exists
-            base_username = email.split('@')[0] if email else f"user_{uid[:8]}"
-            username = base_username
-            
-            # Check for username uniqueness
-            existing_usernames = users_ref.where("username", "==", username).limit(1).get(timeout=5)
-            counter = 1
-            while list(existing_usernames):
-                username = f"{base_username}{counter}"
-                existing_usernames = users_ref.where("username", "==", username).limit(1).get(timeout=5)
-                counter += 1
-            
-            user_data = {
-                "uid": uid,
-                "username": username,
-                "email": email,
-                "created_at": datetime.utcnow().isoformat(), # JSON serializable
-                "tier": "free",
-                "credits": 10
-            }
-            users_ref.document(uid).set(user_data)
-        else:
-            user_doc = user_list[0]
-            user_data = user_doc.to_dict()
-            user_data["id"] = user_doc.id
-            # Convert datetime objects to string for JSON serialization in Redis
-            for key, value in user_data.items():
-                if isinstance(value, datetime):
-                    user_data[key] = value.isoformat()
-
-        # Cache in Redis (TTL: 1 hour)
-        if HAS_REDIS and user_data:
-            redis_client.setex(cache_key, 3600, json.dumps(user_data))
-
-        return user_data
-    except Exception as e:
-        logger.error(f"Auth error: {e}")
-        raise credentials_exception
-
-async def get_current_user_optional(cred: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False))):
-    if not cred: return None
-    try:
-        decoded_token = firebase_auth.verify_id_token(cred.credentials)
-        email = decoded_token.get("email")
-        if not email: return None
-        
-        users_ref = firestore_db.collection("users")
-        user_docs = users_ref.where("email", "==", email).limit(1).get()
-        if not list(user_docs): return None
-        
-        user = list(user_docs)[0].to_dict()
-        user["id"] = list(user_docs)[0].id
-        return user
-    except Exception:
-        return None
-
-async def verify_admin(request: Request):
-    admin_key = os.getenv("ADMIN_KEY", "")
-    provided_key = request.headers.get("X-Admin-Key", "")
-    # Use constant-time comparison to prevent timing-based brute-force attacks.
-    if not admin_key or not hmac.compare_digest(provided_key.encode(), admin_key.encode()):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Unauthorized admin access")
-    return True
-
-class AdminAdjustCredits(BaseModel):
-    user_id: int
-    amount: int
-
-class User(BaseModel):
-    username: str = Field(..., max_length=100)
-
-class UserIn(BaseModel):
-    username: str = Field(..., max_length=100)
-    password: str = Field(..., min_length=8, max_length=100)
-    email: Optional[str] = Field(None, max_length=100)
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-    refresh_token: Optional[str] = None  # included when the endpoint issues one
-
-# Expanded prompt-injection blocklist — covers the most common jailbreak templates.
-# Note: string matching is a lightweight first layer only. A dedicated LLM guard
-# (e.g. Llama Guard, OpenAI moderation API) should be added before production.
-_INJECTION_PATTERNS = [
-    "ignore previous", "ignore above", "ignore all previous",
-    "forget previous", "new persona", "pretend you are",
-    "system:", "assistant:", "user:",
-    "jailbreak", "disregard", "override previous",
-]
-
-# ────────────────────────────# ─────────────────────────────────
-# Standardized Error Handling
-# ────────────────────────────# ─────────────────────────────────
-
-class ErrorResponse(BaseModel):
-    error: str
-    code: Optional[str] = None
-    request_id: Optional[str] = None
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
-
-def standardized_error_handler(request: Request, exc: Exception):
-    request_id = getattr(request.state, "request_id", "unknown")
-    
-    # Detailed logging for internal errors
-    error_msg = str(exc)
-    stack_trace = None
-    if not isinstance(exc, HTTPException) or (isinstance(exc, HTTPException) and exc.status_code >= 500):
-        import traceback
-        stack_trace = traceback.format_exc()
-        logger.error(f"Unhandled exception [ID: {request_id}]: {error_msg}\n{stack_trace}")
-    
-    status_code = 500
-    detail = "Internal Server Error"
-    
-    if isinstance(exc, HTTPException):
-        status_code = exc.status_code
-        detail = exc.detail
-
-    return JSONResponse(
-        status_code=status_code,
-        content={
-            "error": detail,
-            "status": "failed",
-            "request_id": request_id,
-            "timestamp": datetime.utcnow().isoformat()
-        }
-    )
-
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    return await standardized_error_handler(request, exc)
-
-class Query(BaseModel):
-    text: str = Field(..., min_length=5, max_length=500)
-    author: Optional[str] = Field("Unknown", max_length=100)
-    mood: Optional[str] = Field("neutral", max_length=50)
-    topic: Optional[str] = Field(None, max_length=50)
-    lang: Optional[str] = Field("en", max_length=10)
-    custom_bg: Optional[str] = Field(None)
-    top_k: int = Field(5, ge=1, le=20)
-
-    @field_validator("text", "author", "mood", "topic")
-    @classmethod
-    def sanitize_text(cls, v):
-        if v is None:
-            return v
-        v_lower = v.lower()
-        for pattern in _INJECTION_PATTERNS:
-            if pattern in v_lower:
-                raise ValueError(f"Potential prompt injection detected: {pattern}")
-        return v
-
-class ChatMessage(BaseModel):
-    session_id: str = Field(..., max_length=100)
-    message: str = Field(..., max_length=1000)
-    lang: Optional[str] = Field("en", max_length=10)
-    mood: Optional[str] = Field("", max_length=50)
-    persona_id: Optional[str] = None # Changed to str for Firestore IDs
-
-
-    @field_validator("message")
-    @classmethod
-    def sanitize_message(cls, v):
-        v_lower = v.lower()
-        for pattern in _INJECTION_PATTERNS:
-            if pattern in v_lower:
-                raise ValueError(f"Potential prompt injection detected: {pattern}")
-        return v
-
-class PersonaCreate(BaseModel):
-    name: str = Field(..., max_length=100)
-    description: Optional[str] = Field(None, max_length=500)
-    system_prompt: str = Field(..., max_length=2000)
-    avatar_url: Optional[str] = Field(None, max_length=500)
-    is_public: bool = True
-
-    @field_validator("name", "description", "system_prompt")
-    @classmethod
-    def sanitize_persona_inputs(cls, v):
-        if v:
-            v_lower = v.lower()
-            for pattern in _INJECTION_PATTERNS:
-                if pattern in v_lower:
-                    raise ValueError(f"Potential prompt injection detected: {pattern}")
-        return v
-
-# Helper for per-user rate limiting
-def get_user_or_ip(request: Request):
-    # Try to get user from state (if set by some middleware or dependency)
-    # But since dependencies run after rate limiting usually, we might need a custom key_func
-    # For now, we'll use a simpler approach or stick to IP if user not yet identified
-    # Alternatively, we can use the Authorization header as a key if present
-    auth = request.headers.get("Authorization")
-    if auth:
-        return auth
-    return get_remote_address(request)
-
-limiter = Limiter(key_func=get_user_or_ip, storage_uri=REDIS_URL if HAS_REDIS else None)
-
-is_prod = os.getenv("ENVIRONMENT") == "production"
-USE_CELERY = False # Disabled - using sync generation for stability
-
-
-
-# app = FastAPI(...) moved to top
-
+limiter = Limiter(key_func=get_remote_address, storage_uri=REDIS_URL if HAS_REDIS else "memory://")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 @app.middleware("http")
 async def add_request_id(request: Request, call_next):
     request_id = str(uuid.uuid4())
     request.state.request_id = request_id
     start_time = time.time()
-    
     response = await call_next(request)
-    
     duration = (time.time() - start_time) * 1000
-    response.headers["X-Request-ID"] = request_id
-    
     logger.info("request_completed", extra={
-        "request_id": request_id,
-        "method": request.method,
-        "path": request.url.path,
-        "status_code": response.status_code,
-        "duration_ms": int(duration + 0.5) # Round to nearest int instead of float formatting
+        "request_id": request_id, "method": request.method,
+        "path": request.url.path, "status_code": response.status_code,
+        "duration_ms": int(duration)
     })
-    
     return response
 
-@app.middleware("http")
-async def security_headers(request: Request, call_next):
-    response = await call_next(request)
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
-    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-    # CSP mirrors vercel.json and covers API responses that are consumed by the browser.
-    response.headers["Content-Security-Policy"] = (
-        "default-src 'self'; script-src 'self'; object-src 'none'; frame-ancestors 'none';"
+def _safe_truncate(text: str, length: int) -> str:
+    """Safely truncate text for logging."""
+    if not text: return ""
+    return (text[:length] + "...") if len(text) > length else text
+
+# ─────────────────────────────────
+# Studio Engine (Optimized Task Handling)
+# ─────────────────────────────────
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from google.cloud import firestore as google_firestore
+
+_executor = ThreadPoolExecutor(max_workers=10)
+_image_sema = asyncio.Semaphore(5)
+_video_sema = asyncio.Semaphore(2)
+
+async def run_studio_task(job_id: str, task_type: str, params: dict, user_id: str, user_tier: str):
+    """Robust task runner with persistence and concurrency control."""
+    try:
+        # 1. Atomic status update to processing
+        job_ref = firestore_db.collection("jobs").document(job_id)
+        job_ref.update({"status": "processing", "started_at": datetime.utcnow()})
+        
+        semaphore = _image_sema if task_type == "image" else _video_sema
+        async with semaphore:
+            loop = asyncio.get_event_loop()
+            func = generate_quote_image if task_type == "image" else generate_quote_video
+            
+            # 2. Execute with thread pool
+            result = await loop.run_in_executor(_executor, lambda: func(
+                params["text"], author=params.get("author", "Unknown"),
+                mood=params.get("mood", "neutral"), user_tier=user_tier, user_id=user_id,
+                custom_bg=params.get("custom_bg")
+            ))
+
+        # 3. Finalize state
+        if result and result.get("success"):
+            data_url = result.get("data")
+            job_ref.update({
+                "status": "completed", 
+                "url": data_url, 
+                "completed_at": datetime.utcnow(),
+                "engine": result.get("engine")
+            })
+            
+            # 4. Add to feed (optional: only for successful generations)
+            add_document("feed_items", {
+                "user_id": user_id, 
+                "text": params["text"], 
+                "author": params.get("author", "Unknown"),
+                "url": data_url,
+                "type": task_type, 
+                "timestamp": datetime.utcnow(),
+                "job_id": job_id
+            })
+        else:
+            error_msg = result.get("error") if result else "Unknown generation failure"
+            job_ref.update({
+                "status": "failed", 
+                "error": error_msg,
+                "completed_at": datetime.utcnow()
+            })
+            
+    except Exception as e:
+        logger.error(f"Studio Task {job_id} [{task_type}] failed: {e}", exc_info=True)
+        try:
+            firestore_db.collection("jobs").document(job_id).update({
+                "status": "failed", 
+                "error": str(e),
+                "completed_at": datetime.utcnow()
+            })
+        except: pass
+
+# ─────────────────────────────────
+# Global Error Handling
+# ─────────────────────────────────
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    rid = getattr(request.state, "request_id", "unknown")
+    logger.error(f"Unhandled Error [RID: {rid}]: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"error": "Internal Server Error", "request_id": rid}
     )
-    return response
 
-app.include_router(payments_router)
-
-# Rate Limiter setup
-from slowapi.errors import RateLimitExceeded  # type: ignore
-from slowapi import _rate_limit_exceeded_handler  # type: ignore
-from typing import Any, cast
-app.add_exception_handler(RateLimitExceeded, cast(Any, _rate_limit_exceeded_handler))
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    import time
-    start_time = time.time()
-    response = await call_next(request)
-    duration = time.time() - start_time
-    logger.info(f"Method: {request.method} Path: {request.url.path} Status: {response.status_code} Duration: {duration:.2f}s")
-    return response
-
-app.add_exception_handler(Exception, standardized_error_handler)
-app.add_exception_handler(HTTPException, standardized_error_handler)
+# Standardized Error Handling
+app.add_exception_handler(Exception, global_exception_handler)
+app.add_exception_handler(HTTPException, global_exception_handler)
 
 # Ensure database tables are created
 # Base.metadata.create_all(bind=engine) # Removed - using Alembic migrations instead
@@ -988,13 +465,6 @@ async def gen_quote(request: Request, prompt: Query):
 
 # ── Content Engine: Unified Content Generator ────────────────────────────────
 
-class ContentRequest(BaseModel):
-    type: str           # quote, essay, story, script, philosophy, caption, thread, blog
-    topic: str
-    tone: str = "inspiring"
-    depth: str = "high"  # low, medium, high
-
-
 @app.post("/generate_content")
 @limiter.limit("5/minute")
 async def gen_content(
@@ -1202,7 +672,7 @@ async def like_item(item_type: str, item_id: str):
 
         
         # Update analytics via transaction
-        _increment_analytics("likes_count")
+        update_analytics("likes_count")
 
         # Return updated likes (requires a re-fetch or just incrementing the cached value)
         new_likes = (item_doc.to_dict().get("likes", 0)) + 1
@@ -1261,7 +731,7 @@ async def chat(
     incr_daily_ai_spend(1.0)
 
     # Analytics via transaction
-    _increment_analytics("chats_count")
+    update_analytics("chats_count")
 
     # User memory — Redis-cached (TTL = 10 min)
     user_mem = None
@@ -1460,15 +930,6 @@ async def chat(
     return {"response": bot_response}
 
 # ── Learning: Explicit Feedback ─────────────# ─────────────────────────────────
-class FeedbackRequest(BaseModel):
-    session_id: str
-    message_hash: str
-    rating: int                 # 1-5
-    bot_response: str
-    user_message: str
-    mood: Optional[str] = "philosophical"
-    feedback_type: str = "star"
-
 @app.post("/feedback")
 async def submit_feedback(
     req: FeedbackRequest,

@@ -1,29 +1,77 @@
-# DEPRECATED: Legacy SQL Models
-# This application is now Firestore-native.
-# Use firestore_db.py and the document logic in logic files instead.
+# backend/models.py
+from pydantic import BaseModel, Field, field_validator
+from typing import Optional, List
+from datetime import datetime
 
-try:
-    from backend.db import Base # type: ignore
-except ImportError:
-    from db import Base # type: ignore
+_INJECTION_PATTERNS = [
+    "ignore previous", "ignore all previous", "forget previous",
+    "new persona", "pretend you are", "jailbreak", "override previous",
+    "system:", "assistant:", "user:", "disregard"
+]
 
-class Quote(Base):
-    __tablename__ = 'quotes'
-class Users(Base):
-    __tablename__ = 'users'
-class ChatHistory(Base):
-    __tablename__ = 'chat_history'
-class UserMemory(Base):
-    __tablename__ = 'user_memory'
-class UserMemoryLog(Base):
-    __tablename__ = 'user_memory_log'
-class FeedItem(Base):
-    __tablename__ = 'feed_items'
-class Analytics(Base):
-    __tablename__ = 'analytics'
-class PushSubscription(Base):
-    __tablename__ = 'push_subscriptions'
-class PaymentEvent(Base):
-    __tablename__ = 'payment_events'
-class Persona(Base):
-    __tablename__ = 'personas'
+def sanitize_text_field(v: str) -> str:
+    if v:
+        v_lower = v.lower()
+        for pattern in _INJECTION_PATTERNS:
+            if pattern in v_lower:
+                raise ValueError(f"Potential prompt injection detected: {pattern}")
+    return v
+
+class Query(BaseModel):
+    text: str = Field(..., min_length=1, max_length=500)
+    author: Optional[str] = Field("Unknown", max_length=100)
+    mood: Optional[str] = Field("neutral", max_length=50)
+    topic: Optional[str] = Field(None, max_length=50)
+    lang: Optional[str] = Field("en", max_length=10)
+    custom_bg: Optional[str] = Field(None)
+    top_k: int = Field(5, ge=1, le=20)
+
+    @field_validator("text", "author", "mood", "topic")
+    @classmethod
+    def sanitize(cls, v):
+        return sanitize_text_field(v)
+
+class ChatMessage(BaseModel):
+    session_id: str = Field(..., max_length=100)
+    message: str = Field(..., max_length=1000)
+    lang: Optional[str] = Field("en", max_length=10)
+    mood: Optional[str] = Field("", max_length=50)
+    persona_id: Optional[str] = None
+
+    @field_validator("message")
+    @classmethod
+    def sanitize_msg(cls, v):
+        return sanitize_text_field(v)
+
+class PersonaCreate(BaseModel):
+    name: str = Field(..., max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
+    system_prompt: str = Field(..., max_length=2000)
+    avatar_url: Optional[str] = Field(None, max_length=500)
+    is_public: bool = True
+
+    @field_validator("name", "description", "system_prompt")
+    @classmethod
+    def sanitize_persona(cls, v):
+        return sanitize_text_field(v)
+
+class ContentRequest(BaseModel):
+    type: str           # quote, essay, story, script, philosophy, caption, thread, blog
+    topic: str
+    tone: str = "inspiring"
+    depth: str = "high"
+
+class FeedbackRequest(BaseModel):
+    session_id: str
+    message_hash: str
+    rating: int                 # 1-5
+    bot_response: str
+    user_message: str
+    mood: Optional[str] = "philosophical"
+    feedback_type: str = "star"
+
+class JobStatus(BaseModel):
+    job_id: str
+    status: str
+    url: Optional[str] = None
+    error: Optional[str] = None
