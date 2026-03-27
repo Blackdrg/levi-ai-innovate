@@ -34,7 +34,7 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 # Use None to allow migrations to run based on migration files alone
 # since the Python models are deprecated/broken.
-target_metadata = None
+target_metadata = Base.metadata
 
 def get_url() -> str:
     url = os.getenv("DATABASE_URL")

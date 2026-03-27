@@ -20,7 +20,7 @@ const isLocal = window.location.hostname === "localhost";
 
 window.API_BASE = isLocal
   ? "http://localhost:8000"
-  : "/api";   // ✅ Firebase rewrite handles routing
+    : `${window.location.origin}/api`;   // ✅ Firebase rewrite handles routing
 
 console.log(`[LEVI] API_BASE initialized: ${window.API_BASE}`);
 

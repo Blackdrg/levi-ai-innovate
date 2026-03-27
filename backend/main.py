@@ -66,6 +66,11 @@ logger.addHandler(logHandler)
 logger.setLevel(logging.INFO)
 logger.propagate = False # Prevent double logging
 
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from google.cloud import firestore as google_firestore
+
+
+
 def _safe_truncate(text: str, limit: int = 60) -> str:
     """Safe character-based truncation to bypass strict type-checker slicing errors."""
     if not text: return ""
@@ -181,6 +186,34 @@ from backend.learning import (  # type: ignore
 )
 from backend.trainer import trigger_training_pipeline, get_model_history, get_active_model_id, generate_with_active_model  # type: ignore
 from backend.training_models import TrainingData, ResponseFeedback, ModelVersion, TrainingJob  # type: ignore
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Starting LEVI backend (Firestore-Native)...")
+    if not HAS_REDIS:
+        logger.warning("Redis unavailable \u2014 using in-memory fallback.")
+    else:
+        masked = REDIS_URL.split('@')[-1] if '@' in REDIS_URL else REDIS_URL
+        logger.info(f"Redis connected: {masked}")
+    try:
+        firestore_db.collection("health_check").document("status").get(timeout=5.0)
+        logger.info("Firestore connection verified.")
+    except Exception as e:
+        logger.error(f"Error connecting to Firestore: {e}")
+        if is_prod:
+            logger.critical("FATAL: Could not connect to Firestore during startup. Exiting.")
+            raise RuntimeError("Firestore connection failed on startup")
+    logger.info(f"CLIENT_KEY: {'SET' if CLIENT_KEY else 'NOT SET'}")
+    yield
+
+app = FastAPI(
+    title="LEVI Quotes API",
+    docs_url=None if os.getenv("ENVIRONMENT") == "production" else "/docs",
+    redoc_url=None if os.getenv("ENVIRONMENT") == "production" else "/redoc",
+    openapi_url=None if os.getenv("ENVIRONMENT") == "production" else "/openapi.json",
+    lifespan=lifespan
+)
+
 
 # ─────────────────────────────────
 # Middleware & Health Checks
@@ -332,7 +365,8 @@ def _increment_analytics(field: str, amount: int = 1):
         def update_in_transaction(transaction, analytics_ref):
             snapshot = analytics_ref.get(transaction=transaction)
             if snapshot.exists:
-                transaction.update(analytics_ref, {field: firestore.Increment(amount)})
+                transaction.update(analytics_ref, {field: google_firestore.Increment(amount)})
+
             else:
                 initial_data = {
                     "date": today_str,
@@ -360,8 +394,9 @@ async def run_studio_task(job_id: str, task_type: str, params: dict, user_id: Op
         update_document("jobs", job_id, {
             "status": "processing", 
             "started_at": datetime.utcnow(),
-            "attempts": firestore.Increment(1) if 'firestore' in globals() else 1
+            "attempts": google_firestore.Increment(1)
         })
+
         
         # Execute with internal retry and semaphore
         gen_result = await _execute_gen_task(task_type, params, user_id or "anon", user_tier)
@@ -626,7 +661,8 @@ class ChatMessage(BaseModel):
     message: str = Field(..., max_length=1000)
     lang: Optional[str] = Field("en", max_length=10)
     mood: Optional[str] = Field("", max_length=50)
-    persona_id: Optional[int] = None # Added for custom personas
+    persona_id: Optional[str] = None # Changed to str for Firestore IDs
+
 
     @field_validator("message")
     @classmethod
@@ -670,32 +706,10 @@ limiter = Limiter(key_func=get_user_or_ip, storage_uri=REDIS_URL if HAS_REDIS el
 is_prod = os.getenv("ENVIRONMENT") == "production"
 USE_CELERY = False # Disabled - using sync generation for stability
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    logger.info("Starting LEVI backend (Firestore-Native)...")
-    if not HAS_REDIS:
-        logger.warning("Redis unavailable \u2014 using in-memory fallback.")
-    else:
-        masked = REDIS_URL.split('@')[-1] if '@' in REDIS_URL else REDIS_URL
-        logger.info(f"Redis connected: {masked}")
-    try:
-        firestore_db.collection("health_check").document("status").get(timeout=5.0)
-        logger.info("Firestore connection verified.")
-    except Exception as e:
-        logger.error(f"Error connecting to Firestore: {e}")
-        if is_prod:
-            logger.critical("FATAL: Could not connect to Firestore during startup. Exiting.")
-            raise RuntimeError("Firestore connection failed on startup")
-    logger.info(f"CLIENT_KEY: {'SET' if CLIENT_KEY else 'NOT SET'}")
-    yield
 
-app = FastAPI(
-    title="LEVI Quotes API",
-    docs_url=None if is_prod else "/docs",
-    redoc_url=None if is_prod else "/redoc",
-    openapi_url=None if is_prod else "/openapi.json",
-    lifespan=lifespan
-)
+
+# app = FastAPI(...) moved to top
+
 
 @app.middleware("http")
 async def add_request_id(request: Request, call_next):
@@ -1183,8 +1197,9 @@ async def like_item(item_type: str, item_id: str):
             raise HTTPException(status_code=404, detail="Item not found")
 
         # Atomic increment for likes
-        from google.cloud import firestore # type: ignore
-        item_ref.update({"likes": firestore.Increment(1)})
+        from google.cloud import firestore as google_firestore # type: ignore
+        item_ref.update({"likes": google_firestore.Increment(1)})
+
         
         # Update analytics via transaction
         _increment_analytics("likes_count")
@@ -2214,9 +2229,10 @@ async def api_content_tones():
         raise HTTPException(status_code=500, detail="Could not retrieve content tones.")
 
 
-# \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+# ─────────────────────────────────────
 # Image Engine API Routes
-# \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u@app.post("/api/personas")
+# ─────────────────────────────────────
+@app.post("/api/personas")
 async def api_create_persona(
     body: PersonaCreate,
     current_user: dict = Depends(get_current_user)

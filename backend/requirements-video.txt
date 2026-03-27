@@ -1,0 +1,2 @@
+# Optional dependencies for video generation
+TTS>=0.22.0

@@ -3,7 +3,8 @@ name: Deploy Frontend to Firebase Hosting
 on:
   push:
     branches:
-      - main
+      - master
+
     paths:
       - 'frontend/**'
       - 'firebase.json'

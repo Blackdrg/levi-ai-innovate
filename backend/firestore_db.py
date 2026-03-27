@@ -25,12 +25,17 @@ if not firebase_admin._apps:
                 cred = credentials.ApplicationDefault()
                 firebase_admin.initialize_app(cred)
         else:
+            print("[Firebase] FIREBASE_SERVICE_ACCOUNT_JSON missing. Attempting Application Default Credentials...")
             # Try default initialization first (works on GCP or with GOOGLE_APPLICATION_CREDENTIALS)
             cred = credentials.ApplicationDefault()
             firebase_admin.initialize_app(cred)
             print("[Firebase] Initialization successful (Default)")
     except Exception as e:
-        raise RuntimeError(f"Firebase init failed: {e}")
+        print(f"[Firebase] CRITICAL: Firebase initialization failed: {e}")
+        # In production, we might want to fail fast, but let's allow the app to boot
+        # and fail on the first actual DB hit if not in prod.
+        if os.getenv("ENVIRONMENT") == "production":
+             raise RuntimeError(f"Firebase init failed: {e}")
 
 if firebase_admin._apps and not db:
     try:

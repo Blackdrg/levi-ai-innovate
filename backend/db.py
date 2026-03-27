@@ -7,9 +7,11 @@ def get_db():
     yield None
 
 from sqlalchemy import MetaData
+from sqlalchemy.ext.declarative import declarative_base
 
-class Base:
-    metadata = MetaData()
+# Create a proper Base for Alembic to detect
+Base = declarative_base()
+Base.metadata = MetaData()
 
 DATABASE_URL = "firestore://native"
 engine = None

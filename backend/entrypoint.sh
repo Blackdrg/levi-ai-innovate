@@ -11,6 +11,6 @@ alembic upgrade head || echo "WARNING: Alembic migration failed, continuing..."
 echo "[2/2] Starting Uvicorn..."
 exec uvicorn main:app \
   --host 0.0.0.0 \
-  --port "${PORT:-10000}" \
+  --port "${PORT:-8080}" \
   --workers 1 \
   --access-log

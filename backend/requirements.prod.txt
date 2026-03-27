@@ -42,5 +42,5 @@ python-json-logger>=2.0.7
 tenacity>=8.0.0
 diffusers>=0.27.0
 accelerate>=0.30.0
-# TTS>=0.22.0 # Moved to requirements-video.txt
+# TTS>=0.22.0 # Removed for production build optimization
 firebase-admin>=6.5.0
