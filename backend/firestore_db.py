@@ -8,10 +8,27 @@ from datetime import datetime
 db = None
 if not firebase_admin._apps:
     try:
-        # Try default initialization first (works on GCP or with GOOGLE_APPLICATION_CREDENTIALS)
-        cred = credentials.ApplicationDefault()
-        firebase_admin.initialize_app(cred)
-        print("[Firebase] Initialization successful")
+        service_account_json = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
+        if service_account_json:
+            import json
+            try:
+                # Check if it's a file path or direct JSON string
+                if os.path.exists(service_account_json):
+                    cred = credentials.Certificate(service_account_json)
+                else:
+                    service_account_info = json.loads(service_account_json)
+                    cred = credentials.Certificate(service_account_info)
+                firebase_admin.initialize_app(cred)
+                print("[Firebase] Initialized with Service Account JSON")
+            except Exception as e:
+                print(f"[Firebase] Service Account JSON init failed: {e}. Falling back to Default.")
+                cred = credentials.ApplicationDefault()
+                firebase_admin.initialize_app(cred)
+        else:
+            # Try default initialization first (works on GCP or with GOOGLE_APPLICATION_CREDENTIALS)
+            cred = credentials.ApplicationDefault()
+            firebase_admin.initialize_app(cred)
+            print("[Firebase] Initialization successful (Default)")
     except Exception as e:
         raise RuntimeError(f"Firebase init failed: {e}")
 
