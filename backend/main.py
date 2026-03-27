@@ -1,11 +1,13 @@
 # pyright: reportMissingImports=false
 
-from fastapi import FastAPI, Depends, HTTPException, status, Request, Response, Body  # type: ignore
+from fastapi import FastAPI, Depends, HTTPException, status, Request, Response, Body, BackgroundTasks  # type: ignore
 from fastapi.responses import JSONResponse  # type: ignore
 from fastapi.middleware.cors import CORSMiddleware  # type: ignore
+from pydantic import BaseModel, Field, field_validator  # type: ignore
 from contextlib import asynccontextmanager
 import os
 import hashlib
+import hmac
 from typing import List, Optional, Dict, Any
 from dotenv import load_dotenv
 
@@ -85,7 +87,7 @@ def validate_env():
 validate_env()
 
 # Centralized Module Imports
-from backend.models import Query, ChatMessage, PersonaCreate, ContentRequest, FeedbackRequest  # type: ignore
+from backend.models import Query, ChatMessage, PersonaCreate, ContentRequest, FeedbackRequest, AdminAdjustCredits  # type: ignore
 from backend.auth import get_current_user, get_current_user_optional, verify_admin # type: ignore
 from backend.utils.network import safe_request, standard_retry, ai_service_breaker # type: ignore
 from backend.firestore_db import db as firestore_db, update_document, add_document, get_document, update_analytics # type: ignore
@@ -101,6 +103,38 @@ from backend.video_gen import generate_quote_video  # type: ignore
 from backend.email_service import send_daily_quote, send_payment_receipt  # type: ignore
 from backend.payments import router as payments_router, use_credits  # type: ignore
 from backend.learning import collect_training_sample, UserPreferenceModel, AdaptivePromptManager # type: ignore
+
+class OrderRequest(BaseModel):
+    plan: str  # "pro" or "creator"
+
+class PaymentVerify(BaseModel):
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
+    plan: Optional[str] = "pro"
+
+class PushSubscriptionSchema(BaseModel):
+    endpoint: str
+    keys: dict
+
+class ContentGenerateRequest(BaseModel):
+    content_type: str = Field(..., max_length=50, description="One of: quote, essay, story, script, philosophy, caption, thread, blog, poem, newsletter, readme")
+    topic: str = Field(..., max_length=500, description="The subject matter to write about")
+    tone: str = Field("inspiring", max_length=50, description="Tone/style of the content")
+    depth: str = Field("high", description="Output depth: 'low', 'medium', or 'high'")
+    language: str = Field("English", max_length=50, description="Output language (e.g. 'English', 'Spanish', 'Hindi')")
+
+    @field_validator("topic", "tone")
+    @classmethod
+    def sanitize_content_inputs(cls, v):
+        # Note: _INJECTION_PATTERNS should be defined before this model if used
+        from backend.models import _INJECTION_PATTERNS
+        if v:
+            v_lower = v.lower()
+            for pattern in _INJECTION_PATTERNS:
+                if pattern in v_lower:
+                    raise ValueError(f"Potential prompt injection detected: {pattern}")
+        return v
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -233,6 +267,7 @@ origins = [
     "https://levi-ai-c23c6.firebaseapp.com",
     "https://levi-ai-create.web.app",
     "https://levi-ai-create.firebaseapp.com",
+    "https://levi-ai.cr",
 ]
 
 for o in env_origins:
@@ -271,24 +306,28 @@ async def health():
         "timestamp": datetime.utcnow().isoformat(),
         "version": os.getenv("GITHUB_SHA", "local")[:7],
         "dependencies": {
-            "firestore": "checking...",
-            "redis": "checking..." if HAS_REDIS else "unavailable"
+            "firestore": "checking",
+            "redis": "checking" if HAS_REDIS else "unavailable"
         }
     }
     
     overall_status = "ok"
     
     # Check Firestore
-    try:
-        start = time.time()
-        # Ping the health_check collection
-        firestore_db.collection("health_check").document("status").get(timeout=3.0)
-        latency = (time.time() - start) * 1000
-        status_info["dependencies"]["firestore"] = f"healthy ({latency:.1f}ms)"
-    except Exception as e:
-        logger.error(f"Health Check: Firestore unreachable: {e}")
-        status_info["dependencies"]["firestore"] = f"unhealthy: {str(e)}"
+    if firestore_db is None:
         overall_status = "error"
+        status_info["dependencies"]["firestore"] = "uninitialized"
+    else:
+        try:
+            start = time.time()
+            # Ping the health_check collection
+            firestore_db.collection("health_check").document("status").get(timeout=3.0)
+            latency = (time.time() - start) * 1000
+            status_info["dependencies"]["firestore"] = f"healthy ({latency:.1f}ms)"
+        except Exception as e:
+            logger.error(f"Health Check: Firestore unreachable: {e}")
+            status_info["dependencies"]["firestore"] = f"unhealthy: {str(e)}"
+            overall_status = "error"
 
     # Check Redis
     if HAS_REDIS:
@@ -1352,18 +1391,6 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         "created_at": current_user.get("created_at").isoformat() if current_user.get("created_at") else None
     }
 
-class OrderRequest(BaseModel):
-    plan: str  # "pro" or "creator"
-
-class PaymentVerify(BaseModel):
-    razorpay_order_id: str
-    razorpay_payment_id: str
-    razorpay_signature: str
-    plan: Optional[str] = "pro"
-
-class PushSubscriptionSchema(BaseModel):
-    endpoint: str
-    keys: dict
 
 @app.get("/push/vapid_public_key")
 async def get_vapid_public_key():
@@ -1577,22 +1604,6 @@ async def downgrade_tier(current_user: dict = Depends(get_current_user)):
 # Content Engine API Routes
 # \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
-class ContentGenerateRequest(BaseModel):
-    content_type: str = Field(..., max_length=50, description="One of: quote, essay, story, script, philosophy, caption, thread, blog, poem, newsletter, readme")
-    topic: str = Field(..., max_length=500, description="The subject matter to write about")
-    tone: str = Field("inspiring", max_length=50, description="Tone/style of the content")
-    depth: str = Field("high", description="Output depth: 'low', 'medium', or 'high'")
-    language: str = Field("English", max_length=50, description="Output language (e.g. 'English', 'Spanish', 'Hindi')")
-
-    @field_validator("topic", "tone")
-    @classmethod
-    def sanitize_content_inputs(cls, v):
-        if v:
-            v_lower = v.lower()
-            for pattern in _INJECTION_PATTERNS:
-                if pattern in v_lower:
-                    raise ValueError(f"Potential prompt injection detected: {pattern}")
-        return v
 
 
 @app.post("/api/content/generate")

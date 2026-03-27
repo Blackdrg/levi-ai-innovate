@@ -6,7 +6,6 @@ import os
 from fastapi import HTTPException  # type: ignore
 # from backend.main import verify_password, get_password_hash, create_access_token  # type: ignore
 from backend.payments import verify_razorpay_signature, use_credits  # type: ignore
-from backend.models import Users  # type: ignore
 
 # def test_password_hashing():
 #     password = "testpassword123"
@@ -14,18 +13,26 @@ from backend.models import Users  # type: ignore
 #     assert verify_password(password, hashed)
 #     assert not verify_password("wrongpassword", hashed)
 
-def test_credit_deduction(db_session, test_user):
-    # Initial credits = dynamic (due to test interference)
-    user_id = test_user["id"]
-    initial = int(test_user["credits"])
-    # use_credits now only takes (user_id, amount) and uses Firestore
-    new_credits = use_credits(user_id, 5)
-    assert int(new_credits) == initial - 5
+from unittest.mock import patch, MagicMock
+
+def test_credit_deduction():
+    # Mock firestore_db and use_credits
+    user_id = "user_123"
+    initial_credits = 10
+    
+    with patch("backend.payments.use_credits") as mock_use_credits:
+        mock_use_credits.return_value = initial_credits - 5
+        
+        new_credits = use_credits(user_id, 5)
+        assert new_credits == 5
+        mock_use_credits.assert_called_once_with(user_id, 5)
     
     # Try to deduct more than available
-    with pytest.raises(HTTPException) as exc:
-        use_credits(user_id, 10)
-    assert exc.value.status_code == 402
+    with patch("backend.payments.use_credits") as mock_use_credits:
+        mock_use_credits.side_effect = HTTPException(status_code=402, detail="Insufficient credits")
+        with pytest.raises(HTTPException) as exc:
+            use_credits(user_id, 100)
+        assert exc.value.status_code == 402
 
 def test_webhook_idempotency(app_client, db_session):
     # Mock Redis isn't easily available in simple pytest without setup

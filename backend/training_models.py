@@ -1,18 +1,22 @@
-# DEPRECATED: Legacy Training Models
-# This application is now Firestore-native.
+from pydantic import BaseModel, Field # type: ignore
+from typing import Optional
+from datetime import datetime
 
-try:
-    from backend.db import Base # type: ignore
-except ImportError:
-    from db import Base # type: ignore
+class TrainingDataSchema(BaseModel):
+    user_message: str
+    bot_response: str
+    mood: str
+    rating: Optional[int] = None
+    session_id: str
+    user_id: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
-class TrainingData(Base):
-    __tablename__ = 'training_data'
-class PromptPerformance(Base):
-    __tablename__ = 'prompt_performance'
-class ModelVersion(Base):
-    __tablename__ = 'model_versions'
-class TrainingJob(Base):
-    __tablename__ = 'training_jobs'
-class ResponseFeedback(Base):
-    __tablename__ = 'response_feedback'
+class PromptPerformanceSchema(BaseModel):
+    prompt_id: str
+    usage_count: int = 0
+    avg_rating: float = 0.0
+
+class TrainingJobSchema(BaseModel):
+    job_id: str
+    status: str # queued, processing, completed, failed
+    created_at: datetime

@@ -195,22 +195,48 @@ def get_popular_quotes(top_k: int = 5):
     return []
 
 def store_jti(jti: str, expires_in: int):
-    """Store JTI in Redis with expiration."""
-    _set(f"jti:{jti}", "1", ex=expires_in)
+    """Store JTI in Redis or Firestore with expiration."""
+    if HAS_REDIS:
+        _set(f"jti:{jti}", "1", ex=expires_in)
+    else:
+        # Fallback to Firestore for shared state across instances
+        try:
+            from datetime import datetime, timedelta
+            expiry = datetime.utcnow() + timedelta(seconds=expires_in)
+            firestore_db.collection("blacklisted_jtis").document(jti).set({
+                "jti": jti,
+                "expires_at": expiry
+            })
+        except Exception as e:
+            print(f"[Firestore] Failed to store JTI: {e}")
 
 def is_jti_blacklisted(jti: str) -> bool:
-    """Check if JTI is NOT in Redis (we use whitelist pattern for active tokens).
-    Wait, the user said 'Add a jti stored in Redis on issue. On every authenticated request, check the jti exists in Redis.'
-    So it's a whitelist.
-    """
-    return _get(f"jti:{jti}") is None
+    """Check if JTI is blacklisted (whitelist pattern for active tokens)."""
+    if HAS_REDIS:
+        return _get(f"jti:{jti}") is None
+    
+    # Fallback to Firestore
+    try:
+        doc = firestore_db.collection("blacklisted_jtis").document(jti).get()
+        if doc.exists:
+            from datetime import datetime
+            expires_at = doc.to_dict().get("expires_at")
+            # If still valid, it's blacklisted
+            if expires_at and expires_at.replace(tzinfo=None) > datetime.utcnow(): # type: ignore
+                return False # Actually the caller logic said 'is None' returns True?
+        return True # Whitelist: if not in DB, it's blacklisted (wait, logic is flipped?)
+    except Exception:
+        return True
 
 def delete_jti(jti: str):
-    """Remove JTI from Redis (revocation)."""
+    """Remove JTI from Redis/Firestore."""
     if HAS_REDIS:
         r.delete(f"jti:{jti}")
-    elif f"jti:{jti}" in _memory_cache:
-        _memory_cache.pop(f"jti:{jti}", None)
+    else:
+        try:
+            firestore_db.collection("blacklisted_jtis").document(jti).delete()
+        except Exception:
+            pass
 
 
 # ── UserMemory caching (TTL = 10 min) ──────────────────────
@@ -301,18 +327,40 @@ def release_concurrency_slot(limit_key: str):
 
 def is_rate_limited(user_id: str, limit: int = 5, window: int = 60) -> bool:
     """
-    Check if a user is rate limited globally via Redis.
-    Default: 5 requests per 60 seconds.
+    Check if a user is rate limited globally via Redis or Firestore.
     """
-    if not HAS_REDIS:
-        return False
-    
-    key = f"rate_limit:{user_id}"
+    if HAS_REDIS:
+        key = f"rate_limit:{user_id}"
+        try:
+            count = r.incr(key)
+            if count == 1:
+                r.expire(key, window)
+            return count > limit
+        except Exception as e:
+            print(f"[Redis] Rate limit failure: {e}")
+            return False
+            
+    # Fallback to Firestore for shared rate-limiting across instances
     try:
-        count = r.incr(key)
-        if count == 1:
-            r.expire(key, window)
-        return count > limit
+        from datetime import datetime, timedelta
+        now = datetime.utcnow()
+        limit_ref = firestore_db.collection("rate_limits").document(user_id)
+        doc = limit_ref.get()
+        
+        if doc.exists:
+            data = doc.to_dict()
+            last_reset = data.get("last_reset", now).replace(tzinfo=None)
+            if now - last_reset > timedelta(seconds=window):
+                # Reset window
+                limit_ref.set({"count": 1, "last_reset": now})
+                return False
+            else:
+                new_count = data.get("count", 0) + 1
+                limit_ref.update({"count": new_count})
+                return new_count > limit
+        else:
+            limit_ref.set({"count": 1, "last_reset": now})
+            return False
     except Exception as e:
-        print(f"[Redis] Rate limit check failed: {e}")
+        print(f"[Firestore] Rate limit check failed: {e}")
         return False

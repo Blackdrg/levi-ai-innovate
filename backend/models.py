@@ -75,3 +75,7 @@ class JobStatus(BaseModel):
     status: str
     url: Optional[str] = None
     error: Optional[str] = None
+
+class AdminAdjustCredits(BaseModel):
+    user_id: str
+    amount: int

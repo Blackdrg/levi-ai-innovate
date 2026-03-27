@@ -3,7 +3,7 @@
 // Firebase Configuration template. 
 // In production, these should be set during the build/deploy process.
 const firebaseConfig = {
-  apiKey: "AIzaSyBkFj3B-YsG6MKyVbW_4jSF1VVoNSbP1UM", // Replace with your actual key
+  apiKey: "REPLACE_WITH_YOUR_FIREBASE_API_KEY", // Loaded from environment or config at build time
   authDomain: "levi-ai-c23c6.firebaseapp.com",
   projectId: "levi-ai-c23c6",
   storageBucket: "levi-ai-c23c6.firebasestorage.app",

@@ -1,135 +1,220 @@
+# pyright: reportMissingImports=false
+import os
 import time
 import uuid
 import logging
-from fastapi import FastAPI, Request, HTTPException, Depends # type: ignore
+from datetime import datetime
+from typing import Optional, List, Dict, Any
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Request, HTTPException, Depends, status # type: ignore
 from fastapi.responses import JSONResponse # type: ignore
 from fastapi.middleware.cors import CORSMiddleware # type: ignore
 from starlette.middleware.base import BaseHTTPMiddleware # type: ignore
-import os
-from datetime import datetime
+from dotenv import load_dotenv
 
-# Initialize logging
+import sentry_sdk # type: ignore
+from pythonjsonlogger.json import JsonFormatter # type: ignore
+from slowapi import Limiter # type: ignore
+from slowapi.util import get_remote_address # type: ignore
+from slowapi.errors import RateLimitExceeded # type: ignore
+from slowapi import _rate_limit_exceeded_handler # type: ignore
+
+# ── Environment & Logging ───────────────────────────
+if os.path.exists(".env.local"):
+    load_dotenv(".env.local")
+else:
+    load_dotenv()
+
+class CustomJsonFormatter(JsonFormatter):
+    def add_fields(self, log_record, record, message_dict):
+        super(CustomJsonFormatter, self).add_fields(log_record, record, message_dict)
+        if not log_record.get('timestamp'):
+            now = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+            log_record['timestamp'] = now
+        if log_record.get('level'):
+            log_record['level'] = log_record['level'].upper()
+        else:
+            log_record['level'] = record.levelname
+
 logger = logging.getLogger("gateway")
-logging.basicConfig(level=logging.INFO)
+logHandler = logging.StreamHandler()
+formatter = CustomJsonFormatter(fmt='%(timestamp)s %(level)s %(name)s %(message)s') # type: ignore
+logHandler.setFormatter(formatter)
+logger.addHandler(logHandler)
+logger.setLevel(logging.INFO)
+logger.propagate = False
 
-app = FastAPI(title="LEVI API Gateway")
-
-# ── Rate Limiting Middleware ──────────────────────────
-from backend.redis_client import r as redis_client, HAS_REDIS # type: ignore
-
-class RateLimitMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        if not HAS_REDIS:
-            return await call_next(request)
-        
-        # Simple IP-based rate limiting for the gateway
-        ip = request.client.host if request.client else "unknown"
-        key = f"rl:gw:{ip}"
-        
-        try:
-            count = redis_client.incr(key)
-            if count == 1:
-                redis_client.expire(key, 60)
-            
-            if count > 100:  # 100 requests per minute per IP
-                return JSONResponse(
-                    status_code=429, 
-                    content={"error": "Too many requests. Gateway throttled."}
-                )
-        except Exception as e:
-            logger.error(f"Rate limit error: {e}")
-            
-        return await call_next(request)
-
-app.add_middleware(RateLimitMiddleware)
-
-# ── Global Error Handling ─────────────────────────────
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    request_id = getattr(request.state, "request_id", str(uuid.uuid4()))
-    logger.error(f"Gateway Unhandled Error [RID: {request_id}]: {exc}", exc_info=True)
-    return JSONResponse(
-        status_code=500,
-        content={"error": "Internal Gateway error", "request_id": request_id}
+# Sentry Initialization
+SENTRY_DSN = os.getenv("SENTRY_DSN")
+if SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        traces_sample_rate=1.0,
+        environment=os.getenv("ENVIRONMENT", "production"),
     )
+    logger.info("Sentry initialized in Gateway.")
 
-# ── Auth Validation Middleware ────────────────────────
-from firebase_admin import auth as firebase_auth # type: ignore
+# Environment Validation
+REQUIRED_ENV_VARS = [
+    "SECRET_KEY", "RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET",
+    "RAZORPAY_WEBHOOK_SECRET", "ADMIN_KEY", "FIREBASE_PROJECT_ID",
+    "FIREBASE_SERVICE_ACCOUNT_JSON"
+]
+
+def validate_env():
+    missing = [var for var in REQUIRED_ENV_VARS if not os.getenv(var)]
+    if missing and os.getenv("ENVIRONMENT") == "production":
+        logger.error(f"CRITICAL: Missing environment variables: {', '.join(missing)}")
+        exit(1)
+
+validate_env()
+
+# ── Lifespan & App ──────────────────────────────────
+from backend.firestore_db import db as firestore_db # type: ignore
+from backend.redis_client import HAS_REDIS, REDIS_URL # type: ignore
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Starting LEVI Gateway...")
+    try:
+        firestore_db.collection("health_check").document("status").get(timeout=5.0)
+        logger.info("Firestore connection verified.")
+        
+        # Cleanup zombie tasks
+        zombie_jobs = firestore_db.collection("jobs") \
+            .where("status", "==", "processing").get()
+        for doc in zombie_jobs:
+            doc.reference.update({
+                "status": "failed", 
+                "error": "Server restarted during processing",
+                "completed_at": datetime.utcnow()
+            })
+    except Exception as e:
+        logger.error(f"Startup check failed: {e}")
+        if os.getenv("ENVIRONMENT") == "production": raise RuntimeError("STARTUP FAIL")
+    yield
+
+app = FastAPI(
+    title="LEVI API Gateway",
+    version="3.0.0",
+    lifespan=lifespan,
+    docs_url=None if os.getenv("ENVIRONMENT") == "production" else "/docs"
+)
+
+# ── Middleware ──────────────────────────────────────
+limiter = Limiter(key_func=get_remote_address, storage_uri=REDIS_URL if HAS_REDIS else "memory://")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 @app.middleware("http")
-async def auth_validation(request: Request, call_next):
-    # Skip auth for public endpoints
-    public_paths = ["/", "/health", "/docs", "/openapi.json", "/login", "/register"]
-    if request.url.path in public_paths or request.method == "OPTIONS":
-        return await call_next(request)
-    
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-         # Allow optional auth if specified by the service, but here we enforce it at gateway
-         # unless we want to allow optional auth. For now, let's enforce if header is missing
-         # and the path isn't public.
-         pass 
-
-    # In a real microservice split, we would verify the token here
-    # and inject user info into headers.
-    # For now, we'll let the individual services handle it using the shared auth.py
-    # but the Gateway ensures basic structure.
-    
-    return await call_next(request)
-
-# ── Global Request Tracking ───────────────────────────
-@app.middleware("http")
-async def add_process_time_header(request: Request, call_next):
+async def add_request_tracking(request: Request, call_next):
     request_id = str(uuid.uuid4())
     request.state.request_id = request_id
     start_time = time.time()
     
     response = await call_next(request)
     
-    process_time = time.time() - start_time
-    response.headers["X-Process-Time"] = str(process_time)
+    duration = (time.time() - start_time) * 1000
     response.headers["X-Request-ID"] = request_id
     
-    logger.info(f"RID: {request_id} | {request.method} {request.url.path} | Status: {response.status_code} | {process_time:.4f}s")
+    logger.info("gateway_request_completed", extra={
+        "request_id": request_id, 
+        "method": request.method,
+        "path": request.url.path, 
+        "status_code": response.status_code,
+        "duration_ms": int(duration)
+    })
     return response
 
-# ── Global Health Check ──────────────────────────────
-@app.get("/health")
-async def health_check():
-    """Service health monitoring."""
-    return {"status": "healthy", "service": "gateway", "version": "v3.0.0"}
+# CORS
+origins = [
+    "http://localhost:3000", "http://127.0.0.1:3000",
+    "https://levi-ai.vercel.app",
+    "https://levi-ai.create.app",
+    "https://levi-ai-c23c6.web.app",
+    "https://levi-ai.cr",
+]
+env_origins = os.getenv("CORS_ORIGINS", "").split(",")
+for o in env_origins:
+    if o.strip() and o.strip() not in origins:
+        origins.append(o.strip())
 
-# ── Service Mounting ──────────────────────────────────
-# In this implementation, we use FastAPI's mount or include_router 
-# to "simulate" microservices within the same process or 
-# we could use httpx to proxy to real separate service instances.
-# Given the user's request, I'll use separate routers for now.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins if "*" not in origins else ["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-from backend.services.studio.router import router as studio_router # type: ignore
+# ── Routers ─────────────────────────────────────────
 from backend.services.auth.router import router as auth_router # type: ignore
 from backend.services.chat.router import router as chat_router # type: ignore
+from backend.services.studio.router import router as studio_router # type: ignore
 from backend.services.gallery.router import router as gallery_router # type: ignore
 from backend.services.analytics.router import router as analytics_router # type: ignore
+from backend.payments import router as payments_router # type: ignore
 
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(chat_router, prefix="/api/v1")
 app.include_router(studio_router, prefix="/api/v1")
 app.include_router(gallery_router, prefix="/api/v1")
 app.include_router(analytics_router, prefix="/api/v1")
+app.include_router(payments_router, prefix="/api/v1")
 
+# ── Legacy/Global Routes ────────────────────────────
 @app.get("/")
 async def root():
-    return {"status": "ok", "service": "LEVI Gateway", "version": "2.0.0"}
+    return {
+        "status": "ok", 
+        "service": "LEVI Gateway", 
+        "version": "3.0.0",
+        "docs": "/docs" if os.getenv("ENVIRONMENT") != "production" else None
+    }
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+    """Robust health check for CI/CD."""
+    status_info = {
+        "status": "ok",
+        "timestamp": datetime.utcnow().isoformat(),
+        "version": os.getenv("GITHUB_SHA", "local")[:7],
+        "dependencies": {
+            "firestore": "checking",
+            "redis": "checking" if HAS_REDIS else "unavailable"
+        }
+    }
+    
+    overall_status = "ok"
+    
+    # Check Firestore
+    if firestore_db is None:
+        overall_status = "error"
+        status_info["dependencies"]["firestore"] = "uninitialized"
+    else:
+        try:
+            # Ping the health_check collection
+            firestore_db.collection("health_check").document("status").get(timeout=3.0)
+            status_info["dependencies"]["firestore"] = "healthy"
+        except Exception as e:
+            overall_status = "error"
+            status_info["dependencies"]["firestore"] = f"unhealthy: {e}"
 
-# CORS Setup
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"], # Tighten this in production
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+    # Check Redis
+    if HAS_REDIS:
+        try:
+            from backend.redis_client import r # type: ignore
+            if r and r.ping():
+                status_info["dependencies"]["redis"] = "healthy"
+            else:
+                overall_status = "error"
+                status_info["dependencies"]["redis"] = "down"
+        except Exception as e:
+            overall_status = "error"
+            status_info["dependencies"]["redis"] = f"error: {e}"
+            
+    status_info["status"] = overall_status
+    if overall_status != "ok":
+        return JSONResponse(status_code=503, content=status_info)
+    return status_info

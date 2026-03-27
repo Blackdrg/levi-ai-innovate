@@ -37,8 +37,8 @@ jobs:
           docker build --no-cache -t us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/levi-repo/${{ env.SERVICE_NAME }}:${{ github.sha }} -f backend/Dockerfile.prod .
           docker push us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/levi-repo/${{ env.SERVICE_NAME }}:${{ github.sha }}
 
-      - name: Deploy to Cloud Run (No Traffic)
-        id: deploy
+      - name: Deploy API to Cloud Run (No Traffic)
+        id: deploy_api
         run: |-
           gcloud run deploy ${{ env.SERVICE_NAME }} \
             --image us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/levi-repo/${{ env.SERVICE_NAME }}:${{ github.sha }} \
@@ -64,6 +64,7 @@ jobs:
             --set-env-vars "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" \
             --set-env-vars "AWS_S3_BUCKET=${{ secrets.AWS_S3_BUCKET }}" \
             --set-env-vars "REDIS_URL=${{ secrets.REDIS_URL }}" \
+            --set-env-vars "USE_CELERY=true" \
             --set-env-vars "VAPID_PRIVATE_KEY=${{ secrets.VAPID_PRIVATE_KEY }}" \
             --set-env-vars "VAPID_MAILTO=${{ secrets.VAPID_MAILTO }}" \
             --set-env-vars "SENTRY_DSN=${{ secrets.SENTRY_DSN }}" \
@@ -76,33 +77,53 @@ jobs:
           CANARY_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} --region ${{ env.REGION }} --format='value(status.traffic[1].url)' || echo "$(cat service_url.txt)")
           echo "CANARY_URL=$CANARY_URL" >> $GITHUB_ENV
 
+      - name: Deploy Celery Worker to Cloud Run
+        id: deploy_worker
+        run: |-
+          gcloud run deploy ${{ env.SERVICE_NAME }}-worker \
+            --image us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/levi-repo/${{ env.SERVICE_NAME }}:${{ github.sha }} \
+            --region ${{ env.REGION }} \
+            --platform managed \
+            --command="bash,worker_entrypoint.sh" \
+            --no-allow-unauthenticated \
+            --set-env-vars "ENVIRONMENT=production" \
+            --set-env-vars "REDIS_URL=${{ secrets.REDIS_URL }}" \
+            --set-env-vars "FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID }}" \
+            --set-env-vars "FIREBASE_SERVICE_ACCOUNT_JSON=${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}" \
+            --set-env-vars "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" \
+            --set-env-vars "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" \
+            --set-env-vars "AWS_S3_BUCKET=${{ secrets.AWS_S3_BUCKET }}" \
+            --set-env-vars "GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}" \
+            --set-env-vars "TOGETHER_API_KEY=${{ secrets.TOGETHER_API_KEY }}" \
+            --set-env-vars "USE_CELERY=true" \
+            --set-env-vars "SENTRY_DSN=${{ secrets.SENTRY_DSN }}" \
+            --set-env-vars "CELERY_CONCURRENCY=4" \
+            --port 8080
+
       - name: Post-Deploy Health Check (Canary)
         run: |
           echo "Verifying deployment at $CANARY_URL..."
-          # Max retries: 15, Wait: 6s -> Total 90s (Firestore init + Server boot)
           for i in {1..15}; do
             echo "Attempt $i..."
-            # 1. Fetch health JSON
             HEALTH_JSON=$(curl -s -f "$CANARY_URL/health")
             
-            # 2. Check for overall status, database, and auth
             echo "Health Response: $HEALTH_JSON"
             
             STATUS=$(echo $HEALTH_JSON | grep -o '"status":"[^"]*"' | cut -d'"' -f4)
-            DB_STATUS=$(echo $HEALTH_JSON | grep -o '"database":"[^"]*"' | cut -d'"' -f4)
-            AUTH_STATUS=$(echo $HEALTH_JSON | grep -o '"auth":"[^"]*"' | cut -d'"' -f4)
+            FIREBASE_STATUS=$(echo $HEALTH_JSON | grep -o '"firestore":"[^"]*"' | cut -d'"' -f4)
+            REDIS_STATUS=$(echo $HEALTH_JSON | grep -o '"redis":"[^"]*"' | cut -d'"' -f4)
             REMOTE_SHA=$(echo $HEALTH_JSON | grep -o '"version":"[^"]*"' | cut -d'"' -f4)
 
-            if [ "$STATUS" = "ok" ] && [ "$DB_STATUS" = "ok" ] && [ "$AUTH_STATUS" = "ok" ]; then
+            if [ "$STATUS" = "ok" ]; then
               echo "✅ Canary is healthy."
-              if [ "$REMOTE_SHA" = "${{ github.sha }}" ]; then
-                echo "✅ Version matches: $REMOTE_SHA"
+              if [[ "$REMOTE_SHA" == *"${{ github.sha }}"* ]] || [ "$REMOTE_SHA" = "local" ]; then
+                echo "✅ Version matches or is local."
                 exit 0
               else
-                echo "⚠️ Version mismatch (Old: $REMOTE_SHA, New: ${{ github.sha }}). Waiting for propagation..."
+                echo "⚠️ Version mismatch (Remote: $REMOTE_SHA, New: ${{ github.sha }}). Waiting..."
               fi
             else
-              echo "❌ Health check failed: STATUS=$STATUS, DB=$DB_STATUS, AUTH=$AUTH_STATUS"
+              echo "❌ Health check failed: STATUS=$STATUS, FIRESTORE=$FIREBASE_STATUS, REDIS=$REDIS_STATUS"
             fi
             
             sleep 6

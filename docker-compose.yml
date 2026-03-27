@@ -1,21 +1,4 @@
 services:
-  db:
-    image: ankane/pgvector
-    environment:
-      POSTGRES_USER: levi
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-levi}
-      POSTGRES_DB: levi
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U levi"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-
   redis:
     image: redis:alpine
     ports:
@@ -34,12 +17,9 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      db:
-        condition: service_healthy
       redis:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://levi:${POSTGRES_PASSWORD:-levi}@db:5432/levi
       REDIS_URL: redis://redis:6379
       SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-in-prod}
       CORS_ORIGINS: "*"
@@ -61,10 +41,7 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-      db:
-        condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://levi:${POSTGRES_PASSWORD:-levi}@db:5432/levi
       REDIS_URL: redis://redis:6379
       USE_CELERY: "true"
       PYTHONUNBUFFERED: 1
@@ -84,7 +61,6 @@ services:
         condition: service_healthy
     restart: always
 
-
 volumes:
-  postgres_data:
+  model_cache:
 

@@ -20,6 +20,7 @@ def is_rate_limited(user_id: str):
 async def gen_image(
     request: Request, 
     req: Query, 
+    background_tasks: BackgroundTasks,
     current_user: Optional[dict] = Depends(get_current_user_optional)
 ):
     try:
@@ -47,10 +48,8 @@ async def gen_image(
             )
         else:
             # Fallback for local dev without Celery worker
-            from backend.main import run_studio_task # type: ignore
-            from fastapi import BackgroundTasks
-            bt = BackgroundTasks()
-            bt.add_task(
+            from backend.services.studio.logic import run_studio_task # type: ignore
+            background_tasks.add_task(
                 run_studio_task, 
                 job_id=job_id, 
                 task_type="image", 
@@ -68,6 +67,7 @@ async def gen_image(
 async def gen_video(
     request: Request, 
     req: Query, 
+    background_tasks: BackgroundTasks,
     current_user: Optional[dict] = Depends(get_current_user_optional)
 ):
     try:
@@ -95,10 +95,8 @@ async def gen_video(
             )
         else:
              # Fallback
-            from backend.main import run_studio_task # type: ignore
-            from fastapi import BackgroundTasks
-            bt = BackgroundTasks()
-            bt.add_task(
+            from backend.services.studio.logic import run_studio_task # type: ignore
+            background_tasks.add_task(
                 run_studio_task, 
                 job_id=job_id, 
                 task_type="video", 
