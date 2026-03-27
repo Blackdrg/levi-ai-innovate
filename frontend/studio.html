@@ -212,7 +212,10 @@
           <span id="synth-label">Initiate Synthesis</span>
           <div id="synth-spinner" class="hidden synth-spinner"></div>
         </button>
-        <!-- Video generation disabled until real pipeline ready -->
+        <button id="video-btn" onclick="makeVideo()" disabled class="w-full py-4 rounded-full border border-primary/20 text-primary/60 hover:text-primary hover:border-primary transition-all uppercase tracking-[0.2em] text-[10px] font-bold flex items-center justify-center gap-2 disabled:opacity-30 disabled:pointer-events-none">
+          <span class="material-symbols-outlined icon-sm">movie_filter</span>
+          Animate Wisdom
+        </button>
 
       </div>
     </section>

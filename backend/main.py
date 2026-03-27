@@ -1,6 +1,7 @@
 # pyright: reportMissingImports=false
 
 from fastapi import FastAPI, Depends, HTTPException, status, Request, Response  # type: ignore
+from contextlib import asynccontextmanager
 from starlette.middleware.sessions import SessionMiddleware  # type: ignore
 from starlette.routing import Route  # type: ignore
 
@@ -10,10 +11,10 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm  # 
 
 from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse  # type: ignore
 
-from sqlalchemy.orm import Session  # type: ignore
-from sqlalchemy import text # type: ignore
+# from sqlalchemy.orm import Session  # type: ignore
+# from sqlalchemy import text # type: ignore
 
-from pydantic import BaseModel, Field, validator  # type: ignore
+from pydantic import BaseModel, Field, field_validator  # type: ignore
 
 # from jose import JWTError, jwt # type: ignore
 
@@ -168,28 +169,7 @@ import firebase_admin
 from firebase_admin import credentials, auth as firebase_auth
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials # type: ignore
 
-if not firebase_admin._apps:
-    try:
-        # Default initialization (works on GCP/Cloud Run)
-        firebase_admin.initialize_app()
-        logger.info("✅ Firebase initialized (default credentials)")
-    except Exception as e1:
-        try:
-            # Fallback for local dev or explicit service account
-            cred_path = os.getenv("FIREBASE_SERVICE_ACCOUNT")
-            if cred_path and os.path.exists(cred_path):
-                cred = credentials.Certificate(cred_path)
-            else:
-                cred = credentials.ApplicationDefault()
-            firebase_admin.initialize_app(cred)
-            logger.info("✅ Firebase initialized (application/manual default)")
-        except Exception as e2:
-            if os.getenv("ENVIRONMENT") == "production":
-                logger.error(f"❌ Firebase init failed in production: {e2}")
-                raise e2
-            else:
-                logger.warning(f"⚠️ Firebase unavailable locally: {e2}")
-                logger.info("⚠️ Auth endpoints will return 401 — use SKIP_AUTH=true for local dev")
+# Firebase is initialized in backend/firestore_db.py, which is imported above.
 
 security = HTTPBearer()
 
@@ -325,23 +305,15 @@ class ErrorResponse(BaseModel):
 
 def standardized_error_handler(request: Request, exc: Exception):
     request_id = getattr(request.state, "request_id", "unknown")
-    
-    if isinstance(exc, HTTPException):
-        status_code = exc.status_code
-        detail = exc.detail
-    else:
-        status_code = 500
-        detail = str(exc) if not is_prod else "Internal Server Error"
-        logger.error(f"Unhandled exception [ID: {request_id}]: {exc}", exc_info=True)
-
+    logger.error(f"Unhandled exception [ID: {request_id}]: {exc}", exc_info=True)
     return JSONResponse(
-        status_code=status_code,
-        content=ErrorResponse(
-            error=str(detail),
-            code=f"ERR_{status_code}",
-            request_id=request_id
-        ).dict()
+        status_code=500,
+        content={"error": "Server error", "request_id": request_id}
     )
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    return await standardized_error_handler(request, exc)
 
 class Query(BaseModel):
     text: str = Field(..., max_length=500)
@@ -352,7 +324,8 @@ class Query(BaseModel):
     custom_bg: Optional[str] = None
     top_k: int = Field(5, ge=1, le=20)
 
-    @validator("text", "author", "mood", "topic")
+    @field_validator("text", "author", "mood", "topic")
+    @classmethod
     def sanitize_text(cls, v):
         if v is None:
             return v
@@ -369,7 +342,8 @@ class ChatMessage(BaseModel):
     mood: Optional[str] = Field("", max_length=50)
     persona_id: Optional[int] = None # Added for custom personas
 
-    @validator("message")
+    @field_validator("message")
+    @classmethod
     def sanitize_message(cls, v):
         v_lower = v.lower()
         for pattern in _INJECTION_PATTERNS:
@@ -384,7 +358,8 @@ class PersonaCreate(BaseModel):
     avatar_url: Optional[str] = Field(None, max_length=500)
     is_public: bool = True
 
-    @validator("name", "description", "system_prompt")
+    @field_validator("name", "description", "system_prompt")
+    @classmethod
     def sanitize_persona_inputs(cls, v):
         if v:
             v_lower = v.lower()
@@ -407,13 +382,30 @@ def get_user_or_ip(request: Request):
 limiter = Limiter(key_func=get_user_or_ip, storage_uri=REDIS_URL if HAS_REDIS else None)
 
 is_prod = os.getenv("ENVIRONMENT") == "production"
-USE_CELERY = True # Enabled for async reliability
+USE_CELERY = False # Disabled - using sync generation for stability
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Starting LEVI backend (Firestore-Native)...")
+    if not HAS_REDIS:
+        logger.warning("Redis unavailable \u2014 using in-memory fallback.")
+    else:
+        masked = REDIS_URL.split('@')[-1] if '@' in REDIS_URL else REDIS_URL
+        logger.info(f"Redis connected: {masked}")
+    try:
+        firestore_db.collection("health_check").document("status").get()
+        logger.info("Firestore connection verified.")
+    except Exception as e:
+        logger.error(f"Error connecting to Firestore: {e}")
+    logger.info(f"CLIENT_KEY: {'SET' if CLIENT_KEY else 'NOT SET'}")
+    yield
 
 app = FastAPI(
     title="LEVI Quotes API",
     docs_url=None if is_prod else "/docs",
     redoc_url=None if is_prod else "/redoc",
-    openapi_url=None if is_prod else "/openapi.json"
+    openapi_url=None if is_prod else "/openapi.json",
+    lifespan=lifespan
 )
 
 @app.middleware("http")
@@ -456,6 +448,15 @@ from slowapi.errors import RateLimitExceeded  # type: ignore
 from slowapi import _rate_limit_exceeded_handler  # type: ignore
 from typing import Any, cast
 app.add_exception_handler(RateLimitExceeded, cast(Any, _rate_limit_exceeded_handler))
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    import time
+    start_time = time.time()
+    response = await call_next(request)
+    duration = time.time() - start_time
+    logger.info(f"Method: {request.method} Path: {request.url.path} Status: {response.status_code} Duration: {duration:.2f}s")
+    return response
+
 app.add_exception_handler(Exception, standardized_error_handler)
 app.add_exception_handler(HTTPException, standardized_error_handler)
 
@@ -478,6 +479,8 @@ origins = [
     "https://levi-ai-create.com",
     "https://levi-ai-c23c6.web.app",
     "https://levi-ai-c23c6.firebaseapp.com",
+    "https://levi-ai-create.web.app",
+    "https://levi-ai-create.firebaseapp.com",
 ]
 
 for o in env_origins:
@@ -497,24 +500,7 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type", "X-Admin-Key", "X-Request-ID"],
 )
 
-@app.on_event("startup")
-async def startup_event():
-    logger.info("Starting LEVI backend (Firestore-Native)...")
 
-    if not HAS_REDIS:
-        logger.warning("Redis unavailable — using in-memory fallback.")
-    else:
-        masked = REDIS_URL.split('@')[-1] if '@' in REDIS_URL else REDIS_URL
-        logger.info(f"Redis connected: {masked}")
-
-    try:
-        # Simple connectivity check for Firestore
-        firestore_db.collection("health_check").document("status").get()
-        logger.info("Firestore connection verified.")
-    except Exception as e:
-        logger.error(f"Error connecting to Firestore: {e}")
-
-    logger.info(f"CLIENT_KEY: {'SET' if CLIENT_KEY else 'NOT SET'}")
 
 
 @app.api_route("/", methods=["GET", "HEAD"])
@@ -1746,8 +1732,8 @@ async def razorpay_webhook(request: Request):
     _secret_str = str(webhook_secret)
     expected_signature = hmac.new(
         _secret_str.encode(), 
-        payload, 
-        hashlib.sha256
+        payload if isinstance(payload, bytes) else payload.encode(), 
+        digestmod=hashlib.sha256
     ).hexdigest()
     
     actual_signature = signature.decode() if isinstance(signature, bytes) else signature
@@ -1858,7 +1844,8 @@ class ContentGenerateRequest(BaseModel):
     depth: str = Field("high", description="Output depth: 'low', 'medium', or 'high'")
     language: str = Field("English", max_length=50, description="Output language (e.g. 'English', 'Spanish', 'Hindi')")
 
-    @validator("topic", "tone")
+    @field_validator("topic", "tone")
+    @classmethod
     def sanitize_content_inputs(cls, v):
         if v:
             v_lower = v.lower()

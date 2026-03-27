@@ -1,6 +1,4 @@
-function toggleMobileMenu(){const m=document.getElementById('mobile-menu');if(!m)return;m.classList.toggle('hidden');document.body.style.overflow=m.classList.contains('hidden')?'':'hidden'}
-              function showToast(msg, type = 'success') { const t = document.getElementById('toast'); const bg = type === 'error' ? 'rgba(147,0,10,.85)' : type === 'warning' ? 'rgba(120,90,0,.85)' : 'rgba(19,19,23,.9)'; const border = type === 'error' ? 'rgba(255,180,171,.3)' : type === 'warning' ? 'rgba(242,202,80,.4)' : 'rgba(242,202,80,.35)'; const icon = type === 'error' ? 'error' : type === 'warning' ? 'warning' : 'check_circle'; t.innerHTML = `<div class="toast-inner-studio flex items-center gap-2.5 px-5 py-3 rounded-full shadow-2xl" style="background:${bg}; border-color:${border}"><span class="material-symbols-outlined icon-fill" style="font-size:16px;color:#f2ca50">${icon}</span><span class="toast-text-studio">${msg}</span></div>`; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 3200) }
-
+// Use global API_BASE defined in auth-manager.js
 const API_BASE = window.API_BASE;
 let currentStyle='philosophical';let currentImage=null;
 const insights={philosophical:{text:'prioritize ethereal lighting, high-contrast obsidian shadows, and golden particle dispersion.',stability:67},zen:{text:'evoke bamboo mist, still water reflections, and morning light through ancient forests.',stability:82},cyberpunk:{text:'generate neon-soaked cityscapes, rain-slicked streets, and holographic overlays.',stability:74},futuristic:{text:'render clean white surfaces, cosmic voids, and geometric precision with bioluminescent accents.',stability:91},stoic:{text:'depict marble columns, dawn light, classical architecture — austere and powerful.',stability:88},melancholic:{text:'create rain-washed cobblestones, blue hour, soft bokeh with poetic melancholy.',stability:79}};
@@ -40,7 +38,6 @@ async function synthesize(){
     const d=await r.json();
     if(!r.ok){
       showToast(d.error || "Generation failed", "error");
-      displayDemo(text);
       return;
     }
 
@@ -55,10 +52,10 @@ async function synthesize(){
   }catch(e){
     console.error("Synthesize error:", e);
     showToast(e.message || 'Generation error','error');
-    displayDemo(text);
+    setLoading(false);
   }finally{
-    // If queued, we don't want to hide the loader yet as pollTask will manage the UI
-    // But synthesize() itself is done. Maybe pollTask should call setLoading(false)
+     // setLoading(false) is called in pollTask if queued, 
+     // or above if it failed immediately.
   }
 }
 
@@ -127,23 +124,6 @@ function displayImage(src,text){
   addThumb(src);showToast('Masterpiece rendered ✦');
 }
 
-function displayDemo(text){
-  const cv=document.createElement('canvas');cv.width=512;cv.height=512;
-  const ctx=cv.getContext('2d');
-  const palettes={philosophical:['#0a0a18','#1a1040'],zen:['#081210','#0f2820'],cyberpunk:['#0a0018','#200040'],futuristic:['#080c18','#0c1e38'],stoic:['#0e0c0a','#20201a'],melancholic:['#080c14','#0c1828']};
-  const p=palettes[currentStyle]||palettes.philosophical;
-  const g=ctx.createLinearGradient(0,0,512,512);g.addColorStop(0,p[0]);g.addColorStop(1,p[1]);
-  ctx.fillStyle=g;ctx.fillRect(0,0,512,512);
-  ctx.fillStyle='rgba(242,202,80,.06)';ctx.fillRect(0,0,512,512);
-  ctx.strokeStyle='rgba(242,202,80,.15)';ctx.lineWidth=1;ctx.strokeRect(16,16,480,480);
-  ctx.fillStyle='rgba(242,202,80,.6)';ctx.font='italic 18px Newsreader,serif';ctx.textAlign='center';
-  const words=text.split(' ');let lines=[],line='';
-  for(const w of words){const t=line+(line?' ':'')+w;if(ctx.measureText(t).width>420){lines.push(line);line=w}else line=t}
-  lines.push(line);
-  const startY=256-(lines.length*28)/2;
-  lines.forEach((l,i)=>ctx.fillText(l,256,startY+i*28));
-  displayImage(cv.toDataURL(),text);
-}
 
 function addThumb(src){
   const strip=document.getElementById('thumb-strip');

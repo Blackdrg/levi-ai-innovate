@@ -1,9 +1,4 @@
-// Use global API_BASE defined in auth-manager.js
-const API_BASE = window.API_BASE || (
-  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-  ? "http://localhost:8000"
-  : "/api"
-);
+const API_BASE = window.API_BASE;
 
 console.log(`[LEVI] API Base: ${API_BASE}`);
 
@@ -13,12 +8,40 @@ async function getHealth() {
 }
 
 
+async function fetchWithRetry(url, options, retries = 2) {
+  try {
+    const res = await Promise.race([
+      fetch(url, options),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Timeout")), 15000)
+      )
+    ]);
+    
+    if (!res.ok && retries > 0 && res.status >= 500) {
+      console.warn(`[LEVI] Retrying ${url}... (${retries} left)`);
+      return fetchWithRetry(url, options, retries - 1);
+    }
+    return res;
+  } catch (err) {
+    if (retries > 0) {
+      console.warn(`[LEVI] Retrying ${url} after error: ${err.message}... (${retries} left)`);
+      return fetchWithRetry(url, options, retries - 1);
+    }
+    throw err;
+  }
+}
+
 async function apiFetch(endpoint, options = {}) {
   if (window.waitForToken) await window.waitForToken();
   const url = `${API_BASE}${endpoint}`;
+  
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), 15000);
+
   const defaultOptions = {
     headers: { "Content-Type": "application/json" },
-    credentials: 'include'
+    credentials: 'include',
+    signal: controller.signal
   };
 
   const finalOptions = { ...defaultOptions, ...options };
@@ -27,7 +50,9 @@ async function apiFetch(endpoint, options = {}) {
   }
 
   try {
-    const res = await fetch(url, finalOptions);
+    const res = await fetchWithRetry(url, finalOptions);
+    clearTimeout(id);
+
     if (!res.ok) {
       if (res.status === 401) {
         console.warn("[LEVI] Unauthorized - redirecting to auth");
@@ -40,12 +65,6 @@ async function apiFetch(endpoint, options = {}) {
         console.warn("[LEVI] Payment Required - opening pricing");
         if (window.ui && window.ui.showToast) {
           window.ui.showToast("Credits exhausted. Upgrade to continue.", "warning");
-        } else {
-          console.warn("[LEVI] Credits exhausted. Upgrade to continue.");
-          // Fallback alert if ui.js is missing but user interaction is required
-          if (!window.location.pathname.includes('pricing.html')) {
-             alert("Credits exhausted. Redirecting to pricing...");
-          }
         }
         setTimeout(() => {
           window.location.href = 'pricing.html?exhausted=true';
@@ -58,10 +77,13 @@ async function apiFetch(endpoint, options = {}) {
     }
     return await res.json();
   } catch (error) {
+    clearTimeout(id);
     console.error(`[LEVI] Fetch error for ${url}:`, error);
     
-    // Improved Toast notifications for errors
-    const errorMsg = error.message || "Network error";
+    const errorMsg = error.name === 'AbortError' || error.message === 'Timeout' 
+      ? "Request timed out. Please try again." 
+      : (error.message || "Network error");
+      
     if (typeof showToast === 'function') {
       showToast(errorMsg, "error");
     } else if (window.ui && window.ui.showToast) {

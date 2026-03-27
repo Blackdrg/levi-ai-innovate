@@ -9,27 +9,17 @@ db = None
 if not firebase_admin._apps:
     try:
         # Try default initialization first (works on GCP or with GOOGLE_APPLICATION_CREDENTIALS)
-        firebase_admin.initialize_app()
-        print("[Firebase] Initialization successful (Default)")
+        cred = credentials.ApplicationDefault()
+        firebase_admin.initialize_app(cred)
+        print("[Firebase] Initialization successful")
     except Exception as e:
-        try:
-            # Fallback to ApplicationDefault if needed, but usually initialize_app() covers it
-            cred = credentials.ApplicationDefault()
-            firebase_admin.initialize_app(cred)
-            print("[Firebase] Initialization successful (ApplicationDefault)")
-        except Exception as e2:
-            print(f"[Firebase] Initialization failed: {e2}")
-            print("[Firebase] Running in degraded mode without Firestore")
-            # We don't raise here so the server can at least start for verification
-            # of non-Firebase components (though most need it)
-            db = None
+        raise RuntimeError(f"Firebase init failed: {e}")
 
 if firebase_admin._apps and not db:
     try:
         db = firestore.client()
     except Exception as e:
-        print(f"[Firebase] Firestore client init failed: {e}")
-        db = None
+        raise RuntimeError(f"Firestore client init failed: {e}")
 
 def get_firestore_db():
     return db

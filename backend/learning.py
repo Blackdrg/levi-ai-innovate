@@ -11,11 +11,25 @@ import logging
 import hashlib
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any, Tuple
-from backend.firestore_db import db as firestore_db  # type: ignore
-from backend.embeddings import embed_text, HAS_MODEL  # type: ignore
-from backend.redis_client import (  # type: ignore
-    get_cached_user_memory, cache_user_memory, invalidate_user_memory
-)
+try:
+    from backend.firestore_db import db as firestore_db  # type: ignore
+except ImportError:
+    firestore_db = None
+
+try:
+    from backend.embeddings import embed_text, HAS_MODEL  # type: ignore
+except ImportError:
+    embed_text = lambda x: []
+    HAS_MODEL = False
+
+try:
+    from backend.redis_client import (  # type: ignore
+        get_cached_user_memory, cache_user_memory, invalidate_user_memory
+    )
+except ImportError:
+    def get_cached_user_memory(x): return None
+    def cache_user_memory(x, y): pass
+    def invalidate_user_memory(x): pass
 
 logger = logging.getLogger(__name__)
 

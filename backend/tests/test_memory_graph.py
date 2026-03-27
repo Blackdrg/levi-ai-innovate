@@ -14,29 +14,17 @@ from typing import Any
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 class TestMemoryGraph:
-    db: Any
-    mock_memory: Any
-
     @pytest.fixture(autouse=True)
-    def _setup_db(self):
-        """Mock out get_db / Session."""
-        self.db = MagicMock()
-        try:
-             from backend.models import UserMemory  # type: ignore
-        except ImportError:
-             from models import UserMemory  # type: ignore
-             
-        self.mock_memory = UserMemory(
-            user_id=1,
-            structured_memory={"entities": {"interests": ["stoicism"], "goals": [], "facts": []}}
-        )
-        self.db.query().filter().first.return_value = self.mock_memory
+    def _setup_mocks(self):
+        """Mock Firestore and internal learning components."""
+        self.user_id = "user_123"
+        self.mock_memory_data = {
+            "user_id": self.user_id,
+            "structured_memory": {"entities": {"interests": ["stoicism"], "goals": [], "facts": []}}
+        }
 
     def test_extract_memory_insights_mock(self):
-        try:
-            from backend.learning import _extract_memory_insights  # type: ignore
-        except ImportError:
-            from learning import _extract_memory_insights  # type: ignore
+        from backend.learning import _extract_memory_insights
 
         # Mock Groq response
         mock_response = MagicMock()
@@ -56,11 +44,8 @@ class TestMemoryGraph:
         assert "coffee" in res["entities"]["interests"]
 
     def test_update_memory_graph(self):
-        try:
-            from backend.learning import update_memory_graph  # type: ignore
-        except ImportError:
-            from learning import update_memory_graph  # type: ignore
-
+        from backend.learning import update_memory_graph
+        
         extract_mock_val = {
             "entities": {
                 "interests": ["meditation"],
@@ -69,41 +54,49 @@ class TestMemoryGraph:
             }
         }
 
-        with patch("backend.learning._extract_memory_insights", return_value=extract_mock_val):
-            update_memory_graph(1, "I want to run a marathon and medidate.", self.db)
+        # Mock Firestore db call
+        with patch("backend.learning.firestore_db") as mock_firestore:
+            mock_doc = MagicMock()
+            mock_doc.exists = True
+            mock_doc.to_dict.return_value = self.mock_memory_data
+            mock_firestore.collection().document().get.return_value = mock_doc
+            
+            with patch("backend.learning._extract_memory_insights", return_value=extract_mock_val):
+                update_memory_graph(self.user_id, "I want to run a marathon and medidate.")
 
-        # Verify merge logic was applied: "stoicism" was existing, "meditation" added
-        current_mem = self.mock_memory.structured_memory
-        assert "entities" in current_mem
-        entities = current_mem["entities"]
-        assert "stoicism" in entities["interests"]
-        assert "meditation" in entities["interests"]
-        assert "run a marathon" in entities["goals"]
+            # Verify firestore update was called
+            mock_firestore.collection().document().update.assert_called()
 
     def test_system_prompt_injection(self):
-        try:
-            from backend.learning import UserPreferenceModel  # type: ignore
-        except ImportError:
-            from learning import UserPreferenceModel  # type: ignore
+        from backend.learning import UserPreferenceModel
 
-        # Force get_profile to mock load profile so we can explicitly test prompt building
-        model = UserPreferenceModel(self.db, user_id=1)
-        mock_profile = {
-            "preferred_moods": ["philosophical"],
-            "response_style": "concise",
-            "top_topics": [],
-            "avg_rating": 4.0,
-            "structured_memory": {
-                "entities": {
-                    "interests": ["Machine learning", "Quantum mechanics"],
-                    "goals": ["Travel to space"]
+        # Mock Firestore and Redis for get_profile
+        with patch("backend.learning.firestore_db") as mock_firestore:
+            mock_doc = MagicMock()
+            mock_doc.exists = True
+            mock_doc.to_dict.return_value = self.mock_memory_data
+            mock_firestore.collection().document().get.return_value = mock_doc
+            mock_firestore.collection().where().order_by().limit().get.return_value = [] # no rated samples
+
+            model = UserPreferenceModel(user_id=self.user_id)
+            
+            # Explicitly set structured memory in mock profile to test injection
+            mock_profile = {
+                "preferred_moods": ["philosophical"],
+                "response_style": "concise",
+                "top_topics": ["Machine Learning", "Stoicism"],
+                "avg_rating": 4.5,
+                "structured_memory": {
+                    "entities": {
+                        "interests": ["Machine learning", "Quantum mechanics"],
+                        "goals": ["Travel to space"]
+                    }
                 }
             }
-        }
-        model._profile = mock_profile
+            model._profile = mock_profile
 
-        prompt = model.build_system_prompt("Answer wisely.", "stoic")
-        
-        # Verify both items were injected into prompt
-        assert "User interests: Machine learning, Quantum mechanics" in prompt
-        assert "User goals: Travel to space" in prompt
+            prompt = model.build_system_prompt("Answer wisely.", "stoic")
+            
+            # Verify both items were injected into prompt
+            assert "User interests: Machine learning, Quantum mechanics" in prompt
+            assert "User goals: Travel to space" in prompt

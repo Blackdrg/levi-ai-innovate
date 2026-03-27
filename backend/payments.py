@@ -74,7 +74,11 @@ def verify_razorpay_signature(order_id: str, payment_id: str, signature: str) ->
         return False
     msg = f"{order_id}|{payment_id}"
     secret_bytes = RAZORPAY_KEY_SECRET.encode()
-    expected = hmac.new(secret_bytes, msg.encode(), hashlib.sha256).hexdigest()
+    expected = hmac.new(
+        secret_bytes, 
+        msg.encode() if isinstance(msg, str) else msg, 
+        digestmod=hashlib.sha256
+    ).hexdigest()
     return hmac.compare_digest(expected, signature)
 
 def upgrade_user_tier(user_id: str, plan: str):
