@@ -143,8 +143,20 @@ def validate_env():
         try:
             if not os.path.exists(_fs_secret):
                 json.loads(_fs_secret)
+            # AI API KEY CHECKS (Fail-Fast)
+            critical_keys = [
+                "GROQ_API_KEY",
+                "TOGETHER_API_KEY",
+                "FIREBASE_SERVICE_ACCOUNT_JSON"
+            ]
+            missing = [k for k in critical_keys if not os.getenv(k)]
+            if missing:
+                error_msg = f"CRITICAL: Missing required environment variables: {', '.join(missing)}"
+                logger.critical(error_msg)
+                raise RuntimeError(error_msg)
+                
         except Exception as e:
-            error_msg = f"FIREBASE_SERVICE_ACCOUNT_JSON is invalid: {e}"
+            error_msg = f"Initialization failed: {e}"
             logger.critical(error_msg)
             raise RuntimeError(error_msg)
 
@@ -192,6 +204,27 @@ async def db_session_check(request: Request, call_next):
     response = await call_next(request)
     return response
 
+# ─────────────────────────────────────────────
+# ANTI-CRASH: Rate Limiting (In-Memory Fallback)
+# ─────────────────────────────────────────────
+user_requests = {}
+RATE_LIMIT = 5   # requests
+WINDOW = 60      # seconds
+
+def is_rate_limited(user_id: str) -> bool:
+    """Check if a user is exceeding the rate limit."""
+    if not user_id: return False
+    now = time.time()
+    user_requests.setdefault(user_id, [])
+    # Remove old requests
+    user_requests[user_id] = [t for t in user_requests[user_id] if now - t < WINDOW]
+    if len(user_requests[user_id]) >= RATE_LIMIT:
+        return True
+    user_requests[user_id].append(now)
+    return False
+
+# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────
 # Health check endpoint combined below (line 576)
 
 import numpy as np  # type: ignore
@@ -1027,7 +1060,11 @@ async def gen_image(
         user_id = current_user.get("uid") if current_user else None
         user_tier = current_user.get("tier", "free") if current_user else "free"
         
-        # Concurrency Guard: Check for existing active jobs for this user
+        # 3. Rate Limiting (Anti-Crash)
+        if user_id and is_rate_limited(user_id):
+            raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again in a minute.")
+
+        # 1. Studio Concurrency Guard
         if user_id:
             active_jobs = firestore_db.collection("jobs") \
                 .where("user_id", "==", user_id) \
@@ -1085,7 +1122,11 @@ async def gen_video(
         user_id = current_user.get("uid") if current_user else None
         user_tier = current_user.get("tier", "free") if current_user else "free"
 
-        # Concurrency Guard: Check for existing active jobs for this user
+        # 3. Rate Limiting (Anti-Crash)
+        if user_id and is_rate_limited(user_id):
+            raise HTTPException(status_code=429, detail="Too many video requests. Please wait.")
+
+        # 1. Studio Concurrency Guard
         if user_id:
             active_jobs = firestore_db.collection("jobs") \
                 .where("user_id", "==", user_id) \

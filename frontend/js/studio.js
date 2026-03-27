@@ -4,6 +4,27 @@ let currentStyle='philosophical';let currentImage=null;
 let isGenerating = false;
 const insights={philosophical:{text:'prioritize ethereal lighting, high-contrast obsidian shadows, and golden particle dispersion.',stability:67},zen:{text:'evoke bamboo mist, still water reflections, and morning light through ancient forests.',stability:82},cyberpunk:{text:'generate neon-soaked cityscapes, rain-slicked streets, and holographic overlays.',stability:74},futuristic:{text:'render clean white surfaces, cosmic voids, and geometric precision with bioluminescent accents.',stability:91},stoic:{text:'depict marble columns, dawn light, classical architecture — austere and powerful.',stability:88},melancholic:{text:'create rain-washed cobblestones, blue hour, soft bokeh with poetic melancholy.',stability:79}};
 
+// 2. Robust Retry + Timeout Utility
+async function fetchWithRetry(url, options, retries = 2, timeout = 25000) {
+  for (let i = 0; i <= retries; i++) {
+    try {
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), timeout);
+      const res = await fetch(url, { ...options, signal: controller.signal });
+      clearTimeout(id);
+      if (!res.ok) {
+        if (res.status === 429) throw new Error("Too many requests. Please wait.");
+        throw new Error("API error: " + res.status);
+      }
+      return await res.json();
+    } catch (err) {
+      if (i === retries) throw err;
+      console.warn(`[LEVI] Retry ${i+1}/${retries} for ${url}`);
+      await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+    }
+  }
+}
+
 function updateChar(el){const n=el.value.length;document.getElementById('char-count').textContent=n;const cc=document.getElementById('char-count');cc.style.color=n>260?'#f87171':n>200?'#f2ca50':''}
 
 function setStyle(btn,style){
@@ -28,22 +49,25 @@ function prefill(text,author,style){
 window.prefill=prefill;
 
 async function synthesize(){
-  if (isGenerating) return;
+  if (isGenerating) {
+    showToast("Synthesis in progress...", "warning");
+    return;
+  }
   const text=document.getElementById('wisdom-input').value.trim();
   if(!text){showToast('Enter some wisdom first','error');return}
+  
   setLoading(true);
   try{
     await window.waitForToken();
     const body={text,author:document.getElementById('author-input').value||'LEVI AI',mood:currentStyle,background:document.getElementById('bg-input').value};
-    const r=await fetch(`${window.API_BASE}/generate_image`,{method:'POST',body:JSON.stringify(body),headers:{'Content-Type':'application/json'}});
     
-    const d=await r.json();
-    if(!r.ok){
-      showToast(d.error || "Generation failed", "error");
-      setLoading(false);
-      return;
-    }
-
+    // Using Retry Utility
+    const d = await fetchWithRetry(`${window.API_BASE}/generate_image`, {
+      method:'POST',
+      body:JSON.stringify(body),
+      headers:{'Content-Type':'application/json'}
+    });
+    
     if (d.status === 'queued') {
       showToast("Synthesis started...", "info");
       pollTask(d.task_id, text);
@@ -178,8 +202,14 @@ async function makeVideo(){
   showToast('Video generation queued...', 'info');
   try {
     const body={text,author:document.getElementById('author-input').value||'LEVI AI',mood:currentStyle};
-    const r=await fetch(`${window.API_BASE}/generate_video`,{method:'POST',body:JSON.stringify(body),headers:{'Content-Type':'application/json'}});
-    const d=await r.json();
+    
+    // Using Retry Utility
+    const d = await fetchWithRetry(`${window.API_BASE}/generate_video`, {
+      method:'POST',
+      body:JSON.stringify(body),
+      headers:{'Content-Type':'application/json'}
+    });
+    
     if(d.status === 'queued') {
         showToast('Video synthesis in progress...', 'info');
     } else if (d.status === 'completed' || d.url || d.image_b64) {
@@ -187,7 +217,8 @@ async function makeVideo(){
         displayImage(d.url || d.image_b64, text);
     }
   } catch(e) {
-      showToast('Video request failed', 'error');
+      console.error("Video request failed:", e);
+      showToast('Video request failed: ' + e.message, 'error');
   } finally {
       if (!currentImage) setLoading(false);
   }
