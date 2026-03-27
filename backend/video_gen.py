@@ -18,7 +18,17 @@ import random
 from io import BytesIO
 from typing import Optional, Any, List, Tuple
 
+import requests # type: ignore
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type # type: ignore
+
 logger = logging.getLogger(__name__)
+
+try:
+    from backend.circuit_breaker import groq_breaker # type: ignore
+except ImportError:
+    class MockBreaker:
+        def call(self, f, *a, **k): return f(*a, **k)
+    groq_breaker = MockBreaker()
 
 # ── Dependency Availability Checks ──
 HAS_MOVIEPY = False
@@ -63,11 +73,15 @@ except ImportError:
 # SCRIPT GENERATION (Groq-powered)
 # ─────────────────────────────────────────────
 
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception_type((requests.exceptions.RequestException, Exception)),
+    reraise=True
+)
 def generate_narration_script(quote: str, author: str, mood: str,
                                style: str = "reflective") -> str:
-    """Generate a rich narration script using Groq."""
-    import requests  # type: ignore
-
+    """Generate a rich narration script using Groq with retries."""
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
         return f'"{quote}" — {author}'
@@ -82,7 +96,8 @@ def generate_narration_script(quote: str, author: str, mood: str,
     style_instruction = script_styles.get(style, script_styles["reflective"])
 
     try:
-        resp = requests.post(
+        resp = groq_breaker.call(
+            requests.post,
             "https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
             json={
@@ -105,7 +120,7 @@ def generate_narration_script(quote: str, author: str, mood: str,
                 "max_tokens": 100,
                 "temperature": 0.75,
             },
-            timeout=8
+            timeout=20
         )
         if resp.status_code == 200:
             return resp.json()["choices"][0]["message"]["content"].strip()

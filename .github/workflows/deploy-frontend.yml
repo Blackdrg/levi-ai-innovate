@@ -34,6 +34,13 @@ jobs:
 
       - name: Verify Frontend Status
         run: |
-          echo "Verifying Hosting..."
-          curl -f https://levi-ai-c23c6.web.app || (echo "Frontend verify FAILED" && exit 1)
-          echo "Frontend is online! ✅"
+          echo "Verifying Hosting at https://levi-ai-c23c6.web.app ..."
+          # Max retries: 5, Wait: 5s
+          for i in {1..5}; do
+            echo "Attempt $i..."
+            curl -f https://levi-ai-c23c6.web.app && exit 0
+            echo "Frontend check failed, retrying in 5 seconds..."
+            sleep 5
+          done
+          echo "Frontend verification FAILED"
+          exit 1

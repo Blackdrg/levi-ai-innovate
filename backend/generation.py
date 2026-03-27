@@ -222,9 +222,9 @@ def _build_dynamic_system_prompt(persona: Dict, user_memory: Any = None,
 
 @retry(
     stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=2, max=8),
-    retry=retry_if_exception_type((requests.exceptions.RequestException,)),
-    reraise=False
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception_type((requests.exceptions.RequestException, Exception)),
+    reraise=True # Let the caller handle it or fall back
 )
 def _call_groq_api(messages: List[Dict], temperature: float = 0.85,
                    max_tokens: int = 300, model: str = "llama-3.1-8b-instant") -> Optional[str]:
@@ -233,7 +233,16 @@ def _call_groq_api(messages: List[Dict], temperature: float = 0.85,
     if not api_key:
         return None
     try:
-        resp = requests.post(
+        # Use circuit breaker if available
+        try:
+            from backend.circuit_breaker import groq_breaker # type: ignore
+        except ImportError:
+            class MockBreaker:
+                def call(self, f, *a, **k): return f(*a, **k)
+            groq_breaker = MockBreaker()
+
+        resp = groq_breaker.call(
+            requests.post,
             "https://api.groq.com/openai/v1/chat/completions",
             headers={
                 "Authorization": f"Bearer {api_key}",
@@ -245,17 +254,18 @@ def _call_groq_api(messages: List[Dict], temperature: float = 0.85,
                 "max_tokens": max_tokens,
                 "temperature": temperature,
                 "top_p": 0.95,
-                "frequency_penalty": 0.4,  # Reduces repetition
-                "presence_penalty": 0.3,   # Encourages new topics
+                "frequency_penalty": 0.4,
+                "presence_penalty": 0.3,
             },
-            timeout=10
+            timeout=20 # Standardized timeout
         )
         if resp.status_code == 429:
+            logger.warning(f"Groq rate limit hit for model {model}")
             raise requests.exceptions.RequestException("Rate limited")
         resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"].strip()
     except Exception as e:
-        logger.error(f"Groq API error: {e}")
+        logger.error(f"Groq API error (Model: {model}): {e}")
         raise
 
 

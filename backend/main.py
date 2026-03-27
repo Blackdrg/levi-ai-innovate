@@ -102,7 +102,8 @@ REQUIRED_ENV_VARS = [
     "RAZORPAY_WEBHOOK_SECRET",
     "ADMIN_KEY",
     "FIREBASE_PROJECT_ID",
-    "FIREBASE_MESSAGING_SENDER_ID"
+    "FIREBASE_MESSAGING_SENDER_ID",
+    "FIREBASE_SERVICE_ACCOUNT_JSON"
 ]
 
 def validate_env():
@@ -126,6 +127,17 @@ def validate_env():
             "SECRET_KEY must be at least 32 bytes. "
             "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
         )
+
+    # ── Firebase Secret Validation ──────────
+    # Ensure it's not just present, but valid JSON (if string) or existing file path
+    _fs_secret = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON", "")
+    if is_prod and _fs_secret:
+        import json
+        try:
+            if not os.path.exists(_fs_secret):
+                json.loads(_fs_secret)
+        except Exception as e:
+            raise RuntimeError(f"FIREBASE_SERVICE_ACCOUNT_JSON is present but invalid: {e}")
 
 validate_env()
 # ────────────────────────────# ─────────────────────────────────
@@ -171,28 +183,7 @@ async def db_session_check(request: Request, call_next):
     response = await call_next(request)
     return response
 
-@app.get("/health")
-async def health():
-    """Detailed health check for CI/CD and monitoring."""
-    health_status = {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
-    try:
-        # Check Firestore
-        start = time.time()
-        firestore_db.collection("health").document("ping").get(timeout=2.0)
-        health_status["firestore"] = {"latency": f"{time.time() - start:.3f}s", "status": "connected"}
-        
-        # Check Redis (Optional)
-        if HAS_REDIS:
-            from backend.redis_client import redis_client
-            redis_client.ping()
-            health_status["redis"] = "connected"
-            
-    except Exception as e:
-        health_status["status"] = "unhealthy"
-        health_status["error"] = str(e)
-        return JSONResponse(status_code=503, content=health_status)
-        
-    return health_status
+# Health check endpoint combined below (line 576)
 
 import numpy as np  # type: ignore
 import hashlib
@@ -203,9 +194,162 @@ from sqlalchemy import func  # type: ignore
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
-from backend.firestore_db import db as firestore_db, get_document, set_document, query_documents, add_document # type: ignore
+from backend.firestore_db import db as firestore_db, get_document, set_document, query_documents, add_document, update_document # type: ignore
 
-_executor = ThreadPoolExecutor(max_workers=4)
+from fastapi import BackgroundTasks # type: ignore
+
+_executor = ThreadPoolExecutor(max_workers=8) # Increased for better concurrency
+
+# ─────────────────────────────────────────────
+# Studio Background Task Handler
+# ─────────────────────────────────────────────
+
+# Concurrency limits for AI generation to prevent overloading or rate limits
+_image_semaphore = asyncio.Semaphore(3)
+_video_semaphore = asyncio.Semaphore(1)
+
+@retry(
+    stop=stop_after_attempt(2),
+    wait=wait_exponential(multiplier=1, min=4, max=20),
+    retry=retry_if_exception_type(Exception),
+    reraise=False
+)
+async def _execute_gen_task(task_type: str, params: dict, user_id: str, user_tier: str):
+    """Internal helper to execute generation with thread executor."""
+    loop = asyncio.get_event_loop()
+    if task_type == "image":
+        async with _image_semaphore:
+            return await loop.run_in_executor(
+                _executor,
+                lambda: generate_quote_image(
+                    params["text"],
+                    author=params.get("author", "Unknown"),
+                    mood=params.get("mood", "neutral"),
+                    custom_bg=params.get("custom_bg", ""),
+                    user_tier=user_tier,
+                    user_id=user_id,
+                    upload_to_s3=bool(os.getenv("AWS_S3_BUCKET"))
+                )
+            )
+    elif task_type == "video":
+        async with _video_semaphore:
+            return await loop.run_in_executor(
+                _executor,
+                lambda: generate_quote_video(
+                    params["text"],
+                    params.get("author", "Unknown"),
+                    params.get("mood", "neutral"),
+                    user_tier
+                )
+            )
+    return {"success": False, "warnings": ["Invalid task type"]}
+
+def _increment_analytics(field: str, amount: int = 1):
+    """Atomic daily analytics increment using transaction."""
+    try:
+        from google.cloud import firestore # type: ignore
+        today_str = date.today().isoformat()
+        analytics_ref = firestore_db.collection("analytics").document(today_str)
+
+        @firestore.transactional
+        def update_in_transaction(transaction, analytics_ref):
+            snapshot = analytics_ref.get(transaction=transaction)
+            if snapshot.exists:
+                transaction.update(analytics_ref, {field: firestore.Increment(amount)})
+            else:
+                initial_data = {
+                    "date": today_str,
+                    "chats_count": 0,
+                    "likes_count": 0,
+                    "shares_count": 0,
+                    "daily_users": 0,
+                    "generations_count": 0
+                }
+                initial_data[field] = amount
+                transaction.set(analytics_ref, initial_data)
+
+        update_in_transaction(firestore_db.transaction(), analytics_ref)
+    except Exception as e:
+        logger.warning(f"Analytics update failed for {field}: {e}")
+
+
+async def run_studio_task(job_id: str, task_type: str, params: dict, user_id: Optional[str], user_tier: str):
+    """Background worker for image/video generation with reliability and concurrency control."""
+    try:
+        # Update analytics
+        _increment_analytics("generations_count")
+        
+        # 1. Update status to processing
+        update_document("jobs", job_id, {
+            "status": "processing", 
+            "started_at": datetime.utcnow(),
+            "attempts": firestore.Increment(1) if 'firestore' in globals() else 1
+        })
+        
+        # Execute with internal retry and semaphore
+        gen_result = await _execute_gen_task(task_type, params, user_id or "anon", user_tier)
+
+        # 2. Check result
+        if gen_result and gen_result.get("success"):
+            img_data = gen_result.get("data")
+            result_payload = {
+                "status": "completed",
+                "completed_at": datetime.utcnow(),
+                "engine": gen_result.get("engine"),
+                "warnings": gen_result.get("warnings", [])
+            }
+            
+            # Handle result data (URL or B64)
+            if isinstance(img_data, str) and (img_data.startswith("http") or img_data.startswith("data:")):
+                 result_payload["url"] = img_data
+            elif hasattr(img_data, "getvalue"):
+                 # If S3 failed or not configured, fall back to B64 in the job doc (limited)
+                 import base64
+                 result_payload["image_b64"] = "data:image/png;base64," + base64.b64encode(img_data.getvalue()).decode()
+            
+            # 3. Add to Feed automatically if successful
+            try:
+                feed_item = {
+                    "user_id": user_id,
+                    "text": params["text"],
+                    "author": params.get("author", "Unknown"),
+                    "mood": params.get("mood", "neutral"),
+                    "image_url": result_payload.get("url") if task_type == "image" else None,
+                    "video_url": result_payload.get("url") if task_type == "video" else None,
+                    "image_b64": result_payload.get("image_b64") if not result_payload.get("url") else None,
+                    "likes": 0,
+                    "timestamp": datetime.utcnow(),
+                    "job_id": job_id
+                }
+                add_document("feed_items", feed_item)
+            except Exception as fe:
+                logger.warning(f"Failed to add task result to feed: {fe}")
+
+            update_document("jobs", job_id, result_payload)
+            logger.info(f"Studio Task {job_id} [{task_type}] completed successfully.")
+        else:
+            error_msg = "Generation returned no result"
+            if gen_result and gen_result.get("warnings"):
+                error_msg = gen_result.get("warnings")[0]
+            
+            update_document("jobs", job_id, {
+                "status": "failed", 
+                "error": error_msg, 
+                "completed_at": datetime.utcnow()
+            })
+            logger.error(f"Studio Task {job_id} failed: {error_msg}")
+
+    except Exception as e:
+        import traceback
+        full_error = traceback.format_exc()
+        logger.error(f"Background generation error (Job ID: {job_id}): {e}\n{full_error}")
+        update_document("jobs", job_id, {
+            "status": "failed", 
+            "error": str(e), 
+            "error_detail": full_error if not is_prod else "Hidden in production",
+            "completed_at": datetime.utcnow()
+        })
+
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "fallback")
 CLIENT_KEY = os.getenv("CLIENT_KEY")
@@ -381,12 +525,12 @@ async def global_exception_handler(request: Request, exc: Exception):
     return await standardized_error_handler(request, exc)
 
 class Query(BaseModel):
-    text: str = Field(..., max_length=500)
-    author: Optional[str] = Field(None, max_length=100)
-    mood: Optional[str] = Field(None, max_length=50)
+    text: str = Field(..., min_length=5, max_length=500)
+    author: Optional[str] = Field("Unknown", max_length=100)
+    mood: Optional[str] = Field("neutral", max_length=50)
     topic: Optional[str] = Field(None, max_length=50)
     lang: Optional[str] = Field("en", max_length=10)
-    custom_bg: Optional[str] = None
+    custom_bg: Optional[str] = Field(None)
     top_k: int = Field(5, ge=1, le=20)
 
     @field_validator("text", "author", "mood", "topic")
@@ -576,25 +720,32 @@ def root():
 @app.get("/health")
 async def health():
     """
-    Enhanced health check with dependency verification.
+    Robust health check for CI/CD and monitoring.
+    Verifies Firestore and Redis connectivity.
     """
-    status_info: dict = {
+    status_info = {
         "status": "ok",
         "timestamp": datetime.utcnow().isoformat(),
+        "version": os.getenv("GITHUB_SHA", "local")[:7],
         "dependencies": {
-            "firestore": "unhealthy",
-            "redis": "unhealthy" if HAS_REDIS else "unavailable"
+            "firestore": "checking...",
+            "redis": "checking..." if HAS_REDIS else "unavailable"
         }
     }
     
+    overall_status = "ok"
+    
     # Check Firestore
     try:
-        # Simple read to check connectivity
-        firestore_db.collection("health_check").document("status").get()
-        status_info["dependencies"]["firestore"] = "healthy"
+        start = time.time()
+        # Ping the health_check collection
+        firestore_db.collection("health_check").document("status").get(timeout=3.0)
+        latency = (time.time() - start) * 1000
+        status_info["dependencies"]["firestore"] = f"healthy ({latency:.1f}ms)"
     except Exception as e:
         logger.error(f"Health Check: Firestore unreachable: {e}")
-        status_info["status"] = "error"
+        status_info["dependencies"]["firestore"] = f"unhealthy: {str(e)}"
+        overall_status = "error"
 
     # Check Redis
     if HAS_REDIS:
@@ -603,13 +754,16 @@ async def health():
             if r and r.ping():
                 status_info["dependencies"]["redis"] = "healthy"
             else:
-                status_info["status"] = "error"
+                status_info["dependencies"]["redis"] = "down"
+                overall_status = "error"
         except Exception as e:
             logger.error(f"Health Check: Redis unreachable: {e}")
-            status_info["status"] = "error"
-            status_info["dependencies"]["redis"] = "unhealthy"
+            status_info["dependencies"]["redis"] = f"error: {str(e)}"
+            overall_status = "error"
 
-    if status_info["status"] != "ok":
+    status_info["status"] = overall_status
+    
+    if overall_status != "ok":
         return JSONResponse(status_code=503, content=status_info)
         
     return status_info
@@ -809,7 +963,12 @@ async def list_image_styles():
 
 @app.post("/generate_image")
 @limiter.limit("5/minute")
-async def gen_image(request: Request, req: Query, current_user: Optional[dict] = Depends(get_current_user_optional)):
+async def gen_image(
+    request: Request, 
+    req: Query, 
+    background_tasks: BackgroundTasks,
+    current_user: Optional[dict] = Depends(get_current_user_optional)
+):
     try:
         from backend.redis_client import get_daily_ai_spend, incr_daily_ai_spend  # type: ignore
         daily_limit = float(os.getenv("DAILY_AI_LIMIT", "500"))
@@ -820,62 +979,35 @@ async def gen_image(request: Request, req: Query, current_user: Optional[dict] =
         user_id = current_user.get("uid") if current_user else None
         user_tier = current_user.get("tier", "free") if current_user else "free"
         
-        if USE_CELERY:
-            from backend.tasks import generate_image_task # type: ignore
-            task = generate_image_task.delay(
-                quote=req.text,
-                author=req.author or "Unknown",
-                mood=req.mood or "neutral",
-                user_id=user_id,
-                user_tier=user_tier
-            )
-            return {"status": "queued", "task_id": task.id}
-        
-        # Legacy synchronous fallback if Celery fails to load (optional)
-        loop = asyncio.get_event_loop()
-        gen_result = await loop.run_in_executor(
-            _executor,
-            lambda: generate_quote_image(
-                req.text,
-                author=req.author or "Unknown",
-                mood=req.mood or "neutral",
-                custom_bg=req.custom_bg or "",
-                user_tier=user_tier
-            ),
-        )
-        
-        # gen_result is now a dict: {"data": ..., "engine": ..., "success": ..., "warnings": ...}
-        img_data = gen_result.get("data")
-        engine_used = gen_result.get("engine")
-        warnings = gen_result.get("warnings", [])
-        
-        if isinstance(img_data, dict):
-            image_url = img_data.get("url")
-            bio_obj = img_data.get("bio")
-            img_bytes = bio_obj.getvalue() if bio_obj else b""
-        elif hasattr(img_data, "getvalue"):
-            img_bytes = img_data.getvalue()
-            image_url = None
-        else:
-            img_bytes = b""
-            image_url = None
-
-        response_data = {
-            "status": "completed" if gen_result.get("success") else "failed",
-            "engine": engine_used,
-            "warnings": warnings
+        # Always use Async Job Pattern for better reliability
+        job_id = f"job_{uuid.uuid4().hex[:12]}"
+        job_data = {
+            "job_id": job_id,
+            "type": "image",
+            "status": "queued",
+            "user_id": user_id,
+            "params": {"text": req.text, "mood": req.mood, "style": req.mood}, # reusing mood as style if style not in Query
+            "created_at": datetime.utcnow()
         }
+        add_document("jobs", job_data)
+        
+        background_tasks.add_task(
+            run_studio_task, 
+            job_id=job_id, 
+            task_type="image", 
+            params={"text": req.text, "mood": req.mood, "author": req.author, "custom_bg": req.custom_bg},
+            user_id=user_id,
+            user_tier=user_tier
+        )
 
-        if image_url:
-            response_data["url"] = image_url
-        elif img_bytes:
-            import base64
-            response_data["image_b64"] = "data:image/png;base64," + base64.b64encode(img_bytes).decode()
-            
-        if not response_data.get("url") and not response_data.get("image_b64"):
-             return {"status": "failed", "error": "Image generation produced no valid data.", "warnings": warnings}
+        return {"status": "queued", "job_id": job_id, "message": "Image generation started."}
 
-        return response_data
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Image generation request error: {e}")
+        raise HTTPException(status_code=500, detail={"error": str(e), "status": "failed"})
+
 
     except HTTPException:
         raise
@@ -887,7 +1019,12 @@ async def gen_image(request: Request, req: Query, current_user: Optional[dict] =
 
 @app.post("/generate_video")
 @limiter.limit("2/minute")
-async def gen_video(request: Request, req: Query, current_user: Optional[dict] = Depends(get_current_user_optional)):
+async def gen_video(
+    request: Request, 
+    req: Query, 
+    background_tasks: BackgroundTasks,
+    current_user: Optional[dict] = Depends(get_current_user_optional)
+):
     """Generate or queue video generation for a quote."""
     try:
         from backend.redis_client import get_daily_ai_spend, incr_daily_ai_spend  # type: ignore
@@ -899,70 +1036,34 @@ async def gen_video(request: Request, req: Query, current_user: Optional[dict] =
         user_id = current_user.get("uid") if current_user else None
         user_tier = current_user.get("tier", "free") if current_user else "free"
 
-        if USE_CELERY:
-            from backend.tasks import generate_video_task # type: ignore
-            task = generate_video_task.delay(
-                quote=req.text,
-                author=req.author or "Unknown",
-                mood=req.mood or "neutral",
-                user_id=user_id,
-                user_tier=user_tier
-            )
-            return {"status": "queued", "task_id": task.id}
-
-        # Legacy synchronous fallback
-        loop = asyncio.get_event_loop()
-        video_result = await loop.run_in_executor(
-            _executor,
-            lambda: generate_quote_video(
-                req.text,
-                req.author or "Unknown",
-                req.mood or "neutral",
-                user_tier
-            ),
-        )
+        # Async Job Pattern
+        job_id = f"vjob_{uuid.uuid4().hex[:12]}"
+        job_data = {
+            "job_id": job_id,
+            "type": "video",
+            "status": "queued",
+            "user_id": user_id,
+            "params": {"text": req.text, "mood": req.mood},
+            "created_at": datetime.utcnow()
+        }
+        add_document("jobs", job_data)
         
-        # video_result is now a dict: {"data": ..., "engine": ..., "success": ..., "warnings": ...}
-        video_data_io = video_result.get("data")
-        warnings = video_result.get("warnings", [])
+        background_tasks.add_task(
+            run_studio_task, 
+            job_id=job_id, 
+            task_type="video", 
+            params={"text": req.text, "mood": req.mood, "author": req.author},
+            user_id=user_id,
+            user_tier=user_tier
+        )
 
-        if not video_result.get("success") or not video_data_io:
-             logger.warning(f"Video generation failed, falling back to image. Warnings: {warnings}")
-             img_fallback = await gen_image(request, req, current_user)
-             if isinstance(img_fallback, dict):
-                 img_fallback["warnings"] = warnings + img_fallback.get("warnings", [])
-                 img_fallback["fallback_from"] = "video"
-             return img_fallback
-
-        # Upload to s3 if available
-        if os.getenv("AWS_S3_BUCKET"):
-             from backend.tasks import upload_video_to_s3 # type: ignore
-             video_url = upload_video_to_s3(video_data_io.getvalue(), user_id)
-             return {
-                 "status": "completed", 
-                 "url": video_url, 
-                 "engine": video_result.get("engine"),
-                 "warnings": warnings
-             }
-        else:
-             # Fallback if S3 not configured but local gen worked - return base64 or error
-             # For video, base64 is heavy, but let's at least try if it's small or just error
-             raise HTTPException(status_code=400, detail="Cloud storage (S3) required for video results.")
+        return {"status": "queued", "job_id": job_id, "message": "Video synthesis started."}
 
     except HTTPException:
         raise
     except Exception as e:
-        import traceback
-        logger.warning(f"Video generation failed with exception, falling back to image: {e}")
-        try:
-             img_fallback = await gen_image(request, req, current_user)
-             if isinstance(img_fallback, dict):
-                 img_fallback["warnings"] = [str(e)] + img_fallback.get("warnings", [])
-                 img_fallback["fallback_from"] = "video_exception"
-             return img_fallback
-        except Exception as e2:
-             logger.error(f"Fallback image generation also failed: {e2}\n{traceback.format_exc()}")
-             raise HTTPException(status_code=500, detail=f"Generation failed: {str(e)}")
+        logger.error(f"Video generation request error: {e}")
+        raise HTTPException(status_code=500, detail={"error": str(e), "status": "failed"})
 
 
 
@@ -986,15 +1087,8 @@ async def like_item(item_type: str, item_id: str):
         from google.cloud import firestore # type: ignore
         item_ref.update({"likes": firestore.Increment(1)})
         
-        # Update analytics
-        today_str = date.today().isoformat()
-        analytics_ref = firestore_db.collection("analytics").document(today_str)
-        analytics_doc = analytics_ref.get()
-        
-        if analytics_doc.exists:
-            analytics_ref.update({"likes_count": firestore.Increment(1)})
-        else:
-            analytics_ref.set({"date": today_str, "likes_count": 1, "chats_count": 0, "daily_users": 0})
+        # Update analytics via transaction
+        _increment_analytics("likes_count")
 
         # Return updated likes (requires a re-fetch or just incrementing the cached value)
         new_likes = (item_doc.to_dict().get("likes", 0)) + 1
@@ -1052,17 +1146,8 @@ async def chat(
         raise HTTPException(status_code=429, detail="Daily AI usage limit reached. Try again tomorrow.")
     incr_daily_ai_spend(1.0)
 
-    # Analytics
-    try:
-        from google.cloud import firestore # type: ignore
-        today_str = date.today().isoformat()
-        analytics_ref = firestore_db.collection("analytics").document(today_str)
-        if not analytics_ref.get().exists:
-            analytics_ref.set({"date": today_str, "chats_count": 1, "likes_count": 0, "daily_users": 1})
-        else:
-            analytics_ref.update({"chats_count": firestore.Increment(1)})
-    except Exception as e:
-        logger.warning(f"Analytics update failed: {e}")
+    # Analytics via transaction
+    _increment_analytics("chats_count")
 
     # User memory — Redis-cached (TTL = 10 min)
     user_mem = None
@@ -1496,39 +1581,42 @@ async def get_profile(current_user: dict = Depends(get_current_user)):
 @app.get("/task_status/{task_id}")
 async def get_task_status(task_id: str):
     """
-    Check the status of a Celery background task.
+    Check the status of a background task (FastAPI BackgroundTasks or Celery).
     """
-    from backend.tasks import celery_app  # type: ignore
-    from celery.result import AsyncResult  # type: ignore
-    
-    res = AsyncResult(task_id, app=celery_app)
-    # Comprehensive Celery status mapping
-    status_map = {
-        "PENDING": "pending",
-        "STARTED": "processing",
-        "RETRY": "retrying",
-        "SUCCESS": "completed",
-        "FAILURE": "failed",
-        "REVOKED": "cancelled"
-    }
-    
-    current_status = status_map.get(res.status, "pending")
-    
-    if res.ready():
-        result = res.result
-        # If internal result dict has a 'failed' status, override
-        if isinstance(result, dict) and result.get("status") == "failed":
-            return {
-                "status": "failed",
-                "error": result.get("error")
-            }
+    # 1. Check Firestore Jobs first (FastAPI BackgroundTasks)
+    try:
+        job = get_document("jobs", task_id)
+        if job:
+            return job
+    except Exception as e:
+        logger.warning(f"Error checking Firestore job {task_id}: {e}")
+
+    # 2. Fallback to Celery
+    try:
+        from backend.tasks import celery_app  # type: ignore
+        from celery.result import AsyncResult  # type: ignore
         
-        return {
-            "status": "completed",
-            "result": result
+        res = AsyncResult(task_id, app=celery_app)
+        status_map = {
+            "PENDING": "pending",
+            "STARTED": "processing",
+            "RETRY": "retrying",
+            "SUCCESS": "completed",
+            "FAILURE": "failed",
+            "REVOKED": "cancelled"
         }
-    
-    return {"status": current_status}
+        
+        current_status = status_map.get(res.status, "pending")
+        if res.ready():
+            result = res.result
+            if isinstance(result, dict) and result.get("status") == "failed":
+                return {"status": "failed", "error": result.get("error")}
+            return {"status": "completed", "result": result}
+        return {"status": current_status}
+    except Exception:
+        # If celery fails to load, just return not found if firestore also didn't have it
+        return {"status": "not_found", "error": "Task ID not recognized."}
+
 
 @app.post("/track_share")
 async def track_share(current_user: dict = Depends(get_current_user)):

@@ -77,6 +77,12 @@ STYLE_ENHANCERS = {
 }
 
 
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception_type((requests.exceptions.RequestException, Exception)),
+    reraise=True # Hardening: Don't fall back silently in the core prompting layer
+)
 def _enhance_prompt_with_groq(base_prompt: str, mood: str, style: str = "") -> Tuple[str, Optional[str]]:
     """Use Groq to expand a short prompt. Returns (enhanced_prompt, warning)."""
     api_key = os.getenv("GROQ_API_KEY")
@@ -106,11 +112,14 @@ def _enhance_prompt_with_groq(base_prompt: str, mood: str, style: str = "") -> T
                 "max_tokens": 150,
                 "temperature": 0.7,
             },
-            timeout=10 # Increased timeout
+            timeout=20 # Standardized timeout
         )
         if resp.status_code == 200:
             enhanced = resp.json()["choices"][0]["message"]["content"].strip()
             return enhanced, None
+        elif resp.status_code == 429:
+             logger.warning("Groq rate limited during prompt enhancement.")
+             raise requests.exceptions.RequestException("Rate limited")
         else:
             return base_prompt, f"Groq error: {resp.status_code}"
     except Exception as e:
