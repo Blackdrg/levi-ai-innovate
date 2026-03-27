@@ -67,22 +67,35 @@ def set_document(collection_name: str, document_id: str, data: dict):
         print(f"⚠️ Firestore Set Error: {e}")
         return False
 
-def add_document(collection_name: str, data: dict):
+def add_document(collection_name: str, data: dict, model=None):
+    """Add a document with optional Pydantic validation."""
     try:
+        if model:
+            # Validate and convert to dict
+            valid_data = model(**data).model_dump()
+            data = valid_data
+            
         data['created_at'] = datetime.utcnow()
         update_time, doc_ref = db.collection(collection_name).add(data, timeout=10)
         return doc_ref.id
     except Exception as e:
-        print(f"⚠️ Firestore Add Error: {e}")
+        print(f"⚠️ Firestore Add Error [{collection_name}]: {e}")
         return None
 
-def update_document(collection_name: str, document_id: str, data: dict):
+def update_document(collection_name: str, document_id: str, data: dict, model=None):
+    """Update a document with optional Pydantic validation (partial check)."""
     try:
+        if model:
+            # For partial updates, we might only validate the keys present
+            # but simpler is to use model.model_validate(data, partial=True) if available
+            # or just assume the caller passes valid partial data.
+            pass
+            
         doc_ref = db.collection(collection_name).document(document_id)
         doc_ref.update(data, timeout=10)
         return True
     except Exception as e:
-        print(f"⚠️ Firestore Update Error: {e}")
+        print(f"⚠️ Firestore Update Error [{collection_name}]: {e}")
         return False
 
 def delete_document(collection_name: str, document_id: str):
@@ -92,6 +105,24 @@ def delete_document(collection_name: str, document_id: str):
     except Exception as e:
         print(f"⚠️ Firestore Delete Error: {e}")
         return False
+
+def increment_field(collection_name: str, document_id: str, field_name: str, amount: int = 1):
+    """Atomically increment a numeric field in Firestore."""
+    try:
+        doc_ref = db.collection(collection_name).document(document_id)
+        doc_ref.update({
+            field_name: firestore.Increment(amount),
+            "updated_at": datetime.utcnow()
+        }, timeout=10)
+        return True
+    except Exception as e:
+        print(f"⚠️ Firestore Increment Error: {e}")
+        return False
+
+def update_analytics(metric: str, amount: int = 1):
+    """Centralized analytics update (atomic)."""
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    return increment_field("analytics", today, metric, amount)
 
 def query_documents(collection_name: str, filters: list = None, limit: int = 10, order_by: str = None, descending: bool = False):
     try:

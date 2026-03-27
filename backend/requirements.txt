@@ -44,3 +44,7 @@ diffusers>=0.27.0
 accelerate>=0.30.0
 # TTS>=0.22.0 # Moved to requirements-video.txt
 firebase-admin>=6.5.0
+sqlalchemy>=2.0.29
+psycopg2-binary>=2.9.9
+celery[redis]>=5.3.6
+flower>=2.0.1

@@ -54,6 +54,7 @@ async function apiFetch(endpoint, options = {}) {
     clearTimeout(id);
 
     if (!res.ok) {
+      // 1. Specific status handling
       if (res.status === 401) {
         console.warn("[LEVI] Unauthorized - redirecting to auth");
         if (!window.location.pathname.includes('auth.html')) {
@@ -62,32 +63,50 @@ async function apiFetch(endpoint, options = {}) {
       }
       
       if (res.status === 402) {
-        console.warn("[LEVI] Payment Required - opening pricing");
+        console.warn("[LEVI] Payment Required");
         if (window.ui && window.ui.showToast) {
           window.ui.showToast("Credits exhausted. Upgrade to continue.", "warning");
         }
-        setTimeout(() => {
-          window.location.href = 'pricing.html?exhausted=true';
-        }, 2000);
+        return; // Let caller handle or wait for redirect
       }
 
-      const errorData = await res.json().catch(() => ({}));
-      const errorMessage = errorData.error || errorData.detail || `API error: ${res.status}`;
-      throw new Error(errorMessage);
+      // 2. Parse standardized error response
+      let errorData = {};
+      try {
+        errorData = await res.json();
+      } catch (e) {
+        errorData = { error: `HTTP ${res.status}` };
+      }
+
+      const errorMessage = errorData.error || errorData.detail || `Server error (${res.status})`;
+      const requestId = errorData.request_id || res.headers.get("X-Request-ID");
+      
+      console.error(`[LEVI] API Error: ${errorMessage}`, { 
+        status: res.status, 
+        requestId,
+        url 
+      });
+
+      const finalError = new Error(errorMessage);
+      finalError.requestId = requestId;
+      finalError.status = res.status;
+      throw finalError;
     }
     return await res.json();
   } catch (error) {
     clearTimeout(id);
-    console.error(`[LEVI] Fetch error for ${url}:`, error);
     
-    const errorMsg = error.name === 'AbortError' || error.message === 'Timeout' 
-      ? "Request timed out. Please try again." 
-      : (error.message || "Network error");
-      
-    if (typeof showToast === 'function') {
-      showToast(errorMsg, "error");
-    } else if (window.ui && window.ui.showToast) {
-      window.ui.showToast(errorMsg, "error");
+    let displayMsg = error.message || "Network error";
+    if (error.name === 'AbortError' || error.message === 'Timeout') {
+        displayMsg = "Request timed out. Please check your connection.";
+    }
+
+    console.error(`[LEVI] Fetch failed:`, error);
+    
+    const toast = (window.ui && window.ui.showToast) || window.showToast;
+    if (toast) {
+      const ridText = error.requestId ? ` (Ref: ${error.requestId.slice(0, 8)})` : "";
+      toast(`${displayMsg}${ridText}`, "error");
     }
     throw error;
   }

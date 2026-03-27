@@ -28,23 +28,7 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-# ─────────────────────────────────────────────
-# Celery Setup
-# ─────────────────────────────────────────────
-
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
-celery_app = Celery("levi", broker=REDIS_URL, backend=REDIS_URL)
-
-celery_app.conf.update(
-    task_serializer="json",
-    result_serializer="json",
-    accept_content=["json"],
-    task_track_started=True,
-    result_expires=3600,
-    task_acks_late=True,           # Ack after task completes
-    task_reject_on_worker_lost=True,
-    worker_prefetch_multiplier=1,   # One task at a time per worker
-)
+from backend.celery_app import celery_app # type: ignore
 
 
 # ─────────────────────────────────────────────

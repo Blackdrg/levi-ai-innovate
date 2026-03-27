@@ -23,18 +23,10 @@ from typing import Optional, Any, Tuple
 import requests  # type: ignore
 
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance  # type: ignore
-from backend.utils.retries import standard_retry, DEFAULT_TIMEOUT, safe_request
+from backend.utils.network import safe_request, standard_retry, ai_service_breaker, DEFAULT_TIMEOUT
 
-try:
-    from backend.circuit_breaker import groq_breaker, together_breaker # type: ignore
-except ImportError:
-    try:
-        from circuit_breaker import groq_breaker, together_breaker # type: ignore
-    except ImportError:
-        # Fallback if not found during dev
-        class MockBreaker:
-            def call(self, f, *a, **k): return f(*a, **k)
-        groq_breaker = together_breaker = MockBreaker()
+# Use the centralized breaker for all AI services
+groq_breaker = together_breaker = ai_service_breaker
 
 logger = logging.getLogger(__name__)
 
@@ -279,7 +271,7 @@ def generate_via_together(prompt: str, size: Tuple[int, int] = (1024, 1024),
         TOGETHER_API_URL, 
         json=payload, 
         headers=headers, 
-        timeout=DEFAULT_TIMEOUT * 3 # Image gen takes longer
+        timeout=DEFAULT_TIMEOUT * 4 # Image gen takes longer
     )
 
     if resp.status_code == 429:
