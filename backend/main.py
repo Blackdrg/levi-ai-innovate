@@ -114,7 +114,8 @@ def validate_env():
         error_msg = f"CRITICAL: Missing required environment variables: {', '.join(missing)}"
         logger.error(error_msg)
         if is_prod:
-            raise RuntimeError(error_msg)
+            import sys
+            sys.exit(1)
         else:
             print(f"\n[WARNING] {error_msg}\n")
 
@@ -123,21 +124,29 @@ def validate_env():
     # Generate a safe key with: python -c "import secrets; print(secrets.token_hex(32))"
     _secret = os.getenv("SECRET_KEY", "")
     if len(_secret.encode()) < 32:
-        raise RuntimeError(
-            "SECRET_KEY must be at least 32 bytes. "
-            "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
-        )
+        if is_prod:
+            logger.error("SECRET_KEY is too short.")
+            import sys
+            sys.exit(1)
+        else:
+            print("[WARNING] SECRET_KEY is too short.")
 
     # ── Firebase Secret Validation ──────────
     # Ensure it's not just present, but valid JSON (if string) or existing file path
     _fs_secret = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON", "")
-    if is_prod and _fs_secret:
+    if is_prod:
+        if not _fs_secret:
+             logger.error("FIREBASE_SERVICE_ACCOUNT_JSON is missing in production.")
+             import sys
+             sys.exit(1)
         import json
         try:
             if not os.path.exists(_fs_secret):
                 json.loads(_fs_secret)
         except Exception as e:
-            raise RuntimeError(f"FIREBASE_SERVICE_ACCOUNT_JSON is present but invalid: {e}")
+            logger.error(f"FIREBASE_SERVICE_ACCOUNT_JSON is invalid: {e}")
+            import sys
+            sys.exit(1)
 
 validate_env()
 # ────────────────────────────# ─────────────────────────────────
@@ -205,8 +214,43 @@ _executor = ThreadPoolExecutor(max_workers=8) # Increased for better concurrency
 # ─────────────────────────────────────────────
 
 # Concurrency limits for AI generation to prevent overloading or rate limits
+# Use Redis-based global semaphores if available, fallback to local ones
 _image_semaphore = asyncio.Semaphore(3)
 _video_semaphore = asyncio.Semaphore(1)
+
+class RedisSemaphore:
+    def __init__(self, key: str, value: int):
+        from backend.redis_client import r as redis_client, HAS_REDIS
+        self.r = redis_client
+        self.has_redis = HAS_REDIS
+        self.key = f"sema:{key}"
+        self.value = value
+        self.local_sema = asyncio.Semaphore(value)
+
+    async def __aenter__(self):
+        if not self.has_redis:
+            return await self.local_sema.__aenter__()
+        
+        # Simple Redis-based semaphore logic
+        while True:
+            # Atomic check and increment
+            current = self.r.get(self.key)
+            if not current or int(current) < self.value:
+                # Try to increment
+                val = self.r.incr(self.key)
+                if val <= self.value:
+                    return self
+                else:
+                    self.r.decr(self.key)
+            await asyncio.sleep(1) # Polling (could use BLPOP for better efficiency but this is simpler)
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if not self.has_redis:
+            return await self.local_sema.__aexit__(exc_type, exc_val, exc_tb)
+        self.r.decr(self.key)
+
+_global_image_sema = RedisSemaphore("image", 3)
+_global_video_sema = RedisSemaphore("video", 1)
 
 @retry(
     stop=stop_after_attempt(2),
@@ -218,7 +262,7 @@ async def _execute_gen_task(task_type: str, params: dict, user_id: str, user_tie
     """Internal helper to execute generation with thread executor."""
     loop = asyncio.get_event_loop()
     if task_type == "image":
-        async with _image_semaphore:
+        async with _global_image_sema:
             return await loop.run_in_executor(
                 _executor,
                 lambda: generate_quote_image(
@@ -232,7 +276,7 @@ async def _execute_gen_task(task_type: str, params: dict, user_id: str, user_tie
                 )
             )
     elif task_type == "video":
-        async with _video_semaphore:
+        async with _global_video_sema:
             return await loop.run_in_executor(
                 _executor,
                 lambda: generate_quote_video(
@@ -602,10 +646,14 @@ async def lifespan(app: FastAPI):
         masked = REDIS_URL.split('@')[-1] if '@' in REDIS_URL else REDIS_URL
         logger.info(f"Redis connected: {masked}")
     try:
-        firestore_db.collection("health_check").document("status").get()
+        firestore_db.collection("health_check").document("status").get(timeout=5.0)
         logger.info("Firestore connection verified.")
     except Exception as e:
         logger.error(f"Error connecting to Firestore: {e}")
+        if is_prod:
+            import sys
+            logger.critical("FATAL: Could not connect to Firestore during startup. Exiting.")
+            sys.exit(1)
     logger.info(f"CLIENT_KEY: {'SET' if CLIENT_KEY else 'NOT SET'}")
     yield
 

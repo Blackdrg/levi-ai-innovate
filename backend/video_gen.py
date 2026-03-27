@@ -124,8 +124,14 @@ def generate_narration_script(quote: str, author: str, mood: str,
         )
         if resp.status_code == 200:
             return resp.json()["choices"][0]["message"]["content"].strip()
+        elif resp.status_code == 429:
+            logger.warning("Groq rate limited during script generation.")
+            raise requests.exceptions.RequestException("Rate limited")
+        else:
+            resp.raise_for_status()
     except Exception as e:
         logger.warning(f"Script generation failed: {e}")
+        raise # Reraise to trigger Tenacity retry
 
     return f"{quote} — {author}"
 

@@ -67,8 +67,9 @@ jobs:
           # Max retries: 10, Wait: 5s -> Total 50s
           for i in {1..10}; do
             echo "Attempt $i..."
-            curl -v -f "$SERVICE_URL/health" && exit 0
-            echo "Health check failed, retrying in 5 seconds..."
+            # Check for literal "status":"ok" in response
+            curl -v -s -f "$SERVICE_URL/health" | grep -q '"status":"ok"' && exit 0
+            echo "Health check failed (status not ok), retrying in 5 seconds..."
             sleep 5
           done
           echo "Backend health check FAILED after multiple attempts"

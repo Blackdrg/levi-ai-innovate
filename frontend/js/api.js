@@ -141,30 +141,10 @@ export async function generateImage(topic, author = "LEVI AI", mood = "", custom
 }
 
 export async function generateVideo(topic, mood = "", author = "LEVI Muse") {
-  const options = {
+  return apiFetch("/generate_video", {
     method: "POST",
     body: { text: topic, mood, author },
-    credentials: 'include'
-  };
-  
-  const url = `${API_BASE}/generate_video`;
-  const res = await fetch(url, {
-    ...options,
-    body: JSON.stringify(options.body),
-    headers: { "Content-Type": "application/json" }
   });
-  
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.detail || `Video API error: ${res.status}`);
-  }
-  
-  const contentType = res.headers.get("content-type");
-  if (contentType && contentType.includes("application/json")) {
-    return await res.json();
-  }
-  
-  return await res.blob();
 }
 
 export async function trackShare() {
