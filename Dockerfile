@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     curl \
     imagemagick \
+    ffmpeg \
     && sed -i 's/pixel, ghostscript, PDF, XPS, PS/pixel, ghostscript, XPS, PS/' /etc/ImageMagick-6/policy.xml \
     && rm -rf /var/lib/apt/lists/*
 

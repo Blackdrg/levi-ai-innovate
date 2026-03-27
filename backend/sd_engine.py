@@ -148,7 +148,7 @@ _SD_MODEL_ID = os.getenv("SD_MODEL_ID", "runwayml/stable-diffusion-v1-5")
 
 
 def _load_sd_pipeline() -> Any:
-    """Lazy-load the Stable Diffusion pipeline. Returns None if no GPU."""
+    """Lazy-load the Stable Diffusion pipeline. Returns None if no GPU or missing deps."""
     global _sd_pipe, _sd_available
 
     if _sd_available is False:
@@ -159,35 +159,34 @@ def _load_sd_pipeline() -> Any:
             return _sd_pipe
         try:
             import torch  # type: ignore
+            # Check for CUDA availability
             if not torch.cuda.is_available():
-                logger.info("[SD] No CUDA GPU detected. Will use Together AI fallback.")
+                logger.info("[SD] No CUDA GPU detected. Using Together AI FLUX as primary engine.")
                 _sd_available = False
                 return None
 
+            # Attempt to load diffusers
             from diffusers import StableDiffusionPipeline  # type: ignore
-            logger.info(f"[SD] Loading model '{_SD_MODEL_ID}' onto GPU…")
+            logger.info(f"[SD] GPU Detected. Loading model '{_SD_MODEL_ID}'…")
+            
             _sd_pipe = StableDiffusionPipeline.from_pretrained(
                 _SD_MODEL_ID,
                 torch_dtype=torch.float16,
-                safety_checker=None,  # Content safety handled at the app layer
+                low_cpu_mem_usage=True,
             ).to("cuda")
 
-            # Enable memory-efficient attention if xformers is installed
+            # Enable optimizations
             try:
-                _sd_pipe.enable_xformers_memory_efficient_attention()
-                logger.info("[SD] xformers memory-efficient attention enabled.")
+                _sd_pipe.enable_attention_slicing()
+                _sd_pipe.enable_model_cpu_offload() # Save VRAM
+                logger.info("[SD] Pipeline optimized for GPU.")
             except Exception:
-                try:
-                    _sd_pipe.enable_attention_slicing()
-                    logger.info("[SD] Attention slicing enabled (fallback).")
-                except Exception:
-                    pass
+                pass
 
             _sd_available = True
-            logger.info("[SD] Pipeline ready.")
             return _sd_pipe
         except Exception as e:
-            logger.error(f"[SD] Failed to load pipeline: {e}")
+            logger.warning(f"[SD] Local pipeline initialization skipped: {e}. Defaulting to API fallback.")
             _sd_available = False
             return None
 

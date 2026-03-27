@@ -35,6 +35,12 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('#dark-toggle').forEach(btn => {
     btn.addEventListener('click', toggleDarkMode);
   });
+
+  // Global Error Boundary
+  window.addEventListener('unhandledrejection', (event) => {
+    console.error('Unhandled promise rejection:', event.reason);
+    showToast("Cosmic interference detected. Please try again.", "error");
+  });
 });
 
 function toggleDarkMode() {

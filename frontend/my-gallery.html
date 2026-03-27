@@ -10,6 +10,7 @@
 <!-- Firebase & Auth Init (Early) -->
 <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
+<script src="js/config.js"></script>
 <script src="js/auth-manager.js"></script>
 <style>
 .material-symbols-outlined{font-family:'Material Symbols Outlined';font-size:22px;line-height:1;font-variation-settings:'FILL' 0,'wght' 300,'GRAD' 0,'opsz' 24;-webkit-user-select:none;user-select:none}
@@ -159,79 +160,7 @@
 <div id="toast"></div>
 
 <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
-<script>
-function toggleMobileMenu(){const m=document.getElementById('mobile-menu');if(!m)return;m.classList.toggle('hidden')}
-              function showToast(msg, type = 'success') { const t = document.getElementById('toast'); const bg = type === 'error' ? 'rgba(147,0,10,.85)' : 'rgba(19,19,23,.92)'; const border = type === 'error' ? 'rgba(255,180,171,.3)' : 'rgba(242,202,80,.35)'; t.innerHTML = `<div style="background:${bg};border:.5px solid ${border};-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)" class="flex items-center gap-2.5 px-5 py-3 rounded-full shadow-2xl"><span style="font-size:12px;color:#e5e1e7;font-family:'Plus Jakarta Sans',sans-serif;font-weight:600;letter-spacing:.04em">${msg}</span></div>`; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 3000) }
-function logout(){localStorage.removeItem('levi_user');window.location.href='index.html'}
-
-function cardHTML(item,i){
-  const src=item.image_url||item.image_b64||item.url||'';
-  const text=(item.text||'').replace(/'/g,"'");
-  const author=item.author||'LEVI AI';
-  const isVideo=item.type==='video'||item.video_url;
-  const mediaSrc=isVideo?(item.video_url||''):(item.image_url||item.image_b64||'');
-  return `<div class="gallery-card animate-fade-up glass-card ghost-border rounded-2xl overflow-hidden relative" style="animation-delay:${i*60}ms">
-    <div class="relative overflow-hidden" style="aspect-ratio:9/16">
-      ${isVideo?`<video src="${mediaSrc}" class="card-img w-full h-full object-cover" muted playsinline loop onmouseenter="this.play()" onmouseleave="this.pause()"></video>`:`<div class="card-img w-full h-full" style="background:linear-gradient(135deg,#0a0a18,#1a1040);display:flex;align-items:center;justify-content:center">${src?`<img src="${src}" class="w-full h-full object-cover" alt=""/>`:''}</div>`}
-      <div class="absolute inset-0" style="background:linear-gradient(to top,rgba(0,0,0,.8) 0%,transparent 55%)"></div>
-      <!-- Quote text -->
-      <div class="absolute inset-x-0 bottom-0 p-4">
-        <p class="font-headline italic text-xs text-on-surface leading-snug mb-1 line-clamp-3">"${text}"</p>
-        <p class="text-[9px] font-label text-primary uppercase tracking-widest font-semibold">— ${author}</p>
-      </div>
-      <!-- Hover actions -->
-      <div class="reveal absolute inset-0 flex flex-col items-center justify-center gap-3" style="background:rgba(0,0,0,.6);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)">
-        <button onclick="downloadItem('${src}','${text}')" class="flex items-center gap-2 btn-gold px-5 py-2.5 rounded-full text-xs font-semibold uppercase tracking-wider">
-          <span class="material-symbols-outlined icon-sm">download</span>Download
-        </button>
-        <button onclick="shareItem('${text}','${author}')" class="flex items-center gap-2 ghost-border text-on-surface px-5 py-2.5 rounded-full text-xs font-semibold uppercase tracking-wider hover:bg-white/8 transition-all">
-          <span class="material-symbols-outlined icon-sm">share</span>Share
-        </button>
-      </div>
-    </div>
-  </div>`;
-}
-
-function downloadItem(src,text){
-  if(!src){showToast('No image to download','error');return}
-  const a=document.createElement('a');a.href=src;a.download='levi-creation-'+Date.now()+'.png';a.click();showToast('Downloading…')
-}
-function shareItem(text,author){
-  const str=`"${text}" — ${author}`;
-  if(navigator.share)navigator.share({title:'LEVI AI Wisdom',text:str,url:location.href});
-  else{navigator.clipboard.writeText(str);showToast('Copied to clipboard')}
-}
-
-async function loadGallery(){
-  await window.waitForToken();
-  const token = window.levi_user_token;
-  if(!token){document.getElementById('loading-state').classList.add('hidden');document.getElementById('empty-state').classList.remove('hidden');document.getElementById('gallery-count').textContent='Please sign in to view your gallery';return}
-  if (window.ui && window.ui.showLoader) window.ui.showLoader();
-  try{
-    const r=await fetch(`${window.API_BASE}/my_gallery`);
-    if(!r.ok)throw new Error('HTTP '+r.status);
-    const items=await r.json();
-    document.getElementById('loading-state').classList.add('hidden');
-    if(!items||!items.length){document.getElementById('empty-state').classList.remove('hidden');document.getElementById('gallery-count').textContent='0 creations';return}
-    document.getElementById('gallery-count').textContent=items.length+' creation'+(items.length!==1?'s':'');
-    document.getElementById('gallery-grid').innerHTML=items.map((item,i)=>cardHTML(item,i)).join('');
-  }catch(e){
-    console.error("Gallery load failed:", e);
-    if (typeof showToast === 'function') showToast("Network error", "error");
-    document.getElementById('loading-state').classList.add('hidden');
-    document.getElementById('empty-state').classList.remove('hidden');
-    document.getElementById('gallery-count').textContent='Could not load gallery';
-  } finally {
-    if (window.ui && window.ui.hideLoader) window.ui.hideLoader();
-  }
-}
-
-// Auth
-const u=localStorage.getItem('levi_user');
-if(u){try{const o=JSON.parse(u);document.getElementById('sidebar-user').textContent=o.username||'Seeker';document.querySelectorAll('[data-credits]').forEach(el=>el.textContent=(o.credits||0)+' credits')}catch{}}
-
-loadGallery();
-</script>
+<script src="js/my-gallery.js"></script>
 <script src="js/animations.js" type="module"></script>
 <script src="js/feedback.js" type="module"></script>
 </body>

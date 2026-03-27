@@ -84,10 +84,16 @@ async function pollTask(id,text){
       const r = await fetch(`${window.API_BASE}/task_status/${id}`);
       const d = await r.json();
 
-      if (d.status === 'completed' && d.result) {
+      if ((d.status === 'completed' || d.status === 'done') && d.result) {
         setLoading(false);
         const res = d.result;
-        displayImage(res.url || res.image_b64 || res.image || res, text);
+        const imgSrc = res.url || res.image_url || res.image_b64 || res.image;
+        if (imgSrc) {
+            displayImage(imgSrc, text);
+        } else {
+            showToast('Generation completed but no image returned', 'error');
+            setLoading(false);
+        }
       } else if (d.status === 'failed') {
         setLoading(false);
         showToast('Synthesis failed: ' + (d.error || 'Unknown error'), 'error');

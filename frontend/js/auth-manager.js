@@ -4,15 +4,12 @@
 // 1. Firebase Initialization & Configuration
 // ==========================================
 // TODO: Replace this object with your actual Firebase Project keys.
-const firebaseConfig = {
-  apiKey: "AIzaSyBkFj3B-YsG6MKyVbW_4jSF1VVoNSbP1UM",
-  authDomain: "levi-ai-c23c6.firebaseapp.com",
-  projectId: "levi-ai-c23c6",
-  storageBucket: "levi-ai-c23c6.firebasestorage.app",
-  messagingSenderId: "92414072890",
-  appId: "1:92414072890:web:e0e824b7f339bf0ad9fd03",
-  measurementId: "G-ST6N1X9RHD"
-};
+// Configuration is now loaded from config.js
+const firebaseConfig = window.firebaseConfig;
+
+if (!firebaseConfig || !firebaseConfig.apiKey) {
+    console.error("[LEVI] Firebase configuration missing! Ensure config.js is loaded.");
+}
 
 // Initialize Firebase only once
 if (!firebase.apps.length) {
@@ -60,31 +57,37 @@ firebase.auth().onAuthStateChanged(async (user) => {
 });
 
 // Helper to wait for Firebase auth to initialize
-window.waitForToken = () => new Promise((resolve) => {
-    // If we already have a token, resolve immediately
-    if (window.levi_user_token) return resolve(window.levi_user_token);
-    
-    // Check if Firebase is even initialized
-    if (!firebase.apps.length) return resolve(null);
-
-    // Watch for the state change
-    const unsub = firebase.auth().onAuthStateChanged(async (user) => {
+window.waitForToken = () => {
+    return new Promise((resolve) => {
+        const user = firebase.auth().currentUser;
         if (user) {
-            window.levi_user_token = await user.getIdToken();
-            unsub();
-            resolve(window.levi_user_token);
+            // Already logged in, just refresh token
+            user.getIdToken(true)
+                .then(token => {
+                    window.levi_user_token = token;
+                    resolve(token);
+                })
+                .catch(() => resolve(null));
         } else {
-            unsub();
-            resolve(null);
+            // Wait for auth state change
+            const unsubscribe = firebase.auth().onAuthStateChanged(async (u) => {
+                unsubscribe();
+                if (u) {
+                    const token = await u.getIdToken(true);
+                    window.levi_user_token = token;
+                    resolve(token);
+                } else {
+                    resolve(null);
+                }
+            });
+            // Safety timeout
+            setTimeout(() => {
+                unsubscribe();
+                resolve(window.levi_user_token);
+            }, 10000);
         }
     });
-
-    // Safety timeout: don't hang if firebase takes too long
-    setTimeout(() => {
-        unsub();
-        resolve(window.levi_user_token);
-    }, 5000);
-});
+};
 
 // ==========================================
 // 3. Fetch API Interceptor for Firebase Admin
@@ -96,20 +99,19 @@ window.fetch = async function () {
     
     // Intercept if it's hitting our backend (port 8000 locally or /api in prod)
     if (url.startsWith(window.API_BASE) || url.includes(':8000/') || (url.includes('/api/') && !url.startsWith('http'))) {
-        // Wait for auth to settle
-        await window.waitForToken();
-        
-        if (!config) config = {};
-        if (!config.headers) config.headers = {};
-        
-        // Ensure standard headers
-        if (!config.headers['Content-Type'] && !(config.body instanceof FormData)) {
-            config.headers['Content-Type'] = 'application/json';
+        // Get fresh token (auto-refreshes if expired)
+        const user = firebase.auth().currentUser;
+        if (user) {
+            try {
+                const token = await user.getIdToken(); // false = use cached if valid, true = force refresh
+                window.levi_user_token = token;
+            } catch (err) {
+                console.error("[LEVI] Failed to refresh token before fetch:", err);
+            }
         }
         
-        config.credentials = 'include';
-        
         if (window.levi_user_token) {
+            config.headers = config.headers || {};
             config.headers['Authorization'] = `Bearer ${window.levi_user_token}`;
         }
     }

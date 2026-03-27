@@ -1,0 +1,57 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    // User profiles: Only owners can read/write their own profile
+    match /users/{userId} {
+      allow read, write: if isAuthenticated() && isOwner(userId);
+    }
+
+    // Feed items: Anyone can read, only authenticated users can add
+    match /feed_items/{itemId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && 
+                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes']);
+      allow delete: if isAuthenticated() && (resource.data.user_id == request.auth.uid);
+    }
+
+    // Quotes: Publicly readable
+    match /quotes/{quoteId} {
+      allow read: if true;
+      allow write: if false; // Admin only via Admin SDK
+    }
+
+    // User memory: Private to user
+    match /user_memory/{userId} {
+      allow read, write: if isAuthenticated() && isOwner(userId);
+    }
+    
+    match /user_memory_logs/{logId} {
+      allow read: if isAuthenticated() && (resource.data.user_id == request.auth.uid);
+      allow create: if isAuthenticated() && (request.resource.data.user_id == request.auth.uid);
+      allow delete: if isAuthenticated() && (resource.data.user_id == request.auth.uid);
+    }
+
+    // Analytics: Read-only for admins (in theory, but here we just block public write)
+    match /analytics/{date} {
+      allow read: if true;
+      allow write: if false; // Only backend can update
+    }
+    
+    // Health check
+    match /health_check/{doc} {
+      allow read: if true;
+    }
+  }
+}

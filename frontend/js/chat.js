@@ -124,6 +124,9 @@ async function sendMessage() {
         await window.waitForToken();
         const res = await fetch(`${window.API_BASE}/chat`, {
             method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
             body: JSON.stringify({
                 session_id: sessionId,
                 message: text,

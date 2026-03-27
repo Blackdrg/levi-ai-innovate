@@ -22,7 +22,7 @@ if RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET:
         client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
         logger.info("Razorpay client initialized.")
     except Exception as e:
-        logger.error(f"Failed to initialize Razorpay client: {e}")
+        logger.error(f"Failed to initialize Razorpay client. Check RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET: {e}")
 
 from typing import Optional, Any
 
