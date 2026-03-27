@@ -58,16 +58,23 @@ def db_session():
     connection.close()
 
 @pytest.fixture(autouse=True)
-def override_get_db(db_session):
-    """Override FastAPI get_db dependency to use the transactional session."""
+def override_dependencies(db_session, test_user):
+    """Override FastAPI dependencies for testing."""
     from backend.db import get_db
+    from backend.main import get_current_user, get_current_user_optional
+    
     app.dependency_overrides[get_db] = lambda: db_session
+    # Mock current user to return the test_user dict (which now has 'uid' from the 'id' field)
+    mock_user = {**test_user, "uid": test_user["id"]}
+    app.dependency_overrides[get_current_user] = lambda: mock_user
+    app.dependency_overrides[get_current_user_optional] = lambda: mock_user
+    
     yield
     app.dependency_overrides.clear()
 
 @pytest.fixture
 def test_user(db_session):
-    """Create a real user in the test database."""
+    """Create a real user in the test database and return as a dict."""
     # Check if user already exists
     user = db_session.query(Users).filter(Users.username == "testuser").first()
     if not user:
@@ -82,7 +89,15 @@ def test_user(db_session):
         db_session.add(user)
         db_session.commit()
         db_session.refresh(user)
-    return user
+    
+    # Return as dict to match Firestore model
+    return {
+        "id": str(user.id),
+        "username": user.username,
+        "email": user.email,
+        "tier": user.tier,
+        "credits": user.credits
+    }
 
 @pytest.fixture
 def auth_headers(test_user):

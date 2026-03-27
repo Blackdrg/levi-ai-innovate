@@ -96,11 +96,12 @@ if SENTRY_DSN:
 # ────────────────────────────# ─────────────────────────────────
 REQUIRED_ENV_VARS = [
     "SECRET_KEY",
-    "DATABASE_URL",
     "RAZORPAY_KEY_ID",
     "RAZORPAY_KEY_SECRET",
     "RAZORPAY_WEBHOOK_SECRET",
-    "ADMIN_KEY"
+    "ADMIN_KEY",
+    "FIREBASE_PROJECT_ID",
+    "FIREBASE_MESSAGING_SENDER_ID"
 ]
 
 def validate_env():
@@ -169,12 +170,26 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials # type: ig
 
 if not firebase_admin._apps:
     try:
-        cred = credentials.ApplicationDefault()
-        firebase_admin.initialize_app(cred)
-        print("✅ Firebase initialized")
-    except Exception as e:
-        print(f"❌ Firebase init failed: {e}")
-        raise e  # MUST crash if fails
+        # Default initialization (works on GCP/Cloud Run)
+        firebase_admin.initialize_app()
+        logger.info("✅ Firebase initialized (default credentials)")
+    except Exception as e1:
+        try:
+            # Fallback for local dev or explicit service account
+            cred_path = os.getenv("FIREBASE_SERVICE_ACCOUNT")
+            if cred_path and os.path.exists(cred_path):
+                cred = credentials.Certificate(cred_path)
+            else:
+                cred = credentials.ApplicationDefault()
+            firebase_admin.initialize_app(cred)
+            logger.info("✅ Firebase initialized (application/manual default)")
+        except Exception as e2:
+            if os.getenv("ENVIRONMENT") == "production":
+                logger.error(f"❌ Firebase init failed in production: {e2}")
+                raise e2
+            else:
+                logger.warning(f"⚠️ Firebase unavailable locally: {e2}")
+                logger.info("⚠️ Auth endpoints will return 401 — use SKIP_AUTH=true for local dev")
 
 security = HTTPBearer()
 
@@ -632,9 +647,9 @@ async def search_quotes(request: Request, query: Query):
         query_embedding = embed_text(query.text)
         # Stream and score (Naive Vector Search)
         if query.mood:
-            docs = list(quotes_ref.where("mood", "==", query.mood).limit(200).stream())
+            docs = list(quotes_ref.where("mood", "==", query.mood).limit(500).stream())
         else:
-            docs = list(quotes_ref.limit(200).stream())
+            docs = list(quotes_ref.limit(500).stream())
             
         q_emb = np.array(query_embedding)
         scored = []
@@ -769,17 +784,34 @@ async def gen_image(request: Request, req: Query, current_user: Optional[dict] =
         loop = asyncio.get_event_loop()
         bio = await loop.run_in_executor(
             _executor,
-            lambda: generate_quote_image( # type: ignore
-                req.text, 
+            lambda: generate_quote_image(
+                req.text,
                 author=req.author or "Unknown",
-                mood=req.mood or "neutral", 
+                mood=req.mood or "neutral",
                 custom_bg=req.custom_bg or "",
                 user_tier=user_tier
             ),
         )
-        # ... (rest of sync logic could be kept but we prefer Celery)
-        # For brevity, I'll focus on the Celery path.
+        if isinstance(bio, dict):
+            image_url = bio.get("url")
+            bio_obj = bio.get("bio")
+            img_bytes = bio_obj.getvalue() if bio_obj else b""
+        else:
+            img_bytes = bio.getvalue() if hasattr(bio, 'getvalue') else b""
+            image_url = None
 
+        if image_url:
+            return {"status": "completed", "url": image_url}
+        
+        if img_bytes:
+            import base64
+            img_b64 = "data:image/png;base64," + base64.b64encode(img_bytes).decode()
+            return {"status": "completed", "image_b64": img_b64}
+            
+        return {"status": "failed", "error": "Image generation produced no valid data."}
+
+    except HTTPException:
+        raise
     except Exception as e:
         import traceback
         logger.error(f"Image generation error: {e}\n{traceback.format_exc()}")
@@ -827,7 +859,7 @@ async def gen_video(request: Request, req: Query, current_user: Optional[dict] =
         if os.getenv("AWS_S3_BUCKET"):
              from backend.tasks import upload_video_to_s3 # type: ignore
              video_url = upload_video_to_s3(video_bytes_io.getvalue(), user_id)
-             return {"status": "done", "url": video_url}
+             return {"status": "completed", "url": video_url}
         else:
              raise HTTPException(status_code=400, detail="Celery required for video or AWS S3 must be configured.")
 
@@ -835,8 +867,13 @@ async def gen_video(request: Request, req: Query, current_user: Optional[dict] =
         raise
     except Exception as e:
         import traceback
-        logger.error(f"Video generation error: {e}\n{traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.warning(f"Video generation failed, falling back to image: {e}")
+        # Graceful fallback to image generation
+        try:
+             return await gen_image(request, req, current_user)
+        except Exception as e2:
+             logger.error(f"Fallback image generation also failed: {e2}\n{traceback.format_exc()}")
+             raise HTTPException(status_code=500, detail=f"Video and fallback image generation failed: {str(e)}")
 
 
 
@@ -1006,12 +1043,14 @@ async def chat(
 
               if intent == "generate_image":
                    from backend.tasks import generate_image_task  # type: ignore
-                   generate_image_task.delay(params.get("topic") or msg.message, "Unknown", msg.mood or "neutral", user_id, current_user.tier if current_user else "free")
+                   user_tier = current_user.get("tier", "free") if current_user else "free"
+                   generate_image_task.delay(params.get("topic") or msg.message, "Unknown", msg.mood or "neutral", user_id, user_tier)
                    return {"response": f"🎨 [Visual Agent] I am generating an image for '{params.get('topic') or msg.message}'. Check your Feed shortly!"}
 
               if intent == "generate_video":
                    from backend.tasks import generate_video_task  # type: ignore
-                   generate_video_task.delay(params.get("topic") or msg.message, "Unknown", msg.mood or "neutral", user_id, current_user.tier if current_user else "free")
+                   user_tier = current_user.get("tier", "free") if current_user else "free"
+                   generate_video_task.delay(params.get("topic") or msg.message, "Unknown", msg.mood or "neutral", user_id, user_tier)
                    return {"response": f"🎥 [Video Agent] Video synthesis started for '{params.get('topic') or msg.message}'. This will appear in your Feed when ready."}
 
               if intent == "generate_content":
@@ -1217,7 +1256,7 @@ async def get_learning_stats_route(
     current_user: dict = Depends(get_current_user),
 ):
     """Returns learning system statistics via Firestore. Admin-level endpoint."""
-    if current_user.get("tier") not in ("creator", "admin"):
+    if current_user.get("tier", "free") not in ("creator", "admin"):
          raise HTTPException(status_code=403, detail="Requires admin access")
     try:
         from backend.learning import get_learning_stats  # type: ignore
@@ -1248,7 +1287,7 @@ async def trigger_training_manually(
 ):
     """Manually trigger a fine-tuning run via Firestore. Admin use only."""
     # Basic admin check: only creator-tier users can trigger training
-    if current_user.get("tier") not in ("creator", "admin"):
+    if current_user.get("tier", "free") not in ("creator", "admin"):
         raise HTTPException(status_code=403, detail="Requires creator tier")
 
     from backend.trainer import trigger_training_pipeline  # type: ignore
@@ -1264,27 +1303,39 @@ async def trigger_training_manually(
 @app.get("/model/status")
 async def get_model_status():
     """Public endpoint: returns which model is powering LEVI right now."""
-    from trainer import get_active_model_id  # type: ignore
-    from learning import get_learning_stats  # type: ignore
+    try:
+        try:
+            from backend.trainer import get_active_model_id  # type: ignore
+            from backend.learning import get_learning_stats  # type: ignore
+        except ImportError:
+            from trainer import get_active_model_id  # type: ignore
+            from learning import get_learning_stats  # type: ignore
 
-    active = get_active_model_id()
-    stats  = get_learning_stats()
+        active = get_active_model_id()
+        stats  = get_learning_stats()
 
-    # Latest training job from Firestore
-    jobs_ref = firestore_db.collection("training_jobs")
-    latest_jobs = jobs_ref.order_by("created_at", direction=firestore_db.DESCENDING).limit(1).get()
-    latest_job = latest_jobs[0].to_dict() if latest_jobs else None
+        # Latest training job from Firestore
+        jobs_ref = firestore_db.collection("training_jobs")
+        latest_jobs = jobs_ref.order_by("created_at", direction=firestore_db.DESCENDING).limit(1).get()
+        latest_job = latest_jobs[0].to_dict() if latest_jobs else None
 
-    return {
-        "active_model": active or "groq/llama-3.1-8b-instant",
-        "is_fine_tuned": active is not None,
-        "training_samples_collected": stats["total_training_samples"],
-        "knowledge_base_entries":     stats["learned_quotes"],
-        "latest_training_job": {
-            "status": latest_job.get("status", "none"),
-            "created_at": latest_job.get("created_at").isoformat() if latest_job.get("created_at") else None,
-        } if latest_job else None,
-    }
+        return {
+            "active_model": active or "groq/llama-3.1-8b-instant",
+            "is_fine_tuned": active is not None,
+            "training_samples_collected": stats.get("total_training_samples", 0),
+            "knowledge_base_entries":     stats.get("learned_quotes", 0),
+            "latest_training_job": {
+                "status": latest_job.get("status", "none"),
+                "created_at": latest_job.get("created_at").isoformat() if latest_job.get("created_at") else None,
+            } if latest_job else None,
+        }
+    except Exception as e:
+        logger.warning(f"Error fetching model status: {e}")
+        return {
+            "active_model": "groq/llama-3.1-8b-instant",
+            "is_fine_tuned": False,
+            "error": "Status degraded"
+        }
 @app.get("/export_my_data")
 async def export_my_data(current_user: dict = Depends(get_current_user)):
     """
@@ -1362,9 +1413,21 @@ async def get_task_status(task_id: str):
     from celery.result import AsyncResult  # type: ignore
     
     res = AsyncResult(task_id, app=celery_app)
+    # Comprehensive Celery status mapping
+    status_map = {
+        "PENDING": "pending",
+        "STARTED": "processing",
+        "RETRY": "retrying",
+        "SUCCESS": "completed",
+        "FAILURE": "failed",
+        "REVOKED": "cancelled"
+    }
+    
+    current_status = status_map.get(res.status, "pending")
+    
     if res.ready():
         result = res.result
-        # If result is a dict with status='failed', surface it
+        # If internal result dict has a 'failed' status, override
         if isinstance(result, dict) and result.get("status") == "failed":
             return {
                 "status": "failed",
@@ -1376,14 +1439,7 @@ async def get_task_status(task_id: str):
             "result": result
         }
     
-    # Check if task failed at celery level
-    if res.status == 'FAILURE':
-        return {
-            "status": "failed",
-            "error": str(res.result)
-        }
-        
-    return {"status": "pending"}
+    return {"status": current_status}
 
 @app.post("/track_share")
 async def track_share(current_user: dict = Depends(get_current_user)):
@@ -1932,38 +1988,6 @@ async def api_get_personas():
         logger.error(f"[Personas] Failed to fetch personas from Firestore: {e}")
         return {"personas": []}
 
-
-@app.post("/api/personas")
-async def api_create_persona(
-    body: PersonaCreate,
-    current_user: Users = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Create a new AI Persona system template for personalized generation.
-    """
-    try:
-        try:
-             from backend.models import Persona  # type: ignore
-        except ImportError:
-             from models import Persona  # type: ignore
-
-        new_persona = Persona(
-            user_id=current_user.id,
-            name=body.name,
-            description=body.description,
-            system_prompt=body.system_prompt,
-            avatar_url=body.avatar_url,
-            is_public=body.is_public
-        )
-        db.add(new_persona)
-        db.commit()
-        db.refresh(new_persona)
-        return {"status": "success", "message": "Persona created", "persona": new_persona}
-    except Exception as e:
-        logger.error(f"[Personas] Failed to create persona: {e}")
-        db.rollback()
-        raise HTTPException(status_code=500, detail="Could not create AI persona.")
 
 # ─────────────────────────────────────# ─────────────────────────────────
 

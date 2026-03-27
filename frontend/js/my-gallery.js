@@ -213,8 +213,10 @@ function injectStyles() {
   document.head.appendChild(s);
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   injectStyles();
   updateNavAuth();
+  // Ensure we wait for token resolution before initial load
+  await window.waitForToken();
   loadGallery();
 });

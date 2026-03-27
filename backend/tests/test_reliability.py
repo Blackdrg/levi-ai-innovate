@@ -12,7 +12,7 @@ from sqlalchemy import create_engine  # type: ignore
 from sqlalchemy.orm import sessionmaker  # type: ignore
 from backend.main import app, get_db  # type: ignore
 from backend.models import Base, Users, PaymentEvent  # type: ignore
-from backend.auth import create_access_token  # type: ignore
+# from backend.auth import create_access_token  # type: ignore
 import hmac
 import hashlib
 import json
@@ -76,7 +76,7 @@ def test_credit_deduction_post_success(db_session, app_client):
     db.add(user)
     db.commit()
     
-    token = create_access_token(data={"sub": user.username})
+    token = "mock_token" # create_access_token(data={"sub": user.username})
     headers = {"Authorization": f"Bearer {token}"}
     
     from unittest.mock import patch

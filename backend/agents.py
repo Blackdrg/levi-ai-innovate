@@ -67,22 +67,28 @@ class RouterAgent:
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=200,
                 temperature=0.3, # low temperature for deterministic classification
-                response_format={"type": "json_object"} if hasattr(client.chat.completions, 'create') else None # use JSON mode if supported
             )
             raw = response.choices[0].message.content.strip()
-            # Clean up potential code block wrappers
-            if raw.startswith("```json"):
-                raw = raw.replace("```json", "").replace("```", "").strip()
-            data = json.loads(raw)
+            
+            # Robust JSON extraction: look for first '{' and last '}'
+            try:
+                start = raw.find('{')
+                end = raw.rfind('}') + 1
+                if start != -1 and end != 0:
+                    json_str = raw[start:end]
+                    data = json.loads(json_str)
+                else:
+                    raise ValueError("No JSON block found in LLM response")
+            except (json.JSONDecodeError, ValueError) as je:
+                logger.warning(f"[RouterAgent] JSON parse error: {je}. Raw output snip: {raw[:50]}...")
+                return self._fallback_classify(message)
+
             # Safe truncation for logging
-            msg_snip = ""
-            for i, ch in enumerate(message):
-                if i >= 30: break
-                msg_snip += ch
-            logger.info(f"[RouterAgent] '{msg_snip}...' -> {data.get('intent')}")
+            msg_snip = message[:30] + "..." if len(message) > 30 else message
+            logger.info(f"[RouterAgent] '{msg_snip}' -> {data.get('intent')}")
             return data
         except Exception as e:
-            logger.warning(f"[RouterAgent] LLM classification failed: {e}")
+            logger.error(f"[RouterAgent] LLM classification error: {e}")
             return self._fallback_classify(message)
 
     def _fallback_classify(self, message: str) -> Dict[str, Any]:

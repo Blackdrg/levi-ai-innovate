@@ -15,6 +15,7 @@ import logging
 import boto3  # type: ignore
 from io import BytesIO
 from typing import Any, Optional
+from datetime import datetime
 from celery import Celery  # type: ignore
 from botocore.exceptions import BotoCoreError, ClientError  # type: ignore
 
@@ -24,8 +25,6 @@ try:
 except ImportError:
     HAS_WEBPUSH = False
 
-from backend.db import SessionLocal  # type: ignore
-from backend.models import FeedItem, Users, PushSubscription  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -125,25 +124,22 @@ def generate_image_task(
     quote: str,
     author: str,
     mood: str,
-    user_id: Optional[str],
+    user_id,
     user_tier: str = "free",
     style: str = "",
 ):
-    """
-    Background task: Generate image via Together AI + upload to S3.
-    Returns {"status": "done", "url": ..., "id": ..., "type": ...}
-    """
+    from datetime import datetime
+    import base64
     try:
-        try:
-            from backend.image_gen import generate_quote_image  # type: ignore
-        except ImportError:
-            from image_gen import generate_quote_image  # type: ignore
+        from backend.image_gen import generate_quote_image
+    except ImportError:
+        from image_gen import generate_quote_image
 
-        logger.info(f"[ImageTask] Generating for user={user_id}, mood={mood}, style={style}")
+    logger.info(f"[ImageTask] Generating for user={user_id}, mood={mood}")
 
-        # Get user tier from Firestore if not provided correctly
+    try:
         if user_id and user_tier == "free":
-            user_doc = firestore_db.collection("users").document(user_id).get()
+            user_doc = firestore_db.collection("users").document(str(user_id)).get()
             if user_doc.exists:
                 user_tier = user_doc.to_dict().get("tier", "free")
 
@@ -157,34 +153,25 @@ def generate_image_task(
             user_id=user_id,
         )
 
-        # Handle S3 upload result vs BytesIO
         image_url = None
         image_b64 = None
 
         if isinstance(result, dict):
             image_url = result.get("url")
             bio = result.get("bio")
-            if bio:
-                bio.seek(0)
-                img_bytes = bio.read()
-            else:
-                img_bytes = b""
+            img_bytes = bio.read() if bio else b""
         else:
-            # BytesIO
             img_bytes = result.getvalue() if hasattr(result, 'getvalue') else b""
 
-        # Upload to S3 if not already done
         if img_bytes and not image_url and os.getenv("AWS_S3_BUCKET"):
             try:
-                image_url = upload_image_to_s3(img_bytes, user_id) # type: ignore
-            except Exception as e:
-                logger.warning(f"[ImageTask] S3 upload failed: {e}")
+                image_url = upload_image_to_s3(img_bytes, user_id)
+            except Exception as upload_err:
+                logger.warning(f"[ImageTask] S3 upload failed: {upload_err}")
 
-        # Base64 fallback
         if not image_url and img_bytes:
             image_b64 = "data:image/png;base64," + base64.b64encode(img_bytes).decode()
 
-        # Save to Firestore Feed collection
         feed_ref = firestore_db.collection("feed_items")
         new_item_data = {
             "user_id": user_id,
@@ -196,19 +183,23 @@ def generate_image_task(
             "likes": 0,
             "timestamp": datetime.utcnow()
         }
-        update_time, doc_ref = feed_ref.add(new_item_data)
+        _, doc_ref = feed_ref.add(new_item_data)
+
         return {
-            "status": "done",
-            "feed_id": doc_ref.id,
-            "image_url": image_url or image_b64
+            "status": "completed",
+            "url": image_url,
+            "image_b64": image_b64,
+            "id": doc_ref.id,
+            "type": "image"
         }
 
     except Exception as e:
         logger.error(f"[ImageTask] Failed: {e}")
         if self.request.retries >= self.max_retries:
-            # Refund logic if needed
+            if user_id:
+                _refund_credits(str(user_id), 1)
             return {"status": "failed", "error": str(e)}
-        raise self.retry(exc=e, countdown=30)
+        raise self.retry(exc=e, countdown=10)
 
 # ─────────────────────────────────────────────
 # Task 2: Video Generation
@@ -224,9 +215,7 @@ def generate_video_task(
     user_tier: str = "free",
     aspect_ratio: str = "9:16",
 ):
-    """
-    Background task: Generate video + upload to S3.
-    """
+    from datetime import datetime
     try:
         try:
             from backend.video_gen import generate_quote_video  # type: ignore
@@ -263,12 +252,13 @@ def generate_video_task(
             "likes": 0,
             "timestamp": datetime.utcnow()
         }
-        update_time, doc_ref = feed_ref.add(new_item_data)
+        _, doc_ref = feed_ref.add(new_item_data)
 
         return {
-            "status": "done",
+            "status": "completed",
             "url": video_url,
             "id": doc_ref.id,
+            "type": "video"
         }
 
     except Exception as e:
@@ -276,7 +266,7 @@ def generate_video_task(
 
         if self.request.retries >= self.max_retries:
             if user_id:
-                _refund_credits(user_id, 2)
+                _refund_credits(str(user_id), 2)
             return {"status": "failed", "error": str(e)}
 
         raise self.retry(exc=e, countdown=30)
@@ -412,7 +402,7 @@ def dispatch_daily_emails():
                 logger.warning(f"[Dispatch] Failed for user {user_doc.id}: {e}")
 
         logger.info(f"[Dispatch] Sent to {dispatched} users")
-        return {"dispatched": dispatched}
+        return {"status": "completed", "dispatched": dispatched}
     except Exception as e:
         logger.error(f"[Dispatch] Failed: {e}")
         return {"error": str(e)}
@@ -434,43 +424,10 @@ def reset_monthly_credits():
             user_doc.reference.update({"credits": get_tier_credits(tier or "free")})
             count += 1
         logger.info(f"[Credits] Reset {count} users")
-        return {"reset": count}
+        return {"status": "completed", "reset": count}
     except Exception as e:
         logger.error(f"[Credits] Reset failed: {e}")
         return {"error": str(e)}
-
-
-# ─────────────────────────────────────────────
-# Celery Beat Schedule
-# ─────────────────────────────────────────────
-
-from celery.schedules import crontab  # type: ignore
-
-celery_app.conf.beat_schedule = {
-    "daily-wisdom-dispatch": {
-        "task": "backend.tasks.dispatch_daily_emails",
-        "schedule": crontab(hour=8, minute=0),
-    },
-    "monthly-credit-reset": {
-        "task": "backend.tasks.reset_monthly_credits",
-        "schedule": crontab(day_of_month=1, hour=0, minute=5),
-    },
-}
-        from backend.payments import get_tier_credits  # type: ignore
-        users = db.query(Users).filter(Users.tier.in_(["pro", "creator"])).all()
-        count = 0
-        for user in users:
-            user.credits = get_tier_credits(user.tier)
-            count += 1
-        db.commit()
-        logger.info(f"[Credits] Reset {count} users")
-        return {"reset": count}
-    except Exception as e:
-        db.rollback()
-        logger.error(f"[Credits] Reset failed: {e}")
-        return {"error": str(e)}
-    finally:
-        db.close()
 
 
 # ─────────────────────────────────────────────
