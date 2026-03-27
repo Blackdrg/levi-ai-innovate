@@ -90,9 +90,9 @@ from backend.auth import get_current_user, get_current_user_optional, verify_adm
 from backend.utils.network import safe_request, standard_retry, ai_service_breaker # type: ignore
 from backend.firestore_db import db as firestore_db, update_document, add_document, get_document, update_analytics # type: ignore
 from backend.redis_client import ( # type: ignore
-    get_cached_search, cache_search, get_conversation, save_conversation, 
     HAS_REDIS, REDIS_URL, cache_quote_embedding, get_cached_embedding,
-    get_daily_ai_spend, incr_daily_ai_spend, r as redis_client
+    get_daily_ai_spend, incr_daily_ai_spend, r as redis_client,
+    is_rate_limited
 )
 
 from backend.generation import generate_quote, generate_response  # type: ignore
@@ -156,89 +156,61 @@ def _safe_truncate(text: str, length: int) -> str:
     if not text: return ""
     return (text[:length] + "...") if len(text) > length else text
 
-# ─────────────────────────────────
-# Studio Engine (Optimized Task Handling)
-# ─────────────────────────────────
-import asyncio
-from concurrent.futures import ThreadPoolExecutor
-from google.cloud import firestore as google_firestore
+# Studio Engine (Celery-Powered)
+from backend.services.studio.tasks import generate_image_task, generate_video_task
 
-_executor = ThreadPoolExecutor(max_workers=10)
-_image_sema = asyncio.Semaphore(5)
-_video_sema = asyncio.Semaphore(2)
-
-async def run_studio_task(job_id: str, task_type: str, params: dict, user_id: str, user_tier: str):
-    """Robust task runner with persistence and concurrency control."""
-    try:
-        # 1. Atomic status update to processing
-        job_ref = firestore_db.collection("jobs").document(job_id)
-        job_ref.update({"status": "processing", "started_at": datetime.utcnow()})
-        
-        semaphore = _image_sema if task_type == "image" else _video_sema
-        async with semaphore:
-            loop = asyncio.get_event_loop()
-            func = generate_quote_image if task_type == "image" else generate_quote_video
-            
-            # 2. Execute with thread pool
-            result = await loop.run_in_executor(_executor, lambda: func(
-                params["text"], author=params.get("author", "Unknown"),
-                mood=params.get("mood", "neutral"), user_tier=user_tier, user_id=user_id,
-                custom_bg=params.get("custom_bg")
-            ))
-
-        # 3. Finalize state
-        if result and result.get("success"):
-            data_url = result.get("data")
-            job_ref.update({
-                "status": "completed", 
-                "url": data_url, 
-                "completed_at": datetime.utcnow(),
-                "engine": result.get("engine")
-            })
-            
-            # 4. Add to feed (optional: only for successful generations)
-            add_document("feed_items", {
-                "user_id": user_id, 
-                "text": params["text"], 
-                "author": params.get("author", "Unknown"),
-                "url": data_url,
-                "type": task_type, 
-                "timestamp": datetime.utcnow(),
-                "job_id": job_id
-            })
-        else:
-            error_msg = result.get("error") if result else "Unknown generation failure"
-            job_ref.update({
-                "status": "failed", 
-                "error": error_msg,
-                "completed_at": datetime.utcnow()
-            })
-            
-    except Exception as e:
-        logger.error(f"Studio Task {job_id} [{task_type}] failed: {e}", exc_info=True)
-        try:
-            firestore_db.collection("jobs").document(job_id).update({
-                "status": "failed", 
-                "error": str(e),
-                "completed_at": datetime.utcnow()
-            })
-        except: pass
+# run_studio_task removed - migrated to Celery
 
 # ─────────────────────────────────
 # Global Error Handling
 # ─────────────────────────────────
+class LEVIException(Exception):
+    def __init__(self, message: str, status_code: int = 500, error_code: str = "INTERNAL_ERROR"):
+        self.message = message
+        self.status_code = status_code
+        self.error_code = error_code
+        super().__init__(self.message)
+
+@app.exception_handler(LEVIException)
+async def levi_exception_handler(request: Request, exc: LEVIException):
+    rid = getattr(request.state, "request_id", "unknown")
+    logger.warning(f"LEVI Error [{exc.error_code}]: {exc.message} (RID: {rid})")
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": exc.message,
+            "error_code": exc.error_code,
+            "request_id": rid,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    )
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     rid = getattr(request.state, "request_id", "unknown")
+    
+    if isinstance(exc, HTTPException):
+        logger.warning(f"HTTP Exception [RID: {rid}]: {exc.detail}")
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"error": exc.detail, "request_id": rid}
+        )
+        
     logger.error(f"Unhandled Error [RID: {rid}]: {exc}", exc_info=True)
     return JSONResponse(
         status_code=500,
-        content={"error": "Internal Server Error", "request_id": rid}
+        content={
+            "error": "An unexpected error occurred. Our engineers have been notified.",
+            "error_code": "INTERNAL_SERVER_ERROR",
+            "request_id": rid,
+            "timestamp": datetime.utcnow().isoformat()
+        }
     )
 
 # Standardized Error Handling
 app.add_exception_handler(Exception, global_exception_handler)
 app.add_exception_handler(HTTPException, global_exception_handler)
+app.add_exception_handler(LEVIException, levi_exception_handler)
 
 # Ensure database tables are created
 # Base.metadata.create_all(bind=engine) # Removed - using Alembic migrations instead
@@ -458,6 +430,11 @@ async def search_quotes(request: Request, query: Query):
 @limiter.limit("5/minute")
 async def gen_quote(request: Request, prompt: Query):
 
+    # Load Protection
+    user_id = getattr(request.state, "user_id", None)
+    if user_id and is_rate_limited(user_id, limit=10):
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again in a minute.")
+
     generated = generate_quote(prompt.text, mood=prompt.mood or "")
 
     return {"generated_quote": generated}
@@ -473,11 +450,11 @@ async def gen_content(
     current_user: Optional[dict] = Depends(get_current_user_optional),
 ):
     """Generate content of any type (quote, essay, story, script, etc.)."""
-    # Cost protection
-    from backend.redis_client import get_daily_ai_spend, incr_daily_ai_spend  # type: ignore
-    daily_limit = float(os.getenv("DAILY_AI_LIMIT", "500"))
-    if get_daily_ai_spend() >= daily_limit:
-        raise HTTPException(status_code=429, detail="Daily AI usage limit reached.")
+    # Load Protection
+    user_id = current_user.get("uid") if current_user else None
+    if user_id and is_rate_limited(user_id, limit=5):
+        raise HTTPException(status_code=429, detail="Too many content generation requests. Please wait.")
+
     incr_daily_ai_spend(1.0)
 
     # Credit check for non-quote types
@@ -564,16 +541,15 @@ async def gen_image(
             "type": "image",
             "status": "queued",
             "user_id": user_id,
-            "params": {"text": req.text, "mood": req.mood, "style": req.mood}, # reusing mood as style if style not in Query
+            "params": {"text": req.text, "mood": req.mood, "author": req.author, "custom_bg": req.custom_bg},
             "created_at": datetime.utcnow()
         }
         add_document("jobs", job_data)
         
-        background_tasks.add_task(
-            run_studio_task, 
+        # Enqueue Celery Task
+        generate_image_task.delay(
             job_id=job_id, 
-            task_type="image", 
-            params={"text": req.text, "mood": req.mood, "author": req.author, "custom_bg": req.custom_bg},
+            params=job_data["params"],
             user_id=user_id,
             user_tier=user_tier
         )
@@ -626,16 +602,15 @@ async def gen_video(
             "type": "video",
             "status": "queued",
             "user_id": user_id,
-            "params": {"text": req.text, "mood": req.mood},
+            "params": {"text": req.text, "mood": req.mood, "author": req.author},
             "created_at": datetime.utcnow()
         }
         add_document("jobs", job_data)
         
-        background_tasks.add_task(
-            run_studio_task, 
+        # Enqueue Celery Task
+        generate_video_task.delay(
             job_id=job_id, 
-            task_type="video", 
-            params={"text": req.text, "mood": req.mood, "author": req.author},
+            params=job_data["params"],
             user_id=user_id,
             user_tier=user_tier
         )
@@ -723,11 +698,10 @@ async def chat(
     msg_text_snip = _safe_truncate(str(msg.message), 60)
     logger.info(f"Chat [{msg.session_id}] (User: {user_id}): '{msg_text_snip}'")
 
-    # ── Cost Protection Layer ──────────────────────────
-    from backend.redis_client import get_daily_ai_spend, incr_daily_ai_spend  # type: ignore
-    daily_limit = float(os.getenv("DAILY_AI_LIMIT", "500"))
-    if get_daily_ai_spend() >= daily_limit:
-        raise HTTPException(status_code=429, detail="Daily AI usage limit reached. Try again tomorrow.")
+    # Load Protection
+    if user_id and is_rate_limited(user_id, limit=15):
+        raise HTTPException(status_code=429, detail="You're chatting too fast. Let's slow down and breathe.")
+
     incr_daily_ai_spend(1.0)
 
     # Analytics via transaction

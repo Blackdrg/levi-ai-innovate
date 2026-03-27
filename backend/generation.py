@@ -15,7 +15,8 @@ import threading
 import hashlib
 from mtranslate import translate  # type: ignore
 import groq  # type: ignore
-from backend.utils.retries import standard_retry, DEFAULT_TIMEOUT, safe_request
+from backend.utils.network import standard_retry, DEFAULT_TIMEOUT, safe_request
+from backend.circuit_breaker import groq_breaker
 
 from typing import Optional, Any, List, Dict
 
@@ -228,13 +229,7 @@ def _call_groq_api(messages: List[Dict], temperature: float = 0.85,
     if not api_key:
         return None
     try:
-        # Use circuit breaker if available
-        try:
-            from backend.circuit_breaker import groq_breaker # type: ignore
-        except ImportError:
-            class MockBreaker:
-                def call(self, f, *a, **k): return f(*a, **k)
-            groq_breaker = MockBreaker()
+        # Use centralized circuit breaker
 
         resp = groq_breaker.call(
             safe_request,

@@ -37,13 +37,15 @@ jobs:
           docker build --no-cache -t us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/levi-repo/${{ env.SERVICE_NAME }}:${{ github.sha }} -f backend/Dockerfile.prod .
           docker push us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/levi-repo/${{ env.SERVICE_NAME }}:${{ github.sha }}
 
-      - name: Deploy to Cloud Run
+      - name: Deploy to Cloud Run (No Traffic)
         id: deploy
         run: |-
           gcloud run deploy ${{ env.SERVICE_NAME }} \
             --image us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/levi-repo/${{ env.SERVICE_NAME }}:${{ github.sha }} \
             --region ${{ env.REGION }} \
             --platform managed \
+            --no-traffic \
+            --tag=canary \
             --allow-unauthenticated \
             --set-env-vars "ENVIRONMENT=production" \
             --set-env-vars "GITHUB_SHA=${{ github.sha }}" \
@@ -69,15 +71,19 @@ jobs:
             --format='value(status.url)' > service_url.txt
 
           echo "SERVICE_URL=$(cat service_url.txt)" >> $GITHUB_ENV
+          
+          # Fetch the canary (tagged) URL
+          CANARY_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} --region ${{ env.REGION }} --format='value(status.traffic[1].url)' || echo "$(cat service_url.txt)")
+          echo "CANARY_URL=$CANARY_URL" >> $GITHUB_ENV
 
-      - name: Post-Deploy Health Check (Extended)
+      - name: Post-Deploy Health Check (Canary)
         run: |
-          echo "Verifying deployment at $SERVICE_URL..."
+          echo "Verifying deployment at $CANARY_URL..."
           # Max retries: 15, Wait: 6s -> Total 90s (Firestore init + Server boot)
           for i in {1..15}; do
             echo "Attempt $i..."
             # 1. Fetch health JSON
-            HEALTH_JSON=$(curl -s -f "$SERVICE_URL/health")
+            HEALTH_JSON=$(curl -s -f "$CANARY_URL/health")
             
             # 2. Check for overall status, database, and auth
             echo "Health Response: $HEALTH_JSON"
@@ -88,7 +94,7 @@ jobs:
             REMOTE_SHA=$(echo $HEALTH_JSON | grep -o '"version":"[^"]*"' | cut -d'"' -f4)
 
             if [ "$STATUS" = "ok" ] && [ "$DB_STATUS" = "ok" ] && [ "$AUTH_STATUS" = "ok" ]; then
-              echo "✅ Backend is healthy."
+              echo "✅ Canary is healthy."
               if [ "$REMOTE_SHA" = "${{ github.sha }}" ]; then
                 echo "✅ Version matches: $REMOTE_SHA"
                 exit 0
@@ -103,6 +109,14 @@ jobs:
           done
           echo "❌ Backend health check FAILED after 15 attempts."
           exit 1
+
+      - name: Swap Traffic to New Revision
+        if: success()
+        run: |
+          echo "Routing 100% traffic to latest revision..."
+          gcloud run services update-traffic ${{ env.SERVICE_NAME }} \
+            --region ${{ env.REGION }} \
+            --to-latest
 
       - name: Failure Diagnostics (Monitoring)
         if: failure()
