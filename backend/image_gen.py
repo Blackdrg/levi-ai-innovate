@@ -25,6 +25,17 @@ import requests  # type: ignore
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance  # type: ignore
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type  # type: ignore
 
+try:
+    from backend.circuit_breaker import groq_breaker, together_breaker # type: ignore
+except ImportError:
+    try:
+        from circuit_breaker import groq_breaker, together_breaker # type: ignore
+    except ImportError:
+        # Fallback if not found during dev
+        class MockBreaker:
+            def call(self, f, *a, **k): return f(*a, **k)
+        groq_breaker = together_breaker = MockBreaker()
+
 logger = logging.getLogger(__name__)
 
 from backend.s3_utils import upload_image_to_s3 # type: ignore
@@ -66,14 +77,15 @@ STYLE_ENHANCERS = {
 }
 
 
-def _enhance_prompt_with_groq(base_prompt: str, mood: str, style: str = "") -> str:
-    """Use Groq to expand a short prompt into a rich image description."""
+def _enhance_prompt_with_groq(base_prompt: str, mood: str, style: str = "") -> Tuple[str, Optional[str]]:
+    """Use Groq to expand a short prompt. Returns (enhanced_prompt, warning)."""
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
-        return base_prompt
+        return base_prompt, "GROQ_API_KEY missing"
 
     try:
-        resp = requests.post(
+        resp = groq_breaker.call(
+            requests.post,
             "https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
             json={
@@ -94,21 +106,23 @@ def _enhance_prompt_with_groq(base_prompt: str, mood: str, style: str = "") -> s
                 "max_tokens": 150,
                 "temperature": 0.7,
             },
-            timeout=6
+            timeout=10 # Increased timeout
         )
         if resp.status_code == 200:
             enhanced = resp.json()["choices"][0]["message"]["content"].strip()
-            return enhanced
+            return enhanced, None
+        else:
+            return base_prompt, f"Groq error: {resp.status_code}"
     except Exception as e:
         logger.warning(f"Prompt enhancement failed: {e}")
-    return base_prompt
+        return base_prompt, f"Groq exception: {str(e)}"
 
-
-def build_prompt(quote: str, mood: str, style: str = "", enhance: bool = True) -> str:
-    """Build a rich image prompt from quote + mood."""
+def build_prompt(quote: str, mood: str, style: str = "", enhance: bool = True) -> Tuple[str, list]:
+    """Build a rich image prompt. Returns (prompt, warnings)."""
+    warnings = []
     base = MOOD_PROMPTS.get(mood.lower(), MOOD_PROMPTS["neutral"])
 
-    # Extract key words from quote
+    # Extract key words
     stop_words = {"the", "a", "an", "is", "are", "to", "of", "and", "or", "in",
                   "it", "you", "we", "i", "me", "that", "this", "was", "be"}
     words = [w.strip(".,!?\"'—") for w in quote.lower().split() if len(w) > 3]
@@ -120,10 +134,113 @@ def build_prompt(quote: str, mood: str, style: str = "", enhance: bool = True) -
     full_prompt = f"{base_prompt}{style_suffix}, no text, no words, wallpaper quality, ultra detailed"
 
     if enhance:
-        full_prompt = _enhance_prompt_with_groq(full_prompt, mood, style)
+        full_prompt, warn = _enhance_prompt_with_groq(full_prompt, mood, style)
+        if warn:
+            warnings.append(warn)
 
-    return full_prompt
+    return full_prompt, warnings
 
+def generate_quote_image(
+    quote: str,
+    author: str = "",
+    mood: str = "neutral",
+    size: Tuple[int, int] = (1024, 1024),
+    custom_bg: str = "",
+    user_tier: str = "free",
+    style: str = "",
+    return_pil: bool = False,
+    upload_to_s3: bool = False,
+    user_id: Optional[int] = None,
+) -> dict:
+    """
+    Generate a complete quote image with AI background and text overlay.
+    Returns a dict with: 'data', 'engine', 'success', 'warnings'.
+    """
+    warnings = []
+    engineused = "fallback"
+    bg: Optional[Image.Image] = None
+
+    # 1. Custom Background
+    if custom_bg and custom_bg.startswith("data:image"):
+        try:
+            _, encoded = custom_bg.split(",", 1)
+            bg = Image.open(BytesIO(base64.b64decode(encoded))).convert("RGBA")
+            if bg.size != size:
+                bg = bg.resize(size, Image.Resampling.LANCZOS)
+            engineused = "custom"
+            logger.info("Using custom background")
+        except Exception as e:
+            warnings.append(f"Custom bg failed: {e}")
+            bg = None
+
+    # 2. Try Local SD
+    if bg is None:
+        try:
+            try:
+                from backend.sd_engine import generate as sd_generate  # type: ignore
+            except ImportError:
+                from sd_engine import generate as sd_generate  # type: ignore
+            prompt, p_warns = build_prompt(quote, mood, style, enhance=False)
+            warnings.extend(p_warns)
+            sd_result = sd_generate(prompt, style=style or "default", size=size, enhance=False)
+            if sd_result:
+                bg = Image.open(sd_result).convert("RGBA")
+                engineused = "local_sd"
+                logger.info("Using SD engine background")
+        except Exception as e:
+            logger.debug(f"SD engine not available: {e}")
+
+    # 3. Together AI FLUX
+    if bg is None and TOGETHER_API_KEY:
+        try:
+            prompt, p_warns = build_prompt(quote, mood, style, enhance=True)
+            warnings.extend(p_warns)
+            logger.info(f"Together AI generating: '{prompt[:60]}...'")
+            bg = generate_via_together(prompt, size)
+            engineused = "together_ai"
+            logger.info("Using Together AI background")
+        except Exception as e:
+            warnings.append(f"Together AI failed: {str(e)}")
+            logger.error(f"Together AI failed: {e}")
+
+    # 4. Fallback Gradient
+    if bg is None:
+        logger.info("Using gradient fallback")
+        bg = generate_gradient_fallback(mood, size)
+        engineused = "fallback_gradient"
+        if not custom_bg:
+            warnings.append("AI generation failed, used fallback gradient")
+
+    # ── Compositing ──
+    try:
+        bg = add_dark_overlay(bg, mood)
+        bg = overlay_text_advanced(bg, quote, author, mood)
+        bg = add_vignette(bg)
+        bg = add_watermark(bg, user_tier)
+        enhancer = ImageEnhance.Sharpness(bg)
+        bg = enhancer.enhance(1.1)
+        bg = bg.filter(ImageFilter.SMOOTH)
+    except Exception as e:
+        warnings.append(f"Compositing error: {e}")
+        logger.error(f"Compositing failed: {e}")
+
+    if return_pil:
+        return {"data": bg, "engine": engineused, "success": True, "warnings": warnings}
+
+    # ── Export ──
+    output = BytesIO()
+    bg.convert("RGB").save(output, "PNG", optimize=True, quality=95)
+    output.seek(0)
+
+    if upload_to_s3 and AWS_S3_BUCKET:
+        img_bytes = output.getvalue()
+        s3_url = upload_image_to_s3(img_bytes, user_id)
+        if s3_url:
+            return {"data": s3_url, "engine": engineused, "success": True, "warnings": warnings, "bio": output}
+        else:
+            warnings.append("S3 upload failed")
+
+    return {"data": output, "engine": engineused, "success": True, "warnings": warnings}
 
 # ─────────────────────────────────────────────
 # TOGETHER AI — Primary Image Generation
@@ -156,7 +273,13 @@ def generate_via_together(prompt: str, size: Tuple[int, int] = (1024, 1024),
         "Content-Type": "application/json"
     }
 
-    resp = requests.post(TOGETHER_API_URL, json=payload, headers=headers, timeout=90)
+    resp = together_breaker.call(
+        requests.post,
+        TOGETHER_API_URL, 
+        json=payload, 
+        headers=headers, 
+        timeout=90
+    )
 
     if resp.status_code == 429:
         retry_after = float(resp.headers.get("Retry-After", 5))
@@ -471,110 +594,6 @@ def add_watermark(img: Image.Image, user_tier: str = "free") -> Image.Image:
     return img
 
 
-# ─────────────────────────────────────────────
-# S3 UPLOAD
-# ─────────────────────────────────────────────
-
-# S3 upload moved to s3_utils.py
-
-
-# ─────────────────────────────────────────────
-# MAIN ENTRY POINT
-# ─────────────────────────────────────────────
-
-def generate_quote_image(
-    quote: str,
-    author: str = "",
-    mood: str = "neutral",
-    size: Tuple[int, int] = (1024, 1024),
-    custom_bg: str = "",
-    user_tier: str = "free",
-    style: str = "",
-    return_pil: bool = False,
-    upload_to_s3: bool = False,
-    user_id: Optional[int] = None,
-) -> Any:
-    """
-    Generate a complete quote image with AI background and text overlay.
-
-    Returns BytesIO (default), PIL Image (return_pil=True),
-    or dict with url+BytesIO if upload_to_s3=True.
-    """
-    # ── Step 1: Get background ──
-    bg: Optional[Image.Image] = None
-
-    # Custom upload (base64 only — no SSRF)
-    if custom_bg and custom_bg.startswith("data:image"):
-        try:
-            _, encoded = custom_bg.split(",", 1)
-            bg = Image.open(BytesIO(base64.b64decode(encoded))).convert("RGBA")
-            if bg.size != size:
-                bg = bg.resize(size, Image.Resampling.LANCZOS)
-            logger.info("Using custom background")
-        except Exception as e:
-            logger.warning(f"Custom bg failed: {e}")
-            bg = None
-
-    # Try local SD engine first (GPU)
-    if bg is None:
-        try:
-            try:
-                from backend.sd_engine import generate as sd_generate  # type: ignore
-            except ImportError:
-                from sd_engine import generate as sd_generate  # type: ignore
-            prompt = build_prompt(quote, mood, style)
-            sd_result = sd_generate(prompt, style=style or "default", size=size, enhance=False)
-            if sd_result:
-                bg = Image.open(sd_result).convert("RGBA")
-                logger.info("Using SD engine background")
-        except Exception as e:
-            logger.debug(f"SD engine not available: {e}")
-
-    # Together AI FLUX (primary cloud)
-    if bg is None and TOGETHER_API_KEY:
-        try:
-            prompt = build_prompt(quote, mood, style, enhance=True)
-            logger.info(f"Together AI generating: '{prompt[:60]}...'")
-            bg = generate_via_together(prompt, size)
-            logger.info("Using Together AI background")
-        except Exception as e:
-            logger.error(f"Together AI failed: {e}")
-
-    # PIL gradient fallback
-    if bg is None:
-        logger.info("Using gradient fallback")
-        bg = generate_gradient_fallback(mood, size)
-
-    # ── Step 2: Compositing ──
-    bg = add_dark_overlay(bg, mood)
-    bg = overlay_text_advanced(bg, quote, author, mood)
-    bg = add_vignette(bg)
-    bg = add_watermark(bg, user_tier)
-
-    # Final enhancement
-    enhancer = ImageEnhance.Sharpness(bg)
-    bg = enhancer.enhance(1.1)
-    bg = bg.filter(ImageFilter.SMOOTH)
-
-    if return_pil:
-        return bg
-
-    # ── Step 3: Export ──
-    output = BytesIO()
-    bg.convert("RGB").save(output, "PNG", optimize=True, quality=95)
-    output.seek(0)
-
-    # Optional S3 upload
-    if upload_to_s3 and AWS_S3_BUCKET:
-        img_bytes = output.getvalue()
-        s3_url = upload_image_to_s3(img_bytes, user_id)
-        output.seek(0)
-        if s3_url:
-            return {"url": s3_url, "bio": output}
-
-    return output
-
-
 # Convenience alias
 def generate_image(
     prompt: str,
@@ -583,4 +602,6 @@ def generate_image(
     **kwargs
 ) -> BytesIO:
     """Simple alias for direct prompt-based generation."""
-    return generate_quote_image(prompt, mood=mood, size=size, **kwargs)
+    # We need to wrap the result properly for the alias
+    res = generate_quote_image(prompt, mood=mood, size=size, **kwargs)
+    return res.get("data") if isinstance(res, dict) else res
