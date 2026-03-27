@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     imagemagick \
     ffmpeg \
-    && (sed -i 's/pixel, ghostscript, PDF, XPS, PS/pixel, ghostscript, XPS, PS/' /etc/ImageMagick-*/policy.xml || true) \
+    && (sed -i '/pattern=".*PDF.*"/s/rights="none"/rights="read|write"/g' /etc/ImageMagick-*/policy.xml || true) \
     && rm -rf /var/lib/apt/lists/*
 
 RUN python -m venv /opt/venv
