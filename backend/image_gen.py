@@ -338,7 +338,7 @@ def generate_gradient_fallback(mood: str, size: Tuple[int, int]) -> Image.Image:
     try:
         import numpy as np  # type: ignore
         noise = np.random.randint(0, 15, (size[1], size[0], 3), dtype=np.uint8)
-        noise_img = Image.fromarray(noise, 'RGB').convert('RGBA')
+        noise_img = Image.fromarray(noise).convert('RGBA')
         noise_img.putalpha(30)  # Very subtle
         img = Image.alpha_composite(img, noise_img)
     except ImportError:

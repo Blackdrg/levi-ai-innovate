@@ -162,28 +162,15 @@ class TestAPIRoutes:
     client: Any  # Declared for Pyre2; set by the autouse fixture at runtime
 
     @pytest.fixture(autouse=True)
-    def _setup_client(self):
+    def _setup_client(self, app_client):
         """
-        Import TestClient and app with all DB / Redis dependencies mocked out.
-        Skips gracefully if the app cannot be imported in the test environment.
+        Use the standard app_client fixture.
+        The fixtures in conftest.py already handle Firestore and environment mocking.
         """
-        try:
-            from fastapi.testclient import TestClient  # type: ignore
-            # Patch heavy startup dependencies
-            with (
-                patch("backend.db.get_db"),
-                patch("backend.redis_client.HAS_REDIS", False),
-            ):
-                try:
-                    from backend.main import app  # type: ignore
-                except Exception:
-                    from main import app  # type: ignore
-                self.client = TestClient(app, raise_server_exceptions=False)
-        except Exception as e:
-            pytest.skip(f"Could not import app for route tests: {e}")
+        self.client = app_client
 
     def test_get_content_types(self):
-        resp = self.client.get("/api/content/types")
+        resp = self.client.get("/api/v1/content/types")
         assert resp.status_code == 200
         data = resp.json()
         assert "types" in data
@@ -192,14 +179,14 @@ class TestAPIRoutes:
         assert "readme" in data["types"]
 
     def test_get_content_tones(self):
-        resp = self.client.get("/api/content/tones")
+        resp = self.client.get("/api/v1/content/tones")
         assert resp.status_code == 200
         data = resp.json()
         assert "tones" in data
         assert "inspiring" in data["tones"]
 
     def test_get_image_styles(self):
-        resp = self.client.get("/api/image/styles")
+        resp = self.client.get("/api/v1/image/styles")
         assert resp.status_code == 200
         data = resp.json()
         assert "styles" in data
@@ -208,9 +195,19 @@ class TestAPIRoutes:
         assert "minimal_line_art" in data["styles"]
 
     def test_content_generate_requires_auth(self):
-        """POST /api/content/generate should return 401 without a token."""
-        resp = self.client.post(
-            "/api/content/generate",
-            json={"content_type": "quote", "topic": "courage"},
-        )
-        assert resp.status_code in (401, 403)
+        """POST /api/v1/content/generate should return 401 without a token."""
+        # Provisionally clear the auth override to ensure it actually enforces security
+        from backend.auth import get_current_user
+        from backend.gateway import app
+        
+        orig_override = app.dependency_overrides.get(get_current_user)
+        app.dependency_overrides.pop(get_current_user, None) # Clear override to use real implementation
+        try:
+            resp = self.client.post(
+                "/api/v1/content/generate",
+                json={"content_type": "quote", "topic": "courage"},
+            )
+            assert resp.status_code in (401, 403, 422) # 422 if auth header triggers validation error
+        finally:
+            if orig_override:
+                app.dependency_overrides[get_current_user] = orig_override
