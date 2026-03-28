@@ -13,7 +13,7 @@ from backend.generation import fetch_open_source_quote, generate_quote # type: i
 
 logger = logging.getLogger("gateway.gallery")
 
-router = APIRouter(prefix="/gallery", tags=["Gallery"], version="3.0.0")
+router = APIRouter(prefix="/gallery", tags=["Gallery"])
 
 @router.get("/me")
 async def get_my_gallery(

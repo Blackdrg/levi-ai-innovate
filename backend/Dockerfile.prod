@@ -30,7 +30,6 @@ RUN pip install --no-cache-dir --upgrade pip && \
 RUN mkdir -p /app/model_cache && chmod 777 /app/model_cache
 
 COPY backend/ backend/
-COPY .env .env
 
 EXPOSE 8080
 

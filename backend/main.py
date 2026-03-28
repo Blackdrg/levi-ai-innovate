@@ -50,11 +50,11 @@ from slowapi import Limiter  # type: ignore
 from slowapi.util import get_remote_address  # type: ignore
 from slowapi.errors import RateLimitExceeded  # type: ignore
 from slowapi import _rate_limit_exceeded_handler  # type: ignore
-from pythonjsonlogger.json import JsonFormatter  # type: ignore
+from pythonjsonlogger import jsonlogger  # type: ignore
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 # Structured JSON logging
-class CustomJsonFormatter(JsonFormatter):
+class CustomJsonFormatter(jsonlogger.JsonFormatter):
     def add_fields(self, log_record, record, message_dict):
         super(CustomJsonFormatter, self).add_fields(log_record, record, message_dict)
         if not log_record.get('timestamp'):
@@ -200,8 +200,8 @@ async def strip_api_prefix(request: Request, call_next):
 # ─────────────────────────────────
 # Middleware & Rate Limiting
 # ─────────────────────────────────
-app.include_router(admin_router)
-app.include_router(persona_router)
+# app.include_router(admin_router)   # Moved to gateway.py for production
+# app.include_router(persona_router) # Moved to gateway.py for production
 
 @app.get("/health")
 async def health():

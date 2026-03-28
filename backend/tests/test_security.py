@@ -7,7 +7,7 @@ import os
 from backend.gateway import app, _INJECTION_PATTERNS  # type: ignore
 # from backend.models import Users  # type: ignore
 # from backend.auth import create_access_token, create_refresh_token  # type: ignore
-from jose import jwt  # type: ignore
+# from jose import jwt  # type: ignore (Unused and causing ModuleNotFoundError)
 
 client = TestClient(app)
 

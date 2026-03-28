@@ -4,14 +4,19 @@ import uuid
 from datetime import datetime
 import os
 
+import logging
 from backend.models import ChatMessage # type: ignore
 from backend.auth import get_current_user_optional  # type: ignore
 from backend.redis_client import get_conversation, save_conversation, is_rate_limited  # type: ignore
 from backend.firestore_db import update_analytics # type: ignore
 from backend.models import ChatMessage, _INJECTION_PATTERNS # type: ignore
 from backend.payments import use_credits # type: ignore
+from backend.broadcast_utils import broadcast_activity # type: ignore
+from backend.generation import generate_response # type: ignore
 
-router = APIRouter(prefix="/chat", tags=["Chat"], version="3.0.0")
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/chat", tags=["Chat"])
 
 @router.post("")
 async def chat_endpoint(
@@ -20,6 +25,7 @@ async def chat_endpoint(
     current_user: Optional[dict] = Depends(get_current_user_optional),
 ):
     user_id = current_user.get("uid") if current_user else f"guest:{request.client.host}"
+    user_tier = current_user.get("tier", "free") if current_user else "free"
     
     # ── Defensive: Rate Limiting ────────────────────────
     if is_rate_limited(str(user_id), limit=10, window=60):
@@ -61,7 +67,6 @@ async def chat_endpoint(
         classification = router_agent.classify_intent(msg.message)
         
         # Phase 44: Real-Time Broadcast (Synthesis Pulse)
-        from backend.gateway import broadcast_activity # type: ignore
         broadcast_activity("synthesis_started", {
             "tier": user_tier,
             "session": str(msg.session_id)[:8]
