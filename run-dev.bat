@@ -1,5 +1,5 @@
 @echo off
-title LEVI AI Dev Server
+title LEVI-AI Dev Server
 echo Starting both frontend and backend development servers...
 
 :: Ensure we are in the root directory

@@ -41,7 +41,12 @@ if firebase_admin._apps and not db:
     try:
         db = firestore.client()
     except Exception as e:
-        raise RuntimeError(f"Firestore client init failed: {e}")
+        if os.getenv("ENVIRONMENT") != "production":
+            print(f"[Firebase] Using MagicMock for Firestore (Mock Mode): {e}")
+            from unittest.mock import MagicMock
+            db = MagicMock()
+        else:
+            raise RuntimeError(f"Firestore client init failed: {e}")
 
 def get_firestore_db():
     return db

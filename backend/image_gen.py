@@ -513,7 +513,7 @@ def overlay_text_advanced(img: Image.Image, quote: str, author: str, mood: str) 
         draw.text((x, y), line, fill=(255, 255, 255, 245), font=font_quote)
 
     # Author attribution
-    author_text = f"— {author}" if author and author.lower() not in ["unknown", "levi ai", ""] else "— LEVI AI"
+    author_text = f"— {author}" if author and author.lower() not in ["unknown", "levi-ai", ""] else "— LEVI-AI"
     ay = start_y + len(lines) * line_spacing + author_gap
 
     try:
@@ -534,8 +534,8 @@ def overlay_text_advanced(img: Image.Image, quote: str, author: str, mood: str) 
     draw.text((ax, ay), author_text,
               fill=_get_accent_color(mood, 220), font=font_author)
 
-    # LEVI AI watermark (bottom right, subtle)
-    levi_text = "LEVI AI"
+    # LEVI-AI watermark (bottom right, subtle)
+    levi_text = "LEVI-AI"
     try:
         lbbox = draw.textbbox((0, 0), levi_text, font=font_levi)
         lw = lbbox[2] - lbbox[0]

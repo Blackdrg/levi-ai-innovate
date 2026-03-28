@@ -43,7 +43,7 @@ async function loadDaily() {
         const data = await getDailyQuote();
         if (data) {
             quoteEl.textContent = `"${data.text}"`;
-            authorEl.textContent = data.author || "LEVI AI";
+            authorEl.textContent = data.author || "LEVI-AI";
             categoryEl.textContent = data.topic || "Philosophical";
         }
     } catch (err) {

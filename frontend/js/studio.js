@@ -59,7 +59,7 @@ async function synthesize(){
   setLoading(true);
   try{
     await window.waitForToken();
-    const body={text,author:document.getElementById('author-input').value||'LEVI AI',mood:currentStyle,background:document.getElementById('bg-input').value};
+    const body={text,author:document.getElementById('author-input').value||'LEVI-AI',mood:currentStyle,background:document.getElementById('bg-input').value};
     
     // Using Retry Utility
     const d = await fetchWithRetry(`${window.API_BASE}/generate_image`, {
@@ -187,7 +187,7 @@ function downloadImg(){
 }
 function shareImg(){
   const t=document.getElementById('wisdom-input').value;
-  if(navigator.share)navigator.share({title:'LEVI AI Wisdom',text:t,url:location.href});
+  if(navigator.share)navigator.share({title:'LEVI-AI Wisdom',text:t,url:location.href});
   else{navigator.clipboard.writeText(t);showToast('Quote copied to clipboard')}
 }
 function regenerate(){if(document.getElementById('wisdom-input').value.trim())synthesize()}
@@ -201,7 +201,7 @@ async function makeVideo(){
   setLoading(true);
   showToast('Video generation queued...', 'info');
   try {
-    const body={text,author:document.getElementById('author-input').value||'LEVI AI',mood:currentStyle};
+    const body={text,author:document.getElementById('author-input').value||'LEVI-AI',mood:currentStyle};
     
     // Using Retry Utility
     const d = await fetchWithRetry(`${window.API_BASE}/generate_video`, {

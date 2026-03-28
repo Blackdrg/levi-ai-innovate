@@ -27,8 +27,16 @@
   <!-- Firebase & Auth Init (Early) -->
   <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
-  <script src="js/config.js"></script>
-  <script src="js/auth-manager.js"></script>
+  <script src="js/config.js?v=4"></script>
+  <script src="js/auth-manager.js?v=4"></script>
+  <script>
+    // Inline fallback for waitForToken to prevent chat crashes
+    window.waitForToken = window.waitForToken || function() {
+      console.warn("[LEVI] Using inline waitForToken fallback");
+      return Promise.resolve("local-token");
+    };
+    window.API_BASE = window.API_BASE || ((window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") ? `http://${window.location.hostname}:8000/api/v1` : "/api/v1");
+  </script>
   <style>
     .material-symbols-outlined {
       font-family: 'Material Symbols Outlined';
@@ -379,7 +387,7 @@
   <aside class="hidden lg:flex flex-col w-64 h-screen fixed left-0 top-0 z-40 sidebar-wrap" style="z-index:40">
     <div class="pt-28 pb-8 flex flex-col h-full px-5">
       <div class="px-4 mb-10">
-        <h2 class="font-headline italic gold-text text-xl">LEVI AI</h2>
+        <h2 class="font-headline italic gold-text text-xl">LEVI-AI</h2>
         <p class="text-[10px] uppercase tracking-[0.2em] text-zinc-500 mt-1">Celestial Muse</p>
       </div>
       <nav class="flex flex-col gap-1 flex-1">
@@ -484,7 +492,7 @@
 
   <div id="toast"></div>
 
-  <script src="js/chat.js?v=2"></script>
+  <script src="js/chat.js?v=3"></script>
 </body>
 
 </html>

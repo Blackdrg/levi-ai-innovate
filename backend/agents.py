@@ -1,6 +1,6 @@
 # pyright: reportMissingImports=false
 """
-Router Agent for LEVI AI.
+Router Agent for LEVI-AI.
 Classifies user intent to route messages to proper service (Chat, Image, Video, Content).
 """
 import os

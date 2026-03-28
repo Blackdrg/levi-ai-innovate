@@ -1,6 +1,6 @@
 # pyright: reportMissingImports=false
 """
-LEVI AI Learning System
+LEVI-AI Learning System
 Collects conversation feedback, learns user preferences,
 enriches the knowledge base, and prepares fine-tuning datasets.
 """
@@ -152,7 +152,7 @@ def _augment_knowledge_base(question: str, answer: str, mood: str):
         emb = embed_text(answer)
         firestore_db.collection("quotes").add({
             "text": answer,
-            "author": "LEVI AI",
+            "author": "LEVI-AI",
             "topic": "__learned__",
             "mood": mood,
             "embedding": emb,

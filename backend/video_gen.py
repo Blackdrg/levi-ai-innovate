@@ -21,6 +21,8 @@ from typing import Optional, Any, List, Tuple
 from backend.utils.network import safe_request, standard_retry, DEFAULT_TIMEOUT
 from backend.circuit_breaker import groq_breaker
 
+logger = logging.getLogger(__name__)
+
 # ── Dependency Availability Checks ──
 HAS_MOVIEPY = False
 HAS_TTS = False

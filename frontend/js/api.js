@@ -152,7 +152,7 @@ export async function generateQuote(topic, mood = "") {
   });
 }
 
-export async function generateImage(topic, author = "LEVI AI", mood = "", custom_bg = null) {
+export async function generateImage(topic, author = "LEVI-AI", mood = "", custom_bg = null) {
   return apiFetch("/generate_image", {
     method: "POST",
     body: { text: topic, author, mood, custom_bg }
@@ -182,7 +182,7 @@ export async function getDailyQuote() {
   const data = await apiFetch("/daily_quote");
   return {
     text: data.quote || data.text,
-    author: data.author || "LEVI AI",
+    author: data.author || "LEVI-AI",
     topic: data.topic || "Philosophical"
   };
 }

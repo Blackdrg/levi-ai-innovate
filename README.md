@@ -1,6 +1,6 @@
-# LEVI - AI Wisdom & Creative Muse 🌟 (v3.0 Bulletproof Architecture)
+# LEVI-AI - Wisdom & Creative Muse 🌟 (v3.0 Bulletproof Architecture)
 
-LEVI is a high-scale AI platform for philosophical exploration and artistic synthesis. **Status: v3.0 Bulletproof Release. Architected for 50k+ concurrent users with a distributed microservices pattern, Celery async queue, and central API Gateway.**
+LEVI-AI is a high-scale AI platform for philosophical exploration and artistic synthesis. **Status: v3.0 Bulletproof Release. Architected for 50k+ concurrent users with a distributed microservices pattern, Celery async queue, and central API Gateway.**
 
 ## 🏗️ Architecture (v3.0)
 

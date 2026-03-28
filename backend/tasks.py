@@ -339,7 +339,7 @@ def send_daily_quote_email(user_email: str, user_id: str, liked_topics: list, la
                 "Content-Type": "application/json",
             },
             json={
-                "from": "LEVI AI <daily@levi-ai.create.app>",
+                "from": "LEVI-AI <daily@levi-ai.create.app>",
                 "to": [user_email],
                 "subject": f"Your daily wisdom ✦ {topic.capitalize()}",
                 "html": f"<div style='...'>{quote}</div>", # Simplified for brevity, original HTML could be kept

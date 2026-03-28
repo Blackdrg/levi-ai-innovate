@@ -1,6 +1,6 @@
 # pyright: reportMissingImports=false
 """
-Stable Diffusion Image Engine for LEVI AI.
+Stable Diffusion Image Engine for LEVI-AI.
 
 Primary: Local Stable Diffusion via diffusers (requires CUDA GPU).
 Fallback: Together AI FLUX API.

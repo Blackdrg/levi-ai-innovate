@@ -28,7 +28,7 @@ CONTENT_TEMPLATES = {
             "Tone: {tone}. "
             "Rules: No clichés. No 'journey', 'tapestry', 'profound', or 'universe has a plan'. "
             "Make it surprising, specific, and memorable. "
-            "Format: [Quote] — LEVI AI"
+            "Format: [Quote] — LEVI-AI"
         ),
         "user": "Create a {tone} philosophical quote about: {topic}",
     },

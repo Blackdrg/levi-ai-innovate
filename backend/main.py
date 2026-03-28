@@ -268,40 +268,26 @@ app.add_exception_handler(LEVIException, levi_exception_handler)
 
 
 
-env_origins = os.getenv("CORS_ORIGINS", "").split(",")
-
+# CORS configuration
 origins = [
     "http://localhost:3000", "http://127.0.0.1:3000",
     "http://localhost:8000", "http://127.0.0.1:8000",
     "http://localhost:8080", "http://127.0.0.1:8080",
-    "https://levi-git-main-daksh-mehats-projects.vercel.app",
-    "https://levi-k8iuadcvd-daksh-mehats-projects.vercel.app",
+    "http://localhost:8081", "http://127.0.0.1:8081",
+    "http://0.0.0.0:8080", "http://[::1]:8080",
     "https://levi-ai.vercel.app",
-    "https://levi-ai-daksh-mehats-projects.vercel.app",
-    "https://levi-ai.create.app",
     "https://levi-ai-create.com",
     "https://levi-ai-c23c6.web.app",
     "https://levi-ai-c23c6.firebaseapp.com",
-    "https://levi-ai-create.web.app",
-    "https://levi-ai-create.firebaseapp.com",
-    "https://levi-ai.cr",
 ]
 
-for o in env_origins:
-    origin = o.strip()
-    if origin and origin != "*" and origin not in origins:
-        origins.append(origin)
-
-allow_all = os.getenv("CORS_ORIGINS", "").strip() == "*"
-
-# SECURITY: allow_credentials=True is MANDATORY for httpOnly cookies.
-# When allow_credentials=True, allow_origins MUST be a list of trusted domains, NOT ["*"].
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    allow_origin_regex="http://(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):8080",
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Admin-Key", "X-Request-ID"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 

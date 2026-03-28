@@ -32,6 +32,11 @@ jobs:
       - name: Authorize Docker
         run: gcloud auth configure-docker us-central1-docker.pkg.dev
 
+      - name: Ensure Artifact Registry repository exists
+        run: |
+          gcloud artifacts repositories describe levi-repo --location=${{ env.REGION }} || \
+          gcloud artifacts repositories create levi-repo --repository-format=docker --location=${{ env.REGION }} --description="Docker repository for LEVI-AI"
+
       - name: Build and Push Container
         run: |-
           docker build --no-cache -t us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/levi-repo/${{ env.SERVICE_NAME }}:${{ github.sha }} -f backend/Dockerfile.prod .
@@ -39,6 +44,25 @@ jobs:
 
       - name: Deploy API to Cloud Run (No Traffic)
         id: deploy_api
+        env:
+          SECRET_KEY: '${{ secrets.SECRET_KEY }}'
+          RAZORPAY_KEY_ID: '${{ secrets.RAZORPAY_KEY_ID }}'
+          RAZORPAY_KEY_SECRET: '${{ secrets.RAZORPAY_KEY_SECRET }}'
+          RAZORPAY_WEBHOOK_SECRET: '${{ secrets.RAZORPAY_WEBHOOK_SECRET }}'
+          ADMIN_KEY: '${{ secrets.ADMIN_KEY }}'
+          GROQ_API_KEY: '${{ secrets.GROQ_API_KEY }}'
+          TOGETHER_API_KEY: '${{ secrets.TOGETHER_API_KEY }}'
+          RESEND_API_KEY: '${{ secrets.RESEND_API_KEY }}'
+          FIREBASE_PROJECT_ID: '${{ secrets.FIREBASE_PROJECT_ID }}'
+          FIREBASE_MESSAGING_SENDER_ID: '${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}'
+          FIREBASE_SERVICE_ACCOUNT_JSON: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}'
+          AWS_ACCESS_KEY_ID: '${{ secrets.AWS_ACCESS_KEY_ID }}'
+          AWS_SECRET_ACCESS_KEY: '${{ secrets.AWS_SECRET_ACCESS_KEY }}'
+          AWS_S3_BUCKET: '${{ secrets.AWS_S3_BUCKET }}'
+          REDIS_URL: '${{ secrets.REDIS_URL }}'
+          VAPID_PRIVATE_KEY: '${{ secrets.VAPID_PRIVATE_KEY }}'
+          VAPID_ADMIN_EMAIL: '${{ secrets.VAPID_ADMIN_EMAIL }}'
+          SENTRY_DSN: '${{ secrets.SENTRY_DSN }}'
         run: |-
           gcloud run deploy ${{ env.SERVICE_NAME }} \
             --image us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/levi-repo/${{ env.SERVICE_NAME }}:${{ github.sha }} \
@@ -47,27 +71,7 @@ jobs:
             --no-traffic \
             --tag=canary \
             --allow-unauthenticated \
-            --set-env-vars "ENVIRONMENT=production" \
-            --set-env-vars "GITHUB_SHA=${{ github.sha }}" \
-            --set-env-vars "SECRET_KEY=${{ secrets.SECRET_KEY }}" \
-            --set-env-vars "RAZORPAY_KEY_ID=${{ secrets.RAZORPAY_KEY_ID }}" \
-            --set-env-vars "RAZORPAY_KEY_SECRET=${{ secrets.RAZORPAY_KEY_SECRET }}" \
-            --set-env-vars "RAZORPAY_WEBHOOK_SECRET=${{ secrets.RAZORPAY_WEBHOOK_SECRET }}" \
-            --set-env-vars "ADMIN_KEY=${{ secrets.ADMIN_KEY }}" \
-            --set-env-vars "GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}" \
-            --set-env-vars "TOGETHER_API_KEY=${{ secrets.TOGETHER_API_KEY }}" \
-            --set-env-vars "RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}" \
-            --set-env-vars "FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID }}" \
-            --set-env-vars "FIREBASE_MESSAGING_SENDER_ID=${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}" \
-            --set-env-vars "FIREBASE_SERVICE_ACCOUNT_JSON=${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}" \
-            --set-env-vars "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" \
-            --set-env-vars "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" \
-            --set-env-vars "AWS_S3_BUCKET=${{ secrets.AWS_S3_BUCKET }}" \
-            --set-env-vars "REDIS_URL=${{ secrets.REDIS_URL }}" \
-            --set-env-vars "USE_CELERY=false" \
-            --set-env-vars "VAPID_PRIVATE_KEY=${{ secrets.VAPID_PRIVATE_KEY }}" \
-            --set-env-vars "VAPID_MAILTO=${{ secrets.VAPID_MAILTO }}" \
-            --set-env-vars "SENTRY_DSN=${{ secrets.SENTRY_DSN }}" \
+            --set-env-vars "^|^ENVIRONMENT=production|GITHUB_SHA=${{ github.sha }}|SECRET_KEY=$SECRET_KEY|RAZORPAY_KEY_ID=$RAZORPAY_KEY_ID|RAZORPAY_KEY_SECRET=$RAZORPAY_KEY_SECRET|RAZORPAY_WEBHOOK_SECRET=$RAZORPAY_WEBHOOK_SECRET|ADMIN_KEY=$ADMIN_KEY|GROQ_API_KEY=$GROQ_API_KEY|TOGETHER_API_KEY=$TOGETHER_API_KEY|RESEND_API_KEY=$RESEND_API_KEY|FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID|FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID|FIREBASE_SERVICE_ACCOUNT_JSON=$FIREBASE_SERVICE_ACCOUNT_JSON|AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY|AWS_S3_BUCKET=$AWS_S3_BUCKET|REDIS_URL=$REDIS_URL|USE_CELERY=false|VAPID_PRIVATE_KEY=$VAPID_PRIVATE_KEY|VAPID_ADMIN_EMAIL=$VAPID_ADMIN_EMAIL|SENTRY_DSN=$SENTRY_DSN" \
             --port 8080 \
             --format='value(status.url)' > service_url.txt
 
@@ -79,6 +83,16 @@ jobs:
 
       - name: Deploy Celery Worker to Cloud Run
         id: deploy_worker
+        env:
+          REDIS_URL: '${{ secrets.REDIS_URL }}'
+          FIREBASE_PROJECT_ID: '${{ secrets.FIREBASE_PROJECT_ID }}'
+          FIREBASE_SERVICE_ACCOUNT_JSON: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}'
+          AWS_ACCESS_KEY_ID: '${{ secrets.AWS_ACCESS_KEY_ID }}'
+          AWS_SECRET_ACCESS_KEY: '${{ secrets.AWS_SECRET_ACCESS_KEY }}'
+          AWS_S3_BUCKET: '${{ secrets.AWS_S3_BUCKET }}'
+          GROQ_API_KEY: '${{ secrets.GROQ_API_KEY }}'
+          TOGETHER_API_KEY: '${{ secrets.TOGETHER_API_KEY }}'
+          SENTRY_DSN: '${{ secrets.SENTRY_DSN }}'
         run: |-
           gcloud run deploy ${{ env.SERVICE_NAME }}-worker \
             --image us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/levi-repo/${{ env.SERVICE_NAME }}:${{ github.sha }} \
@@ -86,18 +100,7 @@ jobs:
             --platform managed \
             --command="bash,worker_entrypoint.sh" \
             --no-allow-unauthenticated \
-            --set-env-vars "ENVIRONMENT=production" \
-            --set-env-vars "REDIS_URL=${{ secrets.REDIS_URL }}" \
-            --set-env-vars "FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID }}" \
-            --set-env-vars "FIREBASE_SERVICE_ACCOUNT_JSON=${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}" \
-            --set-env-vars "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" \
-            --set-env-vars "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" \
-            --set-env-vars "AWS_S3_BUCKET=${{ secrets.AWS_S3_BUCKET }}" \
-            --set-env-vars "GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}" \
-            --set-env-vars "TOGETHER_API_KEY=${{ secrets.TOGETHER_API_KEY }}" \
-            --set-env-vars "USE_CELERY=false" \
-            --set-env-vars "SENTRY_DSN=${{ secrets.SENTRY_DSN }}" \
-            --set-env-vars "CELERY_CONCURRENCY=4" \
+            --set-env-vars "^|^ENVIRONMENT=production|REDIS_URL=$REDIS_URL|FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID|FIREBASE_SERVICE_ACCOUNT_JSON=$FIREBASE_SERVICE_ACCOUNT_JSON|AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY|AWS_S3_BUCKET=$AWS_S3_BUCKET|GROQ_API_KEY=$GROQ_API_KEY|TOGETHER_API_KEY=$TOGETHER_API_KEY|USE_CELERY=false|SENTRY_DSN=$SENTRY_DSN|CELERY_CONCURRENCY=4" \
             --port 8080
 
       - name: Post-Deploy Health Check (Canary)
@@ -143,5 +146,5 @@ jobs:
         if: failure()
         run: |
           echo "--- SERVICE LOGS ---"
-          gcloud run services logs tail ${{ env.SERVICE_NAME }} --region ${{ env.REGION }} --limit 50
+          gcloud run services logs read ${{ env.SERVICE_NAME }} --region ${{ env.REGION }} --limit 50
           echo "--- END LOGS ---"

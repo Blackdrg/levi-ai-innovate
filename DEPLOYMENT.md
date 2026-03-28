@@ -1,4 +1,4 @@
-# Deployment Guide — LEVI AI
+# Deployment Guide — LEVI-AI
 
 Follow these steps to deploy the full stack to Google Cloud Run and Firebase Hosting.
 

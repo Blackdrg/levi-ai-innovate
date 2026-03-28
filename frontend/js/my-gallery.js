@@ -33,7 +33,7 @@ function createCard(item, index) {
   const mediaSrc = item.video_url || item.video || item.image_url || item.image || item.image_b64 || '';
   const isVideo = !!(item.video_url || item.video || (typeof mediaSrc === 'string' && mediaSrc.includes('.mp4')));
   const text = (item.text || '').replace(/'/g, '&#39;').replace(/"/g, '&quot;');
-  const author = (item.author || 'LEVI AI').replace(/'/g, '&#39;');
+  const author = (item.author || 'LEVI-AI').replace(/'/g, '&#39;');
   const mood = item.mood || 'philosophical';
 
   const mediaHtml = isVideo
@@ -105,9 +105,9 @@ function downloadItem(src, ext, text) {
 window.downloadItem = downloadItem;
 
 async function shareItem(text, author) {
-  const str = text ? `"${text}" — ${author}` : `Made with LEVI AI`;
+  const str = text ? `"${text}" — ${author}` : `Made with LEVI-AI`;
   if (navigator.share) {
-    navigator.share({ title: 'LEVI AI Wisdom', text: str, url: location.origin });
+    navigator.share({ title: 'LEVI-AI Wisdom', text: str, url: location.origin });
   } else {
     navigator.clipboard.writeText(str).then(() => showToast('Copied!'));
   }

@@ -42,7 +42,7 @@ def send_daily_quote(user_email: str, user_name: str, liked_topics: Optional[lis
                     </blockquote>
                     <p style="margin-top: 20px;">Stay inspired today!</p>
                     <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
-                    <small>Sent with 💜 by LEVI AI</small>
+                    <small>Sent with 💜 by LEVI-AI</small>
                 </div>
             """
         }
@@ -134,7 +134,7 @@ def send_verification_email(user_email: str, token: str):
                     </div>
                     <p style="margin-top: 20px; font-size: 0.9em; color: #666;">If the button doesn't work, copy and paste this link: <br>{verify_link}</p>
                     <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0;">
-                    <small style="color: #999;">Sent with 💜 by LEVI AI</small>
+                    <small style="color: #999;">Sent with 💜 by LEVI-AI</small>
                 </div>
             """
         }
@@ -172,7 +172,7 @@ def send_password_reset_email(user_email: str, token: str):
                     </div>
                     <p style="margin-top: 20px; font-size: 0.9em; color: #666;">This link will expire in 1 hour. If the button doesn't work, copy and paste this link: <br>{reset_link}</p>
                     <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0;">
-                    <small style="color: #999;">Sent with 💜 by LEVI AI</small>
+                    <small style="color: #999;">Sent with 💜 by LEVI-AI</small>
                 </div>
             """
         }
