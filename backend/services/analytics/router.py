@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request # type: ignore
 from typing import Optional
 import logging
 
+logger = logging.getLogger(__name__)
+
 from backend.auth import verify_admin # type: ignore
 from backend.firestore_db import db as firestore_db # type: ignore
 from backend.circuit_breaker import groq_breaker, together_breaker, CircuitBreaker # type: ignore
@@ -11,7 +13,7 @@ import os
 from datetime import datetime
 import json
 
-router = APIRouter(prefix="/analytics", tags=["Analytics"], version="3.0.0")
+router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
 @router.get("")
 async def get_analytics_data(request: Request):

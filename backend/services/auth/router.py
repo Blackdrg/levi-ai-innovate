@@ -5,7 +5,7 @@ import os
 from backend.auth import get_current_user, get_current_user_optional # type: ignore
 from backend.payments import use_credits # type: ignore
 
-router = APIRouter(prefix="/auth", tags=["Auth"], version="3.0.0")
+router = APIRouter(prefix="/auth", tags=["Auth"])
 
 @router.get("/me")
 async def get_me(current_user: dict = Depends(get_current_user)):

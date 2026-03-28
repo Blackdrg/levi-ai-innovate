@@ -14,12 +14,13 @@ from fastapi.middleware.gzip import GZipMiddleware # type: ignore
 from starlette.middleware.base import BaseHTTPMiddleware # type: ignore
 from pydantic import BaseModel, Field, field_validator # type: ignore
 import hmac
+import json
 import numpy as np
 from backend.models import _INJECTION_PATTERNS # type: ignore
 from dotenv import load_dotenv
 
 import sentry_sdk # type: ignore
-from pythonjsonlogger.json import JsonFormatter # type: ignore
+from pythonjsonlogger import jsonlogger # type: ignore
 from slowapi import Limiter # type: ignore
 from slowapi.util import get_remote_address # type: ignore
 from slowapi.errors import RateLimitExceeded # type: ignore
@@ -31,7 +32,7 @@ if os.path.exists(".env.local"):
 else:
     load_dotenv()
 
-class CustomJsonFormatter(JsonFormatter):
+class CustomJsonFormatter(jsonlogger.JsonFormatter):
     def add_fields(self, log_record, record, message_dict):
         super(CustomJsonFormatter, self).add_fields(log_record, record, message_dict)
         if not log_record.get('timestamp'):
@@ -71,7 +72,6 @@ REQUIRED_ENV_VARS = [
     "FIREBASE_SERVICE_ACCOUNT_JSON"
 ]
 
-import json
 
 def validate_env():
     """Phase 40: Enhanced Env Validation with Secret Manager Fallback."""
@@ -155,6 +155,10 @@ async def lifespan(app: FastAPI):
     try:
         firestore_db.collection("health_check").document("status").get(timeout=5.0)
         logger.info("Firestore connection verified.")
+        
+        # Register broadcaster so service routers can use it safely
+        from backend.broadcast_utils import register_broadcaster
+        register_broadcaster(broadcast_activity, INSTANCE_ID)
         
         # Cleanup zombie tasks
         zombie_jobs = firestore_db.collection("jobs") \
