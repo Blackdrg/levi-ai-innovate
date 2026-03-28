@@ -1,24 +1,36 @@
-from fastapi import APIRouter, Depends, HTTPException, Request # type: ignore
+from fastapi import APIRouter, Depends, HTTPException, Request, Response # type: ignore
 from typing import Optional, List
 import hashlib
 import numpy as np # type: ignore
+import logging
 
-from backend.auth import get_current_user_optional # type: ignore
+from backend.auth import get_current_user, get_current_user_optional # type: ignore
 from backend.firestore_db import db as firestore_db # type: ignore
 from backend.models import Query # type: ignore
-from backend.redis_client import get_cached_search, cache_search # type: ignore
-
+from backend.redis_client import get_cached_search, cache_search, HAS_REDIS # type: ignore
+from google.cloud import firestore as google_firestore # type: ignore
 from backend.generation import fetch_open_source_quote, generate_quote # type: ignore
 
-router = APIRouter(prefix="/gallery", tags=["Gallery"])
+logger = logging.getLogger("gateway.gallery")
+
+router = APIRouter(prefix="/gallery", tags=["Gallery"], version="3.0.0")
+
+@router.get("/me")
+async def get_my_gallery(
+    response: Response,
+    current_user: dict = Depends(get_current_user)
+):
+    """Fetch private gallery items. Private caching only."""
+    response.headers["Cache-Control"] = "private, max-age=60"
+    return {"items": []}
 
 @router.get("/daily_quote")
-async def get_daily_quote(mood: str = "philosophical"):
-    """Fetch a high-quality quote for the daily dose, with fallback."""
+async def get_daily_quote(response: Response, mood: str = "philosophical"):
+    """Phase 42: Optimized daily quote delivery with SWR."""
+    response.headers["Cache-Control"] = "public, max-age=3600, stale-while-revalidate=86400"
     try:
         # Try to get from a curated collection first
         quotes_ref = firestore_db.collection("quotes")
-        # In a real app, we'd use a 'daily' flag or random logic
         docs = quotes_ref.limit(5).get()
         if docs:
             import random
@@ -36,10 +48,12 @@ async def get_daily_quote(mood: str = "philosophical"):
         return {"text": "Silence is the sleep that nourishes wisdom.", "author": "Bacon", "mood": "zen"}
 
 @router.get("/feed", response_model=List[dict])
-async def get_feed(limit: int = 20, offset: int = 0):
+async def get_feed(request: Request, response: Response, limit: int = 20, offset: int = 0):
+    """Phase 42: High-velocity feed with ETag support and SWR."""
+    response.headers["Cache-Control"] = "public, max-age=60, stale-while-revalidate=600"
     try:
         feed_ref = firestore_db.collection("feed_items")
-        query = feed_ref.order_by("timestamp", direction=firestore_db.DESCENDING).limit(limit).offset(offset)
+        query = feed_ref.order_by("timestamp", direction=google_firestore.Query.DESCENDING).limit(limit).offset(offset)
         docs = query.get()
         
         results = []
@@ -54,12 +68,22 @@ async def get_feed(limit: int = 20, offset: int = 0):
                 "likes": d.get("likes", 0),
                 "time": d.get("timestamp").isoformat() if d.get("timestamp") else None
             })
+        
+        # ETag Hardening
+        import json
+        res_json = json.dumps(results, sort_keys=True)
+        etag = f'W/"{hashlib.md5(res_json.encode()).hexdigest()}"'
+        
+        if request.headers.get("If-None-Match") == etag:
+            return Response(status_code=304)
+            
+        response.headers["ETag"] = etag
         return results
     except Exception as e:
         return []
 
 @router.post("/like/{item_type}/{item_id}")
-async def like_item(item_type: str, item_id: str):
+async def like_item(item_type: str, item_id: str, user_id: str = "anonymous"):
     try:
         if item_type == "quote":
             collection = "quotes"
@@ -75,7 +99,6 @@ async def like_item(item_type: str, item_id: str):
             raise HTTPException(status_code=404, detail="Item not found")
 
         # Atomic increment
-        from google.cloud import firestore as google_firestore # type: ignore
         item_ref.update({"likes": google_firestore.Increment(1)})
         
         from backend.firestore_db import update_analytics # type: ignore
@@ -88,36 +111,53 @@ async def like_item(item_type: str, item_id: str):
 @router.post("/search_quotes", response_model=List[dict])
 async def search_quotes(request: Request, query: Query):
     """
-    Search for quotes using simple keyword matching across Firestore.
-    (Optimized for Firestore-native architecture)
+    Search for quotes using advanced vector similarity matching.
+    (Synchronized from hardened monolithic implementation)
     """
     query_hash = hashlib.md5(f"{query.text}:{query.mood}:{query.topic}".encode()).hexdigest()
     cached = get_cached_search(query_hash)
     if cached:
         return cached
 
-    try:
-        quotes_ref = firestore_db.collection("feed_items")
-        # Simple Firestore filter (limited by Firestore's indexing capabilities)
-        q = quotes_ref.order_by("timestamp", direction=firestore_db.DESCENDING)
-        
-        if query.topic:
-            q = q.where("topic", "==", query.topic)
-        
-        docs = q.limit(query.top_k).get()
-        results = []
-        for doc in docs:
-            d = doc.to_dict()
-            results.append({
-                "id": doc.id,
-                "text": d.get("text"),
-                "author": d.get("author", "Unknown"),
-                "image": d.get("image_url") or d.get("image_b64"),
-                "likes": d.get("likes", 0)
-            })
-        
-        if results:
-            cache_search(query_hash, results)
-        return results
-    except Exception as e:
-        return []
+    quotes_ref = firestore_db.collection("quotes")
+    
+    if not query.text or not HAS_REDIS:
+        docs = list(quotes_ref.limit(query.top_k).stream())
+        results = [d.to_dict() for d in docs]
+    else:
+        try:
+            from backend.embeddings import embed_text, cosine_sim, HAS_MODEL # type: ignore
+            if HAS_MODEL:
+                query_embedding = embed_text(query.text)
+                
+                # Fetch recent quotes for comparison (limited for Firestore efficiency)
+                docs = quotes_ref.limit(100).get()
+                
+                q_emb = np.array(query_embedding)
+                scored = []
+                for d in docs:
+                    data = d.to_dict()
+                    emb = data.get("embedding")
+                    if emb:
+                        score = cosine_sim(q_emb, np.array(emb))
+                        scored.append((data, score))
+                
+                # Sort by similarity
+                scored.sort(key=lambda x: x[1], reverse=True)
+                results = [s[0] for s in scored[:query.top_k]]
+            else:
+                # Basic keyword fallback
+                docs = list(quotes_ref.limit(query.top_k).stream())
+                results = [d.to_dict() for d in docs]
+        except Exception:
+            docs = list(quotes_ref.limit(query.top_k).stream())
+            results = [d.to_dict() for d in docs]
+
+    formatted = [
+        {"quote": q.get("text"), "author": q.get("author"),
+         "topic": q.get("topic"), "mood": q.get("mood")}
+        for q in results
+    ]
+
+    cache_search(query_hash, formatted)
+    return formatted

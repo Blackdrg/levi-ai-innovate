@@ -15,6 +15,7 @@ import logging
 import requests  # type: ignore
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
+from google.cloud import firestore as google_firestore
 
 logger = logging.getLogger(__name__)
 
@@ -173,7 +174,7 @@ def get_active_model_id() -> Optional[str]:
 
 def get_model_history() -> List[Dict]:
     """Retrieve all model versions from Firestore."""
-    docs = firestore_db.collection("model_versions").order_by("created_at", direction="DESCENDING").get()
+    docs = firestore_db.collection("model_versions").order_by("created_at", direction=google_firestore.Query.DESCENDING).limit(1).get()
     return [
         {
             "job_id": d.to_dict().get("job_id"),

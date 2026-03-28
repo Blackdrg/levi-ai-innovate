@@ -1,21 +1,10 @@
-import glob
+# fix_ui.py — DEPRECATED (2026-03-28)
+# This file is a temporary UI recovery script that is no longer needed.
+# The LEVI AI platform now uses standardized modular routers and gateway paths.
+# See services/studio/router.py for active UI/Studio endpoints.
+import logging
+logger = logging.getLogger(__name__)
 
-files = glob.glob('frontend/**/*.html', recursive=True)
-files += glob.glob('frontend/*.html')
-files = list(set(files))
-
-for f in files:
-    print(f"Applying contrast fixes to {f}")
-    with open(f, 'r', encoding='utf-8') as file:
-        content = file.read()
-    
-    # 1. Restore dark background
-    content = content.replace('bg-background', 'bg-surface')
-    
-    # 2. Increase label contrast (#69666e to #9ca3af)
-    content = content.replace('#69666e', '#9ca3af')
-    
-    with open(f, 'w', encoding='utf-8') as file:
-        file.write(content)
-
-print("Batch Update Complete!")
+if __name__ == "__main__":
+    logger.warning("This script is DEPRECATED and does nothing. Use standardized service routers.")
+    print("DEPRECATED: UI fixing logic is now integrated into the modular architecture.")

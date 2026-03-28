@@ -1,17 +1,10 @@
-import os
-import sys
+# create_db.py — DEPRECATED (2026-03-28)
+# This file is an obsolete legacy SQL creation script.
+# The LEVI AI platform has fully migrated to a Firestore-native architecture.
+# Use firestore_db.py for all database interactions.
+import logging
+logger = logging.getLogger(__name__)
 
-# Load env safely
-from dotenv import load_dotenv
-if os.path.exists(".env.local"):
-    load_dotenv(".env.local")
-elif os.path.exists("../.env.local"):
-    load_dotenv("../.env.local")
-
-from db import Base, engine
-import models
-import training_models
-
-print("Generating database schema directly from SQLAlchemy models...")
-Base.metadata.create_all(bind=engine)
-print("Schema complete.")
+if __name__ == "__main__":
+    logger.warning("This script is DEPRECATED and does nothing. Use firestore_db.py.")
+    print("DEPRECATED: LEVI AI is now Firestore-native.")

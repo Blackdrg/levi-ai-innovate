@@ -1,5 +1,24 @@
-// Use global API_BASE defined in auth-manager.js
-const API_BASE = window.API_BASE;
+// Add a robust showToast fallback for early-load calls
+function showToast(msg, type = 'success') {
+    if (window.ui && window.ui.showToast) { window.ui.showToast(msg, type); return; }
+    if (window.LEVI && window.LEVI.toast) { window.LEVI.toast.show(msg, type); return; }
+    const t = document.getElementById('toast');
+    if (!t) return;
+    t.innerHTML = `<div style="background:rgba(19,19,23,.92);border:.5px solid rgba(242,202,80,.35);backdrop-filter:blur(20px);padding:10px 20px;border-radius:9999px;color:#e5e1e7;font-size:12px;font-weight:600">${msg}</div>`;
+    t.classList.add('show');
+    clearTimeout(t._t);
+    t._t = setTimeout(() => t.classList.remove('show'), 3200);
+}
+
+// Fixed API_BASE race condition with a lazy-eval getter
+function getApiBase() {
+    return window.API_BASE || (
+        window.location.hostname === 'localhost'
+            ? 'http://localhost:8000/api/v1'
+            : `${window.location.origin}/api/v1`
+    );
+}
+
 let currentStyle='philosophical';let currentImage=null;
 let isGenerating = false;
 const insights={philosophical:{text:'prioritize ethereal lighting, high-contrast obsidian shadows, and golden particle dispersion.',stability:67},zen:{text:'evoke bamboo mist, still water reflections, and morning light through ancient forests.',stability:82},cyberpunk:{text:'generate neon-soaked cityscapes, rain-slicked streets, and holographic overlays.',stability:74},futuristic:{text:'render clean white surfaces, cosmic voids, and geometric precision with bioluminescent accents.',stability:91},stoic:{text:'depict marble columns, dawn light, classical architecture — austere and powerful.',stability:88},melancholic:{text:'create rain-washed cobblestones, blue hour, soft bokeh with poetic melancholy.',stability:79}};
@@ -62,7 +81,7 @@ async function synthesize(){
     const body={text,author:document.getElementById('author-input').value||'LEVI-AI',mood:currentStyle,background:document.getElementById('bg-input').value};
     
     // Using Retry Utility
-    const d = await fetchWithRetry(`${window.API_BASE}/generate_image`, {
+    const d = await fetchWithRetry(`${getApiBase()}/generate_image`, {
       method:'POST',
       body:JSON.stringify(body),
       headers:{'Content-Type':'application/json'}
@@ -114,7 +133,7 @@ async function pollTask(id,text){
   const poll = async () => {
     try {
       await window.waitForToken();
-      const r = await fetch(`${window.API_BASE}/task_status/${id}`);
+      const r = await fetch(`${getApiBase()}/task_status/${id}`);
       const d = await r.json();
 
       if ((d.status === 'completed' || d.status === 'done') && d.result) {
@@ -204,7 +223,7 @@ async function makeVideo(){
     const body={text,author:document.getElementById('author-input').value||'LEVI-AI',mood:currentStyle};
     
     // Using Retry Utility
-    const d = await fetchWithRetry(`${window.API_BASE}/generate_video`, {
+    const d = await fetchWithRetry(`${getApiBase()}/generate_video`, {
       method:'POST',
       body:JSON.stringify(body),
       headers:{'Content-Type':'application/json'}

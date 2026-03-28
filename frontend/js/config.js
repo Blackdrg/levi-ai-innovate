@@ -12,7 +12,25 @@ const firebaseConfig = {
   measurementId: "G-ST6N1X9RHD"
 };
 
-// Export for use in auth-manager.js
+// Environment Configuration
+const CONFIG = {
+  getApiBase: () => {
+    if (typeof window !== 'undefined') {
+      const { hostname, origin, protocol } = window.location;
+      // 1. Local Development Fallback
+      if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        return 'http://127.0.0.1:8000/api/v1';
+      }
+      // 2. Production Dynamic Discovery (supports subdomains/Vercel/etc.)
+      return `${origin}/api/v1`;
+    }
+    return '/api/v1'; // Generic fallback
+  },
+  firebase: firebaseConfig
+};
+
+// Export for app use
 if (typeof window !== 'undefined') {
     window.firebaseConfig = firebaseConfig;
+    window.LEVI_CONFIG = CONFIG;
 }

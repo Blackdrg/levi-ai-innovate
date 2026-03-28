@@ -4,8 +4,8 @@ from fastapi.testclient import TestClient  # type: ignore
 from datetime import datetime, timedelta
 import hmac  # type: ignore
 import os
-from backend.main import app, _INJECTION_PATTERNS  # type: ignore
-from backend.models import Users  # type: ignore
+from backend.gateway import app, _INJECTION_PATTERNS  # type: ignore
+# from backend.models import Users  # type: ignore
 # from backend.auth import create_access_token, create_refresh_token  # type: ignore
 from jose import jwt  # type: ignore
 
@@ -24,6 +24,12 @@ def test_prompt_injection_expanded():
         })
         assert response.status_code == 422
         assert "Potential prompt injection detected" in response.json()["detail"][0]["msg"]
+
+def test_permitted_cross_domain_policies_header_present():
+    """Phase 39 Hardening: Verify cross-domain policy protection."""
+    response = client.get("/health")
+    assert "X-Permitted-Cross-Domain-Policies" in response.headers
+    assert response.headers["X-Permitted-Cross-Domain-Policies"] == "none"
 
 def test_admin_key_constant_time():
     # We can't easily test timing in unit tests, but we can verify the function exists
@@ -48,23 +54,27 @@ def test_refresh_token_flow(db_session):
     # The /refresh endpoint used to be for custom JWTs.
     pass
 
-def test_verification_token_expired(db_session):
-    # Create user with expired token
-    expired_time = datetime.utcnow() - timedelta(hours=25)
-    user = Users(
-        username="expired@example.com", 
-        email="expired@example.com", 
-        password_hash="fakehash", 
-        is_verified=0,
-        verification_token="expired-token",
-        verification_token_expires_at=expired_time
-    )
-    db_session.add(user)
-    db_session.commit()
-
-    response = client.get("/verify?token=expired-token")
-    assert response.status_code == 400
-    assert "Verification token has expired" in response.json()["detail"]
+def test_verification_token_expired():
+    # Mock Firestore to simulate an expired verification token
+    expired_time = (datetime.utcnow() - timedelta(hours=25)).isoformat()
+    
+    with patch('backend.main.firestore_db') as mock_db:
+        mock_query = MagicMock()
+        mock_doc = MagicMock()
+        mock_doc.exists = True
+        mock_doc.to_dict.return_value = {
+            "email": "expired@example.com",
+            "is_verified": False,
+            "verification_token": "expired-token",
+            "verification_token_expires_at": expired_time
+        }
+        
+        # Mock the query: db.collection("users").where(...).limit(1).get()
+        mock_db.collection().where().limit().get.return_value = [mock_doc]
+        
+        response = client.get("/verify?token=expired-token")
+        assert response.status_code == 400
+        assert "Verification token has expired" in response.json()["detail"]
 
 def test_ssrf_custom_bg_blocked():
     # The implementation removes the HTTP branch from image_gen.

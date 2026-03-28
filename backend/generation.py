@@ -221,18 +221,15 @@ def _build_dynamic_system_prompt(persona: Dict, user_memory: Any = None,
     return base + memory_layer + depth_instruction + anti_repeat
 
 
-@standard_retry
-def _call_groq_api(messages: List[Dict], temperature: float = 0.85,
-                   max_tokens: int = 300, model: str = "llama-3.1-8b-instant") -> Optional[str]:
-    """Raw Groq API call with retry logic."""
+async def _async_call_groq_api(messages: List[Dict], temperature: float = 0.85,
+                          max_tokens: int = 300, model: str = "llama-3.1-8b-instant") -> Optional[str]:
+    """Phase 43: Async Groq API call for parallel orchestration."""
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
         return None
     try:
-        # Use centralized circuit breaker
-
-        resp = groq_breaker.call(
-            safe_request,
+        from backend.utils.network import async_safe_request # type: ignore
+        resp = await async_safe_request(
             "POST",
             "https://api.groq.com/openai/v1/chat/completions",
             headers={
@@ -244,20 +241,65 @@ def _call_groq_api(messages: List[Dict], temperature: float = 0.85,
                 "messages": messages,
                 "max_tokens": max_tokens,
                 "temperature": temperature,
-                "top_p": 0.95,
-                "frequency_penalty": 0.4,
-                "presence_penalty": 0.3,
-            },
-            timeout=DEFAULT_TIMEOUT
+            }
         )
-        if resp.status_code == 429:
-            logger.warning(f"Groq rate limit hit for model {model}")
-            raise requests.exceptions.RequestException("Rate limited")
-        resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"].strip()
     except Exception as e:
-        logger.error(f"Groq API error (Model: {model}): {e}")
-        raise
+        logger.warning(f"Async API call failed for {model}: {e}")
+        return None
+
+
+async def generate_council_response(
+    prompt: str,
+    history: Optional[List[dict]] = None,
+    mood: str = "",
+    max_length: int = 250,
+) -> str:
+    """
+    Phase 43: The Council of Models. 
+    Fires 3 parallel requests and selects the most 'profound' response.
+    """
+    persona = _get_random_persona(mood)
+    system_prompt = _build_dynamic_system_prompt(persona)
+    
+    messages = [{"role": "system", "content": system_prompt}]
+    if history:
+        for turn in history[-3:]:
+            messages.append({"role": "user", "content": turn.get("user", "")})
+            messages.append({"role": "assistant", "content": turn.get("bot", "")})
+    messages.append({"role": "user", "content": prompt})
+
+    # Parallel Inference
+    # Model 1: Llama 3.1 70B (High Intelligence)
+    # Model 2: Mixtral 8x7B (Philosophical nuance)
+    # Model 3: Llama 3.1 8B (Speed fallback)
+    models = ["llama-3.1-70b-versatile", "mixtral-8x7b-32768", "llama-3.1-8b-instant"]
+    
+    tasks = [
+        _async_call_groq_api(messages, temperature=persona["temperature"], 
+                             max_tokens=max_length, model=m)
+        for m in models
+    ]
+    
+    import asyncio
+    responses = await asyncio.gather(*tasks)
+    
+    # Filter out None and select 'Winner'
+    valid = [r for r in responses if r]
+    if not valid:
+        return "The council is silent. Rephrase your thought — I am listening."
+
+    # Synthesis Judge: Pick the response with the most unique 'philosophical depth'
+    # Simplified logic: favor longer responses that avoid cliches
+    def score_response(text: str) -> float:
+        score = len(text) / 100.0  # length is one factor
+        if "tapestry" in text.lower() or "realm" in text.lower(): score -= 2.0
+        if "?" in text: score += 1.0  # questions indicate Socratic depth
+        return score
+
+    winner = max(valid, key=score_response)
+    logger.info(f"Council winner selected from {len(valid)} responses.")
+    return winner
 
 
 def fetch_open_source_quote(mood: str = "") -> Optional[dict]:
@@ -347,23 +389,30 @@ def generate_quote(prompt: str, mood: str = "", max_length: int = 80) -> str:
     return random.choice(curated)
 
 
-def generate_response(
+async def generate_response(
     prompt: str,
     history: Optional[List[dict]] = None,
     mood: str = "",
     max_length: int = 250,
     lang: str = "en",
-    user_memory: Any = None
+    user_memory: Any = None,
+    user_tier: str = "free"
 ) -> str:
     """
-    Generate a free-thinking, non-repetitive philosophical response.
-    Uses randomized personas, dynamic prompting, and anti-repetition measures.
+    Phase 43: Async generation with Council of Models for Pro/Creator tiers.
     """
     if not prompt or not isinstance(prompt, str):
         return "Your silence holds its own wisdom. What wants to be said?"
 
+    # Check for Council Eligibility (Phase 43)
+    if user_tier in ["pro", "creator"]:
+        try:
+            return await generate_council_response(prompt, history, mood, max_length)
+        except Exception as e:
+            logger.warning(f"Council failed, falling back to standard generation: {e}")
+
     log_prompt = str(prompt)[:60]
-    logger.info(f"generate_response: '{log_prompt}' (lang={lang}, mood={mood})")
+    logger.info(f"generate_response (Single): '{log_prompt}' (lang={lang}, mood={mood})")
 
     # Translate Hindi input to English for processing
     input_text = prompt

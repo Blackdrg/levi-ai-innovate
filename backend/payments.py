@@ -71,15 +71,24 @@ def verify_razorpay_signature(order_id: str, payment_id: str, signature: str) ->
     Verify the payment signature from the frontend callback.
     """
     if not RAZORPAY_KEY_SECRET:
+        logger.error("RAZORPAY_KEY_SECRET not configured")
         return False
-    msg = f"{order_id}|{payment_id}"
-    secret_bytes = RAZORPAY_KEY_SECRET.encode()
-    expected = hmac.new(
-        secret_bytes, 
-        msg.encode() if isinstance(msg, str) else msg, 
-        digestmod=hashlib.sha256
-    ).hexdigest()
-    return hmac.compare_digest(expected, signature)
+    
+    try:
+        msg = f"{order_id}|{payment_id}"
+        secret_bytes = RAZORPAY_KEY_SECRET.encode("utf-8")
+        data_bytes = msg.encode("utf-8")
+        
+        expected = hmac.new(
+            secret_bytes, 
+            data_bytes, 
+            digestmod=hashlib.sha256
+        ).hexdigest()
+        
+        return hmac.compare_digest(expected, signature)
+    except Exception as e:
+        logger.error(f"Razorpay signature verification failed: {e}")
+        return False
 
 def upgrade_user_tier(user_id: str, plan: str):
     """
@@ -111,24 +120,37 @@ def verify_payment_signature(order_id: str, payment_id: str, signature: str) -> 
 
 def use_credits(user_id: str, amount: int):
     """
-    Deducts credits from a user's account in Firestore.
+    Deducts credits from a user's account in Firestore with global Locking.
     """
-    user_ref = firestore_db.collection("users").document(user_id)
-    user_doc = user_ref.get()
+    from backend.redis_client import distributed_lock # type: ignore
     
-    if not user_doc.exists:
-        raise HTTPException(status_code=404, detail="User not found")
-        
-    data = user_doc.to_dict()
-    current_credits = int(data.get("credits", 0))
-    tier = data.get("tier", "free")
-    
-    if tier == "free" and current_credits < amount:
-        raise HTTPException(status_code=402, detail="Insufficient credits. Upgrade to Pro for more generations.")
-    
-    new_credits = current_credits - amount
-    user_ref.update({"credits": new_credits})
-    return new_credits
+    with distributed_lock(f"credits:{user_id}", ttl=10) as acquired:
+        if not acquired:
+            logger.warning(f"Failed to acquire credit lock for user {user_id}. Transaction rejected.")
+            raise HTTPException(status_code=429, detail="A transaction is already in progress. Please wait.")
+            
+        try:
+            user_ref = firestore_db.collection("users").document(user_id)
+            user_doc = user_ref.get()
+            
+            if not user_doc.exists:
+                raise HTTPException(status_code=404, detail="User not found")
+                
+            data = user_doc.to_dict()
+            current_credits = int(data.get("credits", 0))
+            tier = data.get("tier", "free")
+            
+            if tier == "free" and current_credits < amount:
+                raise HTTPException(status_code=402, detail="Insufficient credits. Upgrade to Pro for more generations.")
+            
+            new_credits = current_credits - amount
+            user_ref.update({"credits": new_credits})
+            return new_credits
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Credit deduction failed for user {user_id}: {e}")
+            raise HTTPException(status_code=500, detail="Transaction failed")
 
 def process_subscription_lapse(user_id: str):
     """

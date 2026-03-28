@@ -1,12 +1,30 @@
-const API_BASE = window.API_BASE;
+const getBase = () => {
+  if (window.LEVI_CONFIG && window.LEVI_CONFIG.getApiBase) {
+    return window.LEVI_CONFIG.getApiBase();
+  }
+  return window.API_BASE || "/api/v1";
+};
 
+const API_BASE = getBase();
 console.log(`[LEVI] API Base: ${API_BASE}`);
 
+const ui = {
+    showLoader: () => {
+        const l = document.getElementById('global-loader');
+        if (l) { l.style.width = '30%'; l.style.opacity = '1'; }
+    },
+    finishLoader: () => {
+        const l = document.getElementById('global-loader');
+        if (l) { 
+            l.style.width = '100%';
+            setTimeout(() => { l.style.opacity = '0'; setTimeout(() => l.style.width = '0', 300); }, 200);
+        }
+    }
+};
 
 async function getHealth() {
   return apiFetch("/health");
 }
-
 
 async function fetchWithRetry(url, options, retries = 2) {
   try {
@@ -32,12 +50,17 @@ async function fetchWithRetry(url, options, retries = 2) {
 }
 
 async function apiFetch(endpoint, options = {}) {
-  if (window.waitForToken) await window.waitForToken();
+  // 1. Show Global Loader
+  ui.showLoader();
+  
+  // 2. Resolve URL
   const url = `${API_BASE}${endpoint}`;
   
+  // 3. Setup timeout/abort controller
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), 15000);
 
+  // 4. Standardize Headers
   const defaultOptions = {
     headers: { "Content-Type": "application/json" },
     credentials: 'include',
@@ -53,8 +76,14 @@ async function apiFetch(endpoint, options = {}) {
     const res = await fetchWithRetry(url, finalOptions);
     clearTimeout(id);
 
+    // Phase 42: Optimized 304 (Not Modified) handling
+    if (res.status === 304) {
+        console.log(`[LEVI] 304 Not Modified - Using edge cache for ${endpoint}`);
+        return null; // The caller should handle this if needed, but fetch usually resolves this
+    }
+
     if (!res.ok) {
-      // 1. Specific status handling
+      // Specific status handling
       if (res.status === 401) {
         console.warn("[LEVI] Unauthorized - redirecting to auth");
         if (!window.location.pathname.includes('auth.html')) {
@@ -67,10 +96,10 @@ async function apiFetch(endpoint, options = {}) {
         if (window.ui && window.ui.showToast) {
           window.ui.showToast("Credits exhausted. Upgrade to continue.", "warning");
         }
-        return; // Let caller handle or wait for redirect
+        return;
       }
 
-      // 2. Parse standardized error response
+      // Parse standardized error response
       let errorData = {};
       try {
         errorData = await res.json();
@@ -80,18 +109,21 @@ async function apiFetch(endpoint, options = {}) {
 
       const errorMessage = errorData.error || errorData.detail || `Server error (${res.status})`;
       const requestId = errorData.request_id || res.headers.get("X-Request-ID");
+      const traceId = errorData.trace_id || res.headers.get("X-Trace-ID");
       
-      console.error(`[LEVI] API Error: ${errorMessage}`, { 
-        status: res.status, 
-        requestId,
-        url 
-      });
+      console.error(`[LEVI] API Error: ${errorMessage}`, { status: res.status, requestId, traceId, url });
 
       const finalError = new Error(errorMessage);
       finalError.requestId = requestId;
+      finalError.traceId = traceId;
       finalError.status = res.status;
       throw finalError;
     }
+    
+    // Log Trace ID for successful responses (Phase 40)
+    const traceId = res.headers.get("X-Trace-ID");
+    if (traceId) console.log(`[Observability] Trace-ID: ${traceId}`);
+    
     return await res.json();
   } catch (error) {
     clearTimeout(id);
@@ -109,6 +141,9 @@ async function apiFetch(endpoint, options = {}) {
       toast(`${displayMsg}${ridText}`, "error");
     }
     throw error;
+  } finally {
+    // 5. Always HIDE loader
+    ui.finishLoader();
   }
 }
 
@@ -230,5 +265,6 @@ window.api = {
   getMyGallery,
   trackShare,
   getCredits,
-  createCheckout
+  createCheckout,
+  apiFetch
 };

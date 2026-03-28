@@ -1,63 +1,40 @@
-# Refactored conftest.py for Firestore-native architecture
-import pytest
-import sys
-import os
-from unittest.mock import MagicMock
-from fastapi.testclient import TestClient
+import pytest # type: ignore
+from unittest.mock import MagicMock, patch
 
-# Ensure the backend is in the path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+@pytest.fixture(autouse=True)
+def mock_env():
+    """Ensure tests run with consistent environment variables."""
+    with patch.dict("os.environ", {
+        "SECRET_KEY": "test_secret",
+        "RAZORPAY_KEY_ID": "rzp_test_123",
+        "RAZORPAY_KEY_SECRET": "rzp_test_secret",
+        "ADMIN_KEY": "admin_test",
+        "FIREBASE_PROJECT_ID": "test-project",
+        "FIREBASE_SERVICE_ACCOUNT_JSON": '{"type": "service_account"}',
+        "ALERT_WEBHOOK_URL": "http://mock-webhook"
+    }):
+        yield
 
-# Set environment variables BEFORE any backend imports
-os.environ["ENVIRONMENT"] = "development"
-os.environ["FIREBASE_PROJECT_ID"] = "test-project"
-os.environ["FIREBASE_MESSAGING_SENDER_ID"] = "12345678"
-os.environ["SECRET_KEY"] = "9342502788e0ef3e86f80907a78370de86121f0084323e0ef3e86f8c407a7837"
-os.environ["RAZORPAY_KEY_ID"] = "test"
-os.environ["RAZORPAY_KEY_SECRET"] = "test"
-os.environ["RAZORPAY_WEBHOOK_SECRET"] = "test"
-os.environ["ADMIN_KEY"] = "test"
+@pytest.fixture
+def mock_firestore():
+    """Mock the Firestore DB instance."""
+    with patch("backend.firestore_db.db") as mock_db:
+        yield mock_db
 
-# Lazy imports to handle potential circular issues or startup failures
-@pytest.fixture(scope="session")
-def app():
-    from backend.main import app as fastapi_app
-    return fastapi_app
+@pytest.fixture
+def mock_redis():
+    """Mock the Redis client instance."""
+    with patch("backend.redis_client.r") as mock_r:
+        mock_r.ping.return_value = True
+        yield mock_r
 
 @pytest.fixture
 def test_user():
-    """Return a mock user dict matching Firestore schema."""
     return {
         "uid": "user_123",
-        "username": "testuser",
         "email": "test@example.com",
+        "username": "testuser",
         "tier": "free",
-        "credits": 10
+        "credits": 10,
+        "role": "user"
     }
-
-@pytest.fixture(autouse=True)
-def override_dependencies(app, test_user):
-    """Override FastAPI dependencies for testing."""
-    from backend.main import get_current_user, get_current_user_optional
-    
-    # Mock current user
-    app.dependency_overrides[get_current_user] = lambda: test_user
-    app.dependency_overrides[get_current_user_optional] = lambda: test_user
-    
-    yield
-    app.dependency_overrides.clear()
-
-@pytest.fixture
-def auth_headers():
-    """Return valid mock headers for the test user."""
-    return {"Authorization": "Bearer fake_firebase_token"}
-
-@pytest.fixture
-def app_client(app):
-    """Test client fixture."""
-    return TestClient(app)
-
-@pytest.fixture
-def db_session():
-    """Mock DB session for legacy code compatibility."""
-    return MagicMock()

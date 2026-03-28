@@ -110,7 +110,7 @@ def run_studio_task(job_id: str, task_type: str, params: Dict[str, Any], user_id
             return {"status": "failed", "job_id": job_id, "error": error_msg}
 
     except Exception as e:
-        logger.exception(f"Studio task failed for {job_id}: {e}")
+        logger.critical(f"🚨 ALERT: Studio Job {job_id} CRITICAL FAILURE: {e}")
         try:
            firestore_db.collection("jobs").document(job_id).update({
                 "status": "failed",

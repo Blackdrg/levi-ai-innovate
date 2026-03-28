@@ -4,10 +4,32 @@ from fastapi import FastAPI, Depends, HTTPException, status, Request, Response, 
 import hmac
 import numpy as np
 from pydantic import BaseModel, Field, field_validator
-from backend.models import _INJECTION_PATTERNS  # type: ignore
+from backend.embeddings import embed_text, cosine_sim
+from backend.redis_client import (  # type: ignore
+    HAS_REDIS, REDIS_URL, cache_quote_embedding, get_cached_embedding,
+    get_daily_ai_spend, incr_daily_ai_spend, r as redis_client,
+    is_rate_limited, get_conversation, save_conversation
+)
+from backend.models import (  # type: ignore
+    Query, ChatMessage, PersonaCreate, ContentRequest, FeedbackRequest,
+    _INJECTION_PATTERNS
+)
+from google.cloud import firestore as google_firestore # type: ignore
 from fastapi.responses import JSONResponse  # type: ignore
 from fastapi.middleware.cors import CORSMiddleware  # type: ignore
 from contextlib import asynccontextmanager
+"""
+# ⚠️ DEPRECATED ⚠️
+# -----------------
+# This monolithic file (main.py) is officially DEPRECATED and is preserved only for 
+# local development fallback and historical reference.
+# 
+# ALL PRODUCTION LOGIC AND FUTURE HARDENING SHOULD BE APPLIED TO:
+# - backend/gateway.py (The main production entrypoint)
+# - backend/services/* (The modular service routers)
+# 
+# -----------------
+"""
 import os
 import hashlib
 from typing import List, Optional, Dict, Any
@@ -89,15 +111,9 @@ def validate_env():
 validate_env()
 
 # Centralized Module Imports
-from backend.models import Query, ChatMessage, PersonaCreate, ContentRequest, FeedbackRequest  # type: ignore
 from backend.auth import get_current_user, get_current_user_optional, verify_admin # type: ignore
 from backend.utils.network import safe_request, standard_retry, ai_service_breaker # type: ignore
 from backend.firestore_db import db as firestore_db, update_document, add_document, get_document, update_analytics # type: ignore
-from backend.redis_client import ( # type: ignore
-    HAS_REDIS, REDIS_URL, cache_quote_embedding, get_cached_embedding,
-    get_daily_ai_spend, incr_daily_ai_spend, r as redis_client,
-    is_rate_limited
-)
 
 from backend.generation import generate_quote, generate_response  # type: ignore
 from backend.image_gen import generate_quote_image  # type: ignore
@@ -111,7 +127,7 @@ class OrderRequest(BaseModel):
 
 class AdminAdjustCredits(BaseModel):
     user_id: str
-    amount: int
+    amount: int = Field(..., description="Credits to add (positive) or remove (negative)")
 
 class PaymentVerify(BaseModel):
     razorpay_order_id: str
@@ -133,8 +149,7 @@ class ContentGenerateRequest(BaseModel):
     @field_validator("topic", "tone")
     @classmethod
     def sanitize_content_inputs(cls, v):
-        # Note: _INJECTION_PATTERNS should be defined before this model if used
-        from backend.models import _INJECTION_PATTERNS
+        # Note: _INJECTION_PATTERNS is imported at the top
         if v:
             v_lower = v.lower()
             for pattern in _INJECTION_PATTERNS:
@@ -166,6 +181,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="LEVI Quotes API",
+    version="3.0.0",
     docs_url=None if os.getenv("ENVIRONMENT") == "production" else "/docs",
     lifespan=lifespan
 )
@@ -184,6 +200,45 @@ async def strip_api_prefix(request: Request, call_next):
 # ─────────────────────────────────
 # Middleware & Rate Limiting
 # ─────────────────────────────────
+app.include_router(admin_router)
+app.include_router(persona_router)
+
+@app.get("/health")
+async def health():
+    """Health check for CI/CD and monitoring."""
+    results = {
+        "status": "ok",
+        "database": "disconnected",
+        "redis": "disconnected",
+        "timestamp": datetime.utcnow().isoformat(),
+        "version": os.getenv("GITHUB_SHA", "local")
+    }
+    
+    # 1. Check Firestore
+    try:
+        if firestore_db:
+            # Minimal read to verify connection
+            firestore_db.collection("health_check").document("status").get(timeout=5)
+            results["database"] = "connected"
+    except Exception as e:
+        logger.error(f"[Health] Firestore error: {e}")
+        results["status"] = "error"
+        
+    # 2. Check Redis
+    try:
+        if HAS_REDIS:
+            redis_client.ping()
+            results["redis"] = "connected"
+    except Exception as e:
+        logger.error(f"[Health] Redis error: {e}")
+        # We don't necessarily fail the whole app for Redis if it's optional
+        # but for hardening we report it.
+        
+    if results["database"] != "connected":
+        results["status"] = "error"
+        
+    return results
+
 limiter = Limiter(key_func=get_remote_address, storage_uri=REDIS_URL if HAS_REDIS else "memory://")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -295,7 +350,7 @@ app.add_middleware(
 
 @app.api_route("/", methods=["GET", "HEAD"])
 def root():
-    return {"status": "ok", "message": "LEVI backend is running", "docs": "/docs", "health": "/health"}
+    return {"status": "ok", "message": "LEVI backend is running", "version": "3.0.0", "docs": "/docs", "health": "/health"}
 
 
 @app.get("/health")
@@ -307,7 +362,7 @@ async def health():
     status_info = {
         "status": "ok",
         "timestamp": datetime.utcnow().isoformat(),
-        "version": os.getenv("GITHUB_SHA", "local")[:7],
+        "version": "3.0.0",
         "database": "checking",
         "auth": "ok",
     }
@@ -389,44 +444,43 @@ async def search_quotes(request: Request, query: Query):
 
     quotes_ref = firestore_db.collection("quotes")
     
-    if not query.text:
-        # Use simple limit for random-ish results
+    if not query.text or not HAS_REDIS:
         docs = list(quotes_ref.limit(query.top_k).stream())
         results = [d.to_dict() for d in docs]
-    elif not HAS_MODEL:
-        # Keyword-ish fallback
-        if query.mood:
-            docs = list(quotes_ref.where("mood", "==", query.mood).limit(100).stream())
-        else:
-            docs = list(quotes_ref.limit(100).stream())
-            
-        results = [d.to_dict() for d in docs if query.text.lower() in d.to_dict().get("text", "").lower()]
-        if not results:
-            results = [d.to_dict() for d in docs[:query.top_k]]
     else:
-        query_embedding = embed_text(query.text)
-        # Stream and score (Naive Vector Search)
-        if query.mood:
-            docs = list(quotes_ref.where("mood", "==", query.mood).limit(500).stream())
-        else:
-            docs = list(quotes_ref.limit(500).stream())
-            
-        q_emb = np.array(query_embedding)
-        scored = []
-        for d in docs:
-            data = d.to_dict()
-            emb = data.get("embedding")
-            if emb:
-                score = cosine_sim(q_emb, np.array(emb))
-                scored.append((data, score))
-        
-        scored.sort(key=lambda x: x[1], reverse=True)
-        results = [s[0] for s in scored[:query.top_k]]
+        try:
+            from backend.embeddings import embed_text, cosine_sim, HAS_MODEL # type: ignore
+            if HAS_MODEL:
+                query_embedding = embed_text(query.text)
+                if query.mood:
+                    docs = list(quotes_ref.where("mood", "==", query.mood).limit(500).stream())
+                else:
+                    docs = list(quotes_ref.limit(500).stream())
+                
+                q_emb = np.array(query_embedding)
+                scored = []
+                for d in docs:
+                    data = d.to_dict()
+                    emb = data.get("embedding")
+                    if emb:
+                        score = cosine_sim(q_emb, np.array(emb))
+                        scored.append((data, score))
+                
+                scored.sort(key=lambda x: x[1], reverse=True)
+                results = [s[0] for s in scored[:query.top_k]]
+            else:
+                # keyword fallback
+                docs = list(quotes_ref.limit(100).stream())
+                results = [d.to_dict() for d in docs
+                           if query.text.lower() in d.to_dict().get("text", "").lower()]
+                results = results[:query.top_k] or [d.to_dict() for d in docs[:query.top_k]]
+        except Exception:
+            docs = list(quotes_ref.limit(query.top_k).stream())
+            results = [d.to_dict() for d in docs]
 
     formatted = [
-        {"quote": q.get("text"), "author": q.get("author"), "topic": q.get("topic"), "mood": q.get("mood"),
-         "similarity": 0.9,
-         "search_mode": "semantic" if HAS_MODEL else "keyword"}
+        {"quote": q.get("text"), "author": q.get("author"),
+         "topic": q.get("topic"), "mood": q.get("mood")}
         for q in results
     ]
 
@@ -653,7 +707,6 @@ async def like_item(item_type: str, item_id: str):
             raise HTTPException(status_code=404, detail="Item not found")
 
         # Atomic increment for likes
-        from google.cloud import firestore as google_firestore # type: ignore
         item_ref.update({"likes": google_firestore.Increment(1)})
 
         
@@ -674,7 +727,7 @@ async def get_feed(limit: int = 20, offset: int = 0):
         feed_ref = firestore_db.collection("feed_items")
         # Note: Firestore offset is expensive (skips items), but for small feeds it's okay.
         # Better to use cursor-based pagination for large feeds.
-        query = feed_ref.order_by("timestamp", direction=firestore_db.DESCENDING).limit(limit).offset(offset)
+        query = feed_ref.order_by("timestamp", direction=google_firestore.Query.DESCENDING).limit(limit).offset(offset)
         docs = query.get()
         
         results = []
@@ -785,13 +838,11 @@ async def chat(
                         return {"response": "❌ [Router] Credit check failed."}
 
               if intent == "generate_image":
-                   from backend.tasks import generate_image_task  # type: ignore
                    user_tier = current_user.get("tier", "free") if current_user else "free"
                    generate_image_task.delay(params.get("topic") or msg.message, "Unknown", msg.mood or "neutral", user_id, user_tier)
                    return {"response": f"🎨 [Visual Agent] I am generating an image for '{params.get('topic') or msg.message}'. Check your Feed shortly!"}
 
               if intent == "generate_video":
-                   from backend.tasks import generate_video_task  # type: ignore
                    user_tier = current_user.get("tier", "free") if current_user else "free"
                    generate_video_task.delay(params.get("topic") or msg.message, "Unknown", msg.mood or "neutral", user_id, user_tier)
                    return {"response": f"🎥 [Video Agent] Video synthesis started for '{params.get('topic') or msg.message}'. This will appear in your Feed when ready."}
@@ -1050,7 +1101,7 @@ async def get_model_status():
 
         # Latest training job from Firestore
         jobs_ref = firestore_db.collection("training_jobs")
-        latest_jobs = jobs_ref.order_by("created_at", direction=firestore_db.DESCENDING).limit(1).get()
+        latest_jobs = jobs_ref.order_by("created_at", direction=google_firestore.Query.DESCENDING).limit(1).get()
         latest_job = latest_jobs[0].to_dict() if latest_jobs else None
 
         return {
@@ -1212,7 +1263,7 @@ async def get_my_gallery(current_user: dict = Depends(get_current_user), limit: 
     uid = current_user.get("uid")
     try:
         feed_ref = firestore_db.collection("feed_items")
-        query = feed_ref.where("user_id", "==", uid).order_by("timestamp", direction=firestore_db.DESCENDING).limit(limit).offset(offset)
+        query = feed_ref.where("user_id", "==", uid).order_by("timestamp", direction=google_firestore.Query.DESCENDING).limit(limit).offset(offset)
         docs = query.get()
         
         results = []
@@ -1242,7 +1293,7 @@ async def get_my_gallery(current_user: dict = Depends(get_current_user), limit: 
 async def admin_list_users(request: Request, _admin: bool = Depends(verify_admin)):
     try:
         users_ref = firestore_db.collection("users")
-        docs = users_ref.order_by("created_at", direction=firestore_db.DESCENDING).get()
+        docs = users_ref.order_by("created_at", direction=google_firestore.Query.DESCENDING).get()
         
         results = []
         for doc in docs:
@@ -1266,7 +1317,7 @@ async def admin_list_users(request: Request, _admin: bool = Depends(verify_admin
 async def admin_list_feed(request: Request, limit: int = 50, offset: int = 0, _admin: bool = Depends(verify_admin)):
     try:
         feed_ref = firestore_db.collection("feed_items")
-        query = feed_ref.order_by("timestamp", direction=firestore_db.DESCENDING).limit(limit).offset(offset)
+        query = feed_ref.order_by("timestamp", direction=google_firestore.Query.DESCENDING).limit(limit).offset(offset)
         docs = query.get()
         
         return [{

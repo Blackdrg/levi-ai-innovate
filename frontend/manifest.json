@@ -1,21 +1,24 @@
 {
-  "name": "LEVI-AI - Artistic Wisdom",
+  "name": "LEVI AI — v3.0 Bulletproof",
   "short_name": "LEVI",
-  "description": "Experience the fusion of artificial intelligence and artistic inspiration.",
+  "description": "Experience the absolute fusion of artistic wisdom and production-grade artificial intelligence.",
   "start_url": "index.html",
   "display": "standalone",
-  "background_color": "#050B14",
-  "theme_color": "#8B5CF6",
+  "background_color": "#09090f",
+  "theme_color": "#d4af37",
+  "orientation": "portrait",
   "icons": [
     {
       "src": "https://img.icons8.com/fluency/192/000000/brain.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "https://img.icons8.com/fluency/512/000000/brain.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }

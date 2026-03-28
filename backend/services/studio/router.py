@@ -3,18 +3,18 @@ from typing import Optional
 import uuid
 from datetime import datetime
 import os
+import logging
 
 from backend.models import Query # type: ignore
 from backend.auth import get_current_user_optional # type: ignore
 from backend.firestore_db import db as firestore_db, add_document # type: ignore
 from backend.services.studio.tasks import generate_image_task, generate_video_task # type: ignore
+from backend.payments import use_credits # type: ignore
+from backend.redis_client import is_rate_limited # type: ignore
 
-router = APIRouter(prefix="/studio", tags=["Studio"])
+logger = logging.getLogger(__name__)
 
-def is_rate_limited(user_id: str):
-    # Simplified rate limiting check for internal routing
-    # This will be handled more robustly in the Gateway
-    return False
+router = APIRouter(prefix="/studio", tags=["Studio"], version="3.0.0")
 
 @router.post("/generate_image")
 async def gen_image(
@@ -24,8 +24,13 @@ async def gen_image(
     current_user: Optional[dict] = Depends(get_current_user_optional)
 ):
     try:
-        user_id = current_user.get("uid") if current_user else None
+        user_id = current_user.get("uid") if current_user else f"guest:{request.client.host}"
         user_tier = current_user.get("tier", "free") if current_user else "free"
+        
+        # ── Defensive: Rate Limiting ────────────────────────
+        if is_rate_limited(str(user_id), limit=5, window=60):
+            logger.warning(f"[RateLimit] Throttled user {user_id} in Studio (Image)")
+            raise HTTPException(status_code=429, detail="Generation limit reached. Please wait a minute.")
         
         # Async Job Pattern
         job_id = f"job_{uuid.uuid4().hex[:12]}"
@@ -37,8 +42,15 @@ async def gen_image(
             "params": {"text": req.text, "mood": req.mood, "author": req.author, "custom_bg": req.custom_bg},
             "created_at": datetime.utcnow()
         }
-        add_document("jobs", job_data)
-        
+        # ── Financial: Credit Check ─────────────────────────
+        if user_id:
+            try:
+                use_credits(str(user_id), 1)
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"[Studio] Credit deduction failed: {e}")
+
         if os.getenv("USE_CELERY", "true").lower() == "true":
             generate_image_task.delay(
                 job_id=job_id, 
@@ -71,8 +83,13 @@ async def gen_video(
     current_user: Optional[dict] = Depends(get_current_user_optional)
 ):
     try:
-        user_id = current_user.get("uid") if current_user else None
+        user_id = current_user.get("uid") if current_user else f"guest:{request.client.host}"
         user_tier = current_user.get("tier", "free") if current_user else "free"
+        
+        # ── Defensive: Rate Limiting ────────────────────────
+        if is_rate_limited(str(user_id), limit=5, window=60):
+            logger.warning(f"[RateLimit] Throttled user {user_id} in Studio (Video)")
+            raise HTTPException(status_code=429, detail="Generation limit reached. Please wait a minute.")
 
         # Async Job Pattern
         job_id = f"vjob_{uuid.uuid4().hex[:12]}"
@@ -84,8 +101,15 @@ async def gen_video(
             "params": {"text": req.text, "mood": req.mood, "author": req.author},
             "created_at": datetime.utcnow()
         }
-        add_document("jobs", job_data)
-        
+        # ── Financial: Credit Check ─────────────────────────
+        if user_id:
+            try:
+                use_credits(str(user_id), 2)
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"[Studio] Credit deduction failed: {e}")
+
         if os.getenv("USE_CELERY", "true").lower() == "true":
             generate_video_task.delay(
                 job_id=job_id, 

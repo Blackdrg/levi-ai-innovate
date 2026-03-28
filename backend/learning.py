@@ -11,6 +11,7 @@ import logging
 import hashlib
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any, Tuple
+from google.cloud import firestore as google_firestore
 try:
     from backend.firestore_db import db as firestore_db  # type: ignore
 except ImportError:
@@ -185,7 +186,7 @@ class UserPreferenceModel:
 
         # Fetch last 40 rated interactions for this user from Firestore
         samples_ref = firestore_db.collection("training_data")
-        query = samples_ref.where("user_id", "==", self.user_id).order_by("created_at", direction="DESCENDING").limit(40)
+        query = samples_ref.where("user_id", "==", self.user_id).order_by("created_at", direction=google_firestore.Query.DESCENDING).limit(40)
         samples_docs = query.get()
         
         samples = [doc.to_dict() for doc in samples_docs if doc.to_dict().get("rating") is not None]
@@ -455,7 +456,7 @@ def export_training_data(
     Returns (file_path, record_count).
     """
     samples_ref = firestore_db.collection("training_data")
-    query = samples_ref.where("rating", ">=", min_rating).where("is_exported", "==", False).order_by("rating", direction="DESCENDING").limit(limit)
+    query = samples_ref.where("rating", ">=", min_rating).where("is_exported", "==", False).order_by("rating", direction=google_firestore.Query.DESCENDING).limit(limit)
     samples_docs = query.get()
 
     if not samples_docs:
@@ -506,7 +507,7 @@ def get_learning_stats():
         best_variant = 0
         best_score = 0.0
         try:
-            perf_docs = firestore_db.collection("prompt_performance").order_by("avg_score", direction="DESCENDING").limit(1).get()
+            perf_docs = firestore_db.collection("prompt_performance").order_by("avg_score", direction=google_firestore.Query.DESCENDING).limit(1).get()
             if perf_docs:
                 best_variant = int(perf_docs[0].id)
                 best_score = perf_docs[0].to_dict().get("avg_score", 0.0)

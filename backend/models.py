@@ -62,20 +62,25 @@ class ContentRequest(BaseModel):
     depth: str = "high"
 
 class FeedbackRequest(BaseModel):
-    session_id: str
-    message_hash: str
-    rating: int                 # 1-5
-    bot_response: str
-    user_message: str
-    mood: Optional[str] = "philosophical"
-    feedback_type: str = "star"
+    item_id: str
+    item_type: str = "image"
+    rating: int = Field(..., ge=1, le=5)
+    comment: Optional[str] = None
+
+class AdminAdjustCredits(BaseModel):
+    user_id: str
+    amount: int = Field(..., description="Credits to add (positive) or remove (negative)")
+
+class OrderRequest(BaseModel):
+    plan: str  # "pro" or "creator"
+
+class PaymentVerify(BaseModel):
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
 
 class JobStatus(BaseModel):
     job_id: str
     status: str
     url: Optional[str] = None
     error: Optional[str] = None
-
-class AdminAdjustCredits(BaseModel):
-    user_id: str
-    amount: int

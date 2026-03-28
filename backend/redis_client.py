@@ -1,11 +1,11 @@
 # pyright: reportMissingImports=false
 
 import redis  # type: ignore
-
 import os
-
 import json
-
+import redis
+import redis.asyncio as aioredis
+from typing import Optional, Any, Dict
 from dotenv import load_dotenv  # type: ignore
 
 
@@ -119,11 +119,12 @@ def save_conversation(session_id: str, conversation: list, user_id: str = None):
     
     # 2. Save to Firestore for durability
     try:
+        from datetime import datetime
         firestore_db.collection("conversations").document(session_id).set({
             "session_id": session_id,
             "user_id": user_id,
             "history": conversation,
-            "updated_at": os.environ.get("TIMESTAMP", "") # Optional: use real timestamp
+            "updated_at": datetime.utcnow().isoformat()
         }, merge=True)
     except Exception as e:
         print(f"[Firestore] Error saving conversation {session_id}: {e}")
@@ -280,6 +281,12 @@ def incr_daily_ai_spend(amount: float = 1.0) -> float:
         return current
 
 
+async def get_async_redis() -> aioredis.Redis:
+    """Phase 44: Returns an async Redis client for Pub/Sub."""
+    if not REDIS_URL:
+        raise RuntimeError("REDIS_URL not configured")
+    return aioredis.from_url(REDIS_URL, decode_responses=False)
+
 def get_daily_ai_spend() -> float:
     """Get today's accumulated AI spend."""
     key = f"ai_spend:{_date.today().isoformat()}"
@@ -324,6 +331,41 @@ def release_concurrency_slot(limit_key: str):
 
 
 # ── Generic Rate Limiting ───────────────────────────────────
+
+import time
+from contextlib import contextmanager
+
+@contextmanager
+def distributed_lock(lock_name: str, ttl: int = 10):
+    """
+    Phase 41: Multi-instance distributed lock (Redlock pattern).
+    Ensures safe access to global resources (credits, jobs).
+    """
+    if not HAS_REDIS:
+        # Local development fallback: no-op since multi-instance is unlikely
+        yield True
+        return
+
+    lock_key = f"lock:{lock_name}"
+    lock_val = str(time.time())
+    
+    # Try to acquire the lock: SET lock_key lock_val NX PX ttl*1000
+    acquired = r.set(lock_key, lock_val, nx=True, px=ttl * 1000)
+    
+    try:
+        if not acquired:
+            print(f"[Redis] Lock {lock_name} is already held.")
+            yield False
+        else:
+            yield True
+    finally:
+        if acquired:
+            # Only release if we still hold it (check value)
+            # Use Lua script for atomic check-and-delete if possible, 
+            # but for simple hardening this is a solid start.
+            current = _get(lock_key)
+            if current and current.decode() if isinstance(current, bytes) else current == lock_val:
+                r.delete(lock_key)
 
 def is_rate_limited(user_id: str, limit: int = 5, window: int = 60) -> bool:
     """

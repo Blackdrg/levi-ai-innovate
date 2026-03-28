@@ -27,12 +27,9 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 RUN mkdir -p /app/model_cache && chmod 777 /app/model_cache
 
-COPY backend/ .
+COPY backend/ backend/
+COPY .env .env
 
 EXPOSE 8080
 
-CMD uvicorn main:app \
-    --host 0.0.0.0 \
-    --port ${PORT:-8080} \
-    --workers 2 \
-    --timeout-keep-alive 75
+CMD uvicorn backend.gateway:app --host 0.0.0.0 --port $PORT --workers 2

@@ -1,6 +1,9 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: ["./*.html", "./js/**/*.js"],
+  darkMode: 'class',
+  content: [
+    "./**/*.{html,js}"
+  ],
   theme: {
     extend: {
       colors: {
@@ -24,6 +27,8 @@ module.exports = {
         'float': 'float 6s ease-in-out infinite',
         'orb': 'orb 20s linear infinite',
         'pulse-glow': 'pulse-glow 4s ease-in-out infinite',
+        'fade-up': 'fade-up 0.5s ease-out',
+        'pulse-gold': 'pulse-gold 2s ease-in-out infinite',
       },
       keyframes: {
         float: {
@@ -39,6 +44,14 @@ module.exports = {
         'pulse-glow': {
           '0%, 100%': { opacity: 0.3 },
           '50%': { opacity: 0.6 },
+        },
+        'fade-up': {
+          '0%': { opacity: 0, transform: 'translateY(20px)' },
+          '100%': { opacity: 1, transform: 'translateY(0)' },
+        },
+        'pulse-gold': {
+          '0%, 100%': { opacity: 1, boxShadow: '0 0 0 0 rgba(212, 175, 55, 0.4)' },
+          '50%': { opacity: 0.8, boxShadow: '0 0 0 10px rgba(212, 175, 55, 0)' },
         }
       }
     }

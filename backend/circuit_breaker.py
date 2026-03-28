@@ -2,6 +2,8 @@ import time
 import logging
 from functools import wraps
 from typing import Callable, Any
+import requests
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +15,23 @@ class CircuitBreaker:
         self.failures = 0
         self.last_failure_time = 0
         self.state = "CLOSED" # CLOSED, OPEN, HALF-OPEN
+        self.webhook_url = os.getenv("ALERT_WEBHOOK_URL")
+
+    def _send_alert(self, message: str):
+        """Send a proactive alert to the configured webhook."""
+        if not self.webhook_url:
+            return
+            
+        try:
+            # Simple Discord/Slack compatible JSON payload
+            payload = {
+                "content": f"🚨 **LEVI-AI ALERT**: Circuit Breaker **[{self.name}]** {message}",
+                "username": "LEVI Monitoring"
+            }
+            # Short timeout to avoid blocking the main thread
+            requests.post(self.webhook_url, json=payload, timeout=2.0)
+        except Exception as e:
+            logger.error(f"Failed to send alert for {self.name}: {e}")
 
     def call(self, func: Callable, *args, **kwargs) -> Any:
         if self.state == "OPEN":
@@ -24,19 +43,28 @@ class CircuitBreaker:
 
         try:
             result = func(*args, **kwargs)
-            if self.state == "HALF-OPEN":
+            if self.state != "CLOSED":
+                logger.info(f"Circuit Breaker [{self.name}] RECOVERED and is now CLOSED")
                 self.state = "CLOSED"
                 self.failures = 0
-                logger.info(f"Circuit Breaker [{self.name}] recovered and CLOSED")
             return result
         except Exception as e:
+            # Only count true "failures". Rate limits (429) are usually handled by retries
+            # but if they persist, they can trip the circuit. 
             self.failures += 1
             self.last_failure_time = time.time()
-            logger.warning(f"Circuit Breaker [{self.name}] failure {self.failures}/{self.failure_threshold}: {e}")
+            
+            error_msg = str(e)
+            if hasattr(e, "response") and e.response is not None:
+                error_msg = f"HTTP {e.response.status_code}: {e.response.text}"
+
+            logger.warning(f"Circuit Breaker [{self.name}] failure {self.failures}/{self.failure_threshold}: {error_msg}")
             
             if self.failures >= self.failure_threshold:
+                if self.state != "OPEN":
+                    logger.error(f"Circuit Breaker [{self.name}] THRESHOLD REACHED. State changed to OPEN.")
+                    self._send_alert("TRIPPED! Transitioned to OPEN state due to repeated failures.")
                 self.state = "OPEN"
-                logger.error(f"Circuit Breaker [{self.name}] is now OPEN")
             
             raise e
 

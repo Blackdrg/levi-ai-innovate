@@ -8,8 +8,9 @@ from typing import Optional, List, Dict, Any
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, HTTPException, Depends, status, BackgroundTasks  # type: ignore
-from fastapi.responses import JSONResponse  # type: ignore
+from fastapi.responses import JSONResponse, StreamingResponse  # type: ignore
 from fastapi.middleware.cors import CORSMiddleware  # type: ignore
+from fastapi.middleware.gzip import GZipMiddleware # type: ignore
 from starlette.middleware.base import BaseHTTPMiddleware # type: ignore
 from pydantic import BaseModel, Field, field_validator # type: ignore
 import hmac
@@ -59,6 +60,10 @@ if SENTRY_DSN:
     )
     logger.info("Sentry initialized in Gateway.")
 
+# Instance Fingerprinting
+INSTANCE_ID = str(uuid.uuid4())[:8]
+logger.info(f"Initialized with Instance ID: {INSTANCE_ID}")
+
 # Environment Validation
 REQUIRED_ENV_VARS = [
     "SECRET_KEY", "RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET",
@@ -66,21 +71,87 @@ REQUIRED_ENV_VARS = [
     "FIREBASE_SERVICE_ACCOUNT_JSON"
 ]
 
+import json
+
 def validate_env():
+    """Phase 40: Enhanced Env Validation with Secret Manager Fallback."""
+    missing = [var for var in REQUIRED_ENV_VARS if not os.getenv(var)]
+    
+    # ── Secret Manager Fallback (Production) ──────────────────────
+    if missing and os.getenv("ENVIRONMENT") == "production":
+        logger.info("Some environment variables missing. Attempting Secret Manager fallback...")
+        try:
+            from google.cloud import secretmanager # type: ignore
+            client = secretmanager.SecretManagerServiceClient()
+            project_id = os.getenv("FIREBASE_PROJECT_ID", "levi-ai-c23c6")
+            
+            for var in missing:
+                name = f"projects/{project_id}/secrets/{var}/versions/latest"
+                try:
+                    response = client.access_secret_version(name=name)
+                    val = response.payload.data.decode("UTF-8")
+                    os.environ[var] = val
+                    logger.info(f"Retrieved {var} from Secret Manager.")
+                except Exception:
+                    logger.warning(f"Failed to fetch {var} from Secret Manager.")
+        except ImportError:
+            logger.error("google-cloud-secret-manager not installed. Fallback skipped.")
+        except Exception as e:
+            logger.error(f"Secret Manager client failure: {e}")
+
+    # Final check
     missing = [var for var in REQUIRED_ENV_VARS if not os.getenv(var)]
     if missing and os.getenv("ENVIRONMENT") == "production":
-        logger.error(f"CRITICAL: Missing environment variables: {', '.join(missing)}")
+        logger.error(f"CRITICAL: Missing environment variables after fallback: {', '.join(missing)}")
         exit(1)
+    
+    # Standardize Service Account Parsing for Cloud Run
+    sa_json = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
+    if sa_json:
+        try:
+            if sa_json.startswith("{") and sa_json.endswith("}"):
+                json.loads(sa_json)
+                logger.info("Firebase Service Account JSON string validated.")
+            elif os.path.exists(sa_json):
+                 logger.info(f"Firebase Service Account file found: {sa_json}")
+        except Exception as e:
+            logger.error(f"Invalid FIREBASE_SERVICE_ACCOUNT_JSON format: {e}")
+    
+    if not os.getenv("ALERT_WEBHOOK_URL"):
+        logger.info("Optional ALERT_WEBHOOK_URL not set. Proactive monitoring alerts disabled.")
+    else:
+        logger.info("Proactive monitoring alerts ENABLED.")
 
 validate_env()
 
-# ── Lifespan & App ──────────────────────────────────
+# ── Lifespan & Heartbeats ───────────────────────────
 from backend.firestore_db import db as firestore_db # type: ignore
-from backend.redis_client import HAS_REDIS, REDIS_URL # type: ignore
+from backend.redis_client import HAS_REDIS, REDIS_URL, r as redis_client # type: ignore
+import asyncio
+
+async def instance_heartbeat(instance_id: str):
+    """Phase 41: Register this instance in Redis every 30s for cluster visibility."""
+    while True:
+        try:
+            if HAS_REDIS:
+                # Store heartbeat in a Hash: Key=active_instances, Field=instance_id, Val=timestamp
+                redis_client.hset("active_instances", instance_id, int(time.time()))
+                # Cleanup old heartbeats (> 60s)
+                all_instances = redis_client.hgetall("active_instances")
+                for inst, ts in all_instances.items():
+                    if int(time.time()) - int(ts) > 60:
+                        redis_client.hdel("active_instances", inst)
+        except Exception as e:
+            logger.warning(f"Heartbeat failed: {e}")
+        await asyncio.sleep(30)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Starting LEVI Gateway...")
+    logger.info(f"Starting LEVI Gateway [{INSTANCE_ID}]...")
+    
+    # Start Heartbeat Task
+    heartbeat_task = asyncio.create_task(instance_heartbeat(INSTANCE_ID))
+    
     try:
         firestore_db.collection("health_check").document("status").get(timeout=5.0)
         logger.info("Firestore connection verified.")
@@ -97,7 +168,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Startup check failed: {e}")
         if os.getenv("ENVIRONMENT") == "production": raise RuntimeError("STARTUP FAIL")
+    
+    logger.info(f"LEVI Gateway v4.0 Pulse [{INSTANCE_ID}] Initialized Successfully.")
     yield
+    # Stop Heartbeat
+    heartbeat_task.cancel()
+    if HAS_REDIS:
+        redis_client.hdel("active_instances", INSTANCE_ID)
+    logger.info(f"Stopping LEVI Gateway [{INSTANCE_ID}]...")
 
 app = FastAPI(
     title="LEVI API Gateway",
@@ -106,16 +184,7 @@ app = FastAPI(
     docs_url=None if os.getenv("ENVIRONMENT") == "production" else "/docs"
 )
 
-@app.middleware("http")
-async def strip_api_prefix(request: Request, call_next):
-    """Strip /api/v1 prefix for consistency (needed for root routes)."""
-    path = request.scope["path"]
-    if path.startswith("/api/v1"):
-        new_path = path[len("/api/v1"):] or "/"
-        request.scope["path"] = new_path
-        if "raw_path" in request.scope:
-            request.scope["raw_path"] = new_path.encode()
-    return await call_next(request)
+
 
 # ── Middleware ──────────────────────────────────────
 limiter = Limiter(key_func=get_remote_address, storage_uri=REDIS_URL if HAS_REDIS else "memory://")
@@ -124,31 +193,93 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 @app.middleware("http")
 async def add_request_tracking(request: Request, call_next):
+    """Phase 40: Advanced Global Observability Middleware."""
     request_id = str(uuid.uuid4())
+    # Distributed Trace-ID Injection
+    trace_id = request.headers.get("X-Trace-ID", str(uuid.uuid4()))
+    
     request.state.request_id = request_id
+    request.state.trace_id = trace_id
+    
     start_time = time.time()
     
+    # Process request
     response = await call_next(request)
     
+    # Calculate performance metrics
     duration = (time.time() - start_time) * 1000
-    response.headers["X-Request-ID"] = request_id
+    p_size = response.headers.get("Content-Length", "0")
     
+    response.headers["X-Request-ID"] = request_id
+    response.headers["X-Trace-ID"] = trace_id
+    
+    # Phase 42: Cache Isolation (Vary)
+    response.headers["Vary"] = "Accept-Encoding, Authorization, X-Trace-ID"
+    
+    # Phase 45: Real-Time Metric Accumulation (Redis Aggregation)
+    if HAS_REDIS:
+        try:
+            # 1. Throughput increment
+            redis_client.incr("metrics:total_requests")
+            
+            # 2. Latency aggregation (p95 history)
+            redis_client.lpush("metrics:latency_ms", int(duration))
+            redis_client.ltrim("metrics:latency_ms", 0, 99) # Keep last 100 durations
+            
+            # 3. Error monitoring
+            if response.status_code >= 500:
+                redis_client.incr("metrics:error_count")
+        except Exception as e:
+            logger.warning(f"Metric push failed: {e}")
+
     logger.info("gateway_request_completed", extra={
         "request_id": request_id, 
+        "trace_id": trace_id,
         "method": request.method,
         "path": request.url.path, 
         "status_code": response.status_code,
-        "duration_ms": int(duration)
+        "duration_ms": int(duration),
+        "payload_size_kb": round(int(p_size) / 1024, 2) if p_size.isdigit() else 0,
+        "cache_hit": response.headers.get("X-Cache", "MISS")
     })
+    
+    # ── Phase 22: Ultimate Security Hardening ──────────────────
+    # Content Security Policy (CSP)
+    csp_parts = [
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com https://checkout.razorpay.com",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "img-src 'self' data: blob: https://images.unsplash.com https://*.firebasestorage.app https://*.s3.amazonaws.com",
+        "connect-src 'self' https://*.firebaseio.com https://*.googleapis.com https://api.razorpay.com",
+        "font-src 'self' https://fonts.gstatic.com",
+        "frame-src 'self' https://checkout.razorpay.com",
+        "object-src 'none'",
+        "upgrade-insecure-requests"
+    ]
+    response.headers["Content-Security-Policy"] = "; ".join(csp_parts)
+    
+    # HSTS (force HTTPS)
+    if os.getenv("ENVIRONMENT") == "production":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
+    
+    # Standard Security Headers
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["X-DNS-Prefetch-Control"] = "off"
+    response.headers["Expect-CT"] = "max-age=86400, enforce"
+    response.headers["X-Permitted-Cross-Domain-Policies"] = "none"
+    
     return response
 
 # CORS
 origins = [
     "http://localhost:3000", "http://127.0.0.1:3000",
-    "https://levi-ai.vercel.app",
-    "https://levi-ai.create.app",
     "https://levi-ai-c23c6.web.app",
     "https://levi-ai.cr",
+    "https://www.levi-ai.cr",
+    "https://levi-ai.vercel.app"
 ]
 env_origins = os.getenv("CORS_ORIGINS", "").split(",")
 for o in env_origins:
@@ -162,6 +293,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # ── Routers ─────────────────────────────────────────
 from backend.services.auth.router import router as auth_router # type: ignore
@@ -178,6 +311,54 @@ app.include_router(gallery_router, prefix="/api/v1")
 app.include_router(analytics_router, prefix="/api/v1")
 app.include_router(payments_router, prefix="/api/v1")
 
+# ── Phase 44: Real-Time Omnipresence (SSE) ──────────────────
+@app.get("/api/v1/stream")
+async def activity_stream(request: Request):
+    """
+    SSE endpoint for real-time global activity.
+    Listens to Redis Pub/Sub 'levi_activity' channel.
+    """
+    if not HAS_REDIS:
+        raise HTTPException(status_code=503, detail="Stream requires Redis")
+
+    async def event_generator():
+        from backend.redis_client import get_async_redis # type: ignore
+        async_r = await get_async_redis()
+        pubsub = async_r.pubsub()
+        await pubsub.subscribe("levi_activity")
+
+        try:
+            # Initial connection event
+            yield "data: {\"event\":\"connected\",\"msg\":\"Cosmic link established\"}\n\n"
+            
+            async for message in pubsub.listen():
+                if request.is_disconnected():
+                    break
+                if message["type"] == "message":
+                    data = message["data"].decode("utf-8")
+                    yield f"data: {data}\n\n"
+        except Exception as e:
+            logger.error(f"Stream error: {e}")
+        finally:
+            await pubsub.unsubscribe("levi_activity")
+            await pubsub.close()
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+def broadcast_activity(event_type: str, data: Dict[str, Any]):
+    """Utility to push an event to the Global Activity channel."""
+    if not HAS_REDIS: return
+    try:
+        payload = json.dumps({
+            "event": event_type,
+            "data": data,
+            "timestamp": datetime.utcnow().isoformat(),
+            "instance": INSTANCE_ID
+        })
+        redis_client.publish("levi_activity", payload)
+    except Exception as e:
+        logger.warning(f"Broadcast failed: {e}")
+
 # ── Legacy/Global Routes ────────────────────────────
 @app.get("/")
 async def root():
@@ -185,6 +366,7 @@ async def root():
         "status": "ok", 
         "service": "LEVI Gateway", 
         "version": "3.0.0",
+        "environment": os.getenv("ENVIRONMENT", "development"),
         "docs": "/docs" if os.getenv("ENVIRONMENT") != "production" else None
     }
 
@@ -199,11 +381,12 @@ async def health():
         "timestamp": datetime.utcnow().isoformat(),
         "version": os.getenv("GITHUB_SHA", "local")[:7],
         "database": "checking",
+        "redis": "checking",
         "auth": "ok",
     }
     
+    # 1. Check Firestore
     try:
-        # Ping the health_check collection
         firestore_db.collection("health_check").document("status").get(timeout=3.0)
         status_info["database"] = "ok"
     except Exception as e:
@@ -211,4 +394,20 @@ async def health():
         status_info["database"] = "error"
         status_info["status"] = "error"
         
+    # 2. Check Redis
+    try:
+        if HAS_REDIS:
+            from backend.redis_client import r as redis_client
+            redis_client.ping()
+            status_info["redis"] = "ok"
+        else:
+            status_info["redis"] = "disabled"
+    except Exception as e:
+        logger.error(f"Health Check: Redis unreachable: {e}")
+        status_info["redis"] = "error"
+        # We don't fail the whole app for Redis if it's optional, 
+        # but for hardening we report it.
+        
+    status_info["environment"] = os.getenv("ENVIRONMENT", "development")
+
     return status_info

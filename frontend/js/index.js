@@ -183,6 +183,73 @@ document.querySelector('#gallery .border-dashed').onclick = () => {
 };
 
 // 7. Scroll Effects
+// 8. Phase 44: Real-Time Cosmic Activity Ticker
+function initCosmicStream() {
+    const tickerContainer = document.createElement('div');
+    tickerContainer.id = 'cosmic-ticker';
+    tickerContainer.className = 'fixed bottom-24 right-6 z-[60] flex flex-col gap-3 pointer-events-none';
+    document.body.appendChild(tickerContainer);
+
+    // Initial state check
+    if (typeof EventSource === 'undefined') return;
+
+    const streamUrl = `${window.API_BASE.replace('/v1', '')}/v1/stream`;
+    const source = new EventSource(streamUrl);
+
+    source.onmessage = (event) => {
+        try {
+            const payload = JSON.parse(event.data);
+            if (payload.event === 'connected') {
+                console.log("[Stream] Cosmic link established.");
+                return;
+            }
+            showCosmicActivity(payload);
+        } catch (e) { console.warn("Stream parse error:", e); }
+    };
+
+    source.onerror = () => {
+        console.warn("[Stream] Connection interrupted. Reconnecting...");
+    };
+}
+
+function showCosmicActivity(payload) {
+    const ticker = document.getElementById('cosmic-ticker');
+    if (!ticker) return;
+
+    const toast = document.createElement('div');
+    toast.className = 'glass-panel ghost-border px-5 py-3 rounded-full shadow-2xl animate-fade-up flex items-center gap-3 backdrop-blur-xl';
+    toast.style.background = 'rgba(27,27,31,0.85)';
+    toast.style.borderColor = 'rgba(242,202,80,0.2)';
+
+    let icon = 'pulse';
+    let text = 'Celestial activity detected.';
+
+    if (payload.event === 'like_engagement') {
+        icon = 'favorite';
+        text = `A seeker linked with a ${payload.data.type}.`;
+    } else if (payload.event === 'synthesis_started') {
+        icon = 'psychology';
+        text = `Deep synthesis initiated (${payload.data.tier} tier).`;
+    } else if (payload.event === 'synthesis_completed') {
+        icon = 'check_circle';
+        text = `Philosophical revelation crystallized.`;
+    }
+
+    toast.innerHTML = `
+        <span class="material-symbols-outlined text-[16px] text-primary">${icon}</span>
+        <span class="text-[11px] font-semibold text-on-surface uppercase tracking-wider">${text}</span>
+    `;
+
+    ticker.appendChild(toast);
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(-10px)';
+        setTimeout(() => toast.remove(), 400);
+    }, 4500);
+}
+
+initCosmicStream();
+
 window.addEventListener('scroll', () => {
     const nav = document.querySelector('nav');
     if (window.scrollY > 50) {

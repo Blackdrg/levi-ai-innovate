@@ -7,8 +7,7 @@ let token = window.levi_user_token || null;
 let currentMoods = [];
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Init offline banner
-  injectOfflineBanner();
+  // Init Connectivity Check
   checkSystemStatus();
   setInterval(checkSystemStatus, 30000);
 
@@ -36,10 +35,13 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.addEventListener('click', toggleDarkMode);
   });
 
-  // Global Error Boundary
+  // Global Error Boundary (Deep Debugging)
   window.addEventListener('unhandledrejection', (event) => {
-    console.error('Unhandled promise rejection:', event.reason);
-    showToast("Cosmic interference detected. Please try again.", "error");
+    const error = event.reason || {};
+    const ridText = error.requestId ? ` (Ref: ${error.requestId.slice(0, 8)})` : "";
+    
+    console.error('Unhandled promise rejection:', error);
+    showToast(`Cosmic interference detected${ridText}. Please try again.`, "error");
   });
 });
 
@@ -238,82 +240,39 @@ function injectOfflineBanner() {
 }
 
 async function checkSystemStatus() {
-  const statusIndicator = document.getElementById('status-indicator');
-  const offlineBanner = document.getElementById('offline-banner');
+  const overlay = document.getElementById('offline-overlay');
 
   try {
     const data = await getHealth();
     const isHealthy = data && (data.status === 'ok' || data.status === 'healthy');
 
-    if (statusIndicator) {
-      statusIndicator.classList.toggle('bg-red-500', !isHealthy);
-      statusIndicator.classList.toggle('bg-emerald-500', isHealthy);
-      statusIndicator.title = isHealthy ? "System Online" : "System Offline";
-    }
-
-    if (offlineBanner) {
-      offlineBanner.style.display = isHealthy ? 'none' : 'block';
+    if (overlay) {
+      if (!isHealthy) {
+        overlay.classList.remove('hidden');
+        overlay.classList.add('flex');
+      } else {
+        overlay.classList.add('hidden');
+        overlay.classList.remove('flex');
+      }
     }
   } catch (err) {
-    if (statusIndicator) {
-      statusIndicator.classList.add('bg-red-500');
-      statusIndicator.classList.remove('bg-emerald-500');
-    }
-    if (offlineBanner) {
-      offlineBanner.style.display = 'block';
+    if (overlay) {
+      overlay.classList.remove('hidden');
+      overlay.classList.add('flex');
     }
   }
-}
-
-function injectLoader() {
-  if (document.getElementById('global-loader')) return;
-  const style = document.createElement('style');
-  style.id = 'loader-style';
-  style.innerHTML = `
-    #global-loader {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(14, 14, 18, 0.75);
-      backdrop-filter: blur(12px);
-      z-index: 10000;
-      align-items: center;
-      justify-content: center;
-      transition: opacity 0.3s;
-    }
-    .leviloader-spinner {
-      width: 48px;
-      height: 48px;
-      border: 3px solid rgba(242, 202, 80, 0.1);
-      border-top-color: #f2ca50;
-      border-radius: 50%;
-      animation: spin-loader 0.8s linear infinite;
-      box-shadow: 0 0 20px rgba(242, 202, 80, 0.15);
-    }
-    @keyframes spin-loader { to { transform: rotate(360deg); } }
-  `;
-  document.head.appendChild(style);
-
-  const loader = document.createElement('div');
-  loader.id = 'global-loader';
-  loader.innerHTML = '<div class="leviloader-spinner"></div>';
-  document.body.appendChild(loader);
 }
 
 function showLoader() {
-  injectLoader();
   const l = document.getElementById('global-loader');
-  if (l) {
-    l.style.display = 'flex';
-    l.style.opacity = '1';
-  }
+  if (l) { l.style.width = '30%'; l.style.opacity = '1'; }
 }
 
 function hideLoader() {
   const l = document.getElementById('global-loader');
-  if (l) {
-    l.style.opacity = '0';
-    setTimeout(() => { l.style.display = 'none'; }, 300);
+  if (l) { 
+    l.style.width = '100%'; 
+    setTimeout(() => { l.style.opacity = '0'; setTimeout(() => l.style.width = '0', 300); }, 200);
   }
 }
 

@@ -30,7 +30,8 @@ def seed_quotes():
             "author": row['author'],
             "topic": row['topic'],
             "mood": row['mood'],
-            "updated_at": pd.Timestamp.utcnow()
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
         }
 
         if not existing:

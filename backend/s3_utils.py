@@ -18,8 +18,8 @@ def get_s3_client():
         logger.warning("boto3 not installed. S3 upload unavailable.")
         return None
 
-def upload_to_s3(file_bytes: bytes, filename: str, content_type: str) -> Optional[str]:
-    """Upload bytes to S3. Returns accessible URL."""
+def upload_to_s3(file_bytes: bytes, filename: str, content_type: str, expires_in: int = 3600) -> Optional[str]:
+    """Upload bytes to S3. Returns accessible URL (default 1 hr expiry)."""
     bucket = os.getenv("AWS_S3_BUCKET")
     if not bucket:
         return None
@@ -40,22 +40,22 @@ def upload_to_s3(file_bytes: bytes, filename: str, content_type: str) -> Optiona
         if cloudfront:
             return f"https://{cloudfront}/{filename}"
 
-        # Pre-signed URL (7 days)
+        # Pre-signed URL (Standard 1 hour for secure private links)
         return s3.generate_presigned_url(
             "get_object",
             Params={"Bucket": bucket, "Key": filename},
-            ExpiresIn=604800,
+            ExpiresIn=expires_in,
         )
     except Exception as e:
         logger.error(f"S3 upload failed: {e}")
         return None
 
-def upload_image_to_s3(image_bytes: bytes, user_id: Optional[str] = None) -> Optional[str]:
+def upload_image_to_s3(image_bytes: bytes, user_id: Optional[str] = None, expires_in: int = 3600) -> Optional[str]:
     uid = str(user_id) if user_id else "anon"
     filename = f"images/{uid}/{uuid.uuid4().hex}.png"
-    return upload_to_s3(image_bytes, filename, "image/png")
+    return upload_to_s3(image_bytes, filename, "image/png", expires_in=expires_in)
 
-def upload_video_to_s3(video_bytes: bytes, user_id: Optional[str] = None) -> Optional[str]:
+def upload_video_to_s3(video_bytes: bytes, user_id: Optional[str] = None, expires_in: int = 3600) -> Optional[str]:
     uid = str(user_id) if user_id else "anon"
     filename = f"videos/{uid}/{uuid.uuid4().hex}.mp4"
-    return upload_to_s3(video_bytes, filename, "video/mp4")
+    return upload_to_s3(video_bytes, filename, "video/mp4", expires_in=expires_in)

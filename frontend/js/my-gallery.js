@@ -5,7 +5,14 @@
 
 'use strict';
 
-const API_BASE = window.API_BASE;
+// Fixed API_BASE race condition with a lazy-eval getter
+function getApiBase() {
+    return window.API_BASE || (
+        window.location.hostname === 'localhost'
+            ? 'http://localhost:8000/api/v1'
+            : `${window.location.origin}/api/v1`
+    );
+}
 
 const $ = id => document.getElementById(id);
 
@@ -114,7 +121,7 @@ async function shareItem(text, author) {
 
   const token = await window.waitForToken();
   if (token) {
-    fetch(`${API_BASE}/track_share`, {
+    fetch(`${getApiBase()}/track_share`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
       credentials: 'include',
@@ -154,7 +161,7 @@ async function loadGallery() {
   }
 
   try {
-    const res = await fetch(`${API_BASE}/my_gallery`, {
+    const res = await fetch(`${getApiBase()}/my_gallery`, {
       headers: { Authorization: `Bearer ${token}` },
       credentials: 'include',
     });

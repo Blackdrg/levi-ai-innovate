@@ -17,6 +17,7 @@ class RouterAgent:
         if self.api_key:
             from backend.firestore_db import db as firestore_db  # type: ignore
             from backend.embeddings import embed_text  # type: ignore
+            from backend.circuit_breaker import groq_breaker  # type: ignore
             try:
                 import groq  # type: ignore
                 self.client = groq.Groq(api_key=self.api_key)
@@ -62,11 +63,14 @@ class RouterAgent:
         """
 
         try:
-            response = client.chat.completions.create(
-                model="llama-3.1-8b-instant",
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=200,
-                temperature=0.3, # low temperature for deterministic classification
+            from backend.circuit_breaker import groq_breaker # type: ignore
+            
+            response = groq_breaker.call(
+               client.chat.completions.create,
+               model="llama-3.1-8b-instant",
+               messages=[{"role": "user", "content": prompt}],
+               max_tokens=200,
+               temperature=0.3,
             )
             raw = response.choices[0].message.content.strip()
             

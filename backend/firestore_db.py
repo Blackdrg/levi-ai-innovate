@@ -3,6 +3,9 @@ import os
 import firebase_admin
 from firebase_admin import credentials, firestore
 from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Initialize Firebase Admin if not already initialized
 db = None
@@ -19,19 +22,19 @@ if not firebase_admin._apps:
                     service_account_info = json.loads(service_account_json)
                     cred = credentials.Certificate(service_account_info)
                 firebase_admin.initialize_app(cred)
-                print("[Firebase] Initialized with Service Account JSON")
+                logger.info("[Firebase] Initialized with Service Account JSON")
             except Exception as e:
-                print(f"[Firebase] Service Account JSON init failed: {e}. Falling back to Default.")
+                logger.error(f"[Firebase] Service Account JSON init failed: {e}. Falling back to Default.")
                 cred = credentials.ApplicationDefault()
                 firebase_admin.initialize_app(cred)
         else:
-            print("[Firebase] FIREBASE_SERVICE_ACCOUNT_JSON missing. Attempting Application Default Credentials...")
+            logger.info("[Firebase] FIREBASE_SERVICE_ACCOUNT_JSON missing. Attempting Application Default Credentials...")
             # Try default initialization first (works on GCP or with GOOGLE_APPLICATION_CREDENTIALS)
             cred = credentials.ApplicationDefault()
             firebase_admin.initialize_app(cred)
-            print("[Firebase] Initialization successful (Default)")
+            logger.info("[Firebase] Initialization successful (Default)")
     except Exception as e:
-        print(f"[Firebase] CRITICAL: Firebase initialization failed: {e}")
+        logger.error(f"[Firebase] CRITICAL: Firebase initialization failed: {e}")
         # In production, we might want to fail fast, but let's allow the app to boot
         # and fail on the first actual DB hit if not in prod.
         if os.getenv("ENVIRONMENT") == "production":
@@ -60,16 +63,17 @@ def get_document(collection_name: str, document_id: str):
             return doc.to_dict()
         return None
     except Exception as e:
-        print(f"⚠️ Firestore Get Error: {e}")
+        logger.error(f"Firestore Get Error: {e}")
         return None
 
 def set_document(collection_name: str, document_id: str, data: dict):
     try:
+        data["updated_at"] = datetime.utcnow()
         doc_ref = db.collection(collection_name).document(document_id)
         doc_ref.set(data, merge=True, timeout=10)
         return True
     except Exception as e:
-        print(f"⚠️ Firestore Set Error: {e}")
+        logger.error(f"Firestore Set Error: {e}")
         return False
 
 def add_document(collection_name: str, data: dict, model=None):
@@ -80,11 +84,12 @@ def add_document(collection_name: str, data: dict, model=None):
             valid_data = model(**data).model_dump()
             data = valid_data
             
-        data['created_at'] = datetime.utcnow()
+        data["created_at"] = datetime.utcnow()
+        data["updated_at"] = datetime.utcnow()
         update_time, doc_ref = db.collection(collection_name).add(data, timeout=10)
         return doc_ref.id
     except Exception as e:
-        print(f"⚠️ Firestore Add Error [{collection_name}]: {e}")
+        logger.error(f"Firestore Add Error [{collection_name}]: {e}")
         return None
 
 def update_document(collection_name: str, document_id: str, data: dict, model=None):

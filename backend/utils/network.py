@@ -1,7 +1,9 @@
 # backend/utils/network.py
 import logging
 import requests
+import httpx
 import os
+import asyncio
 import time
 from typing import Optional, Any, Dict, Callable
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
@@ -94,3 +96,30 @@ def safe_request(method: str, url: str, **kwargs) -> requests.Response:
     except requests.exceptions.RequestException as e:
         logger.error(f"Network Error for {url} (ID: {request_id}): {e}")
         raise
+async def async_safe_request(method: str, url: str, **kwargs) -> httpx.Response:
+    """
+    Phase 43: Async wrapper for parallel inference.
+    Uses httpx for non-blocking I/O.
+    """
+    if "timeout" not in kwargs:
+        kwargs["timeout"] = DEFAULT_TIMEOUT
+    
+    request_id = kwargs.pop("request_id", "unknown")
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            logger.info(f"Async API Request [{request_id}]: {method} {url}")
+            response = await client.request(method, url, **kwargs)
+            
+            if response.status_code == 429:
+                logger.warning(f"Async Rate limit hit for {url} (ID: {request_id})")
+            
+            response.raise_for_status()
+            return response
+        except httpx.HTTPStatusError as e:
+            status_code = e.response.status_code
+            logger.error(f"Async HTTP Error {status_code} for {url} (ID: {request_id}): {e}")
+            raise
+        except httpx.RequestError as e:
+            logger.error(f"Async Network Error for {url} (ID: {request_id}): {e}")
+            raise

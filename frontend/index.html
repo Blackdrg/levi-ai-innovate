@@ -1,18 +1,38 @@
 <!DOCTYPE html>
 <html class="dark" lang="en">
 <head>
-<title>LEVI — AI Wisdom & Creative Muse</title>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<link href="./css/output.css" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>LEVI — AI Wisdom & Creative Muse</title>
+  
+  <!-- Identity & Theme (OS Sync) -->
+  <meta name="theme-color" content="#131317">
+  <meta name="msapplication-TileColor" content="#f2ca50">
+  <link rel="canonical" href="https://levi-ai.cr"/>
+  <meta name="description" content="LEVI-AI: The celestial convergence of AI wisdom and creative art. Transform thoughts into philosophical dialogue and stunning visual synthesis."/>
+
+  <!-- Open Graph / Web -->
+  <meta property="og:type" content="website"/>
+  <meta property="og:title" content="LEVI — AI Wisdom & Creative Muse"/>
+  <meta property="og:description" content="Transform your thoughts into celestial art and deep philosophical dialogue. v3.0 Bulletproof AI Platform."/>
+  <meta property="og:image" content="https://images.unsplash.com/photo-1464802686167-b939a6910659?auto=format&fit=crop&q=80&w=1200&h=630"/>
+  <meta property="og:url" content="https://levi-ai.cr"/>
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image"/>
+  <meta name="twitter:title" content="LEVI — AI Wisdom & Creative Muse"/>
+  <meta name="twitter:description" content="AI Wisdom & Creative Muse Platform."/>
+  <meta name="twitter:image" content="https://images.unsplash.com/photo-1464802686167-b939a6910659?auto=format&fit=crop&q=80&w=1200&h=630"/>
+
+  <link href="./css/output.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" crossorigin/>
 <script>
 tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#f2ca50","primary-container":"#d4af37","on-primary":"#3c2f00","secondary":"#c3c0ff","secondary-container":"#3626ce","on-secondary-container":"#b3b1ff","tertiary":"#d9c5ff","surface":"#131317","surface-container-lowest":"#0e0e12","surface-container-low":"#1b1b1f","surface-container":"#1f1f23","surface-container-high":"#2a292e","surface-container-highest":"#353439","on-surface":"#e5e1e7","on-surface-variant":"#d0c5af","outline":"#99907c","outline-variant":"#4d4635"},fontFamily:{headline:["Newsreader","serif"],body:["Plus Jakarta Sans","sans-serif"],label:["Plus Jakarta Sans","sans-serif"],sans:["Plus Jakarta Sans","sans-serif"]},borderRadius:{DEFAULT:"0.25rem",lg:"0.5rem",xl:"0.75rem","2xl":"1rem","3xl":"1.5rem",full:"9999px"}}}}
 </script>
 <!-- Firebase & Auth Init (Early) -->
-<script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js" crossorigin="anonymous"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js" crossorigin="anonymous"></script>
 <script src="js/config.js?v=4"></script>
 <script src="js/auth-manager.js?v=4"></script>
 <script>
@@ -89,6 +109,20 @@ tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#f2ca50","pr
 </style>
 </head>
 <body class="bg-surface text-on-surface font-body min-h-screen">
+<!-- Global Loader -->
+<div id="global-loader" class="fixed top-0 left-0 h-[3px] bg-primary z-[1000] transition-all duration-300 pointer-events-none" style="width:0;opacity:0;box-shadow:0 0 10px rgba(242,202,80,0.5)"></div>
+
+<!-- Offline Overlay (Error Boundary) -->
+<div id="offline-overlay" class="fixed inset-0 z-[999] glass flex items-center justify-center p-6 hidden animate-fade-up">
+  <div class="glass-panel ghost-border rounded-[2.5rem] p-12 max-w-lg w-full text-center shadow-2xl">
+    <div class="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-8">
+      <span class="material-symbols-outlined text-primary text-4xl">cloud_off</span>
+    </div>
+    <h2 class="font-headline italic text-4xl gold-text mb-4">Connection Lost</h2>
+    <p class="text-on-surface-variant text-lg font-light leading-relaxed mb-10">We've lost contact with our celestial engines. Please verify your internet connection or try to reconnect.</p>
+    <button onclick="window.location.reload()" class="btn-gold font-semibold tracking-wider uppercase px-10 py-4 rounded-full text-sm w-full">Attempt Reconnection</button>
+  </div>
+</div>
 
 <!-- Orbs -->
 <div class="fixed inset-0 pointer-events-none overflow-hidden orb-container">
@@ -171,7 +205,7 @@ tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#f2ca50","pr
             class="glass-card ghost-border rounded-[2.5rem] p-4 relative overflow-hidden shadow-[0_40px_100px_rgba(0,0,0,0.5)]">
             <div class="rounded-[2rem] overflow-hidden aspect-[4/5] relative">
               <img src="https://images.unsplash.com/photo-1464802686167-b939a6910659?auto=format&fit=crop&q=80"
-                class="w-full h-full object-cover opacity-80" alt="Cosmic Art" />
+                class="w-full h-full object-cover opacity-80" alt="Cosmic Art" fetchpriority="high" />
               <div class="absolute inset-0 bg-gradient-to-t from-surface/90 via-surface/20 to-transparent"></div>
               <div class="absolute bottom-10 left-10 right-10">
                 <p class="font-headline italic text-2xl text-on-surface mb-4 leading-tight">"The cosmos is within us. We are
@@ -322,24 +356,27 @@ tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#f2ca50","pr
       <h2 class="font-headline text-4xl lg:text-5xl font-light tracking-[-0.02em]">Recent <span class="gold-text italic">Creations</span></h2>
       <a href="feed.html" class="text-[11px] text-primary uppercase tracking-widest font-semibold hover:underline hidden md:block">View All →</a>
     </div>
-    <!-- Gallery mock grid -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="gallery-preview">
       <div class="rounded-2xl overflow-hidden aspect-square relative ghost-border gallery-card-1">
+        <img loading="lazy" src="https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&q=60&w=400" class="w-full h-full object-cover opacity-40 hover:opacity-60 transition-opacity" alt="Preview"/>
         <div class="absolute inset-0 flex flex-col justify-end p-4 gallery-overlay">
           <p class="text-[10px] font-label text-primary uppercase tracking-widest font-semibold">Philosophy</p>
         </div>
       </div>
       <div class="rounded-2xl overflow-hidden aspect-[3/4] relative ghost-border gallery-card-2">
+         <img loading="lazy" src="https://images.unsplash.com/photo-1444703686981-a3abbc4d4fe3?auto=format&fit=crop&q=60&w=400" class="w-full h-full object-cover opacity-40 hover:opacity-60 transition-opacity" alt="Preview"/>
         <div class="absolute inset-0 flex flex-col justify-end p-4 gallery-overlay">
           <p class="text-[10px] font-label text-primary uppercase tracking-widest font-semibold">Zen</p>
         </div>
       </div>
       <div class="rounded-2xl overflow-hidden aspect-square relative ghost-border gallery-card-3">
+         <img loading="lazy" src="https://images.unsplash.com/photo-1534972195531-d756b9bfa9f2?auto=format&fit=crop&q=60&w=400" class="w-full h-full object-cover opacity-40 hover:opacity-60 transition-opacity" alt="Preview"/>
         <div class="absolute inset-0 flex flex-col justify-end p-4 gallery-overlay">
           <p class="text-[10px] font-label text-primary uppercase tracking-widest font-semibold">Cyberpunk</p>
         </div>
       </div>
       <div class="rounded-2xl overflow-hidden aspect-[3/4] relative ghost-border gallery-card-4">
+         <img loading="lazy" src="https://images.unsplash.com/photo-1472396961693-142e6e269027?auto=format&fit=crop&q=60&w=400" class="w-full h-full object-cover opacity-40 hover:opacity-60 transition-opacity" alt="Preview"/>
         <div class="absolute inset-0 flex flex-col justify-end p-4 gallery-overlay">
           <p class="text-[10px] font-label text-primary uppercase tracking-widest font-semibold">Stoic</p>
         </div>
@@ -374,7 +411,7 @@ tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#f2ca50","pr
   <div class="max-w-7xl mx-auto grid md:grid-cols-4 gap-10">
     <div class="md:col-span-1">
       <div class="text-2xl font-headline italic gold-text mb-3">LEVI</div>
-      <p class="text-xs text-zinc-500 leading-relaxed">AI Wisdom & Creative Muse Platform. v2.1.1</p>
+      <p class="text-xs text-zinc-500 leading-relaxed">AI Wisdom & Creative Muse Platform. v3.0.0 Bulletproof</p>
       <p class="text-[10px] text-zinc-600 mt-2">Built by Daksh Mehat</p>
     </div>
     <div>
@@ -466,10 +503,17 @@ function toggleLanguage(){showToast('Hindi translation coming soon','warning')}
 // Update nav for logged-in user
 const u=localStorage.getItem('levi_user');if(u){try{const o=JSON.parse(u);const btn=document.getElementById('nav-auth-btn');btn.textContent=o.username||'Account';btn.href='my-gallery.html'}catch{}}
 
-// Load daily quote
-    window.waitForToken().then(() => {
-        fetch(`${window.API_BASE}/daily_quote`).then(r => r.json()).then(d => { if (d.quote) { document.getElementById('daily-quote').textContent = `"${d.quote}"`; if (d.author) document.getElementById('daily-author').textContent = `— ${d.author}` } }).catch(() => { })
-    });
+// Load daily quote (Phase 42/43 Unified)
+window.waitForToken().then(() => {
+    if (window.api && window.api.getDailyQuote) {
+        window.api.getDailyQuote().then(d => {
+            if (d.text) {
+                document.getElementById('daily-quote').textContent = `"${d.text}"`;
+                if (d.author) document.getElementById('daily-author').textContent = `— ${d.author}`;
+            }
+        }).catch(() => { });
+    }
+});
 
 // Typing dots animation CSS
 const style=document.createElement('style');

@@ -403,6 +403,14 @@ def load_font(size: int, mood: str = "", bold: bool = False) -> Any:
             return ImageFont.truetype(font_path, size)
         except Exception:
             continue
+            
+    # Final Windows candidates (last resort)
+    win_fonts = ["C:\\Windows\\Fonts\\arial.ttf", "C:\\Windows\\Fonts\\georgia.ttf", "C:\\Windows\\Fonts\\times.ttf"]
+    for f in win_fonts:
+        try:
+            return ImageFont.truetype(f, size)
+        except Exception:
+            continue
 
     return ImageFont.load_default()
 
@@ -591,8 +599,6 @@ def generate_image(
     mood: str = "neutral",
     size: Tuple[int, int] = (1024, 1024),
     **kwargs
-) -> BytesIO:
+) -> dict:
     """Simple alias for direct prompt-based generation."""
-    # We need to wrap the result properly for the alias
-    res = generate_quote_image(prompt, mood=mood, size=size, **kwargs)
-    return res.get("data") if isinstance(res, dict) else res
+    return generate_quote_image(prompt, mood=mood, size=size, **kwargs)

@@ -15,8 +15,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     curl \
     imagemagick \
+    ghostscript \
     ffmpeg \
     && (sed -i '/pattern=".*PDF.*"/s/rights="none"/rights="read|write"/g' /etc/ImageMagick-*/policy.xml || true) \
+    && (sed -i '/pattern=".*LABEL.*"/s/rights="none"/rights="read|write"/g' /etc/ImageMagick-*/policy.xml || true) \
     && rm -rf /var/lib/apt/lists/*
 
 RUN python -m venv /opt/venv
@@ -27,8 +29,9 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 RUN mkdir -p /app/model_cache && chmod 777 /app/model_cache
 
-COPY backend/ .
+COPY backend/ backend/
+COPY .env .env
 
 EXPOSE 8080
 
-CMD ["uvicorn", "gateway:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "2"]
+CMD uvicorn backend.gateway:app --host 0.0.0.0 --port $PORT --workers 2

@@ -10,9 +10,11 @@ LEVI Video Generation Engine v3.0
 - 9:16 vertical (Reels) and 16:9 landscape modes
 """
 
-import os
-import uuid
 import logging
+import requests
+import os
+import sys
+import uuid
 import tempfile
 import random
 from io import BytesIO
@@ -505,12 +507,12 @@ def generate_video(
     author: str = "",
     mood: str = "neutral",
     **kwargs
-) -> BytesIO:
+) -> dict:
     """Public alias for generate_quote_video."""
     return generate_quote_video(quote, author, mood, **kwargs)
 
 
-def generate_reel(quote: str, author: str = "", mood: str = "neutral") -> BytesIO:
+def generate_reel(quote: str, author: str = "", mood: str = "neutral") -> dict:
     """Generate a short Instagram Reel (15-30 second, 9:16)."""
     return generate_quote_video(
         quote, author, mood,
