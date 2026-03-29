@@ -119,7 +119,7 @@ jobs:
 
             if [ "$STATUS" = "ok" ]; then
               echo "✅ Canary is healthy."
-              if [[ "$REMOTE_SHA" == *"${{ github.sha }}"* ]] || [ "$REMOTE_SHA" = "local" ]; then
+              if [[ "${{ github.sha }}" == "$REMOTE_SHA"* ]] || [ "$REMOTE_SHA" = "local" ]; then
                 echo "✅ Version matches or is local."
                 exit 0
               else

@@ -5,13 +5,13 @@ from datetime import datetime
 import os
 
 import logging
+import json
 from backend.models import ChatMessage # type: ignore
 from backend.auth import get_current_user_optional  # type: ignore
-from backend.redis_client import get_conversation, save_conversation, is_rate_limited  # type: ignore
+from backend.redis_client import get_conversation, save_conversation, is_rate_limited, r as redis_client # type: ignore
 from backend.firestore_db import update_analytics # type: ignore
 from backend.models import ChatMessage, _INJECTION_PATTERNS # type: ignore
 from backend.payments import use_credits # type: ignore
-from backend.broadcast_utils import broadcast_activity # type: ignore
 from backend.generation import generate_response # type: ignore
 
 logger = logging.getLogger(__name__)
@@ -66,11 +66,14 @@ async def chat_endpoint(
         router_agent = RouterAgent()
         classification = router_agent.classify_intent(msg.message)
         
-        # Phase 44: Real-Time Broadcast (Synthesis Pulse)
-        broadcast_activity("synthesis_started", {
-            "tier": user_tier,
-            "session": str(msg.session_id)[:8]
+        # Phase 44: Real-Time Broadcast (Synthesis Pulse - Direct Redis)
+        payload_start = json.dumps({
+            "event": "synthesis_started",
+            "data": {"tier": user_tier, "session": str(msg.session_id)[:8]},
+            "timestamp": datetime.utcnow().isoformat(),
+            "instance": "chat-service"
         })
+        redis_client.publish("levi_activity", payload_start)
         
         # Async generation with Phase 43 Council of Models for Pro/Creator
         response = await generate_response(
@@ -80,11 +83,14 @@ async def chat_endpoint(
             user_tier=user_tier
         )
         
-        # Phase 44: Broadcast Completion
-        broadcast_activity("synthesis_completed", {
-            "tier": user_tier,
-            "complexity": len(response)
+        # Phase 44: Broadcast Completion (Direct Redis)
+        payload_end = json.dumps({
+            "event": "synthesis_completed",
+            "data": {"tier": user_tier, "complexity": len(response)},
+            "timestamp": datetime.utcnow().isoformat(),
+            "instance": "chat-service"
         })
+        redis_client.publish("levi_activity", payload_end)
         
         # Save history
         history.append({"user": msg.message, "bot": response, "timestamp": datetime.utcnow().isoformat()})

@@ -9,11 +9,14 @@ spec:
       - env:
         - name: ENVIRONMENT
           value: "development"
-        - name: PORT
-          value: "8080"
-        # Additional overrides can go here if needed
-        # - name: DB_URL
-        #   value: "..."
+        - name: GOOGLE_CLOUD_PROJECT
+          value: "levi-ai-c23c6"
+        - name: FIREBASE_PROJECT_ID
+          value: "levi-ai-c23c6"
+        - name: WORKERS
+          value: "1"
+        - name: REDIS_URL
+          value: ""
         resources:
           limits:
             memory: 1Gi

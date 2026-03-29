@@ -25,7 +25,13 @@ RUN python -m venv /opt/venv
 
 COPY backend/requirements.prod.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.prod.txt
+    pip install --no-cache-dir \
+    --default-timeout=1000 \
+    --retries 10 \
+    --trusted-host pypi.org \
+    --trusted-host files.pythonhosted.org \
+    --trusted-host download.pytorch.org \
+    -r requirements.prod.txt
 
 RUN mkdir -p /app/model_cache && chmod 777 /app/model_cache
 

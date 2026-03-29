@@ -42,18 +42,25 @@ except ImportError:
     pass
 
 try:
+    # MoviePy v2.0+ approach
     try:
         from moviepy import (  # type: ignore
             ImageClip, TextClip, CompositeVideoClip,
             AudioFileClip, concatenate_videoclips, ColorClip,
         )
-        from moviepy.video.fx import fadein, fadeout  # type: ignore
-    except ImportError:
+        try:
+             from moviepy.video.fx import fadein, fadeout # type: ignore
+        except ImportError:
+             # In v2.x some fx are moved or accessed differently, but we'll try to find them
+             pass
+        HAS_MOVIEPY = True
+    except (ImportError, AttributeError):
+        # MoviePy v1.x fallback
         from moviepy.editor import (  # type: ignore
             ImageClip, TextClip, CompositeVideoClip,
             AudioFileClip, concatenate_videoclips, ColorClip,
         )
-    HAS_MOVIEPY = True
+        HAS_MOVIEPY = True
 except ImportError:
     logger.warning("MoviePy not installed. Video generation unavailable.")
 

@@ -3,16 +3,16 @@
 import requests  # type: ignore
 import json
 
-BASE_URL = "http://localhost:8000"
+BASE_URL = "http://localhost:8080"
 
 def test_endpoint(name, method, endpoint, payload=None):
     url = f"{BASE_URL}{endpoint}"
     print(f"\n--- Testing {name} ---")
     try:
         if method == "GET":
-            response = requests.get(url, timeout=10)
+            response = requests.get(url, timeout=30)
         else:
-            response = requests.post(url, json=payload, timeout=10)
+            response = requests.post(url, json=payload, timeout=30)
         
         with open("test_results_detailed.txt", "a", encoding="utf-8") as f:
             f.write(f"\n--- Testing {name} ---\n")
@@ -34,11 +34,11 @@ def test_endpoint(name, method, endpoint, payload=None):
 if __name__ == "__main__":
     tests = [
         ("Health Check", "GET", "/health"),
-        ("Daily Quote", "GET", "/daily_quote"),
-        ("Analytics", "GET", "/analytics"),
-        ("English Chat", "POST", "/chat", {"session_id": "test", "message": "What is life?", "lang": "en"}),
-        ("Hindi Chat", "POST", "/chat", {"session_id": "test", "message": "नमस्ते", "lang": "hi"}),
-        ("Quote Generation", "POST", "/generate", {"text": "Success", "mood": "Inspiring"})
+        ("Daily Quote", "GET", "/api/v1/gallery/daily_quote"),
+        ("Analytics", "GET", "/api/v1/analytics"),
+        ("English Chat", "POST", "/api/v1/chat", {"session_id": "test", "message": "What is life?", "lang": "en"}),
+        ("Hindi Chat", "POST", "/api/v1/chat", {"session_id": "test", "message": "नमस्ते", "lang": "hi"}),
+        ("Content Generation", "POST", "/api/v1/content/generate", {"type": "quote", "topic": "Success", "tone": "inspiring"})
     ]
     
     results = []

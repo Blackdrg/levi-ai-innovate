@@ -133,8 +133,7 @@ async function pollTask(id,text){
   const poll = async () => {
     try {
       await window.waitForToken();
-      const r = await fetch(`${getApiBase()}/task_status/${id}`);
-      const d = await r.json();
+      const d = await fetchWithRetry(`${getApiBase()}/studio/task_status/${id}`);
 
       if ((d.status === 'completed' || d.status === 'done') && d.result) {
         setLoading(false);

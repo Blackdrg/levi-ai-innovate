@@ -10,7 +10,7 @@ window.waitForToken = () => {
             resolve("local-token");
             return;
         }
-        const authObj = auth(); // compatibility
+        const authObj = auth; // compatibility
         const user = authObj.currentUser;
         if (user) {
             user.getIdToken(true).then(resolve).catch(() => resolve("local-token"));
