@@ -8,21 +8,32 @@
   <!-- Identity & Theme (OS Sync) -->
   <meta name="theme-color" content="#131317">
   <meta name="msapplication-TileColor" content="#f2ca50">
-  <link rel="canonical" href="https://levi-ai.cr"/>
+  <link rel="canonical" href="https://levi-ai-c23c6.web.app"/>
   <meta name="description" content="LEVI-AI: The celestial convergence of AI wisdom and creative art. Transform thoughts into philosophical dialogue and stunning visual synthesis."/>
 
   <!-- Open Graph / Web -->
   <meta property="og:type" content="website"/>
   <meta property="og:title" content="LEVI — AI Wisdom & Creative Muse"/>
   <meta property="og:description" content="Transform your thoughts into celestial art and deep philosophical dialogue. v3.0 Bulletproof AI Platform."/>
-  <meta property="og:image" content="https://images.unsplash.com/photo-1464802686167-b939a6910659?auto=format&fit=crop&q=80&w=1200&h=630"/>
-  <meta property="og:url" content="https://levi-ai.cr"/>
+  <meta property="og:image" content="/og-splash.png"/>
+  <meta property="og:url" content="https://levi-ai-c23c6.web.app"/>
 
   <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image"/>
   <meta name="twitter:title" content="LEVI — AI Wisdom & Creative Muse"/>
   <meta name="twitter:description" content="AI Wisdom & Creative Muse Platform."/>
-  <meta name="twitter:image" content="https://images.unsplash.com/photo-1464802686167-b939a6910659?auto=format&fit=crop&q=80&w=1200&h=630"/>
+  <meta name="twitter:image" content="/og-splash.png"/>
+
+  <!-- Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-ST6N1X9RHD"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-ST6N1X9RHD');
+  </script>
+
+  <link rel="apple-touch-icon" href="/logo.png">
 
   <link href="./css/output.css" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet" crossorigin/>
@@ -36,9 +47,6 @@ tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#f2ca50","pr
 <script src="js/config.js?v=4"></script>
 <script src="js/auth-manager.js?v=4"></script>
 <script>
-  window.waitForToken = window.waitForToken || function() {
-    return Promise.resolve("local-token");
-  };
   window.API_BASE = window.API_BASE || (window.location.hostname === "localhost" ? "http://localhost:8000/api/v1" : "/api/v1");
 </script>
 <style>
