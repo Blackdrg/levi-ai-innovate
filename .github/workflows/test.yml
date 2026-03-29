@@ -12,7 +12,6 @@ jobs:
           cache: 'pip'
       - name: Install dependencies
         run: |
-          pip install -r backend/requirements.txt 
-          pip install pytest-asyncio httpx python-json-logger tenacity
+          pip install -r backend/requirements.txt
       - name: Run tests
         run: pytest backend/tests/ --tb=short

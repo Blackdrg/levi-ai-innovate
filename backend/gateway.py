@@ -20,7 +20,7 @@ from backend.models import _INJECTION_PATTERNS # type: ignore
 from dotenv import load_dotenv
 
 import sentry_sdk # type: ignore
-from pythonjsonlogger import json as jsonlogger # type: ignore
+from pythonjsonlogger import jsonlogger # type: ignore
 from slowapi import Limiter # type: ignore
 from slowapi.util import get_remote_address # type: ignore
 from slowapi.errors import RateLimitExceeded # type: ignore
@@ -143,7 +143,11 @@ def validate_env():
 
     return True
 
-ENV_LOADED = validate_env()
+try:
+    ENV_LOADED = validate_env()
+except Exception as e:
+    logger.error(f"Critical error during environment validation: {e}")
+    ENV_LOADED = False
 
 # Note: validate_env() is called above after definition
 
@@ -185,15 +189,18 @@ async def lifespan(app: FastAPI):
         from backend.broadcast_utils import register_broadcaster
         register_broadcaster(broadcast_activity, INSTANCE_ID)
         
-        # Cleanup zombie tasks
-        zombie_jobs = firestore_db.collection("jobs") \
-            .where("status", "==", "processing").get()
-        for doc in zombie_jobs:
-            doc.reference.update({
-                "status": "failed", 
-                "error": "Server restarted during processing",
-                "completed_at": datetime.utcnow()
-            })
+        # Cleanup zombie tasks (with timeout to prevent startup hang)
+        try:
+            zombie_jobs = firestore_db.collection("jobs") \
+                .where("status", "==", "processing").get(timeout=5.0)
+            for doc in zombie_jobs:
+                doc.reference.update({
+                    "status": "failed", 
+                    "error": "Server restarted during processing",
+                    "completed_at": datetime.utcnow()
+                })
+        except Exception as ze:
+            logger.warning(f"Zombie job cleanup skipped or failed: {ze}")
     except Exception as e:
         logger.error(f"Startup check failed: {e}")
         # In production, we don't crash the whole process just for a transient network error,
