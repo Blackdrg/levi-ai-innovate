@@ -1,0 +1,20 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: levi-backend-dev
+spec:
+  template:
+    spec:
+      containers:
+      - env:
+        - name: ENVIRONMENT
+          value: "development"
+        - name: PORT
+          value: "8080"
+        # Additional overrides can go here if needed
+        # - name: DB_URL
+        #   value: "..."
+        resources:
+          limits:
+            memory: 1Gi
+            cpu: "1000m"
