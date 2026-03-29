@@ -1,3 +1,4 @@
+#!/bin/bash
 # entrypoint.sh — Start server directly for Firestore architecture
 set -e
 
