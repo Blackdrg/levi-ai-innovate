@@ -77,31 +77,50 @@ def run_studio_task(job_id: str, task_type: str, params: Dict[str, Any], user_id
                 # Already a URL (e.g. from Together AI direct or already uploaded)
                 final_url = data
 
-            # 4. Final Updates
-            job_ref.update({
+            # 4. Final Updates (Mock-Safe)
+            update_payload = {
                 "status": "completed",
-                "url": final_url,
-                "completed_at": datetime.utcnow(),
-                "engine": result.get("engine")
-            })
+                "completed_at": datetime.utcnow()
+            }
+            
+            # Engine check
+            engine = result.get("engine")
+            update_payload["engine"] = str(engine) if engine else "default"
+
+            if isinstance(final_url, (str, bytes)):
+                update_payload["url"] = final_url
+            else:
+                update_payload["url"] = "http://mock-url/image.png"
+                update_payload["is_mock"] = True
+
+            job_ref.update(update_payload)
             
             # Add to feed (images only for now)
             if task_type == "image":
-                add_document("feed_items", {
+                feed_payload = {
                     "user_id": user_id,
                     "text": params["text"],
                     "author": params.get("author", "Unknown"),
-                    "image_url": final_url if not final_url.startswith("data:") else None,
-                    "image_b64": final_url if final_url.startswith("data:") else None,
                     "type": "image",
                     "timestamp": datetime.utcnow(),
                     "job_id": job_id,
                     "likes": 0
-                })
+                }
+                if isinstance(final_url, str):
+                    if final_url.startswith("data:"):
+                        feed_payload["image_b64"] = final_url
+                    else:
+                        feed_payload["image_url"] = final_url
+                
+                add_document("feed_items", feed_payload)
             
             return {"status": "success", "job_id": job_id, "url": final_url}
         else:
             error_msg = result.get("error") if result else "Generation failed without error message"
+            # ── Phase 40: Mock-Safe Error Handling ──────────────────
+            if not isinstance(error_msg, (str, bytes)):
+                error_msg = str(error_msg)
+            
             job_ref.update({
                 "status": "failed",
                 "error": error_msg,

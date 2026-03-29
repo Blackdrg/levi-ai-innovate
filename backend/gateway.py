@@ -20,7 +20,7 @@ from backend.models import _INJECTION_PATTERNS # type: ignore
 from dotenv import load_dotenv
 
 import sentry_sdk # type: ignore
-from pythonjsonlogger import jsonlogger # type: ignore
+from pythonjsonlogger.json import JsonFormatter # type: ignore
 from slowapi import Limiter # type: ignore
 from slowapi.util import get_remote_address # type: ignore
 from slowapi.errors import RateLimitExceeded # type: ignore
@@ -32,7 +32,7 @@ if os.path.exists(".env.local"):
 else:
     load_dotenv()
 
-class CustomJsonFormatter(jsonlogger.JsonFormatter):
+class CustomJsonFormatter(JsonFormatter):
     def add_fields(self, log_record, record, message_dict):
         super(CustomJsonFormatter, self).add_fields(log_record, record, message_dict)
         if not log_record.get('timestamp'):
@@ -219,7 +219,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="LEVI API Gateway",
-    version="3.0.0",
+    version="4.5.1",
     lifespan=lifespan,
     docs_url=None if os.getenv("ENVIRONMENT") == "production" else "/docs"
 )
@@ -313,6 +313,19 @@ async def add_request_tracking(request: Request, call_next):
     
     return response
 
+@app.middleware("http")
+async def strip_api_prefix(request: Request, call_next):
+    """Strip /api/v1 and /api prefixes for Firebase Hosting compatibility."""
+    path = request.scope["path"]
+    if path.startswith("/api/v1"):
+        new_path = path[len("/api/v1"):] or "/"
+        request.scope.update({"path": new_path})
+    elif path.startswith("/api"):
+        new_path = path[len("/api"):] or "/"
+        request.scope.update({"path": new_path})
+    
+    return await call_next(request)
+
 # CORS
 origins = [
     "http://localhost:3000", "http://127.0.0.1:3000",
@@ -345,18 +358,17 @@ from backend.services.analytics.router import router as analytics_router # type:
 from backend.payments import router as payments_router # type: ignore
 from backend.services.studio.ai_router import router as ai_router # type: ignore
 
-app.include_router(auth_router, prefix="/api/v1")
-app.include_router(chat_router, prefix="/api/v1")
-app.include_router(studio_router, prefix="/api/v1")
-app.include_router(gallery_router, prefix="/api/v1")
-app.include_router(analytics_router, prefix="/api/v1")
-app.include_router(payments_router, prefix="/api/v1")
-app.include_router(ai_router, prefix="/api/v1")
-app.include_router(ai_router, prefix="/api") # Legacy Compatibility
+app.include_router(auth_router, prefix="", tags=["Auth"])
+app.include_router(chat_router, prefix="", tags=["Chat"])
+app.include_router(studio_router, prefix="", tags=["Studio"])
+app.include_router(gallery_router, prefix="", tags=["Gallery"])
+app.include_router(analytics_router, prefix="", tags=["Analytics"])
+app.include_router(payments_router, prefix="", tags=["Payments"])
+app.include_router(ai_router, prefix="", tags=["AI"])
 
 
 # ── Phase 44: Real-Time Omnipresence (SSE) ──────────────────
-@app.get("/api/v1/stream")
+@app.get("/stream")
 async def activity_stream(request: Request):
     """
     SSE endpoint for real-time global activity.

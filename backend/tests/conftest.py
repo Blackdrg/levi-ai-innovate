@@ -11,16 +11,17 @@ def mock_env():
         "ADMIN_KEY": "admin_test",
         "FIREBASE_PROJECT_ID": "test-project",
         "FIREBASE_SERVICE_ACCOUNT_JSON": '{"type": "service_account"}',
-        "ALERT_WEBHOOK_URL": "http://mock-webhook"
+        "ALERT_WEBHOOK_URL": "http://mock-webhook",
+        "USE_CELERY": "false"
     }):
         yield
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def mock_firestore():
     """Mock the Firestore DB instance with realistic defaults."""
     from datetime import datetime
     with patch("backend.firestore_db.db") as mock_db:
-        # Configure a default document structure to avoid MagicMock vs datetime errors
+        # Configure a default document structure
         mock_doc = MagicMock()
         mock_doc.exists = True
         mock_doc.to_dict.return_value = {
@@ -28,9 +29,16 @@ def mock_firestore():
             "last_reset": datetime.utcnow(),
             "credits": 10,
             "tier": "free",
-            "last_used": datetime.utcnow()
+            "history": []
         }
+        
+        # Chain mocks: db.collection().document().get() -> mock_doc
         mock_db.collection.return_value.document.return_value.get.return_value = mock_doc
+        # db.collection().where().limit().get() -> [mock_doc]
+        mock_db.collection.return_value.where.return_value.limit.return_value.get.return_value = [mock_doc]
+        # db.collection().add() -> (time, doc_ref)
+        mock_db.collection.return_value.add.return_value = (datetime.utcnow(), MagicMock(id="mock_id"))
+        
         yield mock_db
 
 @pytest.fixture
@@ -56,14 +64,24 @@ def app_client(test_user):
     app.dependency_overrides[get_current_user] = lambda: test_user
     app.dependency_overrides[get_current_user_optional] = lambda: test_user
     
-    # Mock HAS_REDIS to True globally for the test client
-    with patch("backend.gateway.HAS_REDIS", True):
-        with patch("backend.services.analytics.router.HAS_REDIS", True):
-            with patch("backend.auth.HAS_REDIS", True):
-                client = TestClient(app)
-                yield client
-                # Clear overrides after test
-                app.dependency_overrides = {}
+    # Mock HAS_REDIS and provide a mock Redis client to avoid connection timeouts
+    mock_r = MagicMock()
+    mock_r.ping.return_value = True
+    mock_r.get.return_value = "[]" # Default to empty JSON list for conversation history
+    mock_r.set.return_value = True
+    mock_r.incr.return_value = 1
+    mock_r.pipeline.return_value.execute.return_value = [0.0] # For metrics/spend increment
+    
+    with patch("backend.gateway.HAS_REDIS", True), \
+         patch("backend.services.analytics.router.HAS_REDIS", True), \
+         patch("backend.auth.HAS_REDIS", True), \
+         patch("backend.redis_client.HAS_REDIS", True), \
+         patch("backend.redis_client.r", mock_r), \
+         patch("backend.services.chat.router.redis_client", mock_r):
+        client = TestClient(app)
+        yield client
+        # Clear overrides after test
+        app.dependency_overrides = {}
 
 @pytest.fixture
 def db_session(mock_firestore):

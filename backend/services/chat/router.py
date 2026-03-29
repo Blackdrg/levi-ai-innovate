@@ -6,11 +6,10 @@ import os
 
 import logging
 import json
-from backend.models import ChatMessage # type: ignore
+from backend.models import ChatMessage, _INJECTION_PATTERNS # type: ignore
 from backend.auth import get_current_user_optional  # type: ignore
 from backend.redis_client import get_conversation, save_conversation, is_rate_limited, r as redis_client # type: ignore
 from backend.firestore_db import update_analytics # type: ignore
-from backend.models import ChatMessage, _INJECTION_PATTERNS # type: ignore
 from backend.payments import use_credits # type: ignore
 from backend.generation import generate_response # type: ignore
 

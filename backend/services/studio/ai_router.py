@@ -3,7 +3,7 @@ import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request # type: ignore
 from backend.models import ContentRequest # type: ignore
-from backend.auth import get_current_user_optional # type: ignore
+from backend.auth import get_current_user # type: ignore
 from backend.content_engine import generate_content, get_available_types, get_available_tones # type: ignore
 from backend.sd_engine import get_available_styles # type: ignore
 from backend.redis_client import is_rate_limited, get_daily_ai_spend, incr_daily_ai_spend # type: ignore
@@ -32,10 +32,10 @@ async def list_image_styles():
 async def gen_content(
     request: Request,
     req: ContentRequest,
-    current_user: Optional[dict] = Depends(get_current_user_optional)
+    current_user: dict = Depends(get_current_user)
 ):
     """Generate AI content based on type, topic, and tone with cost protection."""
-    user_id = current_user.get("uid") if current_user else f"guest:{request.client.host}"
+    user_id = current_user.get("uid")
     
     # ── Defensive: Rate Limiting ────────────────────────
     if is_rate_limited(str(user_id), limit=5, window=60):
