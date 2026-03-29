@@ -176,8 +176,10 @@ async def lifespan(app: FastAPI):
             })
     except Exception as e:
         logger.critical(f"Startup check/cleanup failed: {e}")
-        if os.getenv("ENVIRONMENT") == "production": raise RuntimeError("STARTUP FAIL")
+        if os.getenv("ENVIRONMENT") == "production":
+             logger.error("CRITICAL: Initial database connection failed. Service may be degraded.")
     yield
+
 
 app = FastAPI(
     title="LEVI Quotes API",
