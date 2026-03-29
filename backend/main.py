@@ -50,7 +50,7 @@ from slowapi import Limiter  # type: ignore
 from slowapi.util import get_remote_address  # type: ignore
 from slowapi.errors import RateLimitExceeded  # type: ignore
 from slowapi import _rate_limit_exceeded_handler  # type: ignore
-from pythonjsonlogger import jsonlogger  # type: ignore
+from pythonjsonlogger import json as jsonlogger  # type: ignore
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 # Structured JSON logging

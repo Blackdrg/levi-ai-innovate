@@ -8,6 +8,7 @@ import logging
 from fastapi import APIRouter, HTTPException, Depends, Request  # type: ignore
 from backend.firestore_db import db as firestore_db  # type: ignore
 from backend.redis_client import _get, _set, HAS_REDIS  # type: ignore
+from backend.auth import get_current_user_optional  # type: ignore
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/payments", tags=["payments"])
@@ -172,3 +173,24 @@ def process_subscription_lapse(user_id: str):
     except Exception as e:
         logger.error(f"Failed to process subscription lapse for user {user_id}: {e}")
     return False
+
+@router.post("/verify_payment")
+async def verify_payment_endpoint(
+    payload: dict,
+    current_user: Optional[dict] = Depends(get_current_user_optional)
+):
+    """Router endpoint for Razorpay payment verification."""
+    order_id = payload.get("razorpay_order_id")
+    payment_id = payload.get("razorpay_payment_id")
+    signature = payload.get("razorpay_signature")
+    plan = payload.get("plan", "pro")
+    
+    if not order_id or not payment_id or not signature:
+        raise HTTPException(status_code=400, detail="Missing payment identifiers")
+        
+    if verify_razorpay_signature(order_id, payment_id, signature):
+        if current_user:
+            upgrade_user_tier(current_user["uid"], plan)
+        return {"status": "success", "message": "Payment verified and account upgraded"}
+    else:
+        raise HTTPException(status_code=400, detail="Invalid payment signature")

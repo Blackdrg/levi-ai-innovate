@@ -11,7 +11,7 @@ HTTP_PID=$!
 
 # 2. Start Celery worker
 echo "Starting Celery worker (pool=threads)..."
-celery -A celery_app worker --loglevel=info --pool=threads --concurrency="${CELERY_CONCURRENCY:-4}"
+exec celery -A backend.celery_app worker --loglevel=info --pool=threads --concurrency="${CELERY_CONCURRENCY:-4}"
 
 # Cleanup
 kill $HTTP_PID

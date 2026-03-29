@@ -8,16 +8,17 @@ from unittest.mock import patch, MagicMock, AsyncMock
 async def test_broadcast_activity_pushes_to_redis():
     """Verify that broadcast_activity publishes to the correct Redis channel."""
     mock_redis = MagicMock()
-    with patch('backend.gateway.redis_client', mock_redis):
-        from backend.gateway import broadcast_activity
-        broadcast_activity("test_event", {"key": "value"})
-        
-        mock_redis.publish.assert_called_once()
-        args, _ = mock_redis.publish.call_args
-        assert args[0] == "levi_activity"
-        data = json.loads(args[1])
-        assert data["event"] == "test_event"
-        assert data["data"]["key"] == "value"
+    with patch('backend.gateway.HAS_REDIS', True):
+        with patch('backend.gateway.redis_client', mock_redis):
+            from backend.gateway import broadcast_activity
+            broadcast_activity("test_event", {"key": "value"})
+            
+            mock_redis.publish.assert_called_once()
+            args = mock_redis.publish.call_args[0]
+            assert args[0] == "levi_activity"
+            data = json.loads(args[1])
+            assert data["event"] == "test_event"
+            assert data["data"]["key"] == "value"
 
 @pytest.mark.asyncio
 async def test_stream_generator_listens_to_redis():

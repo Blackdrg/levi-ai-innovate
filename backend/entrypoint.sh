@@ -9,8 +9,8 @@ echo "[1/2] Skipping SQL migrations (Firestore native detected)..."
 
 # 2. Start application via Gateway
 echo "[2/2] Starting Uvicorn with Gateway..."
-exec uvicorn gateway:app \
+exec uvicorn backend.gateway:app \
   --host 0.0.0.0 \
   --port "${PORT:-8080}" \
   --workers 2 \
-  --access-log
+  --log-level info

@@ -31,6 +31,8 @@ RUN mkdir -p /app/model_cache && chmod 777 /app/model_cache
 
 COPY backend/ backend/
 
+RUN chmod +x backend/entrypoint.sh backend/worker_entrypoint.sh
+
 EXPOSE 8080
 
-CMD uvicorn backend.gateway:app --host 0.0.0.0 --port $PORT --workers 2
+CMD ["./backend/entrypoint.sh"]

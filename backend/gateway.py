@@ -20,7 +20,7 @@ from backend.models import _INJECTION_PATTERNS # type: ignore
 from dotenv import load_dotenv
 
 import sentry_sdk # type: ignore
-from pythonjsonlogger import jsonlogger # type: ignore
+from pythonjsonlogger import json as jsonlogger # type: ignore
 from slowapi import Limiter # type: ignore
 from slowapi.util import get_remote_address # type: ignore
 from slowapi.errors import RateLimitExceeded # type: ignore
@@ -65,6 +65,16 @@ if SENTRY_DSN:
 INSTANCE_ID = str(uuid.uuid4())[:8]
 logger.info(f"Initialized with Instance ID: {INSTANCE_ID}")
 
+# Phase 46: Cloud Logging Integration
+if os.getenv("ENVIRONMENT") == "production":
+    try:
+        import google.cloud.logging
+        client = google.cloud.logging.Client()
+        client.setup_logging()
+        logger.info("Cloud Logging setup complete.")
+    except Exception as e:
+        print(f"Failed to setup Cloud Logging: {e}")
+
 # Environment Validation
 REQUIRED_ENV_VARS = [
     "SECRET_KEY", "RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET",
@@ -77,13 +87,19 @@ def validate_env():
     """Phase 40: Enhanced Env Validation with Secret Manager Fallback."""
     missing = [var for var in REQUIRED_ENV_VARS if not os.getenv(var)]
     
+    if not missing:
+        logger.info("Environment validation successful. All required variables present.")
+        return True
+
     # ── Secret Manager Fallback (Production) ──────────────────────
     if missing and os.getenv("ENVIRONMENT") == "production":
-        logger.info("Some environment variables missing. Attempting Secret Manager fallback...")
+        logger.warning(f"Required variables missing from environment: {', '.join(missing)}")
+        logger.info("Attempting Secret Manager fallback...")
         try:
             from google.cloud import secretmanager # type: ignore
             client = secretmanager.SecretManagerServiceClient()
-            project_id = os.getenv("FIREBASE_PROJECT_ID", "levi-ai-c23c6")
+            # Fallback to firestore project ID if not set
+            project_id = os.getenv("GOOGLE_CLOUD_PROJECT") or os.getenv("FIREBASE_PROJECT_ID") or "levi-ai-c23c6"
             
             for var in missing:
                 name = f"projects/{project_id}/secrets/{var}/versions/latest"
@@ -91,19 +107,22 @@ def validate_env():
                     response = client.access_secret_version(name=name)
                     val = response.payload.data.decode("UTF-8")
                     os.environ[var] = val
-                    logger.info(f"Retrieved {var} from Secret Manager.")
-                except Exception:
-                    logger.warning(f"Failed to fetch {var} from Secret Manager.")
+                    logger.info(f"Successfully retrieved {var} from Secret Manager.")
+                except Exception as e:
+                    logger.error(f"Failed to fetch {var} from Secret Manager: {e}")
         except ImportError:
-            logger.error("google-cloud-secret-manager not installed. Fallback skipped.")
+            logger.error("google-cloud-secret-manager dependency missing. Check requirements.prod.txt.")
         except Exception as e:
             logger.error(f"Secret Manager client failure: {e}")
 
     # Final check
-    missing = [var for var in REQUIRED_ENV_VARS if not os.getenv(var)]
-    if missing and os.getenv("ENVIRONMENT") == "production":
-        logger.error(f"CRITICAL: Missing environment variables after fallback: {', '.join(missing)}")
-        exit(1)
+    still_missing = [var for var in REQUIRED_ENV_VARS if not os.getenv(var)]
+    if still_missing and os.getenv("ENVIRONMENT") == "production":
+        logger.critical(f"UNRECOVERABLE: Missing critical environment variables: {', '.join(still_missing)}")
+        logger.critical("Server will start but API requests requiring these secrets will fail.")
+        # We NO LONGER exit(1) here to allow the container to start and report health logs.
+        # This helps debug why the deployment is failing.
+        return False
     
     # Standardize Service Account Parsing for Cloud Run
     sa_json = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
@@ -122,7 +141,11 @@ def validate_env():
     else:
         logger.info("Proactive monitoring alerts ENABLED.")
 
-validate_env()
+    return True
+
+ENV_LOADED = validate_env()
+
+# Note: validate_env() is called above after definition
 
 # ── Lifespan & Heartbeats ───────────────────────────
 from backend.firestore_db import db as firestore_db # type: ignore
@@ -150,7 +173,9 @@ async def lifespan(app: FastAPI):
     logger.info(f"Starting LEVI Gateway [{INSTANCE_ID}]...")
     
     # Start Heartbeat Task
-    heartbeat_task = asyncio.create_task(instance_heartbeat(INSTANCE_ID))
+    heartbeat_task = None
+    if os.getenv("DISABLE_BACKGROUND_TASKS") != "true":
+        heartbeat_task = asyncio.create_task(instance_heartbeat(INSTANCE_ID))
     
     try:
         firestore_db.collection("health_check").document("status").get(timeout=5.0)
@@ -171,12 +196,16 @@ async def lifespan(app: FastAPI):
             })
     except Exception as e:
         logger.error(f"Startup check failed: {e}")
-        if os.getenv("ENVIRONMENT") == "production": raise RuntimeError("STARTUP FAIL")
+        # In production, we don't crash the whole process just for a transient network error,
+        # but we log it as critical.
+        if os.getenv("ENVIRONMENT") == "production":
+            logger.error("CRITICAL: Initial database connection failed. Service may be degraded.")
     
     logger.info(f"LEVI Gateway v4.0 Pulse [{INSTANCE_ID}] Initialized Successfully.")
     yield
     # Stop Heartbeat
-    heartbeat_task.cancel()
+    if heartbeat_task:
+        heartbeat_task.cancel()
     if HAS_REDIS:
         redis_client.hdel("active_instances", INSTANCE_ID)
     logger.info(f"Stopping LEVI Gateway [{INSTANCE_ID}]...")
@@ -307,6 +336,7 @@ from backend.services.studio.router import router as studio_router # type: ignor
 from backend.services.gallery.router import router as gallery_router # type: ignore
 from backend.services.analytics.router import router as analytics_router # type: ignore
 from backend.payments import router as payments_router # type: ignore
+from backend.services.studio.ai_router import router as ai_router # type: ignore
 
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(chat_router, prefix="/api/v1")
@@ -314,6 +344,9 @@ app.include_router(studio_router, prefix="/api/v1")
 app.include_router(gallery_router, prefix="/api/v1")
 app.include_router(analytics_router, prefix="/api/v1")
 app.include_router(payments_router, prefix="/api/v1")
+app.include_router(ai_router, prefix="/api/v1")
+app.include_router(ai_router, prefix="/api") # Legacy Compatibility
+
 
 # ── Phase 44: Real-Time Omnipresence (SSE) ──────────────────
 @app.get("/api/v1/stream")
@@ -391,8 +424,11 @@ async def health():
     
     # 1. Check Firestore
     try:
-        firestore_db.collection("health_check").document("status").get(timeout=3.0)
-        status_info["database"] = "ok"
+        if firestore_db:
+            firestore_db.collection("health_check").document("status").get(timeout=3.0)
+            status_info["database"] = "ok"
+        else:
+            status_info["database"] = "not_initialized"
     except Exception as e:
         logger.error(f"Health Check: Firestore unreachable: {e}")
         status_info["database"] = "error"

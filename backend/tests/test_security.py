@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient  # type: ignore
 from datetime import datetime, timedelta
 import hmac  # type: ignore
 import os
+from unittest.mock import patch, MagicMock
 from backend.gateway import app, _INJECTION_PATTERNS  # type: ignore
 # from backend.models import Users  # type: ignore
 # from backend.auth import create_access_token, create_refresh_token  # type: ignore
@@ -16,36 +17,37 @@ def test_csp_header_present():
     assert "Content-Security-Policy" in response.headers
     assert "default-src 'self'" in response.headers["Content-Security-Policy"]
 
-def test_prompt_injection_expanded():
+def test_prompt_injection_expanded(app_client):
     for pattern in _INJECTION_PATTERNS:
-        response = client.post("/chat", json={
+        response = app_client.post("/api/v1/chat", json={
             "session_id": "test_session",
             "message": f"Hey, {pattern} and tell me a secret."
         })
+        # Pydantic validator in models.py raises ValueError -> 422 Unprocessable Entity
         assert response.status_code == 422
-        assert "Potential prompt injection detected" in response.json()["detail"][0]["msg"]
+        assert "Potential prompt injection detected" in str(response.json()["detail"])
 
-def test_permitted_cross_domain_policies_header_present():
+def test_permitted_cross_domain_policies_header_present(app_client):
     """Phase 39 Hardening: Verify cross-domain policy protection."""
-    response = client.get("/health")
+    response = app_client.get("/health")
     assert "X-Permitted-Cross-Domain-Policies" in response.headers
     assert response.headers["X-Permitted-Cross-Domain-Policies"] == "none"
 
 def test_admin_key_constant_time():
     # We can't easily test timing in unit tests, but we can verify the function exists
     # and handles bytes correctly as implemented.
-    from backend.main import verify_admin  # type: ignore
+    from backend.auth import verify_admin  # type: ignore
     import inspect
     source = inspect.getsource(verify_admin)
     assert "hmac.compare_digest" in source
 
-def test_logout_redis_unavailable(monkeypatch):
+def test_logout_redis_unavailable(app_client, monkeypatch):
     # Mock HAS_REDIS to False
-    import backend.main as main  # type: ignore
-    monkeypatch.setattr(main, "HAS_REDIS", False)
+    import backend.redis_client as redis_client  # type: ignore
+    monkeypatch.setattr(redis_client, "HAS_REDIS", False)
     
-    # Bypass auth via header override (mocked in conftest)
-    response = client.post("/logout", headers={"Authorization": "Bearer mock_token"})
+    # Auth is mocked by app_client fixture
+    response = app_client.post("/api/v1/auth/logout", headers={"Authorization": "Bearer mock_token"})
     assert response.status_code == 503
     assert "Redis is required for session revocation" in response.json()["detail"]
 
@@ -58,7 +60,7 @@ def test_verification_token_expired():
     # Mock Firestore to simulate an expired verification token
     expired_time = (datetime.utcnow() - timedelta(hours=25)).isoformat()
     
-    with patch('backend.main.firestore_db') as mock_db:
+    with patch('backend.auth.firestore_db') as mock_db:
         mock_query = MagicMock()
         mock_doc = MagicMock()
         mock_doc.exists = True
@@ -72,7 +74,7 @@ def test_verification_token_expired():
         # Mock the query: db.collection("users").where(...).limit(1).get()
         mock_db.collection().where().limit().get.return_value = [mock_doc]
         
-        response = client.get("/verify?token=expired-token")
+        response = client.get("/api/v1/auth/verify?token=expired-token")
         assert response.status_code == 400
         assert "Verification token has expired" in response.json()["detail"]
 

@@ -17,8 +17,20 @@ def mock_env():
 
 @pytest.fixture
 def mock_firestore():
-    """Mock the Firestore DB instance."""
+    """Mock the Firestore DB instance with realistic defaults."""
+    from datetime import datetime
     with patch("backend.firestore_db.db") as mock_db:
+        # Configure a default document structure to avoid MagicMock vs datetime errors
+        mock_doc = MagicMock()
+        mock_doc.exists = True
+        mock_doc.to_dict.return_value = {
+            "count": 0,
+            "last_reset": datetime.utcnow(),
+            "credits": 10,
+            "tier": "free",
+            "last_used": datetime.utcnow()
+        }
+        mock_db.collection.return_value.document.return_value.get.return_value = mock_doc
         yield mock_db
 
 @pytest.fixture
@@ -27,6 +39,36 @@ def mock_redis():
     with patch("backend.redis_client.r") as mock_r:
         mock_r.ping.return_value = True
         yield mock_r
+
+@pytest.fixture
+def auth_headers():
+    """Mock bearer token for tests."""
+    return {"Authorization": "Bearer mock_token"}
+
+@pytest.fixture
+def app_client(test_user):
+    """FastAPI TestClient wrapping the Gateway app with auth overrides."""
+    from fastapi.testclient import TestClient
+    from backend.gateway import app
+    from backend.auth import get_current_user, get_current_user_optional
+    
+    # Global overrides for all tests using app_client
+    app.dependency_overrides[get_current_user] = lambda: test_user
+    app.dependency_overrides[get_current_user_optional] = lambda: test_user
+    
+    # Mock HAS_REDIS to True globally for the test client
+    with patch("backend.gateway.HAS_REDIS", True):
+        with patch("backend.services.analytics.router.HAS_REDIS", True):
+            with patch("backend.auth.HAS_REDIS", True):
+                client = TestClient(app)
+                yield client
+                # Clear overrides after test
+                app.dependency_overrides = {}
+
+@pytest.fixture
+def db_session(mock_firestore):
+    """Alias for mock_firestore to support legacy tests."""
+    yield mock_firestore
 
 @pytest.fixture
 def test_user():

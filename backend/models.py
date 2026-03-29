@@ -56,10 +56,15 @@ class PersonaCreate(BaseModel):
         return sanitize_text_field(v)
 
 class ContentRequest(BaseModel):
-    type: str           # quote, essay, story, script, philosophy, caption, thread, blog
+    content_type: str = Field(..., alias="type")
     topic: str
     tone: str = "inspiring"
     depth: str = "high"
+    language: str = "English"
+
+    model_config = {
+        "populate_by_name": True
+    }
 
 class FeedbackRequest(BaseModel):
     item_id: str

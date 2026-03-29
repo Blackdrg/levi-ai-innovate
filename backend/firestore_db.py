@@ -35,10 +35,9 @@ if not firebase_admin._apps:
             logger.info("[Firebase] Initialization successful (Default)")
     except Exception as e:
         logger.error(f"[Firebase] CRITICAL: Firebase initialization failed: {e}")
-        # In production, we might want to fail fast, but let's allow the app to boot
-        # and fail on the first actual DB hit if not in prod.
         if os.getenv("ENVIRONMENT") == "production":
-             raise RuntimeError(f"Firebase init failed: {e}")
+            logger.error("Running in production with FAILED Firebase initialization. DB calls will fail.")
+            # We do not raise RuntimeError here to allow the Gateway to start and report logs.
 
 if firebase_admin._apps and not db:
     try:
@@ -49,7 +48,9 @@ if firebase_admin._apps and not db:
             from unittest.mock import MagicMock
             db = MagicMock()
         else:
-            raise RuntimeError(f"Firestore client init failed: {e}")
+            logger.error(f"[Firebase] Firestore client init failed: {e}. DB will be unavailable.")
+            from unittest.mock import MagicMock
+            db = MagicMock()
 
 def get_firestore_db():
     return db

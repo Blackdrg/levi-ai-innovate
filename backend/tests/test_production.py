@@ -5,33 +5,34 @@ import pytest  # type: ignore
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient  # type: ignore
 
-try:
-    from backend.main import app  # type: ignore
-except ImportError:
-    from main import app  # type: ignore
+from backend.gateway import app # type: ignore
 
-@patch('backend.main.get_db')
-@patch('backend.main.use_credits')
-@patch('backend.main.generate_quote_image')
+@patch('backend.firestore_db.db')
+@patch('backend.payments.use_credits')
+@patch('backend.image_gen.generate_quote_image')
 def test_generate_image_sync(mock_gen, mock_credits, mock_db, app_client, auth_headers):
-    """Test synchronous image generation."""
-    # Mock credits check to pass
+    """Test image generation with local background task (Sync behavior for test)."""
     mock_credits.return_value = True
+    mock_gen.return_value = "data:image/png;base64,mock"
     
-    # Mock image generation to return dummy bytes
-    from io import BytesIO
-    mock_gen.return_value = BytesIO(b"dummy_image_data")
-    
-    # Force USE_CELERY=false for this test
+    # Mocking doc for rate limiting
+    from datetime import datetime
+    mock_doc = MagicMock()
+    mock_doc.exists = True
+    mock_doc.to_dict.return_value = {"count": 0, "last_reset": datetime.utcnow()}
+    mock_db.collection.return_value.document.return_value.get.return_value = mock_doc
+
+    # Force USE_CELERY=false to use background_tasks fallback
     with patch('os.getenv', side_effect=lambda k, d=None: "false" if k == "USE_CELERY" else d):
-        resp = app_client.post('/generate_image', json={'text': 'Test quote', 'mood': 'zen'}, headers=auth_headers)
+        resp = app_client.post('/api/v1/studio/generate_image', json={'text': 'Test quote', 'mood': 'zen'}, headers=auth_headers)
         
     assert resp.status_code == 200
-    assert "image_b64" in resp.json()
+    assert resp.json()["status"] == "queued"
+    assert "task_id" in resp.json()
 
-@patch('backend.main.get_db')
-@patch('backend.main.use_credits')
-@patch('backend.tasks.generate_image_task.delay')
+@patch('backend.firestore_db.db')
+@patch('backend.payments.use_credits')
+@patch('backend.services.studio.router.generate_image_task.delay')
 def test_generate_image_async(mock_task, mock_credits, mock_db, app_client, auth_headers):
     """Test asynchronous image generation via Celery."""
     mock_credits.return_value = True
@@ -39,13 +40,13 @@ def test_generate_image_async(mock_task, mock_credits, mock_db, app_client, auth
     
     # Force USE_CELERY=true
     with patch('os.getenv', side_effect=lambda k, d=None: "true" if k == "USE_CELERY" else d):
-        resp = app_client.post('/generate_image', json={'text': 'Test quote', 'mood': 'zen'}, headers=auth_headers)
+        resp = app_client.post('/api/v1/studio/generate_image', json={'text': 'Test quote', 'mood': 'zen'}, headers=auth_headers)
         
-    assert resp.status_code == 202
-    assert resp.json()["task_id"] == "test_task_id"
-    assert resp.json()["status"] == "processing"
+    assert resp.status_code == 200 # Now returns 200 queued
+    assert resp.json()["task_id"].startswith("job_")
+    assert resp.json()["status"] == "queued"
 
-@patch('backend.main.get_db')
+@patch('backend.firestore_db.db')
 @patch('backend.payments.verify_razorpay_signature')
 @patch('backend.payments.upgrade_user_tier')
 def test_verify_payment(mock_upgrade, mock_verify, mock_db, app_client, auth_headers):
@@ -59,7 +60,7 @@ def test_verify_payment(mock_upgrade, mock_verify, mock_db, app_client, auth_hea
         "plan": "pro"
     }
     
-    resp = app_client.post('/verify_payment', json=payload, headers=auth_headers)
+    resp = app_client.post('/api/v1/payments/verify_payment', json=payload, headers=auth_headers)
         
     assert resp.status_code == 200
     assert resp.json()["status"] == "success"

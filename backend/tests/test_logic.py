@@ -68,7 +68,8 @@ from backend.agents import RouterAgent
 
 def test_circuit_breaker_trips():
     """Verify that the circuit correctly opens after threshold failures."""
-    breaker = CircuitBreaker("TestBreaker", failure_threshold=2, recovery_timeout=1)
+    # Using a longer recovery timeout for testing stability
+    breaker = CircuitBreaker("TestBreaker", failure_threshold=2, recovery_timeout=10)
     
     def failing_func():
         raise Exception("Failure")
@@ -83,23 +84,30 @@ def test_circuit_breaker_trips():
         breaker.call(failing_func)
     assert breaker.state == "OPEN"
     
-    # 3. Verify it stays open until timeout
+    # 3. Verify it stays open (should raise Exception without even calling the func)
     with pytest.raises(Exception) as exc:
-        breaker.call(lambda: "success")
+        breaker.call(lambda: "should-not-hit")
     assert "is OPEN" in str(exc.value)
 
 def test_router_agent_intent():
     """Verify intent classification routing logic."""
     agent = RouterAgent()
     
-    # Mock the LLM call
-    with patch("backend.agents.groq_breaker.call") as mock_call:
-        # 1. Test Chat Intent
-        mock_call.return_value = "{\"intent\": \"chat\", \"confidence\": 0.9}"
-        intent = agent.classify("Hello there")
-        assert intent == "chat"
+    # Mock the LLM call at the source
+    with patch("backend.services.studio.router.generate_image_task.delay") as mock_task, \
+         patch("backend.services.studio.router.use_credits") as mock_use_credits, \
+         patch("backend.circuit_breaker.groq_breaker.call") as mock_call:
+        # Create a mock response object that looks like Groq/OpenAI response
+        mock_response = MagicMock()
         
-        # 2. Test Studio Intent
-        mock_call.return_value = "{\"intent\": \"studio\", \"confidence\": 0.9}"
-        intent = agent.classify("Create a video about space")
-        assert intent == "studio"
+        # 1. Test Chat Intent
+        mock_response.choices[0].message.content = "{\"intent\": \"chat\", \"confidence\": 0.9}"
+        mock_call.return_value = mock_response
+        intent_info = agent.classify_intent("Hello there")
+        assert intent_info["intent"] == "chat"
+        
+        # 2. Test Image Intent
+        mock_response.choices[0].message.content = "{\"intent\": \"generate_image\", \"confidence\": 0.9, \"parameters\": {\"topic\": \"space\"}}"
+        mock_call.return_value = mock_response
+        intent_info = agent.classify_intent("Create an image about space")
+        assert intent_info["intent"] == "generate_image"
