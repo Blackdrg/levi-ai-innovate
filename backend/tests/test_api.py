@@ -2,6 +2,7 @@
 """API Tests."""
 import sys
 import os
+from io import BytesIO
 import pytest
 from unittest.mock import patch, MagicMock
 
@@ -27,11 +28,9 @@ def test_health(app_client):
     assert resp.status_code == 200
     assert resp.json()['status'] == 'ok'
 
-@patch('backend.firestore_db.db')
 @patch('backend.services.chat.router.generate_response')
-def test_chat(mock_gen_resp, mock_db, app_client, test_user, auth_headers):
+def test_chat(mock_gen_resp, app_client, test_user, auth_headers):
     """Test chat."""
-    mock_db.return_value = [MagicMock()]
     mock_gen_resp.return_value = 'hi'
     resp = app_client.post('/api/v1/chat', json={'session_id': '1', 'message': 'hi'}, headers=auth_headers)
     assert resp.status_code == 200
@@ -48,15 +47,19 @@ def test_analytics(mock_db, app_client):
     resp = app_client.get('/api/v1/analytics')
     assert resp.status_code == 200
 
-@patch('backend.payments.use_credits')
+@patch('backend.services.studio.router.use_credits')
 @patch('backend.image_gen.generate_quote_image')
 @patch('backend.firestore_db.db')
 def test_generate_image_auth(mock_db, mock_gen, mock_credits, app_client, test_user, auth_headers):
     """Test generate_image with auth override."""
-    mock_gen.return_value = MagicMock()
-    mock_gen.return_value.getvalue.return_value = b"fake_image_data"
-    with patch.dict(os.environ, {"USE_CELERY": "false"}):
-        resp = app_client.post('/api/v1/studio/generate_image', json={'text': 'Wisdom'}, headers=auth_headers)
+    # Mock generate_quote_image to return a dict with a BytesIO data object (simulating real engine)
+    mock_gen.return_value = {
+        "success": True, 
+        "data": BytesIO(b"fake_image_bytes"), 
+        "engine": "mock_engine"
+    }
+    
+    resp = app_client.post('/api/v1/studio/generate_image', json={'text': 'Wisdom'}, headers=auth_headers)
     assert resp.status_code == 200
     assert resp.json()["status"] == "queued"
     assert "task_id" in resp.json()

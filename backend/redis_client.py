@@ -105,13 +105,22 @@ def get_conversation(session_id: str) -> list:
         doc = firestore_db.collection("conversations").document(session_id).get()
         if doc.exists:
             conv = doc.to_dict().get("history", [])
-            # Re-cache in Redis
-            _set(f"conv:{session_id}", json.dumps(conv), ex=3600)
+            # Re-cache in Redis if it's a valid serializable list
+            if isinstance(conv, list) and is_serializable(conv):
+                _set(f"conv:{session_id}", json.dumps(conv), ex=3600)
             return conv
     except Exception as e:
         print(f"[Firestore] Error loading conversation {session_id}: {e}")
         
     return []
+
+def is_serializable(obj: Any) -> bool:
+    """Helper to check if an object is JSON serializable."""
+    try:
+        json.dumps(obj)
+        return True
+    except (TypeError, OverflowError):
+        return False
 
 def save_conversation(session_id: str, conversation: list, user_id: str = None):
     # 1. Save to Redis
@@ -361,11 +370,12 @@ def distributed_lock(lock_name: str, ttl: int = 10):
     finally:
         if acquired:
             # Only release if we still hold it (check value)
-            # Use Lua script for atomic check-and-delete if possible, 
-            # but for simple hardening this is a solid start.
             current = _get(lock_key)
-            if current and current.decode() if isinstance(current, bytes) else current == lock_val:
-                r.delete(lock_key)
+            if current:
+                # Standardize to string for comparison
+                val = current.decode() if isinstance(current, bytes) else str(current)
+                if val == lock_val:
+                    r.delete(lock_key)
 
 def is_rate_limited(user_id: str, limit: int = 5, window: int = 60) -> bool:
     """
@@ -391,8 +401,15 @@ def is_rate_limited(user_id: str, limit: int = 5, window: int = 60) -> bool:
         
         if doc.exists:
             data = doc.to_dict()
-            last_reset = data.get("last_reset", now).replace(tzinfo=None)
-            if now - last_reset > timedelta(seconds=window):
+            last_reset_raw = data.get("last_reset", now)
+            
+            # Phase 40: Mock-Safe Datetime Handling
+            if hasattr(last_reset_raw, "replace"):
+                last_reset = last_reset_raw.replace(tzinfo=None) # type: ignore
+            else:
+                last_reset = now
+                
+            if isinstance(last_reset, datetime) and (now - last_reset > timedelta(seconds=window)):
                 # Reset window
                 limit_ref.set({"count": 1, "last_reset": now})
                 return False

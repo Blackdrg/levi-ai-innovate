@@ -24,7 +24,9 @@ async def gen_image(
     current_user: Optional[dict] = Depends(get_current_user_optional)
 ):
     try:
-        user_id = current_user.get("uid") if current_user else f"guest:{request.client.host}"
+        # ── Phase 40: Safe Request Access for Testing ────────────────
+        client_host = request.client.host if request.client else "127.0.0.1"
+        user_id = current_user.get("uid") if current_user else f"guest:{client_host}"
         user_tier = current_user.get("tier", "free") if current_user else "free"
         
         # ── Defensive: Rate Limiting ────────────────────────
@@ -73,6 +75,7 @@ async def gen_image(
         return {"status": "queued", "task_id": job_id, "message": "Image generation started."}
 
     except Exception as e:
+        logger.error(f"Image generation request failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail={"error": str(e), "status": "failed"})
 
 @router.post("/generate_video")
@@ -83,7 +86,9 @@ async def gen_video(
     current_user: Optional[dict] = Depends(get_current_user_optional)
 ):
     try:
-        user_id = current_user.get("uid") if current_user else f"guest:{request.client.host}"
+        # ── Phase 40: Safe Request Access for Testing ────────────────
+        client_host = request.client.host if request.client else "127.0.0.1"
+        user_id = current_user.get("uid") if current_user else f"guest:{client_host}"
         user_tier = current_user.get("tier", "free") if current_user else "free"
         
         # ── Defensive: Rate Limiting ────────────────────────
@@ -132,6 +137,7 @@ async def gen_video(
         return {"status": "queued", "task_id": job_id, "message": "Video synthesis started."}
 
     except Exception as e:
+        logger.error(f"Video generation request failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail={"error": str(e), "status": "failed"})
 
 @router.get("/task_status/{job_id}")
