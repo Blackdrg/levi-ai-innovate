@@ -247,6 +247,8 @@ async def _async_call_llm_api(messages: List[Dict], temperature: float = 0.85,
         logger.warning(f"Async API call failed for {model} ({provider}): {e}")
         return None
 
+_async_call_groq_api = _async_call_llm_api
+
 
 async def generate_council_response(
     prompt: str,

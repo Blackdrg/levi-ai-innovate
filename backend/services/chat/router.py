@@ -7,7 +7,7 @@ import os
 
 from backend.models import ChatMessage, _INJECTION_PATTERNS
 from backend.auth import get_current_user_optional
-from backend.redis_client import get_conversation, save_conversation, is_rate_limited
+from backend.redis_client import get_conversation, save_conversation, is_rate_limited, r as redis_client, HAS_REDIS
 from backend.firestore_db import update_analytics
 from backend.payments import use_credits
 from backend.generation import generate_response
