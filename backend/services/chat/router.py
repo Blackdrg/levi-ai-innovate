@@ -42,6 +42,7 @@ async def chat_endpoint(
         user_input=msg.message,
         session_id=msg.session_id,
         user_id=str(user_id),
+        background_tasks=background_tasks,
         user_tier=user_tier,
         mood=msg.mood or "philosophical"
     )
