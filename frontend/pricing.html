@@ -210,79 +210,9 @@
 
 <div id="toast"></div>
 
-<script>
-function toggleMobileMenu(){const m=document.getElementById('mobile-menu');if(!m)return;m.classList.toggle('hidden')}
-          function showToast(msg, type = 'success') { const t = document.getElementById('toast'); const border = type === 'error' ? 'rgba(255,180,171,.3)' : 'rgba(242,202,80,.35)'; const bg = type === 'error' ? 'rgba(147,0,10,.85)' : 'rgba(19,19,23,.92)'; t.innerHTML = `<div style="background:${bg};border:.5px solid ${border};-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)" class="flex items-center gap-2.5 px-5 py-3 rounded-full shadow-2xl"><span style="font-size:12px;color:#e5e1e7;font-family:'Plus Jakarta Sans',sans-serif;font-weight:600;letter-spacing:.04em">${msg}</span></div>`; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 3500) }
-
-    // Check for exhausted credits
-    if (window.location.search.includes('exhausted=true')) {
-      setTimeout(() => {
-        if (window.showToast) window.showToast("Your credits have been spent. Choose a plan to continue your journey.", "warning");
-      }, 500);
-    }
-const PLANS={pro:{amount:29900,name:'LEVI Pro',description:'100 credits per month'},creator:{amount:59900,name:'LEVI Creator',description:'500 credits per month'}};
-
-async function subscribe(plan){
-  await window.waitForToken();
-  const token = window.levi_user_token;
-  if(!token){showToast('Please sign in to subscribe','warning');setTimeout(()=>window.location.href='auth.html',1400);return}
-  const user=JSON.parse(localStorage.getItem('levi_user')||'{}');
-  const btnId=plan+'-btn';
-  document.getElementById(btnId).disabled=true;
-  document.getElementById(btnId).textContent='Loading…';
-  if (window.ui && window.ui.showLoader) window.ui.showLoader();
-  try{
-    const d = await window.api.apiFetch('/create_order', {
-      method: "POST",
-      body: { plan }
-    });
-    const options={
-      key:d.key_id||'rzp_test_placeholder',
-      amount:PLANS[plan].amount,
-      currency:'INR',
-      name:'LEVI-AI',
-      description:PLANS[plan].description,
-      order_id:d.order_id,
-      prefill:{name:user.username||'',email:user.email||''},
-      theme:{color:'#f2ca50'},
-      handler:async function(response){
-        if (window.ui && window.ui.showLoader) window.ui.showLoader();
-        try {
-          const vd = await window.api.apiFetch('/verify_payment', {
-            method: 'POST',
-            body: response
-          });
-          if(vd.success){
-            showToast('Payment successful! Your plan is now active.');
-            if(vd.user) localStorage.setItem('levi_user', JSON.stringify(vd.user));
-          } else {
-            showToast('Payment verification failed — contact support', 'error');
-          }
-        } catch(e) {
-          console.error("Payment verification failed:", e);
-          showToast('Network error — please refresh', 'error');
-        } finally {
-          if (window.ui && window.ui.finishLoader) window.ui.finishLoader();
-        }
-      }
-    };
-    const rzp=new Razorpay(options);
-    rzp.on('payment.failed',e=>{showToast('Payment failed: '+e.error.description,'error')});
-    rzp.open();
-  }catch(e){
-    showToast(e.message||'Failed to create order. Please try again.','error');
-  }finally{
-    const btn=document.getElementById(btnId);
-    btn.disabled=false;
-    btn.textContent=plan==='pro'?'Upgrade to Pro':'Become Creator';
-    if (window.ui && window.ui.hideLoader) window.ui.hideLoader();
-  }
-}
-
-// Auth
-const u=localStorage.getItem('levi_user');
-if(u){try{const o=JSON.parse(u);document.getElementById('nav-auth-btn').textContent=o.username||'Account';document.getElementById('nav-auth-btn').href='my-gallery.html';if(o.credits!==undefined)document.getElementById('credits-display').textContent=o.credits+' credits'}catch{}}
-</script>
+<script src="js/api.js" type="module"></script>
+<script src="js/ui.js" type="module"></script>
+<script src="js/pricing.js" type="module"></script>
 <script src="js/animations.js" type="module"></script>
 <script src="js/feedback.js" type="module"></script>
 </body>

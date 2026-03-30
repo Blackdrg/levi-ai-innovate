@@ -87,12 +87,30 @@ async function handleChat() {
     chatMessages.scrollTop = chatMessages.scrollHeight;
 
     try {
-        const response = await chat(msg, "demo-session");
+        let botFullText = "";
+        const botDiv = document.createElement('div');
+        botDiv.className = "flex justify-start";
+        const inner = document.createElement('div');
+        inner.className = "glass px-5 py-3 rounded-2xl rounded-tl-none max-w-[80%] text-sm border-white/5 whitespace-pre-wrap";
+        botDiv.appendChild(inner);
+        chatMessages.insertBefore(botDiv, typingIndicator);
+
+        await window.api.chatStream(
+            msg, 
+            "demo-session", 
+            (chunk) => {
+                botFullText += chunk;
+                inner.textContent = botFullText;
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            },
+            (meta) => { console.log("[Demo] Meta:", meta); }
+        );
+        
         typingIndicator.classList.add('opacity-0');
-        appendMessage(response.response, 'bot');
+        if (window.syncUser) window.syncUser();
     } catch (err) {
         typingIndicator.classList.add('opacity-0');
-        appendMessage("The connection to the cosmic archive was interrupted. Please try again.", 'bot');
+        appendMessage("The connection to the cosmic archive was interrupted.", 'bot');
     }
 }
 
@@ -121,16 +139,17 @@ clearChatBtn.onclick = () => {
 // 5. Search Debounce
 const searchInput = document.querySelector('#hero input');
 let searchTimeout;
-searchInput.oninput = () => {
-    clearTimeout(searchTimeout);
-    searchTimeout = setTimeout(async () => {
-        const query = searchInput.value.trim();
-        if (query.length > 3) {
-            console.log(`Searching for: ${query}`);
-            // Optionally trigger search or show preview
-        }
-    }, 500);
-};
+if (searchInput) {
+    searchInput.oninput = () => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(async () => {
+            const query = searchInput.value.trim();
+            if (query.length > 3) {
+                console.log(`Searching for: ${query}`);
+            }
+        }, 500);
+    };
+}
 
 // Keyboard Shortcut Ctrl+K
 window.onkeydown = (e) => {
@@ -143,8 +162,10 @@ window.onkeydown = (e) => {
 // 6. Gallery & Feed
 async function loadGallery() {
     const galleryGrid = document.querySelector('#gallery .grid');
+    if (!galleryGrid) return;
     try {
-        const items = await getFeed(2);
+        const data = await window.api.getFeed(2);
+        const items = data.items || data;
         if (items && items.length > 0) {
             const cards = galleryGrid.querySelectorAll('.group');
             items.forEach((item, i) => {
@@ -154,21 +175,24 @@ async function loadGallery() {
                     const author = cards[i].querySelector('.text-gold');
                     const likeBtn = cards[i].querySelector('button');
 
-                    img.src = item.image_b64;
-                    quote.textContent = `"${item.text}"`;
-                    author.textContent = item.author || "Anonymous";
+                    const url = item.url || item.image_url || item.image_b64;
+                    if (img) img.src = url;
+                    if (quote) quote.textContent = `"${item.text || item.quote}"`;
+                    if (author) author.textContent = item.author || "Anonymous Seeker";
 
-                    likeBtn.onclick = async () => {
-                        try {
-                            await likeItem('feed', item.id);
-                            likeBtn.classList.add('text-pink-500');
-                        } catch (err) { console.error(err); }
-                    };
+                    if (likeBtn) {
+                        likeBtn.onclick = async () => {
+                            try {
+                                await window.api.likeItem('feed', item.id);
+                                likeBtn.classList.add('text-pink-500');
+                            } catch (err) { console.error(err); }
+                        };
+                    }
                 }
             });
         }
     } catch (err) {
-        console.warn("Gallery feed failed");
+        console.warn("Gallery feed failed", err);
     }
 }
 loadGallery();
@@ -246,6 +270,61 @@ function showCosmicActivity(payload) {
         toast.style.transform = 'translateY(-10px)';
         setTimeout(() => toast.remove(), 400);
     }, 4500);
+}
+
+// index.js - Landing Page Logic
+document.addEventListener('DOMContentLoaded', () => {
+    const user = localStorage.getItem('levi_user');
+    const heroBtn = document.querySelector('a[href="auth.html"] .btn-gold');
+    const chatHeroBtn = document.querySelector('a[href="chat.html"]');
+
+    if (user) {
+        // Update Primary Hero
+        const startLink = document.querySelector('a[href="auth.html"]');
+        if (startLink) {
+            startLink.href = 'studio.html';
+            const btn = startLink.querySelector('.btn-gold');
+            if (btn) btn.textContent = 'Enter Studio →';
+        }
+        
+        // Update Chat Hero
+        if (chatHeroBtn) {
+            chatHeroBtn.querySelector('span').textContent = 'Open Chat →';
+        }
+    }
+
+    // Initialize Pulse Feed
+    if (window.api && window.api.getFeed) {
+        loadPulse();
+    }
+});
+
+async function loadPulse() {
+    const pulseGrid = document.getElementById('pulse-grid');
+    if (!pulseGrid) return;
+    
+    try {
+        const feed = await window.api.getFeed(1, 4);
+        if (feed && feed.length > 0) {
+            pulseGrid.innerHTML = '';
+            feed.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'glass-card ghost-border h-48 rounded-2xl overflow-hidden group';
+                card.innerHTML = `
+                    <div class="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110" 
+                         style="background-image: url('${item.image_b64 || item.url}')"></div>
+                    <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
+                    <div class="absolute bottom-4 left-4 right-4">
+                        <p class="text-[10px] text-primary uppercase font-bold tracking-widest mb-0.5">${item.type || 'Inspiration'}</p>
+                        <p class="text-[11px] text-zinc-300 font-medium line-clamp-2 italic">"${item.prompt}"</p>
+                    </div>
+                `;
+                pulseGrid.appendChild(card);
+            });
+        }
+    } catch(e) {
+        console.warn("[LEVI] Pulse feed failed:", e);
+    }
 }
 
 initCosmicStream();

@@ -62,7 +62,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://levi-gateway.a.run.app/api/:path*"
+      "destination": "https://levi-backend-levi-ai-c23c6-uc.a.run.app/api/:path*"
     }
   ]
 }

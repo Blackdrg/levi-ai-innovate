@@ -25,26 +25,22 @@ _memory_cache = {}
 
 
 try:
-
-    r = redis.from_url(REDIS_URL)
-
+    r = redis.from_url(REDIS_URL, socket_timeout=5)
     r.ping()
-
     HAS_REDIS = True
-
+    print(f"[Redis] Successfully connected to {REDIS_URL.split('@')[-1] if '@' in REDIS_URL else REDIS_URL}")
 except Exception as e:
-
-    is_missing = "localhost" in REDIS_URL
-
-    masked = REDIS_URL.split("@")[-1] if "@" in REDIS_URL else REDIS_URL
-
-    if is_missing:
-
-        print(f"[Redis] REDIS_URL not set, using in-memory fallback. ({e})")
-
+    HAS_REDIS = False
+    is_prod = os.getenv("ENVIRONMENT") == "production"
+    error_msg = f"[Redis] Critical: Connection to Redis failed ({e})."
+    
+    if is_prod:
+        # Phase 3: Enforce Redis in Production
+        print(f"CRITICAL: {error_msg} Redis is MANDATORY in production for session memory, rate limiting, and caching.")
+        # In actual production, we might want to raise an error to stop the container
+        raise RuntimeError(error_msg)
     else:
-
-        print(f"[Redis] Unavailable at {masked}: {e}. Using in-memory fallback.")
+        print(f"{error_msg} Falling back to in-memory cache (Local Dev).")
 
 
 
@@ -274,9 +270,9 @@ def invalidate_user_memory(user_id: int):
 # ── Daily AI spend tracking ─────────────────────────────────
 from datetime import date as _date
 
-def incr_daily_ai_spend(amount: float = 1.0) -> float:
-    """Increment today's AI spend counter. Returns new total."""
-    key = f"ai_spend:{_date.today().isoformat()}"
+def incr_daily_ai_spend(user_id: str = "global", amount: float = 1.0) -> float:
+    """Increment a user's (or global) daily AI spend counter."""
+    key = f"ai_spend:{user_id}:{_date.today().isoformat()}"
     if HAS_REDIS:
         pipe = r.pipeline()
         pipe.incrbyfloat(key, amount)
@@ -286,23 +282,35 @@ def incr_daily_ai_spend(amount: float = 1.0) -> float:
     else:
         current = float(_memory_cache.get(key) or 0)
         current += amount
-        _memory_cache[key] = str(current)  # type: ignore
+        _memory_cache[key] = str(current)
         return current
 
-
-async def get_async_redis() -> aioredis.Redis:
-    """Phase 44: Returns an async Redis client for Pub/Sub."""
-    if not REDIS_URL:
-        raise RuntimeError("REDIS_URL not configured")
-    return aioredis.from_url(REDIS_URL, decode_responses=False)
-
-def get_daily_ai_spend() -> float:
-    """Get today's accumulated AI spend."""
-    key = f"ai_spend:{_date.today().isoformat()}"
+def get_daily_ai_spend(user_id: str = "global") -> float:
+    """Get a user's (or global) daily AI spend."""
+    key = f"ai_spend:{user_id}:{_date.today().isoformat()}"
     raw = _get(key)
     if raw is None:
         return 0.0
     return float(raw)
+
+def get_user_credits(user_id: str) -> int:
+    """Fast credit retrieval with Firestore fallback."""
+    key = f"user_credits:{user_id}"
+    cached = _get(key)
+    if cached:
+        return int(cached)
+    
+    # Fallback to Firestore
+    try:
+        user_doc = firestore_db.collection("users").document(user_id).get(timeout=5)
+        if user_doc.exists:
+            credits = int(user_doc.to_dict().get("credits", 0))
+            if HAS_REDIS:
+                r.setex(key, 300, credits) # Cache for 5 mins
+            return credits
+    except Exception as e:
+        print(f"[Redis/Firestore] Credit retrieval failed: {e}")
+    return 0
 
 
 # ── Global Concurrency Control ──────────────────────────────

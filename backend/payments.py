@@ -11,7 +11,7 @@ from backend.redis_client import _get, _set, HAS_REDIS  # type: ignore
 from backend.auth import get_current_user_optional  # type: ignore
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/payments", tags=["payments"])
+router = APIRouter(prefix="", tags=["payments"])
 
 # Razorpay client initialization
 RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID")
@@ -119,38 +119,57 @@ def verify_payment_signature(order_id: str, payment_id: str, signature: str) -> 
     """
     return verify_razorpay_signature(order_id, payment_id, signature)
 
-def use_credits(user_id: str, amount: int):
+from backend.config import TIERS, COST_MATRIX
+from backend.redis_client import incr_daily_ai_spend, get_daily_ai_spend # type: ignore
+
+def use_credits(user_id: str, action: str = "chat", amount: Optional[int] = None):
     """
-    Deducts credits from a user's account in Firestore with global Locking.
+    Deducts AI units or credits from a user's account.
+    Prioritizes Tier Allowance -> Credits fallback.
     """
     from backend.redis_client import distributed_lock # type: ignore
     
+    # 1. Determine Cost
+    cost = amount if amount is not None else COST_MATRIX.get(action, 1)
+    
+    # 2. Get User Info for Tier
+    user_ref = firestore_db.collection("users").document(user_id)
+    user_doc = user_ref.get()
+    if not user_doc.exists:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    user_data = user_doc.to_dict()
+    tier = user_data.get("tier", "free")
+    current_credits = int(user_data.get("credits", 0))
+    limit = TIERS.get(tier, TIERS["free"])["daily_limit"]
+    
+    # 3. Check Daily Spend (Fast Path)
+    daily_spend = get_daily_ai_spend(user_id)
+    if daily_spend + cost <= limit:
+        # User is within their daily tier allowance
+        incr_daily_ai_spend(user_id, float(cost))
+        return {"status": "success", "source": "allowance", "remaining_limit": limit - (daily_spend + cost)}
+
+    # 4. Fallback to Credits (Slow Path / Distributed Lock)
     with distributed_lock(f"credits:{user_id}", ttl=10) as acquired:
         if not acquired:
-            logger.warning(f"Failed to acquire credit lock for user {user_id}. Transaction rejected.")
-            raise HTTPException(status_code=429, detail="A transaction is already in progress. Please wait.")
+            logger.warning(f"Credit lock failed for {user_id}")
+            raise HTTPException(status_code=429, detail="Transaction in progress")
             
         try:
-            user_ref = firestore_db.collection("users").document(user_id)
-            user_doc = user_ref.get()
+            if current_credits < cost:
+                raise HTTPException(
+                    status_code=402, 
+                    detail=f"Daily limit ({limit}) reached. Insufficient credits for additional usage."
+                )
             
-            if not user_doc.exists:
-                raise HTTPException(status_code=404, detail="User not found")
-                
-            data = user_doc.to_dict()
-            current_credits = int(data.get("credits", 0))
-            tier = data.get("tier", "free")
-            
-            if tier == "free" and current_credits < amount:
-                raise HTTPException(status_code=402, detail="Insufficient credits. Upgrade to Pro for more generations.")
-            
-            new_credits = current_credits - amount
+            new_credits = current_credits - cost
             user_ref.update({"credits": new_credits})
-            return new_credits
+            return {"status": "success", "source": "credits", "remaining_credits": new_credits}
         except HTTPException:
             raise
         except Exception as e:
-            logger.error(f"Credit deduction failed for user {user_id}: {e}")
+            logger.error(f"Credit deduction failed: {e}")
             raise HTTPException(status_code=500, detail="Transaction failed")
 
 def process_subscription_lapse(user_id: str):

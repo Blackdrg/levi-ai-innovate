@@ -17,91 +17,101 @@ from backend.firestore_db import db as firestore_db
 from backend.redis_client import r as redis_client, HAS_REDIS
 from backend.utils.retries import logger
 
-security = HTTPBearer()
+from backend.config import TIERS, COST_MATRIX
+
+def check_allowance(user_id: str, tier: str, cost: int = 1) -> bool:
+    """Verifies if the user has enough daily units or credits."""
+    from backend.redis_client import get_daily_ai_spend, get_user_credits # type: ignore
+    
+    # 1. Check Tier Daily Allowance
+    limit = TIERS.get(tier, TIERS["free"])["daily_limit"]
+    spend = get_daily_ai_spend(user_id)
+    
+    if spend + cost > limit:
+        # 2. Fallback to purchased credits if daily limit is hit
+        credits = get_user_credits(user_id)
+        if credits < cost:
+            return False
+            
+    return True
+
 
 async def get_current_user(cred: HTTPAuthorizationCredentials = Depends(security)):
+    """Phase 4: Robust Firebase Auth Middleware."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
+        detail="Invalid or expired session. Please log in again.",
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
         token = cred.credentials
-        # Check Redis cache first
-        cache_key = f"user_token:{hashlib.md5(token.encode()).hexdigest()}"
+        
+        # 1. Distributed Cache Lookup
+        token_hash = hashlib.md5(token.encode()).hexdigest()
+        cache_key = f"auth:user:{token_hash}"
         
         if HAS_REDIS:
             cached_user = redis_client.get(cache_key)
             if cached_user:
                 return json.loads(cached_user)
 
-        decoded_token = firebase_auth.verify_id_token(token)
-        uid = decoded_token.get("uid")
-        email = decoded_token.get("email")
-        if not uid: raise credentials_exception
+        # 2. Firebase Verification
+        try:
+            decoded_token = firebase_auth.verify_id_token(token, check_revoked=True)
+            uid = decoded_token.get("uid")
+            email = decoded_token.get("email")
+            if not uid: raise credentials_exception
+        except Exception as fe:
+            logger.warning(f"Firebase token verification failed: {fe}")
+            raise credentials_exception
         
-        # Firestore-native user lookup
-        users_ref = firestore_db.collection("users")
-        user_docs = users_ref.where("email", "==", email).limit(1).get(timeout=5)
+        # 3. User Synchronization
+        user_ref = firestore_db.collection("users").document(uid)
+        user_doc = user_ref.get(timeout=5)
         
-        user_data = None
-        user_list = list(user_docs)
-        if not user_list:
-            # Create user in Firestore if not exists
+        if not user_doc.exists:
             base_username = email.split('@')[0] if email else f"user_{uid[:8]}"
-            username = base_username
-            
-            # Check for username uniqueness
-            existing_usernames = users_ref.where("username", "==", username).limit(1).get(timeout=5)
-            counter = 1
-            while list(existing_usernames):
-                username = f"{base_username}{counter}"
-                existing_usernames = users_ref.where("username", "==", username).limit(1).get(timeout=5)
-                counter += 1
-            
             user_data = {
                 "uid": uid,
-                "username": username,
+                "username": base_username,
                 "email": email,
-                "created_at": datetime.utcnow().isoformat(),
+                "created_at": datetime.utcnow(),
                 "tier": "free",
-                "credits": 10
+                "credits": 10,
+                "last_active": datetime.utcnow()
             }
-            users_ref.document(uid).set(user_data)
+            user_ref.set(user_data)
         else:
-            user_doc = user_list[0]
             user_data = user_doc.to_dict()
-            user_data["id"] = user_doc.id
-            # Convert datetime objects to string for JSON serialization
-            for key, value in user_data.items():
-                if isinstance(value, datetime):
-                    user_data[key] = value.isoformat()
+            user_data["uid"] = uid
+            user_ref.update({"last_active": datetime.utcnow()})
 
-        # Cache in Redis (TTL: 1 hour)
-        if HAS_REDIS and user_data:
-            redis_client.setex(cache_key, 3600, json.dumps(user_data))
+        # Inject Tier Config
+        user_data["tier_config"] = TIERS.get(user_data.get("tier", "free"))
+
+        # 4. JSON Serialization Cleanup
+        for key, value in user_data.items():
+            if isinstance(value, datetime):
+                user_data[key] = value.isoformat()
+
+        if HAS_REDIS:
+            redis_client.setex(cache_key, 1800, json.dumps(user_data))
 
         return user_data
+
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Auth error: {e}")
+        logger.error(f"Critical Auth System Failure: {e}")
         raise credentials_exception
 
 async def get_current_user_optional(cred: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False))):
     if not cred: return None
     try:
-        decoded_token = firebase_auth.verify_id_token(cred.credentials)
-        email = decoded_token.get("email")
-        if not email: return None
-        
-        users_ref = firestore_db.collection("users")
-        user_docs = users_ref.where("email", "==", email).limit(1).get()
-        if not list(user_docs): return None
-        
-        user = list(user_docs)[0].to_dict()
-        user["id"] = list(user_docs)[0].id
-        return user
+        return await get_current_user(cred)
     except Exception:
         return None
+
 
 async def verify_admin(request: Request):
     admin_key = os.getenv("ADMIN_KEY", "")

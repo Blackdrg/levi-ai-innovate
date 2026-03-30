@@ -65,9 +65,7 @@ function prefill(text,author,style){
   showToast('Prefilled: '+author);
 }
 
-window.prefill=prefill;
-
-async function synthesize(){
+window.prefill=prefill;async function synthesize(){
   if (isGenerating) {
     showToast("Synthesis in progress...", "warning");
     return;
@@ -78,38 +76,26 @@ async function synthesize(){
   setLoading(true);
   try{
     await window.waitForToken();
-    const body={text,author:document.getElementById('author-input').value||'LEVI-AI',mood:currentStyle,background:document.getElementById('bg-input').value};
+    const author = document.getElementById('author-input').value || 'LEVI-AI';
+    const mood = currentStyle;
+
+    const data = await window.api.generateImage(text, author, mood);
     
-    // Using Retry Utility
-    const d = await fetchWithRetry(`${getApiBase()}/studio/generate_image`, {
-      method:'POST',
-      body:JSON.stringify(body),
-      headers:{'Content-Type':'application/json'}
-    });
-    
-    if (d.status === 'queued') {
+    if (data.status === 'queued' || data.task_id) {
       showToast("Synthesis started...", "info");
-      pollTask(d.task_id, text);
+      pollTask(data.task_id || data.id, text);
       return;
     }
 
-    if(d.warnings && d.warnings.length > 0) {
-      console.warn("[LEVI] Generation warnings:", d.warnings);
-      if (d.warnings.some(w => w.toLowerCase().includes("fallback"))) {
-         showToast("AI busy, used high-quality fallback", "info");
-      }
-    }
-
-    const imgSrc = d.url || d.image_url || d.image_b64;
+    const imgSrc = data.url || data.image_url || data.image_b64;
     if(imgSrc){ displayImage(imgSrc, text); }
     else throw new Error('No image in response');
   }catch(e){
     console.error("Synthesize error:", e);
     showToast(e.message || 'Generation error','error');
     setLoading(false);
-  }finally{
-     // Loading is handled in displayImage or catch
-    if(!currentImage) setLoading(false);
+  } finally {
+    if (window.syncUser) window.syncUser();
   }
 }
 
@@ -125,25 +111,22 @@ function setLoading(on){
   document.getElementById('hud-label').textContent=on?'Synthesizing':'Ready';
 }
 
-async function pollTask(id,text){
+async function pollTask(id, text){
   let retryCount = 0;
   const maxRetries = 60; 
-  let pollInterval = 3000; 
 
   const poll = async () => {
     try {
       await window.waitForToken();
-      const d = await fetchWithRetry(`${getApiBase()}/studio/task_status/${id}`);
+      const d = await window.api.getTaskStatus(id);
 
       if ((d.status === 'completed' || d.status === 'done') && d.result) {
         setLoading(false);
         const res = d.result;
-        if(res.warnings && res.warnings.length > 0) {
-           showToast("Render complete with optimization", "info");
-        }
         const imgSrc = res.url || res.image_url || res.image_b64 || res.image;
         if (imgSrc) {
             displayImage(imgSrc, text);
+            if (window.syncUser) window.syncUser();
         } else {
             showToast('Generation completed but no image returned', 'error');
         }
@@ -157,20 +140,14 @@ async function pollTask(id,text){
           showToast('Task timeout', 'error');
           return;
         }
-        setTimeout(poll, pollInterval);
+        setTimeout(poll, 3000);
       }
     } catch (error) {
       console.error("Polling error:", error);
       retryCount++;
-      if (retryCount >= maxRetries) {
-        setLoading(false);
-        showToast('Connection lost', 'error');
-      } else {
-        setTimeout(poll, 5000);
-      }
+      if (retryCount < maxRetries) setTimeout(poll, 5000);
     }
   };
-
   poll();
 }
 
@@ -219,17 +196,15 @@ async function makeVideo(){
   setLoading(true);
   showToast('Video generation queued...', 'info');
   try {
-    const body={text,author:document.getElementById('author-input').value||'LEVI-AI',mood:currentStyle};
-    
-    // Using Retry Utility
-    const d = await fetchWithRetry(`${getApiBase()}/studio/generate_video`, {
-      method:'POST',
-      body:JSON.stringify(body),
-      headers:{'Content-Type':'application/json'}
+    const author = document.getElementById('author-input').value || 'LEVI-AI';
+    const d = await window.api.apiFetch("/studio/generate_video", {
+        method: "POST",
+        body: { text, author, mood: currentStyle }
     });
     
     if(d.status === 'queued') {
         showToast('Video synthesis in progress...', 'info');
+        pollTask(d.task_id, text);
     } else if (d.status === 'completed' || d.url || d.image_b64) {
         showToast('Video heavy, rendered as high-quality image fallback', 'info');
         displayImage(d.url || d.image_b64, text);
@@ -238,7 +213,8 @@ async function makeVideo(){
       console.error("Video request failed:", e);
       showToast('Video request failed: ' + e.message, 'error');
   } finally {
-      if (!currentImage) setLoading(false);
+      setLoading(false);
+      if (window.syncUser) window.syncUser();
   }
 }
 function newCanvas(){
@@ -252,6 +228,25 @@ function newCanvas(){
   document.getElementById('hud-label').textContent='Awaiting';
 }
 
-// Auth
+// --- Initialization ---
+document.addEventListener('DOMContentLoaded', () => {
+    // 1. Login Guard
+    const user = localStorage.getItem('levi_user');
+    const isLocal = window.levi_user_token === 'local-token';
+    
+    if (!user && !isLocal) {
+        if (window.ui) window.ui.showToast("The Muse requires a signature. Please sign in.", "warning");
+        setTimeout(() => window.location.href = 'auth.html', 1500);
+        return;
+    }
+
+    Studio.init();
+});
+
 const u=localStorage.getItem('levi_user');
-if(u){try{const o=JSON.parse(u);document.getElementById('user-name').textContent=o.username||'Seeker';document.getElementById('user-avatar').textContent=(o.username||'S').charAt(0).toUpperCase();document.getElementById('nav-auth-btn').textContent=o.username||'Account';document.getElementById('nav-auth-btn').onclick=()=>{window.location.href='my-gallery.html'};document.querySelectorAll('[data-credits]').forEach(el=>el.textContent=(o.credits||0)+' credits')}catch{}}
+if(u){try{
+    const o=JSON.parse(u);
+    if (document.getElementById('user-name')) document.getElementById('user-name').textContent=o.username||'Seeker';
+    if (document.getElementById('user-avatar')) document.getElementById('user-avatar').textContent=(o.username||'S').charAt(0).toUpperCase();
+    if (window.syncUser) window.syncUser();
+} catch(e) {} }

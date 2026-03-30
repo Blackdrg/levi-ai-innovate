@@ -13,7 +13,7 @@ from backend.redis_client import r as redis_client, HAS_REDIS # type: ignore
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/analytics", tags=["Analytics"])
+router = APIRouter(prefix="", tags=["Analytics"])
 
 @router.get("")
 async def get_analytics_data(request: Request):
