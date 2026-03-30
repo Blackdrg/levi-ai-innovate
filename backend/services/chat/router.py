@@ -8,7 +8,7 @@ from backend.auth import get_current_user_optional
 from backend.redis_client import get_conversation, save_conversation, is_rate_limited, incr_daily_ai_spend, get_daily_ai_spend
 from backend.firestore_db import update_analytics
 from backend.payments import use_credits
-from backend.generation import generate_response
+from backend.services.orchestrator import run_orchestrator
 import os
 
 logger = logging.getLogger(__name__)
@@ -20,7 +20,7 @@ async def chat_endpoint(
     msg: ChatMessage,
     current_user: Optional[dict] = Depends(get_current_user_optional),
 ):
-    user_id = current_user.get("uid") if current_user else f"guest:{request.client.host}"
+    user_id = current_user.get("uid") if current_user else f"guest:{request.client.host if request.client else '127.0.0.1'}"
     user_tier = current_user.get("tier", "free") if current_user else "free"
 
     if is_rate_limited(str(user_id), limit=10, window=60):
@@ -36,16 +36,14 @@ async def chat_endpoint(
     incr_daily_ai_spend(1.0)
 
     update_analytics("chats_count")
-    history = get_conversation(msg.session_id)
-
-    bot_response = await generate_response(
-        msg.message,
-        history=history,
-        mood=msg.mood or "philosophical",
-        user_tier=user_tier
+    
+    # --- Orchestrator Integration ---
+    bot_response = await run_orchestrator(
+        user_input=msg.message,
+        session_id=msg.session_id,
+        user_id=str(user_id),
+        user_tier=user_tier,
+        mood=msg.mood or "philosophical"
     )
-
-    history.append({"user": msg.message, "bot": bot_response, "timestamp": datetime.utcnow().isoformat()})
-    save_conversation(msg.session_id, history, user_id=user_id)
 
     return {"response": bot_response}
