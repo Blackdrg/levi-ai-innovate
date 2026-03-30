@@ -97,8 +97,12 @@ class MemoryManager:
         try:
             from .memory_utils import search_relevant_facts, prune_old_facts
 
-            # Trigger 30-day pruning (maintenance, non-blocking)
-            asyncio.create_task(prune_old_facts(user_id))
+            # Trigger 30-day pruning (maintenance, fire-and-forget, non-blocking)
+            try:
+                asyncio.create_task(prune_old_facts(user_id))
+            except RuntimeError:
+                # No running event loop (e.g. test environments) — skip silently
+                pass
 
             relevant_facts = await search_relevant_facts(user_id, query, limit=10)
             return {

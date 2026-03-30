@@ -154,37 +154,44 @@ async def detect_intent(user_input: str) -> IntentResult:
     Supported output intents:
       greeting, simple_query, tool_request, image, code, search,
       complex_query, chat, unknown
+
+    Never raises — always returns a valid IntentResult.
     """
-    # Stage 1 — Rules
+    # Stage 1 — Rules (zero cost, instant)
     rule_match = check_rules(user_input)
     if rule_match:
         return rule_match
 
-    # Stage 2 — LLM
-    system_prompt = (
-        "You are the LEVI Intent Classifier. Categorize the user's input into "
-        "EXACTLY ONE of these intents: "
-        "'greeting', 'simple_query', 'tool_request', 'image', 'code', "
-        "'search', 'complex_query', 'chat', 'unknown'. "
-        "Also score complexity (1-10) and confidence (0.0-1.0). "
-        "Output ONLY valid JSON: "
-        '{"intent": "chat", "complexity": 5, "confidence": 0.8}'
-    )
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_input},
-    ]
-
-    raw = await call_lightweight_llm(messages)
-    data = _parse_json_result(
-        raw,
-        {"intent": "chat", "complexity": 3, "confidence": 0.5},
-    )
-
+    # Stage 2 — LLM fallback (safe: exceptions return default)
     try:
-        return IntentResult(**data)
-    except Exception:
-        return IntentResult(intent="chat", complexity=3, confidence=0.4)
+        system_prompt = (
+            "You are the LEVI Intent Classifier. Categorize the user's input into "
+            "EXACTLY ONE of these intents: "
+            "'greeting', 'simple_query', 'tool_request', 'image', 'code', "
+            "'search', 'complex_query', 'chat', 'unknown'. "
+            "Also score complexity (1-10) and confidence (0.0-1.0). "
+            "Output ONLY valid JSON: "
+            '{"intent": "chat", "complexity": 5, "confidence": 0.8}'
+        )
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_input},
+        ]
+
+        raw = await call_lightweight_llm(messages)
+        data = _parse_json_result(
+            raw,
+            {"intent": "chat", "complexity": 3, "confidence": 0.5},
+        )
+
+        try:
+            return IntentResult(**data)
+        except Exception:
+            return IntentResult(intent="chat", complexity=3, confidence=0.4)
+
+    except Exception as e:
+        logger.error("detect_intent LLM fallback failed: %s — defaulting to 'chat'", e)
+        return IntentResult(intent="chat", complexity=3, confidence=0.3)
 
 
 # ---------------------------------------------------------------------------
