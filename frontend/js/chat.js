@@ -1,4 +1,20 @@
 // chat.js
+// --- Initialization ---
+document.addEventListener('DOMContentLoaded', async () => {
+    // 1. Login Guard
+    const user = localStorage.getItem('levi_user');
+    const isLocal = window.levi_user_token === 'local-token';
+    
+    if (!user && !isLocal) {
+        if (window.ui) window.ui.showToast("Please sign in to access the AI Philosopher.", "warning");
+        setTimeout(() => window.location.href = 'auth.html', 1500);
+        return;
+    }
+
+    await loadChatHistory();
+    displayWelcomeMessage();
+});
+
 document.addEventListener("DOMContentLoaded", () => {
     // Load marked.js for markdown rendering
     if (typeof marked === 'undefined') {
@@ -106,7 +122,7 @@ async function sendMessage() {
     appendMessage('user', text);
     input.value = "";
     input.style.height = 'auto';
-    chatHistory.push({ user: text });
+    chatHistory.push({ user: text, bot: "" });
 
     const sendIcon = document.getElementById("send-icon");
     const spinner = document.getElementById("send-loading");
@@ -119,31 +135,79 @@ async function sendMessage() {
         sessionStorage.setItem("chat_session_id", sessionId);
     }
 
-    if (window.ui && window.ui.showLoader) window.ui.showLoader();
+    // Prepare Bot Message Placeholder (Dynamic Streaming)
+    const messagesDiv = document.getElementById("messages");
+    const botDiv = document.createElement("div");
+    botDiv.className = "msg-bot p-4 fade-in text-sm text-on-surface-variant flex flex-col gap-2";
+    const textSpan = document.createElement("div");
+    textSpan.className = "leading-relaxed whitespace-pre-wrap";
+    botDiv.appendChild(textSpan);
+    messagesDiv.appendChild(botDiv);
+    
+    let botFullText = "";
+    let metadataCaptured = null;
+
     try {
         await window.waitForToken();
-        const data = await window.api.chat(text, sessionId);
         
+        await window.api.chatStream(
+            text, 
+            sessionId, 
+            (chunk) => {
+                botFullText += chunk;
+                // Render markdown on the fly or just plain text for speed
+                textSpan.innerHTML = typeof marked !== 'undefined' ? marked.parse(botFullText) : botFullText;
+                messagesDiv.scrollTo({ top: messagesDiv.scrollHeight, behavior: 'auto' });
+            },
+            (meta) => {
+                console.log("[LEVI] Received metadata:", meta);
+                metadataCaptured = meta;
+                if (meta.intent) {
+                    botDiv.setAttribute('data-intent', meta.intent);
+                }
+            }
+        );
+
         messageCount++;
-        
-        const msgId = data.id || `msg_${Date.now()}`; 
-        const finalReply = data.response || data.reply || "";
-        
-        if (!finalReply) {
-            if (typeof showToast === 'function') showToast("Chat failed - empty response", "error");
+        lastBotMessage = botFullText;
+        chatHistory[chatHistory.length - 1].bot = botFullText;
+
+        // Post-Stream: Add controls & metadata actions
+        const controls = document.createElement("div");
+        controls.className = "flex items-center gap-2 mt-2 pt-2 border-t border-white/10";
+        const msgId = metadataCaptured?.request_id || `msg_${Date.now()}`;
+        controls.innerHTML = `
+            <button onclick="submitFeedback('${msgId}', 1.0, this)" class="text-zinc-500 hover:text-emerald-400 transition-colors" title="Good response"><span class="material-symbols-outlined icon-sm">thumb_up</span></button>
+            <button onclick="submitFeedback('${msgId}', 0.0, this)" class="text-zinc-500 hover:text-red-400 transition-colors" title="Bad response"><span class="material-symbols-outlined icon-sm">thumb_down</span></button>
+            ${metadataCaptured?.intent ? `<span class="ml-auto text-[10px] text-primary/60 uppercase tracking-widest font-bold">${metadataCaptured.intent} Agent</span>` : ''}
+        `;
+        botDiv.appendChild(controls);
+
+        // Dynamic Studio Suggestion
+        if (metadataCaptured?.intent === 'image' || (messageCount > 0 && messageCount % 3 === 0)) {
+            const suggest = document.createElement("div");
+            suggest.className = "mt-3 bg-surface-container rounded p-3 border border-primary/20 flex flex-col items-center text-center";
+            const jobText = metadataCaptured?.job_ids?.[0] ? `Job ID: ${metadataCaptured.job_ids[0]}` : "Turn this thought into art?";
+            suggest.innerHTML = `
+                <span class="material-symbols-outlined gold-text mb-1">palette</span>
+                <p class="text-xs text-on-surface mb-2 font-medium">${jobText}</p>
+                <a href="studio.html?quote=${encodeURIComponent(botFullText.substring(0, 100))}&mood=${currentMood}" class="btn-gold text-[10px] uppercase font-bold px-4 py-1.5 rounded-full inline-block">Synthesize Vision</a>
+            `;
+            botDiv.appendChild(suggest);
         }
-        
-        appendMessage('bot', finalReply || "A profound silence.", msgId);
-        chatHistory[chatHistory.length - 1].bot = finalReply;
-        
+
+        // Final sync of user credits (Phase 4 Synchronization)
+        if (window.syncUser) window.syncUser();
+
     } catch (err) {
-        console.error("Chat error:", err);
-        if (typeof showToast === 'function') showToast("Network error", "error");
-        appendMessage('bot', "Connection to the cosmic ether was lost. (Error connecting to server)");
+        console.error("Chat stream error:", err);
+        textSpan.innerText = (err.message === "ALLOWANCE_EXCEEDED") 
+            ? "Your daily AI allowance has been reached. Please upgrade to continue."
+            : "Connection to the cosmic ether was lost. (Internal Circuit Paradox)";
+        botDiv.classList.add("msg-error");
     } finally {
         if(sendIcon) sendIcon.classList.remove("hidden");
         if(spinner) spinner.classList.add("hidden");
-        if (window.ui && window.ui.hideLoader) window.ui.hideLoader();
     }
 }
 

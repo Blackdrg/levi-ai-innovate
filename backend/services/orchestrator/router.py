@@ -8,7 +8,7 @@ from .engine import run_orchestrator
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/orchestrator", tags=["Orchestrator"])
+router = APIRouter(prefix="", tags=["Orchestrator"])
 
 @router.post("")
 async def orchestrator_endpoint(

@@ -14,7 +14,7 @@ from backend.redis_client import is_rate_limited # type: ignore
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/studio", tags=["Studio"])
+router = APIRouter(prefix="", tags=["Studio"])
 
 @router.post("/generate_image")
 async def gen_image(

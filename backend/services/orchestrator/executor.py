@@ -11,8 +11,8 @@ class AgentExecutionError(Exception):
     pass
 
 @retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=2, max=10),
+    stop=stop_after_attempt(2),
+    wait=wait_exponential(multiplier=1, min=1, max=5),
     retry=retry_if_exception_type(AgentExecutionError),
     reraise=True
 )
@@ -20,30 +20,28 @@ async def _call_agent_with_retry(agent_name: str, context: Dict[str, Any]) -> Di
     """Wrapper to call an agent with standardized retry logic."""
     result = await call_agent(agent_name, context)
     
-    # If the result itself contains an error status (transient), trigger retry
     if result.get("status") == "error" and result.get("retryable", True):
-        raise AgentExecutionError(f"Agent {agent_name} returned a retryable error: {result.get('error')}")
+        raise AgentExecutionError(f"Agent {agent_name} failed: {result.get('error')}")
     
     return result
 
 async def execute_plan(plan: List[Dict[str, Any]], context: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Execute the generated plan sequentially, with self-healing retries and fallbacks."""
+    """Execute the generated plan sequentially with fallbacks."""
     results = []
     
     for step_info in plan:
         step_name = step_info.get("step", "unnamed_step")
         agent_name = step_info.get("agent", "chat_agent")
         
-        logger.info(f"Executing step: {step_name} with agent: {agent_name}")
+        logger.info(f"Executing step: {step_name} (Agent: {agent_name})")
         
         try:
-            # 1. Attempt execution with self-healing retries
+            # 1. Primary Execution
             result = await _call_agent_with_retry(agent_name, context)
             
-            # 2. Check for non-retryable errors or failure after retries
+            # 2. Handle Explicit Errors
             if result.get("status") == "error":
-                logger.warning(f"Step {step_name} failed. Attempting fallback to chat_agent.")
-                # Fallback: Let the chat agent try to handle the context so far
+                logger.warning(f"Step '{step_name}' failed. Falling back to chat.")
                 result = await call_agent("chat_agent", context)
                 result["fallback"] = True
                 
@@ -53,28 +51,23 @@ async def execute_plan(plan: List[Dict[str, Any]], context: Dict[str, Any]) -> L
                 "result": result
             })
             
-            # Pass intermediate results to next step
+            # Update context for next steps
             context["last_result"] = result
-            context["intermediate_results"] = results
+            if "intermediate_results" not in context:
+                context["intermediate_results"] = []
+            context["intermediate_results"].append(result)
             
-            # If even fallback failed, we must stop
-            if result.get("status") == "error":
-                break
-                
         except Exception as e:
-            logger.error(f"Execution failed for {step_name} after retries: {e}")
-            # Final Fallback Attempt
-            try:
-                fallback_result = await call_agent("chat_agent", context)
-                results.append({
-                    "step": step_name,
-                    "agent": "chat_agent",
-                    "result": fallback_result,
-                    "error": str(e),
-                    "fallback": True
-                })
-            except Exception as final_e:
-                 results.append({"step": step_name, "error": f"Critical Failure: {final_e}"})
-            break
+            logger.error(f"Critical execution failure in {step_name}: {e}")
+            # Final Fallback to Chat Agent
+            fallback_result = await call_agent("chat_agent", context)
+            results.append({
+                "step": step_name,
+                "agent": "chat_agent",
+                "result": fallback_result,
+                "error": str(e),
+                "fallback": True
+            })
+            break # Stop execution on critical failure
             
     return results

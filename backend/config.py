@@ -1,0 +1,31 @@
+# backend/config.py
+"""Centralized configuration for LEVI AI Tiers and Costs."""
+
+TIERS = {
+    "free": {
+        "daily_limit": 100, 
+        "priority": 0, 
+        "features": ["standard_memory"],
+        "models": ["llama-3.1-8b-instant"]
+    },
+    "pro": {
+        "daily_limit": 1000, 
+        "priority": 1, 
+        "features": ["ltm", "high_reasoning", "search"],
+        "models": ["llama-3.1-70b-versatile", "mixtral-8x7b"]
+    },
+    "creator": {
+        "daily_limit": 5000, 
+        "priority": 2, 
+        "features": ["video", "ltm", "high_reasoning", "search"],
+        "models": ["llama-3.1-70b-versatile", "mixtral-8x7b", "qwen-2.5-72b"]
+    }
+}
+
+COST_MATRIX = {
+    "chat": 1,
+    "search": 1,
+    "code": 2,
+    "image": 5,
+    "video": 10
+}

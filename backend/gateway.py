@@ -353,20 +353,62 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 from backend.services.auth.router import router as auth_router # type: ignore
 from backend.services.chat.router import router as chat_router # type: ignore
 from backend.services.orchestrator.router import router as orchestrator_router # type: ignore
+from backend.services.orchestrator.privacy_router import router as privacy_router # type: ignore
 from backend.services.studio.router import router as studio_router # type: ignore
 from backend.services.gallery.router import router as gallery_router # type: ignore
 from backend.services.analytics.router import router as analytics_router # type: ignore
 from backend.payments import router as payments_router # type: ignore
 from backend.services.studio.ai_router import router as ai_router # type: ignore
 
-app.include_router(auth_router, prefix="", tags=["Auth"])
-app.include_router(chat_router, prefix="", tags=["Chat"])
-app.include_router(orchestrator_router, prefix="", tags=["Orchestrator"])
-app.include_router(studio_router, prefix="", tags=["Studio"])
-app.include_router(gallery_router, prefix="", tags=["Gallery"])
-app.include_router(analytics_router, prefix="", tags=["Analytics"])
-app.include_router(payments_router, prefix="", tags=["Payments"])
-app.include_router(ai_router, prefix="", tags=["AI"])
+# Phase 2: Standardized Route Architecture
+app.include_router(chat_router, prefix="/api/chat", tags=["Chat"])
+app.include_router(studio_router, prefix="/api/generate", tags=["Studio"])
+app.include_router(ai_router, prefix="/api/generate/advanced", tags=["AI"])
+app.include_router(auth_router, prefix="/api/user", tags=["Auth"])
+app.include_router(payments_router, prefix="/api/user/payments", tags=["Payments"])
+app.include_router(privacy_router, prefix="/api/user/privacy", tags=["Privacy"])
+app.include_router(analytics_router, prefix="/api/system/analytics", tags=["Analytics"])
+app.include_router(orchestrator_router, prefix="/api/system/orchestrator", tags=["Orchestrator"])
+app.include_router(gallery_router, prefix="/api/gallery", tags=["Gallery"])
+
+# ── Global Error Handling ───────────────────────────
+class LEVIException(Exception):
+    def __init__(self, message: str, status_code: int = 500, error_code: str = "INTERNAL_ERROR"):
+        self.message = message
+        self.status_code = status_code
+        self.error_code = error_code
+        super().__init__(self.message)
+
+@app.exception_handler(LEVIException)
+async def levi_exception_handler(request: Request, exc: LEVIException):
+    rid = getattr(request.state, "request_id", "unknown")
+    logger.warning(f"LEVI Error [{exc.error_code}]: {exc.message} (RID: {rid})")
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": exc.message,
+            "error_code": exc.error_code,
+            "request_id": rid,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    )
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    rid = getattr(request.state, "request_id", "unknown")
+    if isinstance(exc, HTTPException):
+        return JSONResponse(status_code=exc.status_code, content={"error": exc.detail, "request_id": rid})
+    
+    logger.error(f"Unhandled Error [RID: {rid}]: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "An unexpected error occurred in the cosmic matrix.",
+            "error_code": "INTERNAL_SERVER_ERROR",
+            "request_id": rid
+        }
+    )
+
 
 
 # ── Phase 44: Real-Time Omnipresence (SSE) ──────────────────

@@ -316,36 +316,44 @@
     }
 
     function showMsg(txt, type = 'error') {
-      const el = document.getElementById('auth-msg');
-      el.textContent = txt;
-      el.className = `mb-5 px-4 py-3 rounded-xl text-xs font-semibold msg-${type}`;
-      el.classList.remove('hidden');
+      if (window.ui && window.ui.showToast) window.ui.showToast(txt, type);
+      else console.log(`[AUTH] ${type}: ${txt}`);
     }
 
     function setLoading(on) {
-      document.getElementById('submit-label').classList.toggle('hidden', on);
-      document.getElementById('submit-spinner').classList.toggle('hidden', !on);
-      document.getElementById('submit-btn').disabled = on;
+      const btn = document.getElementById('submit-btn');
+      const label = document.getElementById('submit-label');
+      const spinner = document.getElementById('submit-spinner');
+      if (!btn || !label || !spinner) return;
+      label.classList.toggle('hidden', on);
+      spinner.classList.toggle('hidden', !on);
+      btn.disabled = on;
     }
 
     // Connect Google Button to Firebase
     document.getElementById('google-btn').addEventListener('click', async (e) => {
         e.preventDefault();
+        if (typeof firebase === 'undefined' || !firebase.auth) {
+            showMsg('Authentication system unavailable in local mode.', 'warning');
+            return;
+        }
         const provider = new firebase.auth.GoogleAuthProvider();
         try {
             await firebase.auth().signInWithPopup(provider);
-            // onAuthStateChanged in auth-manager.js will auto-redirect on success
         } catch (error) {
             showMsg(error.message || 'Google authentication failed.');
         }
     });
 
     async function handleAuth() {
-      const username = document.getElementById('username-input').value.trim();
-      const password = document.getElementById('password-input').value;
-      const email = document.getElementById('email-input').value.trim();
+      const usernameInput = document.getElementById('username-input');
+      const passwordInput = document.getElementById('password-input');
+      const emailInput = document.getElementById('email-input');
+      
+      const username = usernameInput ? usernameInput.value.trim() : '';
+      const password = passwordInput ? passwordInput.value : '';
+      const email = emailInput ? emailInput.value.trim() : '';
 
-      // Firebase relies entirely on Email. Map the user's login text.
       const targetEmail = (mode === 'register' && email) ? email : username;
 
       if (mode === 'forgot') {
@@ -353,29 +361,28 @@
         setLoading(true);
         try {
             await firebase.auth().sendPasswordResetEmail(targetEmail);
-            showMsg('If this email is registered you will receive a reset link shortly.', 'success');
+            showMsg('Reset link sent! Please check your inbox.', 'success');
         } catch (error) {
-            showMsg(error.message || 'Reset request failed. Please try again.');
+            showMsg(error.message || 'Reset request failed.');
         } finally {
             setLoading(false);
         }
         return;
       }
 
-      if (!targetEmail || !password) { showMsg('Please fill in all fields.'); return; }
-      if (mode === 'register' && password.length < 8) { showMsg('Password must be at least 8 characters.'); return; }
-
+      if (!targetEmail || (!password && mode !== 'forgot')) { showMsg('Please fill in all fields.'); return; }
+      
       setLoading(true);
       try {
           if (mode === 'register') {
               await firebase.auth().createUserWithEmailAndPassword(targetEmail, password);
-              showMsg('Account created successfully! Logging you in...', 'success');
+              showMsg('Welcome Seeker!', 'success');
           } else {
               await firebase.auth().signInWithEmailAndPassword(targetEmail, password);
-              showMsg('Welcome back! Redirecting...', 'success');
+              showMsg('Welcome back!', 'success');
           }
       } catch (error) {
-          showMsg(error.message || 'Authentication failed. Please verify credentials.');
+          showMsg(error.message || 'Authentication failed. Please try again.');
       } finally {
           setLoading(false);
       }

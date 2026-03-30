@@ -8,62 +8,60 @@ from backend.firestore_db import db as firestore_db
 logger = logging.getLogger(__name__)
 
 class MemoryManager:
-    """Manages 3 layers of memory: Short-Term, Mid-Term, and Long-Term."""
+    """Manages 3 layers of memory with Phase 2 Soul Upgrades."""
 
     @staticmethod
     def get_short_term_memory(session_id: str) -> List[Dict[str, Any]]:
-        """Get the current conversation history from Redis/Firestore."""
+        """Instant session awareness from Redis."""
         return get_conversation(session_id)
 
     @staticmethod
-    def get_mid_term_memory(user_id: str, limit: int = 50) -> List[Dict[str, Any]]:
-        """Get the recent interaction history for a user across multiple sessions."""
+    def get_mid_term_memory(user_id: str, limit: int = 5) -> List[Dict[str, Any]]:
+        """Recent interaction history (Pulse) from Firestore."""
         if not user_id: return []
         
         try:
-            # Query the sessions associated with the user and get combined history
             docs = firestore_db.collection("conversations") \
                 .where("user_id", "==", user_id) \
                 .order_by("updated_at", direction="DESCENDING") \
                 .limit(limit) \
                 .stream()
             
-            combined_history = []
-            for doc in docs:
-                combined_history.extend(doc.to_dict().get("history", []))
-            
-            return combined_history[:limit]
+            return [doc.to_dict() for doc in docs]
         except Exception as e:
             logger.error(f"Error fetching mid-term memory: {e}")
             return []
 
     @staticmethod
     async def get_long_term_memory(user_id: str, query: str = "") -> Dict[str, Any]:
-        """Get semantic facts and preferences about the user."""
+        """Retrieve categorized facts and user traits."""
         if not user_id: return {}
         
         try:
-            # 1. Base Preferences from Profile
-            profile = {}
-            doc = firestore_db.collection("user_profiles").document(user_id).get()
-            if doc.exists:
-                profile = doc.to_dict().get("preferences", {})
+            from .memory_utils import search_relevant_facts, prune_old_facts
             
-            # 2. Semantic Search for Relevant Facts (LTM Upgrade)
-            from .memory_utils import search_relevant_facts
-            facts = await search_relevant_facts(user_id, query)
+            # 1. Trigger 30-day pruning (Maintenance)
+            await prune_old_facts(user_id)
             
-            return {
-                "profile": profile,
-                "relevant_facts": facts
+            # 2. Semantic Search for specialized context
+            relevant_facts = await search_relevant_facts(user_id, query, limit=10)
+            
+            # 3. Categorize facts for the synthesizer
+            categorized = {
+                "preferences": [f["fact"] for f in relevant_facts if f["category"] == "preference"],
+                "traits": [f["fact"] for f in relevant_facts if f["category"] == "trait"],
+                "history": [f["fact"] for f in relevant_facts if f["category"] == "history"],
+                "other": [f["fact"] for f in relevant_facts if f["category"] == "factual"]
             }
+            
+            return categorized
         except Exception as e:
             logger.error(f"Error fetching long-term memory: {e}")
             return {}
 
     @staticmethod
     def store_memory(user_id: str, session_id: str, user_input: str, bot_response: str):
-        """Update historical layers with new interaction."""
+        """Update Redis (Short-term) and Firestore interaction logs."""
         history = get_conversation(session_id)
         history.append({
             "user": user_input,
@@ -74,26 +72,50 @@ class MemoryManager:
 
     @staticmethod
     async def process_new_interaction(user_id: str, user_input: str, bot_response: str):
-        """Background task to extract and store facts from interaction."""
+        """Phase 2 Background Task: Fact Extraction, Deduplication, and Pulse Update."""
         from .memory_utils import extract_facts, store_facts
         try:
-            facts = await extract_facts(user_input, bot_response)
-            if facts:
-                await store_facts(user_id, facts)
+            # 1. Extract categorized facts
+            new_facts = await extract_facts(user_input, bot_response)
+            
+            # 2. Store with semantic deduplication
+            if new_facts:
+                await store_facts(user_id, new_facts)
+                
+            # 3. Update User Interaction Pulse (Mood tracking)
+            # This is handled by updating the user profile or a specific pulse collection
+            # For now, we rely on Mid-term memory queries.
+            
         except Exception as e:
             logger.error(f"Failed to process interaction for memory: {e}")
 
     @staticmethod
     async def get_combined_context(user_id: str, session_id: str, query: str = "") -> Dict[str, Any]:
-        """Retrieve and combine memory layers for the current prompt."""
-        short_term = MemoryManager.get_short_term_memory(session_id)
+        """Combine all 3 layers into a rich context object for the Brain."""
+        import asyncio
         
-        # Mid/Long term fetches
-        long_term = await MemoryManager.get_long_term_memory(user_id, query)
+        # Parallelize memory retrieval for lower latency
+        short_term_task = asyncio.to_thread(MemoryManager.get_short_term_memory, session_id)
+        mid_term_task = asyncio.to_thread(MemoryManager.get_mid_term_memory, user_id, 3)
+        long_term_task = MemoryManager.get_long_term_memory(user_id, query)
+        
+        short_term, mid_term, long_term = await asyncio.gather(
+            short_term_task, mid_term_task, long_term_task
+        )
+        
+        # Calculate 'Interaction Pulse' (Recent Mood)
+        moods = [m.get("mood", "philosophical") for m in mid_term if m.get("mood")]
+        pulse = moods[0] if moods else "stable"
+        
+        # Determine Feature Flags based on tier (Phase 5)
+        from backend.config import TIERS # type: ignore
+        # Here we'd typically have the user object, but for now we pass flags
         
         return {
             "history": short_term,
-            "long_term": long_term, # Contains profile and relevant_facts
-            "current_session": session_id,
-            "user_id": user_id
+            "long_term": long_term,
+            "mid_term": mid_term, # Include mid-term for deeper pulse analysis
+            "interaction_pulse": pulse,
+            "user_id": user_id,
+            "session_id": session_id
         }
