@@ -1,76 +1,95 @@
-# LEVI-AI — Wisdom & Creative Muse 🌟 (v4.5 Omnipresent)
+# LEVI-AI — The Autonomous Brain 🧠 (v5.0)
 
-LEVI-AI is a high-scale production AI platform for philosophical exploration and artistic synthesis. **Status: v4.5 Omnipresent Release is LIVE. Features include Real-Time SSE Event Streams, Parallel 'Council of Models' Inference (Llama/Mixtral/Gemma), and a High-Fidelity Admin Control Plane.**
+LEVI-AI is no longer just a chatbot—it is a sophisticated **AI Orchestrator** designed for philosophical exploration and autonomous task execution. It transitions the era of static responses into a dynamic era of **Intent → Plan → Execute → Synthesize**.
 
 > [!IMPORTANT]
-> **Master Technical Manual**: For architectural analysis and operational diagnostics, see the [DIAGNOSTICS_MASTER.md](file:///c:/Users/mehta/Desktop/New%20folder/LEVI-AI/DIAGNOSTICS_MASTER.md).
+> **Production Status**: v5.0 "The Brain" is LIVE. 
+> Key features: **Autonomous Orchestrator**, **3-Layer Semantic Memory**, **Self-Healing Execution**, and **High-Fidelity Synthesis**.
 
+---
 
-## 🏗️ Architecture (v3.0)
+## 🏗️ The Orchestrator Architecture
+
+LEVI's new "Brain" acts as a central conductor, coordinating specialized agents to solve complex human requests.
 
 ```mermaid
 graph TD
-    User((User)) -->|HTTPS| Gateway[Unified API Gateway]
-    Gateway -->|Auth| AuthService[Auth Service]
-    Gateway -->|Chat/LLM| ChatService[Chat Service]
-    Gateway -->|Gallery| GalleryService[Gallery Service]
-    Gateway -->|Task| StudioService[Studio Service]
+    User((User)) -->|HTTPS| Gateway[API Gateway]
     
-    StudioService -->|Queue| Redis[(Redis Queue)]
-    Redis -->|Process| Worker[Celery Worker]
-    Worker -->|Render| MoviePy[MoviePy / Coqui TTS]
-    Worker -->|S3| S3[(Production S3)]
+    subgraph Brain ["🧠 The Brain (Orchestrator)"]
+        Gateway -->|Input| Planner[Task Planner]
+        Planner -->|Multi-Step Plan| Executor[Self-Healing Executor]
+        
+        subgraph Agents
+            Executor -->|Call| ChatAgent[Chat Agent]
+            Executor -->|Call| ImageAgent[Studio Agent]
+            Executor -->|Call| ResearchAgent[Research Agent]
+        end
+        
+        Agents -->|Results| Synthesizer[Conductor Synthesis]
+    end
     
-    AllServices -->|Persistence| Firestore[(Firestore DB)]
-    AllServices -->|Resiliency| CircuitBreaker[Circuit Breaker]
+    subgraph Memory ["💾 3-Layer Memory System"]
+        Synthesizer -->|Store| ShortTerm[(Redis - Session)]
+        Synthesizer -->|Store| MidTerm[(Firestore - Interaction)]
+        Synthesizer -->|Extract Facts| LongTerm[(Embeddings - Facts)]
+    end
+    
+    LongTerm -->|Context Injection| Planner
+    Synthesizer -->|Final Response| User
 ```
-
-- **Unified Gateway**: Central entry point with rate limiting, circuit breakers, and sub-service routing.
-- **Service Routers**: Hardened micro-service logic split into Auth, Chat, Studio, Gallery, and Analytics.
-- **Async Engine**: Production-ready Celery workers for long-running image and video synthesis.
-- **Council of Models**: Parallel inference engine (Llama-3.1 + Mixtral + Gemma) for high-depth philosophical synthesis.
-- **Real-Time Stream**: SSE-based global activity pulse using Redis Pub/Sub orchestration.
-- **Resiliency**: Built-in state monitoring and automatic S3 pre-signed URL security.
-
-## 🛠️ Technology Stack
-- **Backend**: FastAPI (v3.0 Modular Architecture), Celery, Redis.
-- **Database**: 100% Firestore-Native (Universal NoSQL).
-- **Storage**: AWS S3 (Secure Pre-signed URLs).
-- **AI Models**: Groq (Llama-3.1), Together AI (FLUX.1).
-- **Styling**: Vanilla CSS (High-Performance Glassmorphism).
-
-## 🚀 Quick Start (Dockerized)
-
-The easiest way to run the full bulletproof stack locally:
-
-```bash
-docker-compose up --build
-```
-- **Frontend**: [http://localhost](http://localhost) (via Nginx)
-- **API Gateway**: [http://localhost/api/v1](http://localhost/api/v1)
-- **Health Check**: [http://localhost/api/v1/health](http://localhost/api/v1/health)
-
-## 📁 Key Components
-
-- **backend/gateway.py**: The central control layer.
-- **backend/services/**: Independent service logic and routers.
-- **backend/s3_utils.py**: Secure media delivery.
-- **frontend/js/config.js**: Dynamic environment discovery.
-
-## 🚀 Production Deployment (Hardened v3.0)
-
-The v3.0 Bulletproof stack is optimized for **Google Cloud Run**.
-
-1. **Deploy Gateway**:
-   ```bash
-   gcloud run deploy levi-gateway --source . --command "gunicorn" --args "backend.gateway:app"
-   ```
-2. **Deploy Workers**:
-   ```bash
-   gcloud run deploy levi-workers --source . --command "celery" --args "-A backend.celery_app worker --loglevel=info"
-   ```
-
-**Environment Architecture**: Ensure all required variables (S3, Groq, Razorpay, Firebase) are set in the Cloud Run service configuration according to the [MAINTENANCE.md](MAINTENANCE.md).
 
 ---
-**LEVI-AI v4.5 Omnipresent — Architected for Excellence.**
+
+## 🚀 Key Features (v5.0)
+
+### 🧠 Autonomous Orchestration
+LEVI doesn't just reply; it **plans**. Every request is analyzed for intent and complexity, generating a multi-step execution plan across specialized agents.
+
+### 💾 3-Layer Semantic Memory
+- **Short-Term (Redis)**: Instant session awareness.
+- **Mid-Term (Firestore)**: Historical interaction tracking.
+- **Long-Term (Embeddings)**: **Semantic Fact Extraction**. LEVI remembers who you are across sessions by distilling conversations into atomic, searchable facts.
+
+### 🛡️ Self-Healing Executor
+If an AI agent or tool fails (e.g., API timeout), the executor automatically implements **Exponential Backoff Retries** and fallback paths to ensure a seamless user experience.
+
+### 🎨 Advanced Synthesis
+Multi-agent outputs are blended into a single, cohesive, philosophical monologue using high-reasoning synthesis (Llama 3.1 70B for Pro users).
+
+---
+
+## 🛠️ Technology Stack
+- **Backend**: FastAPI (Modular Service Architecture), Celery, Redis.
+- **AI Stack**: Groq (Llama 3.1), Together AI (FLUX.1), Sentence-Transformers.
+- **Database**: Firestore-Native (Universal NoSQL Persistence).
+- **Orchestration**: Custom-built Intent-Plan-Execute Loop.
+
+---
+
+## 🚀 Quick Start (Development)
+
+1. **Install Dependencies**:
+   ```ps1
+   .\.venv\Scripts\Activate.ps1
+   pip install -r requirements.txt
+   ```
+2. **Launch Services**:
+   ```ps1
+   # Use the consolidated launch script
+   .\finish_push.bat
+   ```
+
+---
+
+## 📂 Repository Structure (v5.0 Organized)
+
+- **[backend/](backend/)**: All micro-service logic and the Orchestrator engine.
+- **[frontend/](frontend/)**: High-performance Vanilla CSS & JS interface.
+- **[scripts/](scripts/)**: Consolidated utility and maintenance scripts.
+- **[tests/](tests/)**: Comprehensive test suite encompassing unit, integration, and orchestration tests.
+
+---
+
+**LEVI-AI v5.0 — The Future of Philosophical Orchestration.**  
+*Architected for depth. Optimized for emergence.*

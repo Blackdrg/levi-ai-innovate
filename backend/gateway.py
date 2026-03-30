@@ -352,6 +352,7 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 # ── Routers ─────────────────────────────────────────
 from backend.services.auth.router import router as auth_router # type: ignore
 from backend.services.chat.router import router as chat_router # type: ignore
+from backend.services.orchestrator.router import router as orchestrator_router # type: ignore
 from backend.services.studio.router import router as studio_router # type: ignore
 from backend.services.gallery.router import router as gallery_router # type: ignore
 from backend.services.analytics.router import router as analytics_router # type: ignore
@@ -360,6 +361,7 @@ from backend.services.studio.ai_router import router as ai_router # type: ignore
 
 app.include_router(auth_router, prefix="", tags=["Auth"])
 app.include_router(chat_router, prefix="", tags=["Chat"])
+app.include_router(orchestrator_router, prefix="", tags=["Orchestrator"])
 app.include_router(studio_router, prefix="", tags=["Studio"])
 app.include_router(gallery_router, prefix="", tags=["Gallery"])
 app.include_router(analytics_router, prefix="", tags=["Analytics"])

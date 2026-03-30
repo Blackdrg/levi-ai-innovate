@@ -47,23 +47,55 @@ async def chat_handler(context: Dict[str, Any]) -> Dict[str, Any]:
 
 @register_agent("image_agent")
 async def image_handler(context: Dict[str, Any]) -> Dict[str, Any]:
-    # This would typically trigger a background task or return instructions to the frontend
-    prompt = context.get("last_result", {}).get("message", context.get("input", ""))
+    """Connects the Orchestrator to the LEVI Studio (Image Gen)."""
+    from backend.services.studio.utils import create_studio_job
+    
+    # Extract the refined prompt from previous steps or the original input
+    message = context.get("last_result", {}).get("message", context.get("input", ""))
+    user_id = context.get("user_id", "guest")
+    user_tier = context.get("user_tier", "free")
     mood = context.get("mood", "philosophical")
     
+    # Trigger the architectural studio logic
+    result = create_studio_job(
+        task_type="image",
+        params={"text": message, "mood": mood},
+        user_id=user_id,
+        user_tier=user_tier
+    )
+    
+    if result.get("status") == "error":
+        return {"status": "error", "message": result.get("error", "Studio failed.")}
+
     return {
-        "message": f"I am preparing to visualize this: '{prompt}'.",
-        "action": "generate_image",
-        "params": {"text": prompt, "mood": mood},
-        "agent": "image_agent"
+        "message": f"I have visualized your concept: '{message}'. The masterpiece is being rendered (Job ID: {result.get('job_id')}).",
+        "job_id": result.get("job_id"),
+        "agent": "image_agent",
+        "status": "success"
     }
 
 @register_agent("research_agent")
 async def research_handler(context: Dict[str, Any]) -> Dict[str, Any]:
-    query = context.get("input", "")
-    # Mocking search results for now
+    """Simulates research by using the LLM to gather context on a topic."""
+    from .planner import call_lightweight_llm
+    
+    topic = context.get("input", "general existence")
+    
+    system_prompt = (
+        "You are the LEVI Researcher. Provide 3-4 concise, deep, and factual 'research notes' "
+        "about the user topic. Focus on philosophical, historical, or scientific depth. "
+        "Format as a list of facts."
+    )
+    
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": f"Research Topic: {topic}"}
+    ]
+    
+    research_notes = await call_lightweight_llm(messages)
+    
     return {
-        "message": f"I've looked into '{query}'. AI trends are moving towards multi-modal orchestration (ironically).",
-        "results": [{"title": "AI Trends 2026", "snippet": "Agents are everywhere."}],
-        "agent": "research_agent"
+        "message": research_notes or "Research indicates a profound void in this specific area.",
+        "agent": "research_agent",
+        "status": "success"
     }
