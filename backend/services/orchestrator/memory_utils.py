@@ -63,7 +63,7 @@ async def store_facts(user_id: str, new_facts: List[Dict[str, Any]]):
         if not fact_text: continue
         
         try:
-            new_embedding = embed_text(fact_text)
+            new_embedding = await asyncio.to_thread(embed_text, fact_text)
             
             # 2. Deduplication check
             is_duplicate = False
@@ -78,15 +78,20 @@ async def store_facts(user_id: str, new_facts: List[Dict[str, Any]]):
             
             if is_duplicate: continue
 
-            # 3. Store new unique fact
+            # 3. Store new unique fact - Non-blocking I/O
             fact_id = hashlib.md5(fact_text.encode()).hexdigest()
-            firestore_db.collection("user_facts").document(f"{user_id}_{fact_id}").set({
+            doc_data = {
                 "user_id": user_id,
                 "fact": fact_text,
                 "category": category,
                 "embedding": new_embedding,
                 "created_at": datetime.utcnow()
-            })
+            }
+            
+            await asyncio.to_thread(
+                firestore_db.collection("user_facts").document(f"{user_id}_{fact_id}").set,
+                doc_data
+            )
         except Exception as e:
             logger.error(f"Error storing fact: {e}")
 
@@ -95,7 +100,7 @@ async def search_relevant_facts(user_id: str, query: str, limit: int = 5) -> Lis
     if not user_id: return []
     
     try:
-        query_embedding = np.array(embed_text(query))
+        query_embedding = np.array(await asyncio.to_thread(embed_text, query))
         
         docs = firestore_db.collection("user_facts") \
             .where("user_id", "==", user_id) \
@@ -105,11 +110,14 @@ async def search_relevant_facts(user_id: str, query: str, limit: int = 5) -> Lis
         scored_facts = []
         for doc in docs:
             data = doc.to_dict()
+            fact_text = data.get("fact")
+            if fact_text is None: continue # Issue Fix: Avoid None facts
+
             fact_emb = np.array(data.get("embedding", []))
             if fact_emb.size > 0:
                 score = cosine_sim(query_embedding, fact_emb)
                 scored_facts.append({
-                    "fact": data.get("fact"),
+                    "fact": fact_text,
                     "category": data.get("category"),
                     "score": score,
                     "id": doc.id
