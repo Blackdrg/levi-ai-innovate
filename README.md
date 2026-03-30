@@ -1,95 +1,98 @@
-# LEVI-AI — The Autonomous Brain 🧠 (v5.0)
+# LEVI — The Celestial AI Philosopher (v6.0 Production) 🌌
 
-LEVI-AI is no longer just a chatbot—it is a sophisticated **AI Orchestrator** designed for philosophical exploration and autonomous task execution. It transitions the era of static responses into a dynamic era of **Intent → Plan → Execute → Synthesize**.
+LEVI is a high-fidelity **AI Orchestrator** designed for philosophical exploration and autonomous task execution. It has evolved from a simple chatbot into a sophisticated **Intent → Plan → Execute → Synthesize** loop, capable of cross-session memory and real-time state synchronization.
 
 > [!IMPORTANT]
-> **Production Status**: v5.0 "The Brain" is LIVE. 
-> Key features: **Autonomous Orchestrator**, **3-Layer Semantic Memory**, **Self-Healing Execution**, and **High-Fidelity Synthesis**.
+> **Production Status**: v6.0 "The Soul" Is LIVE. 
+> Integrates: **Autonomous Orchestrator**, **3-Layer Semantic Memory**, **Real-Time SSE Activity**, and **Tier-Aware Credit Processing**.
 
 ---
 
-## 🏗️ The Orchestrator Architecture
+## 🏗️ Architecture: The Orchestrator Loop
 
-LEVI's new "Brain" acts as a central conductor, coordinating specialized agents to solve complex human requests.
+LEVI coordinates specialized agents to solve complex human requests, moving beyond simple prompts into a self-healing, multi-step execution pipeline.
 
 ```mermaid
 graph TD
-    User((User)) -->|HTTPS| Gateway[API Gateway]
+    User((User)) -->|HTTPS / SSE| Gateway[API Gateway]
     
     subgraph Brain ["🧠 The Brain (Orchestrator)"]
         Gateway -->|Input| Planner[Task Planner]
         Planner -->|Multi-Step Plan| Executor[Self-Healing Executor]
         
         subgraph Agents
-            Executor -->|Call| ChatAgent[Chat Agent]
-            Executor -->|Call| ImageAgent[Studio Agent]
-            Executor -->|Call| ResearchAgent[Research Agent]
+            Executor -->|Call| ChatAgent[AI Philosopher]
+            Executor -->|Call| ImageAgent[Creation Muse]
+            Executor -->|Call| CodeAgent[Logic Architect]
         end
         
-        Agents -->|Results| Synthesizer[Conductor Synthesis]
+        Agents -->|Results| Synthesizer[Response Conductor]
     end
     
-    subgraph Memory ["💾 3-Layer Memory System"]
+    subgraph Memory ["💾 3-Layer Soul Memory"]
         Synthesizer -->|Store| ShortTerm[(Redis - Session)]
-        Synthesizer -->|Store| MidTerm[(Firestore - Interaction)]
-        Synthesizer -->|Extract Facts| LongTerm[(Embeddings - Facts)]
+        Synthesizer -->|Store| MidTerm[(Firestore - Logging)]
+        Synthesizer -->|Extract Facts| LongTerm[(Embeddings - Traits)]
     end
     
     LongTerm -->|Context Injection| Planner
     Synthesizer -->|Final Response| User
+    Gateway -.->|Real-time Activity| User
 ```
 
 ---
 
-## 🚀 Key Features (v5.0)
+## 🚀 Key Features (v6.0)
 
 ### 🧠 Autonomous Orchestration
-LEVI doesn't just reply; it **plans**. Every request is analyzed for intent and complexity, generating a multi-step execution plan across specialized agents.
+LEVI analyzes every request for intent and complexity. If you ask for a complex task, it generates a multi-step execution plan across specialized agents, synthesizing the final result into a cohesive philosophical dialogue.
 
-### 💾 3-Layer Semantic Memory
-- **Short-Term (Redis)**: Instant session awareness.
-- **Mid-Term (Firestore)**: Historical interaction tracking.
-- **Long-Term (Embeddings)**: **Semantic Fact Extraction**. LEVI remembers who you are across sessions by distilling conversations into atomic, searchable facts.
+### 💾 3-Layer Soul Memory
+- **Short-Term (Redis)**: Instant, sub-millisecond session awareness.
+- **Mid-Term (Firestore)**: Historical interaction tracking and "Interaction Pulse" (Mood).
+- **Long-Term (Embeddings)**: **Semantic Fact Extraction**. LEVI identifies traits and preferences during your conversation, building a persistent "Soul" profile that persists across all future sessions.
 
-### 🛡️ Self-Healing Executor
-If an AI agent or tool fails (e.g., API timeout), the executor automatically implements **Exponential Backoff Retries** and fallback paths to ensure a seamless user experience.
+### ⚡ Real-Time Omnipresence
+Implemented using **Server-Sent Events (SSE)**, the platform now features a global activity stream and real-time credit synchronization. Your user state (Tier/Credits) updates instantly across all open tabs.
 
-### 🎨 Advanced Synthesis
-Multi-agent outputs are blended into a single, cohesive, philosophical monologue using high-reasoning synthesis (Llama 3.1 70B for Pro users).
+### 🛡️ Production Hardening
+- **Self-Healing Execution**: Automatic retries with exponential backoff for all agent calls.
+- **Managed Background Tasks**: Strong-referenced task handlers prevent memory processing failures during high-concurrency requests.
+- **Secure Gateway**: Hardened API gateway with JWT injection and CORS-locked origins.
 
 ---
 
 ## 🛠️ Technology Stack
-- **Backend**: FastAPI (Modular Service Architecture), Celery, Redis.
-- **AI Stack**: Groq (Llama 3.1), Together AI (FLUX.1), Sentence-Transformers.
-- **Database**: Firestore-Native (Universal NoSQL Persistence).
-- **Orchestration**: Custom-built Intent-Plan-Execute Loop.
+- **Frontend**: Vanilla JS & CSS (High Performance/Zero-Hydration), SSE Streaming.
+- **Backend**: FastAPI, asyncio worker threads, Standardized API v1 Gateway.
+- **AI Stack**: Groq (Llama 3.1 70B/8B), Together AI (FLUX.1-schnell), Sentence-Transformers.
+- **Infrastructure**: Firebase (Auth/Firestore), Redis (Session Cache/Pub-Sub), Vercel/Cloud Run.
 
 ---
 
 ## 🚀 Quick Start (Development)
 
-1. **Install Dependencies**:
-   ```ps1
-   .\.venv\Scripts\Activate.ps1
+1. **Environment Setup**:
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate  # or .\.venv\Scripts\Activate.ps1
    pip install -r requirements.txt
    ```
-2. **Launch Services**:
-   ```ps1
-   # Use the consolidated launch script
-   .\finish_push.bat
+2. **Local Development**:
+   LEVI features a robust **Auth STUB** for local development. You can test the full "Brain" logic even without Firebase production keys.
+   ```bash
+   python -m backend.gateway
    ```
 
 ---
 
-## 📂 Repository Structure (v5.0 Organized)
-
-- **[backend/](backend/)**: All micro-service logic and the Orchestrator engine.
-- **[frontend/](frontend/)**: High-performance Vanilla CSS & JS interface.
-- **[scripts/](scripts/)**: Consolidated utility and maintenance scripts.
-- **[tests/](tests/)**: Comprehensive test suite encompassing unit, integration, and orchestration tests.
+## 📂 Repository Structure
+- **[/backend](backend/)**: Core Orchestrator services, Memory Management, and API Gateway.
+- **[/frontend](frontend/)**: The primary philosophical interface and dynamic studio.
+- **[/scripts](scripts/)**: Deployment and maintenance utilities.
+- **[vercel.json](vercel.json)** & **[firebase.json](firebase.json)**: Production routing and API rewrite alignment.
 
 ---
 
-**LEVI-AI v5.0 — The Future of Philosophical Orchestration.**  
-*Architected for depth. Optimized for emergence.*
+**LEVI — Architected for depth. Optimized for emergence.**  
+*Exploring the intersection of human intent and machine logic.*
