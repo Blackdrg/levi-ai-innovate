@@ -4,7 +4,7 @@ from typing import Any, Callable, Dict, Optional
 _broadcast_func: Optional[Callable[[str, Dict[str, Any]], None]] = None
 _instance_id: Optional[str] = None
 
-def register_broadcaster(func: Callable[[str, Dict[str, Any]], None], instance_id: str):
+def register_broadcaster(func: Callable[[str, Dict[str, Any]], None], instance_id: str) -> None:
     """Register the gateway's broadcast function."""
     global _broadcast_func, _instance_id
     _broadcast_func = func
