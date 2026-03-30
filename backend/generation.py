@@ -23,14 +23,7 @@ from typing import Optional, Any, List, Dict
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-groq_client: Any = None
-if GROQ_API_KEY:
-    try:
-        groq_client = groq.Groq(api_key=GROQ_API_KEY)
-        logger.info("Groq client initialized.")
-    except Exception as e:
-        logger.error(f"Failed to initialize Groq client: {e}")
+TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY")
 
 HAS_GENERATOR = False
 generator: Any = None
@@ -221,17 +214,23 @@ def _build_dynamic_system_prompt(persona: Dict, user_memory: Any = None,
     return base + memory_layer + depth_instruction + anti_repeat
 
 
-async def _async_call_groq_api(messages: List[Dict], temperature: float = 0.85,
-                          max_tokens: int = 300, model: str = "llama-3.1-8b-instant") -> Optional[str]:
-    """Phase 43: Async Groq API call for parallel orchestration."""
-    api_key = os.getenv("GROQ_API_KEY")
+async def _async_call_llm_api(messages: List[Dict], temperature: float = 0.85,
+                          max_tokens: int = 300, model: str = "llama-3.1-8b-instant", provider: str = "groq") -> Optional[str]:
+    """Phase 43: Async LLM API call (Groq or Together) for parallel orchestration."""
+    if provider == "groq":
+        api_key = os.getenv("GROQ_API_KEY")
+        url = "https://api.groq.com/openai/v1/chat/completions"
+    else:
+        api_key = os.getenv("TOGETHER_API_KEY")
+        url = "https://api.together.xyz/v1/chat/completions"
+
     if not api_key:
         return None
     try:
         from backend.utils.network import async_safe_request # type: ignore
         resp = await async_safe_request(
             "POST",
-            "https://api.groq.com/openai/v1/chat/completions",
+            url,
             headers={
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json"
@@ -245,7 +244,7 @@ async def _async_call_groq_api(messages: List[Dict], temperature: float = 0.85,
         )
         return resp.json()["choices"][0]["message"]["content"].strip()
     except Exception as e:
-        logger.warning(f"Async API call failed for {model}: {e}")
+        logger.warning(f"Async API call failed for {model} ({provider}): {e}")
         return None
 
 
@@ -269,16 +268,20 @@ async def generate_council_response(
             messages.append({"role": "assistant", "content": turn.get("bot", "")})
     messages.append({"role": "user", "content": prompt})
 
-    # Parallel Inference
-    # Model 1: Llama 3.1 70B (High Intelligence)
-    # Model 2: Mixtral 8x7B (Philosophical nuance)
-    # Model 3: Llama 3.1 8B (Speed fallback)
-    models = ["llama-3.1-70b-versatile", "mixtral-8x7b-32768", "llama-3.1-8b-instant"]
+    # Parallel Inference across Groq and Together
+    # Model 1: Llama 3.1 70B (Groq - High Intelligence)
+    # Model 2: Mixtral 8x7B (Together - Philosophical nuance)
+    # Model 3: Qwen 2.5 72B (Together - Structural depth)
+    providers = [
+        ("llama-3.1-70b-versatile", "groq"),
+        ("mistralai/Mixtral-8x7B-Instruct-v0.1", "together"),
+        ("Qwen/Qwen2.5-72B-Instruct", "together")
+    ]
     
     tasks = [
-        _async_call_groq_api(messages, temperature=persona["temperature"], 
-                             max_tokens=max_length, model=m)
-        for m in models
+        _async_call_llm_api(messages, temperature=persona["temperature"], 
+                             max_tokens=max_length, model=m, provider=p)
+        for m, p in providers
     ]
     
     import asyncio

@@ -53,6 +53,9 @@ async def gen_image(
             except Exception as e:
                 logger.error(f"[Studio] Credit deduction failed: {e}")
 
+        # Create Job Doc in Firestore first so polling doesn't 404
+        firestore_db.collection("jobs").document(job_id).set(job_data)
+
         if os.getenv("USE_CELERY", "true").lower() == "true":
             generate_image_task.delay(
                 job_id=job_id, 
@@ -114,6 +117,9 @@ async def gen_video(
                 raise
             except Exception as e:
                 logger.error(f"[Studio] Credit deduction failed: {e}")
+
+        # Create Job Doc in Firestore first
+        firestore_db.collection("jobs").document(job_id).set(job_data)
 
         if os.getenv("USE_CELERY", "true").lower() == "true":
             generate_video_task.delay(
