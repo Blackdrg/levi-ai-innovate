@@ -170,51 +170,51 @@ export async function register(username, password) {
 }
 
 export async function getProfile() {
-  return apiFetch("/users/me");
+  return apiFetch("/auth/me");
 }
 
 export async function searchQuotes(text, filters = {}) {
-  return apiFetch("/search_quotes", {
+  return apiFetch("/gallery/search_quotes", {
     method: "POST",
     body: { text, ...filters, top_k: 5 }
   });
 }
 
 export async function generateQuote(topic, mood = "") {
-  return apiFetch("/generate", {
+  return apiFetch("/chat/generate", {
     method: "POST",
     body: { text: topic, mood }
   });
 }
 
 export async function generateImage(topic, author = "LEVI-AI", mood = "", custom_bg = null) {
-  return apiFetch("/generate_image", {
+  return apiFetch("/studio/generate_image", {
     method: "POST",
     body: { text: topic, author, mood, custom_bg }
   });
 }
 
 export async function generateVideo(topic, mood = "", author = "LEVI Muse") {
-  return apiFetch("/generate_video", {
+  return apiFetch("/studio/generate_video", {
     method: "POST",
     body: { text: topic, mood, author },
   });
 }
 
 export async function trackShare() {
-  return apiFetch("/track_share", { method: "POST" });
+  return apiFetch("/analytics/track_share", { method: "POST" });
 }
 
 export async function getCredits() {
-  return apiFetch("/credits");
+  return apiFetch("/auth/credits");
 }
 
 export async function createCheckout(plan) {
-  return apiFetch(`/create_checkout?plan=${plan}`, { method: "POST" });
+  return apiFetch(`/payments/create_checkout?plan=${plan}`, { method: "POST" });
 }
 
 export async function getDailyQuote() {
-  const data = await apiFetch("/daily_quote");
+  const data = await apiFetch("/gallery/daily_quote");
   return {
     text: data.quote || data.text,
     author: data.author || "LEVI-AI",
@@ -231,19 +231,19 @@ export async function generateQuoteImage(text, author = "Unknown", mood = "neutr
 }
 
 export async function getFeed(limit = 20) {
-  return apiFetch(`/feed?limit=${limit}`);
+  return apiFetch(`/gallery/feed?limit=${limit}`);
 }
 
 export async function likeItem(type, id) {
-  return apiFetch(`/like/${type}/${id}`, { method: "POST" });
+  return apiFetch(`/gallery/like/${type}/${id}`, { method: "POST" });
 }
 
 export async function getTaskStatus(taskId) {
-  return apiFetch(`/task_status/${taskId}`);
+  return apiFetch(`/studio/task_status/${taskId}`);
 }
 
 export async function getMyGallery() {
-  return apiFetch("/my_gallery");
+  return apiFetch("/gallery/my_gallery");
 }
 
 // Attach to window for non-module scripts

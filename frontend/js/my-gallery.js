@@ -121,7 +121,7 @@ async function shareItem(text, author) {
 
   const token = await window.waitForToken();
   if (token) {
-    fetch(`${getApiBase()}/track_share`, {
+    fetch(`${getApiBase()}/analytics/track_share`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
       credentials: 'include',
@@ -161,7 +161,7 @@ async function loadGallery() {
   }
 
   try {
-    const res = await fetch(`${getApiBase()}/my_gallery`, {
+    const res = await fetch(`${getApiBase()}/gallery/my_gallery`, {
       headers: { Authorization: `Bearer ${token}` },
       credentials: 'include',
     });

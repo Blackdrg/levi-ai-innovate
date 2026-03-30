@@ -120,3 +120,19 @@ async def get_performance_metrics(is_admin: bool = Depends(verify_admin)):
     except Exception as e:
         logger.error(f"Live performance aggregation failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/feedback")
+async def submit_feedback(payload: dict):
+    """Phase 43: Feedback endpoint for LLM response evaluation."""
+    msg_id = payload.get("message_id")
+    score = payload.get("score", 0.0)
+    logger.info(f"Feedback received for {msg_id}: {score}")
+    # In production, we'd store this in Firestore for training
+    return {"status": "success"}
+
+@router.post("/track_share")
+async def track_share():
+    """Phase 43: Track social sharing events."""
+    from backend.firestore_db import update_analytics # type: ignore
+    update_analytics("share_count")
+    return {"status": "success"}
