@@ -1,16 +1,15 @@
-import logging
 from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import Optional
-import uuid
-from datetime import datetime, timezone
-import os
-import json
+import logging
+from datetime import datetime
 
 from backend.models import ChatMessage, _INJECTION_PATTERNS
 from backend.auth import get_current_user_optional
-from backend.redis_client import get_conversation, save_conversation, is_rate_limited, r as redis_client, HAS_REDIS
+from backend.redis_client import get_conversation, save_conversation, is_rate_limited, incr_daily_ai_spend, get_daily_ai_spend
 from backend.firestore_db import update_analytics
+from backend.payments import use_credits
 from backend.generation import generate_response
+import os
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/chat", tags=["Chat"])
@@ -29,53 +28,24 @@ async def chat_endpoint(
 
     msg_low = msg.message.lower()
     if any(pattern in msg_low for pattern in _INJECTION_PATTERNS):
-        raise HTTPException(status_code=400, detail="Possible prompt injection detected.")
+        raise HTTPException(status_code=400, detail="Invalid message content.")
 
-    from backend.redis_client import get_daily_ai_spend, incr_daily_ai_spend
     daily_limit = float(os.getenv("DAILY_AI_LIMIT", "500"))
     if get_daily_ai_spend() >= daily_limit:
-        raise HTTPException(status_code=429, detail="Daily AI usage limit reached.")
+        raise HTTPException(status_code=429, detail="Daily AI limit reached.")
     incr_daily_ai_spend(1.0)
 
     update_analytics("chats_count")
     history = get_conversation(msg.session_id)
 
-    # Phase 44: Real-Time Observability (Broadcast Synthesis Start)
-    try:
-        payload_start = json.dumps({
-            "event": "synthesis_started",
-            "data": {"session_id": str(msg.session_id)[:8], "tier": user_tier},
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        })
-        if HAS_REDIS:
-            redis_client.publish("levi_activity", payload_start)
-    except Exception as e:
-        logger.error(f"[SSE] Start broadcast failed: {e}")
+    bot_response = await generate_response(
+        msg.message,
+        history=history,
+        mood=msg.mood or "philosophical",
+        user_tier=user_tier
+    )
 
-    try:
-        response = await generate_response(
-            msg.message,
-            history=history,
-            mood=msg.mood or "philosophical",
-            user_tier=user_tier
-        )
-    except Exception as e:
-        logger.error(f"[Chat] Generation failed: {e}")
-        raise HTTPException(status_code=500, detail="AI generation failed.")
-
-    # Phase 44: Real-Time Observability (Broadcast Synthesis Complete)
-    try:
-        payload_end = json.dumps({
-            "event": "synthesis_completed",
-            "data": {"session_id": str(msg.session_id)[:8], "tier": user_tier},
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        })
-        if HAS_REDIS:
-            redis_client.publish("levi_activity", payload_end)
-    except Exception as e:
-        logger.error(f"[SSE] End broadcast failed: {e}")
-
-    history.append({"user": msg.message, "bot": response, "timestamp": datetime.now(timezone.utc).isoformat()})
+    history.append({"user": msg.message, "bot": bot_response, "timestamp": datetime.utcnow().isoformat()})
     save_conversation(msg.session_id, history, user_id=user_id)
 
-    return {"response": response, "session_id": msg.session_id}
+    return {"response": bot_response}
