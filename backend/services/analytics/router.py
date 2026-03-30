@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request # type: ignore
+from backend.utils.exceptions import LEVIException
 from typing import Optional
 import numpy as np
 import os
@@ -42,7 +43,7 @@ async def get_analytics_data(request: Request):
         }
     except Exception as e:
         logger.error(f"Analytics retrieval failed: {e}")
-        raise HTTPException(status_code=503, detail="Analytics temporarily unavailable")
+        raise LEVIException("Analytics temporarily unavailable", status_code=503, error_code="ANALYTICS_UNAVAILABLE")
 
 @router.get("/admin/health")
 async def admin_health_check(is_admin: bool = Depends(verify_admin)):
@@ -73,7 +74,7 @@ async def control_circuit_breaker(name: str, action: str, is_admin: bool = Depen
     elif name == "together": breaker = together_breaker
     
     if not breaker:
-        raise HTTPException(status_code=404, detail="Breaker not found")
+        raise LEVIException("Breaker not found", status_code=404, error_code="BREAKER_NOT_FOUND")
         
     if action == "trip":
         breaker.state = "OPEN"
@@ -82,7 +83,7 @@ async def control_circuit_breaker(name: str, action: str, is_admin: bool = Depen
         breaker.state = "CLOSED"
         breaker.failures = 0
     else:
-        raise HTTPException(status_code=400, detail="Invalid action")
+        raise LEVIException("Invalid action", status_code=400, error_code="INVALID_BREAKER_ACTION")
         
     return {"status": "success", "breaker": name, "new_state": breaker.state}
 
@@ -119,7 +120,7 @@ async def get_performance_metrics(is_admin: bool = Depends(verify_admin)):
         }
     except Exception as e:
         logger.error(f"Live performance aggregation failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise LEVIException(str(e), status_code=500, error_code="METRICS_AGGREGATION_FAIL")
 
 @router.post("/feedback")
 async def submit_feedback(payload: dict):

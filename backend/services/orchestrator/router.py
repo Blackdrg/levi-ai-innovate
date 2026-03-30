@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
+from backend.utils.exceptions import LEVIException
 from typing import Optional
 import logging
 
@@ -31,4 +32,4 @@ async def orchestrator_endpoint(
         return {"response": response}
     except Exception as e:
         logger.error(f"Orchestration failure: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal Orchestration Error")
+        raise LEVIException("Internal Orchestration Error", status_code=500, error_code="ORCHESTRATION_FAIL")

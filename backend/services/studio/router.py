@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks # type: ignore
+from backend.utils.exceptions import LEVIException
 from typing import Optional
 import uuid
 from datetime import datetime
@@ -32,7 +33,7 @@ async def gen_image(
         # ── Defensive: Rate Limiting ────────────────────────
         if is_rate_limited(str(user_id), limit=5, window=60):
             logger.warning(f"[RateLimit] Throttled user {user_id} in Studio (Image)")
-            raise HTTPException(status_code=429, detail="Generation limit reached. Please wait a minute.")
+            raise LEVIException("Generation limit reached. Please wait a minute.", status_code=429, error_code="RATE_LIMIT_EXCEEDED")
         
         # Async Job Pattern
         job_id = f"job_{uuid.uuid4().hex[:12]}"
@@ -79,7 +80,7 @@ async def gen_image(
 
     except Exception as e:
         logger.error(f"Image generation request failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail={"error": str(e), "status": "failed"})
+        raise LEVIException(str(e), status_code=500, error_code="STUDIO_IMAGE_FAIL")
 
 @router.post("/generate_video")
 async def gen_video(
@@ -97,7 +98,7 @@ async def gen_video(
         # ── Defensive: Rate Limiting ────────────────────────
         if is_rate_limited(str(user_id), limit=5, window=60):
             logger.warning(f"[RateLimit] Throttled user {user_id} in Studio (Video)")
-            raise HTTPException(status_code=429, detail="Generation limit reached. Please wait a minute.")
+            raise LEVIException("Generation limit reached. Please wait a minute.", status_code=429, error_code="RATE_LIMIT_EXCEEDED")
 
         # Async Job Pattern
         job_id = f"vjob_{uuid.uuid4().hex[:12]}"
@@ -144,7 +145,7 @@ async def gen_video(
 
     except Exception as e:
         logger.error(f"Video generation request failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail={"error": str(e), "status": "failed"})
+        raise LEVIException(str(e), status_code=500, error_code="STUDIO_VIDEO_FAIL")
 
 @router.get("/task_status/{job_id}")
 async def get_task_status(job_id: str):

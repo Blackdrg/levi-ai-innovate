@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
+from backend.utils.exceptions import LEVIException
 from fastapi.responses import StreamingResponse
 from typing import Optional, AsyncGenerator
 import logging
@@ -41,7 +42,7 @@ async def chat_endpoint(
     user_tier = current_user.get("tier", "free") if current_user else "free"
 
     if is_rate_limited(str(user_id), limit=15, window=60):
-        raise HTTPException(status_code=429, detail="Too many messages. Please wait.")
+        raise LEVIException("Too many messages. Please wait.", status_code=429, error_code="RATE_LIMIT_EXCEEDED")
 
     msg_low = msg.message.lower()
     if any(pattern in msg_low for pattern in _INJECTION_PATTERNS):
@@ -49,7 +50,7 @@ async def chat_endpoint(
 
     daily_limit = float(os.getenv("DAILY_AI_LIMIT", "500"))
     if get_daily_ai_spend() >= daily_limit:
-        raise HTTPException(status_code=429, detail="Daily AI limit reached.")
+        raise LEVIException("Daily AI limit reached.", status_code=429, error_code="DAILY_LIMIT_REACHED")
     
     # --- Orchestrator Integration ---
     # Now returns a Dict with metadata

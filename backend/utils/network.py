@@ -55,6 +55,34 @@ class CircuitBreaker:
             self.on_failure()
             raise e
 
+    async def async_call(self, func: Callable, *args, **kwargs):
+        """Phase 43: Async support for circuit breaking."""
+        if self.state == "OPEN":
+            if time.time() - self.last_failure_time > self.recovery_time:
+                self.state = "HALF-OPEN"
+                logger.info(f"Circuit {self.name} is now HALF-OPEN.")
+            else:
+                raise RuntimeError(f"Circuit {self.name} is OPEN. Try again later.")
+
+        try:
+            result = await func(*args, **kwargs)
+            self.on_success()
+            return result
+        except Exception as e:
+            # Standardize 429 check for both requests and httpx
+            is_rate_limit = False
+            if hasattr(e, "response") and e.response is not None:
+                status_code = getattr(e.response, "status_code", None)
+                if status_code == 429:
+                    is_rate_limit = True
+            
+            if is_rate_limit:
+                logger.warning(f"Async Rate limit hit in {self.name}. Circuit remains {self.state}.")
+                raise e
+                
+            self.on_failure()
+            raise e
+
     def on_success(self):
         if self.state == "HALF-OPEN":
             logger.info(f"Circuit {self.name} is now CLOSED.")

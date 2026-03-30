@@ -19,6 +19,10 @@ from backend.utils.retries import logger
 
 from backend.config import TIERS, COST_MATRIX
 
+# Module-level bearer scheme instance — must be defined before get_current_user
+# references it via Depends(security).
+security = HTTPBearer()
+
 def check_allowance(user_id: str, tier: str, cost: int = 1) -> bool:
     """Verifies if the user has enough daily units or credits."""
     from backend.redis_client import get_daily_ai_spend, get_user_credits # type: ignore
