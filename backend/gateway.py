@@ -287,10 +287,10 @@ async def add_request_tracking(request: Request, call_next):
     # Content Security Policy (CSP)
     csp_parts = [
         "default-src 'self'",
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com https://checkout.razorpay.com",
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-        "img-src 'self' data: blob: https://images.unsplash.com https://*.firebasestorage.app https://*.s3.amazonaws.com",
-        "connect-src 'self' https://*.firebaseio.com https://*.googleapis.com https://api.razorpay.com",
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com https://checkout.razorpay.com https://cdn.jsdelivr.net https://www.googletagmanager.com",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net",
+        "img-src 'self' data: blob: https://images.unsplash.com https://*.firebasestorage.app https://*.s3.amazonaws.com https://www.google-analytics.com",
+        "connect-src 'self' https://*.firebaseio.com https://*.googleapis.com https://api.razorpay.com https://www.google-analytics.com https://stats.g.doubleclick.net",
         "font-src 'self' https://fonts.gstatic.com",
         "frame-src 'self' https://checkout.razorpay.com",
         "object-src 'none'",
