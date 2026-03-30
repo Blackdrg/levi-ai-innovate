@@ -122,27 +122,8 @@ async function sendMessage() {
     if (window.ui && window.ui.showLoader) window.ui.showLoader();
     try {
         await window.waitForToken();
-        const res = await fetch(`${window.API_BASE}/chat`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                session_id: sessionId,
-                message: text,
-                mood: currentMood,
-                history: chatHistory.slice(-5) 
-            })
-        });
-
-        if (res.status === 429) {
-            appendMessage('bot', "Ah, the mind needs rest. We've reached our conversation limit for a moment. Please pause and breathe before continuing.");
-            return;
-        }
-
-        if (!res.ok) throw new Error("Server error");
+        const data = await window.api.chat(text, sessionId);
         
-        const data = await res.json();
         messageCount++;
         
         const msgId = data.id || `msg_${Date.now()}`; 
@@ -173,7 +154,7 @@ async function submitFeedback(msgId, score, btn) {
     
     try {
         await window.waitForToken();
-        await fetch(`${window.API_BASE}/feedback`, {
+        await fetch(`${window.API_BASE}/analytics/feedback`, {
             method: "POST",
             body: JSON.stringify({ message_id: msgId, score: score })
         });
