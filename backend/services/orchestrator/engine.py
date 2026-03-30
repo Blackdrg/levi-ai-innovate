@@ -63,6 +63,7 @@ async def run_orchestrator(
 
         # 3. Decision Engine
         engine_config = await decide_engine(intent, context)
+        context["engine_config"] = engine_config
 
         # 4. Multi-Agent Routing
         if intent.intent in ["image", "code", "search"] and intent.confidence > 0.6:
@@ -121,6 +122,7 @@ async def run_orchestrator(
 async def decide_engine(intent: IntentResult, context: Dict[str, Any]) -> Dict[str, Any]:
     """Decides which LLM engine / model to use based on tier and intent."""
     user_tier = context.get("user_tier", "free")
+    complexity = intent.complexity
     # Free tier gets 8B for simple and 70B for high complexity (8+).
     
     if user_tier in ["pro", "creator"] or complexity >= 8:

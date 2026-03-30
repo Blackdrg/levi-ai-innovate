@@ -36,9 +36,18 @@ async function apiFetch(endpoint, options = {}) {
   try {
     const res = await fetch(url, finalOptions);
     if (!res.ok) {
-        if (res.status === 402) throw new Error("ALLOWANCE_EXCEEDED");
         const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.detail || `Server Error: ${res.status}`);
+        const errorMessage = errorData.error || errorData.detail || `Server Error: ${res.status}`;
+        
+        // Specific handling for standard codes
+        if (res.status === 402 || errorData.error_code === "INSUFFICIENT_CREDITS") {
+            throw new Error("PRO_UPGRADE_REQUIRED");
+        }
+        if (errorData.error_code === "RATE_LIMIT_EXCEEDED") {
+            throw new Error("You are moving too fast. Deep breaths! Please wait a moment.");
+        }
+        
+        throw new Error(errorMessage);
     }
     return await res.json();
   } catch (error) {

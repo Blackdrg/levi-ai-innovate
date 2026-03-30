@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
+from backend.utils.exceptions import LEVIException
 from typing import List, Dict, Any, Optional
 import logging
 
@@ -17,7 +18,7 @@ async def get_my_facts(
     """View all facts LEVI has learned about you."""
     user_id = current_user.get("uid")
     if not user_id:
-        raise HTTPException(status_code=401, detail="User not authenticated")
+        raise LEVIException("User not authenticated", status_code=401, error_code="UNAUTHORIZED")
     
     try:
         # Maintenance: Prune old facts on view
@@ -41,7 +42,7 @@ async def get_my_facts(
         return {"user_id": user_id, "facts": facts, "count": len(facts)}
     except Exception as e:
         logger.error(f"Error fetching facts for privacy view: {e}")
-        raise HTTPException(status_code=500, detail="Failed to retrieve memory facts")
+        raise LEVIException("Failed to retrieve memory facts", status_code=500, error_code="MEMORY_FETCH_FAIL")
 
 @router.delete("/facts/{fact_id}")
 async def delete_fact(
@@ -56,18 +57,18 @@ async def delete_fact(
         doc = doc_ref.get()
         
         if not doc.exists:
-            raise HTTPException(status_code=404, detail="Fact not found")
+            raise LEVIException("Fact not found", status_code=404, error_code="ITEM_NOT_FOUND")
         
         if doc.to_dict().get("user_id") != user_id:
-            raise HTTPException(status_code=403, detail="Not authorized to delete this memory")
+            raise LEVIException("Not authorized to delete this memory", status_code=403, error_code="FORBIDDEN")
             
         doc_ref.delete()
         return {"status": "success", "message": "Memory successfully forgotten"}
-    except HTTPException:
+    except LEVIException:
         raise
     except Exception as e:
         logger.error(f"Error deleting fact {fact_id}: {e}")
-        raise HTTPException(status_code=500, detail="Internal deletion error")
+        raise LEVIException("Internal deletion error", status_code=500, error_code="MEMORY_DELETE_FAIL")
 
 @router.delete("/facts/clear-all")
 async def clear_all_memory(
@@ -94,4 +95,4 @@ async def clear_all_memory(
         return {"status": "success", "cleared_count": count}
     except Exception as e:
         logger.error(f"Error clearing memory for {user_id}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to wipe memory")
+        raise LEVIException("Failed to wipe memory", status_code=500, error_code="MEMORY_CLEAR_FAIL")

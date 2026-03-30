@@ -3,6 +3,7 @@ import asyncio
 from typing import List, Dict, Any
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from .agent_registry import call_agent
+from backend.utils.network import ai_service_breaker
 
 logger = logging.getLogger(__name__)
 
@@ -17,13 +18,18 @@ class AgentExecutionError(Exception):
     reraise=True
 )
 async def _call_agent_with_retry(agent_name: str, context: Dict[str, Any]) -> Dict[str, Any]:
-    """Wrapper to call an agent with standardized retry logic."""
-    result = await call_agent(agent_name, context)
-    
-    if result.get("status") == "error" and result.get("retryable", True):
-        raise AgentExecutionError(f"Agent {agent_name} failed: {result.get('error')}")
-    
-    return result
+    """Wrapper to call an agent with standardized retry and circuit breaking."""
+    try:
+        result = await ai_service_breaker.async_call(call_agent, agent_name, context)
+        
+        if result.get("status") == "error" and result.get("retryable", True):
+            raise AgentExecutionError(f"Agent {agent_name} failed: {result.get('error')}")
+        
+        return result
+    except RuntimeError as re:
+        # Circuit is OPEN
+        logger.error(f"Circuit Breaker blocked call to {agent_name}: {re}")
+        return {"status": "error", "error": "Circuit Breaker OPEN", "retryable": False}
 
 async def execute_plan(plan: List[Dict[str, Any]], context: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Execute the generated plan sequentially with fallbacks."""

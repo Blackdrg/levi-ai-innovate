@@ -24,7 +24,12 @@ async def call_agent(name: str, context: Dict[str, Any]) -> Dict[str, Any]:
         return await AGENTS[name](context)
     except Exception as e:
         logger.exception(f"Error executing agent {name}: {e}")
-        return {"error": str(e)}
+        return {
+            "status": "error",
+            "error": str(e),
+            "agent": name,
+            "retryable": True # Default to retryable for unexpected exceptions
+        }
 
 # --- Specialized Agents ---
 
@@ -43,7 +48,12 @@ async def chat_handler(context: Dict[str, Any]) -> Dict[str, Any]:
         mood=mood,
         user_tier=user_tier
     )
-    return {"message": response, "agent": "chat_agent", "status": "success"}
+    return {
+        "message": response,
+        "agent": "chat_agent",
+        "status": "success",
+        "retryable": False
+    }
 
 @register_agent("image_agent")
 async def image_handler(context: Dict[str, Any]) -> Dict[str, Any]:
@@ -63,7 +73,12 @@ async def image_handler(context: Dict[str, Any]) -> Dict[str, Any]:
     )
     
     if result.get("status") == "error":
-        return {"status": "error", "message": result.get("error", "Studio failed.")}
+        return {
+            "status": "error",
+            "message": result.get("error", "Studio failed."),
+            "agent": "image_agent",
+            "retryable": True
+        }
 
     return {
         "message": f"I have visualized your concept: '{message}'. The masterpiece is being rendered.",
@@ -87,7 +102,12 @@ async def search_handler(context: Dict[str, Any]) -> Dict[str, Any]:
             use_credits(str(user_id), 1)
         except Exception as ce:
             logger.warning(f"Credit deduction failed for search: {ce}")
-            return {"status": "error", "message": "Search requires credits. Your balance is insufficient."}
+            return {
+                "status": "error",
+                "message": "Search requires credits. Your balance is insufficient.",
+                "agent": "search_agent",
+                "retryable": False
+            }
 
     system_prompt = (
         "You are the LEVI Search Engine. Provide 3-5 concise, deep, and factual insights "
@@ -109,7 +129,8 @@ async def search_handler(context: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "message": search_results or "The collective knowledge is silent on this matter.",
         "agent": "search_agent",
-        "status": "success"
+        "status": "success",
+        "retryable": False
     }
 
 @register_agent("code_agent")
@@ -127,7 +148,12 @@ async def code_handler(context: Dict[str, Any]) -> Dict[str, Any]:
             use_credits(str(user_id), 2)
         except Exception as ce:
             logger.warning(f"Credit deduction failed for code: {ce}")
-            return {"status": "error", "message": "Architectural logic requires 2 credits. Your balance is insufficient."}
+            return {
+                "status": "error",
+                "message": "Architectural logic requires 2 credits. Your balance is insufficient.",
+                "agent": "code_agent",
+                "retryable": False
+            }
 
     system_prompt = (
         "You are the LEVI Architect. Generate clean, efficient, and well-documented code "
@@ -149,6 +175,7 @@ async def code_handler(context: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "message": code_output or "I could not construct the logic you requested.",
         "agent": "code_agent",
-        "status": "success"
+        "status": "success",
+        "retryable": False
     }
 

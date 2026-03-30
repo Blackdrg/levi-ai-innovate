@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Response # type: ignore
+from backend.utils.exceptions import LEVIException
 from typing import Optional, List
 import hashlib
 import numpy as np # type: ignore
@@ -90,13 +91,13 @@ async def like_item(item_type: str, item_id: str, user_id: str = "anonymous"):
         elif item_type == "feed":
             collection = "feed_items"
         else:
-            raise HTTPException(status_code=400, detail="Invalid item type")
+            raise LEVIException("Invalid item type", status_code=400, error_code="INVALID_ITEM_TYPE")
 
         item_ref = firestore_db.collection(collection).document(item_id)
         item_doc = item_ref.get()
 
         if not item_doc.exists:
-            raise HTTPException(status_code=404, detail="Item not found")
+            raise LEVIException("Item not found", status_code=404, error_code="ITEM_NOT_FOUND")
 
         # Atomic increment
         item_ref.update({"likes": google_firestore.Increment(1)})
@@ -105,8 +106,10 @@ async def like_item(item_type: str, item_id: str, user_id: str = "anonymous"):
         update_analytics("likes_count")
 
         return {"status": "success"}
+    except LEVIException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise LEVIException(str(e), status_code=500, error_code="GALLERY_ACTION_FAIL")
 
 @router.get("/my_gallery")
 async def get_my_gallery(

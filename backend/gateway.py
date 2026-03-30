@@ -6,6 +6,7 @@ import logging
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 from contextlib import asynccontextmanager
+from backend.utils.logging_context import log_request_id, log_user_id
 
 from fastapi import FastAPI, Request, HTTPException, Depends, status, BackgroundTasks  # type: ignore
 from fastapi.responses import JSONResponse, StreamingResponse  # type: ignore
@@ -26,6 +27,9 @@ from slowapi.util import get_remote_address # type: ignore
 from slowapi.errors import RateLimitExceeded # type: ignore
 from slowapi import _rate_limit_exceeded_handler # type: ignore
 
+from slowapi.errors import RateLimitExceeded # type: ignore
+from slowapi import _rate_limit_exceeded_handler # type: ignore
+
 # ── Environment & Logging ───────────────────────────
 if os.path.exists(".env.local"):
     load_dotenv(".env.local")
@@ -42,6 +46,11 @@ class CustomJsonFormatter(JsonFormatter):
             log_record['level'] = log_record['level'].upper()
         else:
             log_record['level'] = record.levelname
+        
+        # Add context-aware fields
+        log_record['request_id'] = log_request_id.get()
+        log_record['user_id'] = log_user_id.get()
+        log_record['instance_id'] = os.getenv("INSTANCE_ID", "unknown")
 
 logger = logging.getLogger("gateway")
 logHandler = logging.StreamHandler()
@@ -241,6 +250,12 @@ async def add_request_tracking(request: Request, call_next):
     request.state.request_id = request_id
     request.state.trace_id = trace_id
     
+    # Set context variables
+    log_request_id.set(request_id)
+    # user_id will be set later in auth middleware or routers if available
+    # For now, initialize with guest or trace_id
+    log_user_id.set(request.headers.get("X-User-ID", "anonymous"))
+    
     start_time = time.time()
     
     # Process request
@@ -361,28 +376,45 @@ from backend.payments import router as payments_router # type: ignore
 from backend.services.studio.ai_router import router as ai_router # type: ignore
 
 # Phase 2: Standardized Route Architecture
-app.include_router(chat_router, prefix="/api/chat", tags=["Chat"])
-app.include_router(studio_router, prefix="/api/generate", tags=["Studio"])
-app.include_router(ai_router, prefix="/api/generate/advanced", tags=["AI"])
-app.include_router(auth_router, prefix="/api/user", tags=["Auth"])
-app.include_router(payments_router, prefix="/api/user/payments", tags=["Payments"])
-app.include_router(privacy_router, prefix="/api/user/privacy", tags=["Privacy"])
-app.include_router(analytics_router, prefix="/api/system/analytics", tags=["Analytics"])
-app.include_router(orchestrator_router, prefix="/api/system/orchestrator", tags=["Orchestrator"])
-app.include_router(gallery_router, prefix="/api/gallery", tags=["Gallery"])
+# Note: Middleware strips /api/v1 and /api, so we register canonical paths.
+app.include_router(chat_router, prefix="/chat", tags=["Chat"])
+app.include_router(studio_router, prefix="/studio", tags=["Studio"])
+app.include_router(ai_router, prefix="/studio/advanced", tags=["AI Studio"])
+app.include_router(auth_router, prefix="/auth", tags=["Auth"])
+app.include_router(payments_router, prefix="/user/payments", tags=["Payments"])
+app.include_router(privacy_router, prefix="/user/privacy", tags=["Privacy"])
+app.include_router(analytics_router, prefix="/system/analytics", tags=["Analytics"])
+app.include_router(orchestrator_router, prefix="/system/orchestrator", tags=["Orchestrator"])
+app.include_router(gallery_router, prefix="/gallery", tags=["Gallery"])
 
 # ── Global Error Handling ───────────────────────────
-class LEVIException(Exception):
-    def __init__(self, message: str, status_code: int = 500, error_code: str = "INTERNAL_ERROR"):
-        self.message = message
-        self.status_code = status_code
-        self.error_code = error_code
-        super().__init__(self.message)
+from backend.utils.exceptions import LEVIException
 
 @app.exception_handler(LEVIException)
 async def levi_exception_handler(request: Request, exc: LEVIException):
     rid = getattr(request.state, "request_id", "unknown")
-    logger.warning(f"LEVI Error [{exc.error_code}]: {exc.message} (RID: {rid})")
+    uid = getattr(request.state, "user_id", log_user_id.get("anonymous"))
+
+    # Capture to Sentry with structured tags for triage dashboards
+    if SENTRY_DSN:
+        with sentry_sdk.push_scope() as scope:
+            scope.set_tag("error_code", exc.error_code)
+            scope.set_tag("request_id", rid)
+            scope.set_user({"id": uid})
+            scope.set_extra("message", exc.message)
+            scope.set_extra("status_code", exc.status_code)
+            sentry_sdk.capture_exception(exc)
+
+    logger.warning(
+        "levi_exception",
+        extra={
+            "error_code": exc.error_code,
+            "message": exc.message,
+            "request_id": rid,
+            "user_id": uid,
+            "status_code": exc.status_code,
+        }
+    )
     return JSONResponse(
         status_code=exc.status_code,
         content={

@@ -2,6 +2,7 @@ import os
 import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request # type: ignore
+from backend.utils.exceptions import LEVIException
 from backend.models import ContentRequest # type: ignore
 from backend.auth import get_current_user # type: ignore
 from backend.content_engine import generate_content, get_available_types, get_available_tones # type: ignore
@@ -40,7 +41,7 @@ async def gen_content(
     # ── Defensive: Rate Limiting ────────────────────────
     if is_rate_limited(str(user_id), limit=5, window=60):
         logger.warning(f"[RateLimit] Throttled user {user_id} in AI Content")
-        raise HTTPException(status_code=429, detail="Too many requests. Please wait a minute.")
+        raise LEVIException("Too many requests. Please wait a minute.", status_code=429, error_code="RATE_LIMIT_EXCEEDED")
 
     # ── Financial: Credit Check ─────────────────────────
     if current_user and req.content_type != "quote":
@@ -48,12 +49,12 @@ async def gen_content(
             use_credits(str(user_id), 1)
         except Exception as e:
             logger.error(f"[AI Content] Credit deduction failed: {e}")
-            raise HTTPException(status_code=402, detail="Insufficient credits.")
+            raise LEVIException("Insufficient credits.", status_code=402, error_code="INSUFFICIENT_CREDITS")
 
     # ── Cost Protection Layer ──────────────────────────
     daily_limit = float(os.getenv("DAILY_AI_LIMIT", "500"))
     if get_daily_ai_spend() >= daily_limit:
-        raise HTTPException(status_code=429, detail="Daily AI usage limit reached.")
+        raise LEVIException("Daily AI usage limit reached.", status_code=429, error_code="DAILY_LIMIT_REACHED")
     incr_daily_ai_spend(1.0)
 
     result = generate_content(
@@ -65,6 +66,6 @@ async def gen_content(
     )
     
     if "error" in result:
-        raise HTTPException(status_code=400, detail=result["error"])
+        raise LEVIException(result["error"], status_code=400, error_code="CONTENT_GEN_FAIL")
     
     return result

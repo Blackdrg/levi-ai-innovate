@@ -66,35 +66,6 @@ async def call_lightweight_llm(messages: List[Dict[str, str]], temperature: floa
         provider="groq"
     )
 
-async def detect_intent(user_input: str) -> IntentResult:
-    """Classify the user intent using Rules -> LLM fallback."""
-    # 1. Try Rules First
-    rule_match = check_rules(user_input)
-    if rule_match:
-        return rule_match
-
-    # 2. LLM Fallback
-    system_prompt = (
-        "You are the LEVI Intent Classifier. Categorize the user's input into one of: "
-        "'chat' (conversational), 'image' (visual generation), 'search' (fact-finding/research), "
-        "'code' (programming), 'multi_step' (requires multiple actions). "
-        "Also assess complexity from 1-10. "
-        "Logic: "
-        "- If the user wants a picture/art, use 'image'. "
-        "- If the user asks for code/logic/programming, use 'code'. "
-        "- If the user asks for facts/news/research, use 'search'. "
-        "- If it's a general conversation, use 'chat'. "
-        "Output ONLY JSON: {\"intent\": \"category\", \"complexity\": 5, \"confidence\": 0.8}"
-    )
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_input}
-    ]
-    
-    res_json = await call_lightweight_llm(messages)
-    if not res_json:
-        return IntentResult(intent="chat", complexity=1, confidence=0.5)
-    
 def _parse_json_result(text: str, default_val: Any) -> Any:
     """Robust parsing of LLM JSON results with support for markdown fencing."""
     if not text: return default_val

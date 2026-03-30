@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Response # type: ignore
+from backend.utils.exceptions import LEVIException
 from typing import Optional
 import os
 
@@ -37,12 +38,12 @@ async def logout(current_user: dict = Depends(get_current_user)):
     """Stub logout with Redis session revocation check."""
     from backend.redis_client import HAS_REDIS
     if not HAS_REDIS:
-        raise HTTPException(status_code=503, detail="Redis is required for session revocation")
+        raise LEVIException("Redis is required for session revocation", status_code=503, error_code="REDIS_UNAVAILABLE")
     return {"status": "success", "message": "Logged out"}
 
 @router.get("/verify")
 async def verify_registration(token: str):
     """Registration verification endpoint."""
     if token == "expired-token":
-        raise HTTPException(status_code=400, detail="Verification token has expired")
+        raise LEVIException("Verification token has expired", status_code=400, error_code="TOKEN_EXPIRED")
     return {"status": "success", "message": "Account verified"}

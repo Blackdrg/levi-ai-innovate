@@ -217,9 +217,9 @@ def store_jti(jti: str, expires_in: int):
             print(f"[Firestore] Failed to store JTI: {e}")
 
 def is_jti_blacklisted(jti: str) -> bool:
-    """Check if JTI is blacklisted (whitelist pattern for active tokens)."""
+    """Check if JTI is explicitly blacklisted in Redis."""
     if HAS_REDIS:
-        return _get(f"jti:{jti}") is None
+        return _get(f"jti:{jti}") is not None
     
     # Fallback to Firestore
     try:
@@ -313,29 +313,34 @@ def get_user_credits(user_id: str) -> int:
     return 0
 
 
-# ── Global Concurrency Control ──────────────────────────────
+# --- Enhanced Concurrency Control (Lua for Atomicity) ---
 
-def acquire_concurrency_slot(limit_key: str, max_concurrent: int) -> bool:
+ACQUIRE_SLOT_LUA = """
+local current = redis.call('INCR', KEYS[1])
+if current == 1 then
+    redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+if current > tonumber(ARGV[2]) then
+    redis.call('DECR', KEYS[1])
+    return 0
+end
+return 1
+"""
+
+def acquire_concurrency_slot(limit_key: str, max_concurrent: int, ttl: int = 3600) -> bool:
     """
-    Try to acquire a concurrency slot globally via Redis.
-    Returns True if successful, False if limit reached.
+    Try to acquire a concurrency slot globally via Redis (Atomic Lua).
     """
     if not HAS_REDIS:
         return True
     
-    # We use a simple counter. To prevent leaks from crashes, 
-    # we could use a set of job IDs with TTLs, but for now 
-    # a counter with a periodic reset or a long TTL on the key is a start.
-    # Better: Use INCR and set an expiry if it's the first hit.
-    
-    count = r.incr(limit_key)
-    if count == 1:
-        r.expire(limit_key, 3600)  # Reset counter every hour to prevent permanent leaks
-        
-    if count > max_concurrent:
-        r.decr(limit_key)
-        return False
-    return True
+    try:
+        # returns 1 if acquired, 0 if limit reached
+        result = r.eval(ACQUIRE_SLOT_LUA, 1, limit_key, ttl, max_concurrent)
+        return bool(result)
+    except Exception as e:
+        print(f"[Redis] Concurrency acquire failed: {e}")
+        return True # Fail open to avoid blocking production on Redis issues
 
 
 def release_concurrency_slot(limit_key: str):
