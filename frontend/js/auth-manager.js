@@ -1,21 +1,53 @@
 /* frontend/js/auth-manager.js */
 console.log("[LEVI] auth-manager.js executing...");
 
-// Define this early so it's always available
+// ==========================================
+// 1. Firebase Initialization & Configuration (MUST BE FIRST)
+// ==========================================
+const firebaseConfig = window.firebaseConfig;
+
+if (!firebaseConfig || !firebaseConfig.apiKey) {
+    console.error("[LEVI] Firebase configuration missing!");
+}
+
+if (typeof firebase !== 'undefined' && !firebase.apps.length) {
+    if (!firebaseConfig || firebaseConfig.apiKey === "REPLACE_WITH_YOUR_FIREBASE_API_KEY" || firebaseConfig.apiKey.includes("AIzaSy...")) {
+        console.warn("[LEVI] Using Auth STUB (Local Mode)");
+        window.firebase.auth = () => ({
+            currentUser: { uid: "local-user", email: "local@example.com", getIdToken: async () => "local-token" },
+            onAuthStateChanged: (cb) => { cb({ uid: "local-user", email: "local@example.com", displayName: "Local Seeker" }); return () => {}; },
+            signOut: async () => { console.log("Logged out from stub"); }
+        });
+    } else {
+        try {
+            firebase.initializeApp(firebaseConfig);
+            console.log("[LEVI] Firebase Initialized.");
+        } catch (e) {
+            console.error("[LEVI] Firebase Init Failed:", e);
+        }
+    }
+}
+
+// ==========================================
+// 2. Auth Helper Methods
+// ==========================================
 window.waitForToken = () => {
     return new Promise((resolve) => {
-        const auth = typeof firebase !== 'undefined' ? firebase.auth() : null;
+        // Safety: verify if firebase is fully ready
+        const isReady = typeof firebase !== 'undefined' && firebase.apps.length > 0;
+        const auth = isReady ? firebase.auth() : null;
+        
         if (!auth) {
-            console.warn("[LEVI] Firebase Auth not available, resolving with local token");
+            console.warn("[LEVI] Firebase Auth not available or not initialized, resolving with local token");
             resolve("local-token");
             return;
         }
-        const authObj = auth; // compatibility
-        const user = authObj.currentUser;
+        
+        const user = auth.currentUser;
         if (user) {
             user.getIdToken(true).then(resolve).catch(() => resolve("local-token"));
         } else {
-            const unsubscribe = authObj.onAuthStateChanged(async (u) => {
+            const unsubscribe = auth.onAuthStateChanged(async (u) => {
                 unsubscribe();
                 if (u) {
                     const token = await u.getIdToken(true);
@@ -28,32 +60,6 @@ window.waitForToken = () => {
         }
     });
 };
-
-// ==========================================
-// 1. Firebase Initialization & Configuration
-// ==========================================
-const firebaseConfig = window.firebaseConfig;
-
-if (!firebaseConfig || !firebaseConfig.apiKey) {
-    console.error("[LEVI] Firebase configuration missing!");
-}
-
-if (typeof firebase !== 'undefined' && !firebase.apps.length) {
-    if (!firebaseConfig || firebaseConfig.apiKey === "REPLACE_WITH_YOUR_FIREBASE_API_KEY") {
-        console.warn("[LEVI] Using Auth STUB (Local Mode)");
-        window.firebase.auth = () => ({
-            currentUser: { uid: "local-user", email: "local@example.com", getIdToken: async () => "local-token" },
-            onAuthStateChanged: (cb) => { cb({ uid: "local-user", email: "local@example.com", displayName: "Local Seeker" }); return () => {}; },
-            signOut: async () => { console.log("Logged out from stub"); }
-        });
-    } else {
-        try {
-            firebase.initializeApp(firebaseConfig);
-        } catch (e) {
-            console.error("[LEVI] Firebase Init Failed:", e);
-        }
-    }
-}
 
 const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
 window.API_BASE = isLocal ? `http://${window.location.hostname}:8000/api/v1` : `${window.location.origin}/api/v1`;
