@@ -7,6 +7,7 @@ from backend.payments import use_credits # type: ignore
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
+@router.get("/users/me")
 @router.get("/me")
 async def get_me(current_user: dict = Depends(get_current_user)):
     """

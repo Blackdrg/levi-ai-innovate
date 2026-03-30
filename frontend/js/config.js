@@ -3,12 +3,7 @@
 // Firebase Configuration template. 
 // In production, these should be set during the build/deploy process.
 const firebaseConfig = {
-  /** 
-   * Firebase API Key. 
-   * REQUIRED ENV: VITE_FIREBASE_API_KEY
-   * In local development, it falls back to the literal string if not injected.
-   */
-  apiKey: (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_API_KEY) || "AIzaSy...", 
+  apiKey: "AIzaSy...",            // your real key
   authDomain: "levi-ai-c23c6.firebaseapp.com",
   projectId: "levi-ai-c23c6",
   storageBucket: "levi-ai-c23c6.firebasestorage.app",

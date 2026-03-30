@@ -109,23 +109,29 @@ async def like_item(item_type: str, item_id: str, user_id: str = "anonymous"):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/my_gallery")
-async def get_my_gallery_items(
+async def get_my_gallery(
     current_user: dict = Depends(get_current_user),
-    limit: int = 20
+    limit: int = 20,
+    offset: int = 0
 ):
     uid = current_user.get("uid")
     try:
         feed_ref = firestore_db.collection("feed_items")
-        query = feed_ref.where("user_id", "==", uid)\
-            .order_by("timestamp", direction=google_firestore.Query.DESCENDING)\
-            .limit(limit)
+        query = (feed_ref
+            .where("user_id", "==", uid)
+            .order_by("timestamp", direction=google_firestore.Query.DESCENDING)
+            .limit(limit).offset(offset))
         docs = query.get()
-        return [{"id": d.id, **{k: v for k, v in d.to_dict().items() 
-                  if k != "image_b64"}, 
-                 "image": d.to_dict().get("image_url") or d.to_dict().get("image_b64"),
-                 "time": d.to_dict().get("timestamp").isoformat() 
-                         if d.to_dict().get("timestamp") else None}
-                for d in docs]
+        return [{
+            "id": doc.id,
+            "text": doc.to_dict().get("text"),
+            "author": doc.to_dict().get("author"),
+            "mood": doc.to_dict().get("mood"),
+            "image": doc.to_dict().get("image_url") or doc.to_dict().get("image_b64"),
+            "video": doc.to_dict().get("video_url"),
+            "likes": doc.to_dict().get("likes", 0),
+            "time": doc.to_dict().get("timestamp").isoformat() if doc.to_dict().get("timestamp") else None
+        } for doc in docs]
     except Exception as e:
         logger.error(f"Gallery error: {e}")
         return []
