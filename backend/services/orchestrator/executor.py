@@ -65,7 +65,7 @@ async def execute_plan(plan: List[Dict[str, Any]], context: Dict[str, Any]) -> L
                 "step": step_name,
                 "agent": "chat_agent",
                 "result": fallback_result,
-                "error": str(e),
+                "error": f"Critical Failure: {str(e)}",
                 "fallback": True
             })
             break # Stop execution on critical failure

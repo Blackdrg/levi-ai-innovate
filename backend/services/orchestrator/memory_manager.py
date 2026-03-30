@@ -35,7 +35,16 @@ class MemoryManager:
     @staticmethod
     async def get_long_term_memory(user_id: str, query: str = "") -> Dict[str, Any]:
         """Retrieve categorized facts and user traits."""
-        if not user_id: return {}
+        default_shape = {
+            "preferences": [],
+            "traits": [],
+            "history": [],
+            "other": [],
+            "profile": {},
+            "relevant_facts": []
+        }
+        
+        if not user_id: return default_shape
         
         try:
             from .memory_utils import search_relevant_facts, prune_old_facts
@@ -51,13 +60,15 @@ class MemoryManager:
                 "preferences": [f["fact"] for f in relevant_facts if f["category"] == "preference"],
                 "traits": [f["fact"] for f in relevant_facts if f["category"] == "trait"],
                 "history": [f["fact"] for f in relevant_facts if f["category"] == "history"],
-                "other": [f["fact"] for f in relevant_facts if f["category"] == "factual"]
+                "other": [f["fact"] for f in relevant_facts if f["category"] == "factual"],
+                "profile": {}, # Reserved for high-level personality extraction
+                "relevant_facts": relevant_facts
             }
             
             return categorized
         except Exception as e:
-            logger.error(f"Error fetching long-term memory: {e}")
-            return {}
+            logger.error(f"Error fetching long-term memory for user {user_id}: {e}")
+            return default_shape
 
     @staticmethod
     def store_memory(user_id: str, session_id: str, user_input: str, bot_response: str):

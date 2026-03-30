@@ -11,7 +11,20 @@ from .orchestrator_types import IntentResult, OrchestratorResponse
 from backend.config import TIERS, COST_MATRIX
 from backend.auth import check_allowance
 
+
 logger = logging.getLogger(__name__)
+
+# Phase 2: Strong references to prevent background task GC
+_LEVI_BACKGROUND_TASKS = set()
+
+def _handle_task_result(task: asyncio.Task):
+    """Callback to clean up background tasks and handle exceptions."""
+    try:
+        _LEVI_BACKGROUND_TASKS.discard(task)
+        if not task.cancelled() and task.exception():
+            logger.error(f"Background task failed: {task.exception()}", exc_info=task.exception())
+    except Exception:
+        pass
 
 async def run_orchestrator(
     user_input: str,
@@ -73,6 +86,14 @@ async def run_orchestrator(
         if background_tasks:
             background_tasks.add_task(MemoryManager.process_new_interaction, user_id, user_input, bot_response)
             background_tasks.add_task(MemoryManager.store_memory, user_id, session_id, user_input, bot_response)
+        else:
+            # Create fire-and-forget tasks safely with held references
+            t1 = asyncio.create_task(MemoryManager.process_new_interaction(user_id, user_input, bot_response))
+            t2 = asyncio.create_task(MemoryManager.store_memory(user_id, session_id, user_input, bot_response))
+            _LEVI_BACKGROUND_TASKS.add(t1)
+            _LEVI_BACKGROUND_TASKS.add(t2)
+            t1.add_done_callback(_handle_task_result)
+            t2.add_done_callback(_handle_task_result)
         
         # Deduct cost
         if user_id and not user_id.startswith("guest:"):

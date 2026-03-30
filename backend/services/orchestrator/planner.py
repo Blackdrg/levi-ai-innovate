@@ -95,17 +95,49 @@ async def detect_intent(user_input: str) -> IntentResult:
     if not res_json:
         return IntentResult(intent="chat", complexity=1, confidence=0.5)
     
+def _parse_json_result(text: str, default_val: Any) -> Any:
+    """Robust parsing of LLM JSON results with support for markdown fencing."""
+    if not text: return default_val
+    
     try:
-        # Clean up potential markdown formatting in response
-        if "```json" in res_json:
-            res_json = res_json.split("```json")[1].split("```")[0]
-        elif "```" in res_json:
-            res_json = res_json.split("```")[1].split("```")[0]
+        # 1. Clean fenced blocks
+        content = text.strip()
+        if "```json" in content:
+            content = content.split("```json")[1].split("```")[0]
+        elif "```" in content:
+            content = content.split("```")[1].split("```")[0]
             
-        data = json.loads(res_json.strip())
-        return IntentResult(**data)
+        # 2. Parse
+        return json.loads(content.strip())
     except Exception as e:
-        logger.error(f"Intent JSON parse failed: {e}")
+        logger.error(f"Failed to parse LLM JSON: {e} | Original: {text[:100]}...")
+        return default_val
+
+async def detect_intent(user_input: str) -> IntentResult:
+    """Classify the user intent using Rules -> LLM fallback."""
+    # 1. Try Rules First
+    rule_match = check_rules(user_input)
+    if rule_match:
+        return rule_match
+
+    # 2. LLM Fallback
+    system_prompt = (
+        "You are the LEVI Intent Classifier. Categorize the user's input into one of: "
+        "'chat', 'image', 'search', 'code'. "
+        "Also assess complexity (1-10) and confidence (0-1). "
+        "Output ONLY JSON: {\"intent\": \"category\", \"complexity\": 5, \"confidence\": 0.8}"
+    )
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_input}
+    ]
+    
+    res_raw = await call_lightweight_llm(messages)
+    data = _parse_json_result(res_raw, {"intent": "chat", "complexity": 1, "confidence": 0.5})
+    
+    try:
+        return IntentResult(**data)
+    except Exception:
         return IntentResult(intent="chat", complexity=3, confidence=0.4)
 
 async def generate_plan(user_input: str, intent_data: IntentResult, context: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -141,28 +173,14 @@ async def generate_plan(user_input: str, intent_data: IntentResult, context: Dic
         "You are the LEVI Task Planner. Define a JSON array of steps for the task. "
         "Available agents: 'chat_agent', 'image_agent', 'search_agent', 'code_agent'. "
         "Each step MUST have: 'step' (descriptive name) and 'agent'. "
-        "Logic: Search for info -> Synthesize with chat -> maybe generate image/code if requested. "
-        "Keep the plan practical (max 4-5 steps). "
-        "Output ONLY valid JSON array."
+        "Output ONLY a valid JSON array."
     )
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": f"Task: {user_input}\nIntent: {intent}\nComplexity: {complexity}"}
     ]
     
-    plan_json = await call_lightweight_llm(messages)
-    if not plan_json:
-        return [{"step": "emergency_chat", "agent": "chat_agent"}]
-    
-    try:
-        if "```json" in plan_json:
-            plan_json = plan_json.split("```json")[1].split("```")[0]
-        elif "```" in plan_json:
-            plan_json = plan_json.split("```")[1].split("```")[0]
-        
-        return json.loads(plan_json.strip())
-    except Exception as e:
-        logger.error(f"Plan JSON parse failed: {e}")
-        return [{"step": "fallback_chat", "agent": "chat_agent"}]
+    plan_raw = await call_lightweight_llm(messages)
+    return _parse_json_result(plan_raw, [{"step": "fallback_chat", "agent": "chat_agent"}])
 
 
