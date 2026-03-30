@@ -1,46 +1,43 @@
-# Deployment Guide — LEVI-AI
+# Deployment Guide — LEVI-AI (v5.0)
 
-Follow these steps to deploy the full stack to Google Cloud Run and Firebase Hosting.
+Follow these steps to deploy the **"Brain" Orchestrator** stack to Google Cloud Run and Firebase Hosting.
 
-## GitHub Secrets Checklist (15+ Critical Keys)
+## 🖥️ Hardware Infrastructure (v5.0 Core)
+
+> [!IMPORTANT]
+> **Cloud Run RAM Recommendation**: Because LEVI now runs local embedding models and high-concurrency orchestration, you **MUST** configure the backend service with at least **2GB RAM** (4GB recommended for heavy Studio usage). Memory-limited instances (<1GB) will encounter `OOMKilled` errors during semantic extraction.
+
+## 💾 GitHub Secrets Checklist (v5.0 Optimized)
 
 You MUST add these to GitHub Settings > Secrets and variables > Actions:
 
-### Google Cloud & Firebase
-1. `GCP_SA_KEY`: Service Account JSON with Cloud Run Admin & Storage Admin roles.
-2. `FIREBASE_SERVICE_ACCOUNT_JSON`: Service Account JSON for Firestore access.
-3. `FIREBASE_SERVICE_ACCOUNT_LEVI_AI_C23C6`: Firebase CLI token or Service Account for Hosting deploy.
-4. `FIREBASE_PROJECT_ID`: e.g., `levi-ai-c23c6`.
-5. `FIREBASE_MESSAGING_SENDER_ID`: From Firebase Console.
+### 🌐 Cloud & Persistence
+1. `GCP_SA_KEY`: Service Account JSON (Cloud Run Admin, Storage Admin).
+2. `FIREBASE_SERVICE_ACCOUNT_JSON`: Full JSON for Firestore and Analytics.
+3. `FIREBASE_PROJECT_ID`: e.g., `levi-ai-c23c6`.
+4. `REDIS_URL`: **Mandatory for Orchestrator Orchestration** (Use Upstash for serverless Redis).
 
-### Core Backend & Auth
-6. `SECRET_KEY`: Long random string for JWT/Security.
-7. `ADMIN_KEY`: Security key for admin routes (`X-Admin-Key`).
+### 🧠 AI & Intelligence
+5. `GROQ_API_KEY`: Primary inference for Intent and Planning.
+6. `TOGETHER_API_KEY`: High-fidelity synthesis and Image generation.
+7. `ADMIN_KEY`: X-Admin-Key for maintenance routes.
 
-### External AI & Services
-8. `GROQ_API_KEY`: For fast inference.
-9. `TOGETHER_API_KEY`: For image generation/LLMs.
-10. `RESEND_API_KEY`: For transactional emails.
+### 💳 Payments & Growth
+8. `RAZORPAY_KEY_ID`: Payment gateway ID.
+9. `RAZORPAY_KEY_SECRET`: Payment gateway Secret.
+10. `RAZORPAY_WEBHOOK_SECRET`: Webhook verification.
 
-### Payments (Razorpay)
-11. `RAZORPAY_KEY_ID`: Your Razorpay Key ID.
-12. `RAZORPAY_KEY_SECRET`: Your Razorpay Key Secret.
-13. `RAZORPAY_WEBHOOK_SECRET`: For payment verification.
+### 📦 Media & Observability
+11. `AWS_S3_BUCKET`: (Optional) Falling back to Base64/Firestore if not provided.
+12. `SENTRY_DSN`: Recommended for monitoring the new Orchestrator's retries.
 
-### Infrastructure & Monitoring
-14. `REDIS_URL`: Connection string for Upstash or Redis.
-15. `SENTRY_DSN`: Sentry project DSN for error tracking.
-16. `AWS_ACCESS_KEY_ID`: For S3 storage (Optional).
-17. `AWS_SECRET_ACCESS_KEY`: For S3 storage (Optional).
-18. `AWS_S3_BUCKET`: Your S3 bucket name (Optional).
+## 🚀 Execution Strategy
 
-## Deployment Steps
-
-1. **Push to master**: Any push to the `master` branch will trigger both backend and frontend workflows.
+1. **Push to master**: Triggers the GitHub Actions pipeline (`.github/workflows/master_deploy.yml`).
 2. **Backend**: Deployed to Cloud Run on port 8080.
-3. **Frontend**: Deployed to Firebase Hosting with proxy rewrites for `/api`.
+3. **Frontend**: Deployed to Firebase Hosting with proxy rewrites.
 
-## Verification
-
-Check the health endpoint: `https://your-app.a.run.app/health`
-Verify Frontend: `https://levi-ai-c23c6.web.app`
+## 🧪 Production Verification
+- **Brain Check**: `https://levi-api.a.run.app/orchestrator/status`
+- **Health Check**: `https://levi-api.a.run.app/health`
+- **Launchpad**: `https://levi-ai-c23c6.web.app`
