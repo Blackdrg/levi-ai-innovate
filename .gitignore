@@ -47,3 +47,13 @@ frontend/node_modules/
 tts_install_log.txt
 vs_search.txt
 winget_search.txt
+
+# Celery Beat scheduler state (machine-specific, never commit)
+celerybeat-schedule
+celerybeat-schedule.db
+celerybeat-schedule.bak
+celerybeat-schedule.dat
+celerybeat-schedule.dir
+
+# Redis dump (if running locally)
+dump.rdb
