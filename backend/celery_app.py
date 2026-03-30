@@ -9,10 +9,15 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 IS_DEV = os.getenv("ENVIRONMENT", "development") == "development"
 IS_WINDOWS = sys.platform == "win32"
 
+# In dev: use in-memory broker so the worker starts without Redis installed.
+# In production: use Redis as the real broker.
+_BROKER = "memory://" if IS_DEV else REDIS_URL
+_BACKEND = "cache+memory://" if IS_DEV else REDIS_URL
+
 celery_app = Celery(
     "levi_tasks",
-    broker=REDIS_URL,
-    backend=REDIS_URL,
+    broker=_BROKER,
+    backend=_BACKEND,
     include=[
         "backend.services.studio.tasks",
         "backend.tasks",
