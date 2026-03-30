@@ -5,8 +5,15 @@ echo ------------------------------------------------
 echo [1/4] Building Frontend Optimized Assets (CSS)...
 cd frontend
 call npm install
+if %ERRORLEVEL% NEQ 0 (
+    cd ..
+    goto :error
+)
 call npm run build
-if %ERRORLEVEL% NEQ 0 goto :error
+if %ERRORLEVEL% NEQ 0 (
+    cd ..
+    goto :error
+)
 cd ..
 
 echo [2/4] Staging all architectural updates...

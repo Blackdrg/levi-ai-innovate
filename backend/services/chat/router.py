@@ -2,14 +2,14 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import Optional
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 import os
+import json
 
 from backend.models import ChatMessage, _INJECTION_PATTERNS
 from backend.auth import get_current_user_optional
 from backend.redis_client import get_conversation, save_conversation, is_rate_limited, r as redis_client, HAS_REDIS
 from backend.firestore_db import update_analytics
-from backend.payments import use_credits
 from backend.generation import generate_response
 
 logger = logging.getLogger(__name__)
@@ -40,6 +40,18 @@ async def chat_endpoint(
     update_analytics("chats_count")
     history = get_conversation(msg.session_id)
 
+    # Phase 44: Real-Time Observability (Broadcast Synthesis Start)
+    try:
+        payload_start = json.dumps({
+            "event": "synthesis_started",
+            "data": {"session_id": str(msg.session_id)[:8], "tier": user_tier},
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+        if HAS_REDIS:
+            redis_client.publish("levi_activity", payload_start)
+    except Exception as e:
+        logger.error(f"[SSE] Start broadcast failed: {e}")
+
     try:
         response = await generate_response(
             msg.message,
@@ -51,7 +63,19 @@ async def chat_endpoint(
         logger.error(f"[Chat] Generation failed: {e}")
         raise HTTPException(status_code=500, detail="AI generation failed.")
 
-    history.append({"user": msg.message, "bot": response, "timestamp": datetime.utcnow().isoformat()})
+    # Phase 44: Real-Time Observability (Broadcast Synthesis Complete)
+    try:
+        payload_end = json.dumps({
+            "event": "synthesis_completed",
+            "data": {"session_id": str(msg.session_id)[:8], "tier": user_tier},
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+        if HAS_REDIS:
+            redis_client.publish("levi_activity", payload_end)
+    except Exception as e:
+        logger.error(f"[SSE] End broadcast failed: {e}")
+
+    history.append({"user": msg.message, "bot": response, "timestamp": datetime.now(timezone.utc).isoformat()})
     save_conversation(msg.session_id, history, user_id=user_id)
 
     return {"response": response, "session_id": msg.session_id}
