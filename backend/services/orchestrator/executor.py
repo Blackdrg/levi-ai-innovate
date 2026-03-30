@@ -1,11 +1,33 @@
 import logging
+import asyncio
 from typing import List, Dict, Any
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from .agent_registry import call_agent
 
 logger = logging.getLogger(__name__)
 
+class AgentExecutionError(Exception):
+    """Specific error for agent failures to trigger retries."""
+    pass
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception_type(AgentExecutionError),
+    reraise=True
+)
+async def _call_agent_with_retry(agent_name: str, context: Dict[str, Any]) -> Dict[str, Any]:
+    """Wrapper to call an agent with standardized retry logic."""
+    result = await call_agent(agent_name, context)
+    
+    # If the result itself contains an error status (transient), trigger retry
+    if result.get("status") == "error" and result.get("retryable", True):
+        raise AgentExecutionError(f"Agent {agent_name} returned a retryable error: {result.get('error')}")
+    
+    return result
+
 async def execute_plan(plan: List[Dict[str, Any]], context: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Execute the generated plan sequentially, passing context between steps."""
+    """Execute the generated plan sequentially, with self-healing retries and fallbacks."""
     results = []
     
     for step_info in plan:
@@ -14,33 +36,45 @@ async def execute_plan(plan: List[Dict[str, Any]], context: Dict[str, Any]) -> L
         
         logger.info(f"Executing step: {step_name} with agent: {agent_name}")
         
-        # Call the agent with the current context
         try:
-            result = await call_agent(agent_name, context)
+            # 1. Attempt execution with self-healing retries
+            result = await _call_agent_with_retry(agent_name, context)
             
-            # Store the result and update context for the next step
+            # 2. Check for non-retryable errors or failure after retries
+            if result.get("status") == "error":
+                logger.warning(f"Step {step_name} failed. Attempting fallback to chat_agent.")
+                # Fallback: Let the chat agent try to handle the context so far
+                result = await call_agent("chat_agent", context)
+                result["fallback"] = True
+                
             results.append({
                 "step": step_name,
                 "agent": agent_name,
                 "result": result
             })
             
-            # Pass the latest results to the next agent
+            # Pass intermediate results to next step
             context["last_result"] = result
             context["intermediate_results"] = results
             
-            # Stop if there's a fatal error in a step
+            # If even fallback failed, we must stop
             if result.get("status") == "error":
-                logger.error(f"Execution halted due to error in step {step_name}")
                 break
                 
         except Exception as e:
-            logger.error(f"Exception during step execution {step_name}: {e}")
-            results.append({
-                "step": step_name,
-                "agent": agent_name,
-                "error": str(e)
-            })
+            logger.error(f"Execution failed for {step_name} after retries: {e}")
+            # Final Fallback Attempt
+            try:
+                fallback_result = await call_agent("chat_agent", context)
+                results.append({
+                    "step": step_name,
+                    "agent": "chat_agent",
+                    "result": fallback_result,
+                    "error": str(e),
+                    "fallback": True
+                })
+            except Exception as final_e:
+                 results.append({"step": step_name, "error": f"Critical Failure: {final_e}"})
             break
             
     return results

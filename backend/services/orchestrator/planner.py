@@ -16,33 +16,52 @@ async def call_lightweight_llm(messages: List[Dict[str, str]], temperature: floa
         provider="groq"
     )
 
-async def classify_intent(user_input: str) -> str:
-    """Classify the user intent into a predefined category."""
+async def classify_intent(user_input: str) -> Dict[str, Any]:
+    """Classify the user intent and assess task complexity."""
     system_prompt = (
         "You are the LEVI Intent Classifier. Categorize the user's input into: "
         "'chat', 'generate_image', 'research', 'task_execution', 'multi_step'. "
-        "Output ONLY the category name."
+        "Also assess complexity from 1-10. "
+        "Output ONLY JSON: {\"intent\": \"category\", \"complexity\": 5}"
     )
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_input}
     ]
     
-    intent = await call_lightweight_llm(messages)
-    if not intent:
-        return "chat"
+    res_json = await call_lightweight_llm(messages)
+    if not res_json:
+        return {"intent": "chat", "complexity": 1}
     
-    intent = intent.lower().strip()
-    valid_intents = ["chat", "generate_image", "research", "task_execution", "multi_step"]
-    for valid in valid_intents:
-        if valid in intent:
-            return valid
-    return "chat"
+    try:
+        if "```json" in res_json:
+            res_json = res_json.split("```json")[1].split("```")[0]
+        return json.loads(res_json.strip())
+    except Exception:
+        return {"intent": "chat" if "chat" in res_json.lower() else "multi_step", "complexity": 5}
 
-async def generate_plan(user_input: str, intent: str, context: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Generate a step-by-step plan based on the intent."""
-    if intent == "chat":
+async def generate_plan(user_input: str, intent_data: Dict[str, Any], context: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Generate a step-by-step plan based on intent and complexity."""
+    intent = intent_data.get("intent", "chat")
+    complexity = intent_data.get("complexity", 1)
+
+    if intent == "chat" and complexity < 4:
         return [{"step": "chat_response", "agent": "chat_agent"}]
+    
+    # For complex or specific tasks, use structured planning
+    system_prompt = (
+        "You are the LEVI Task Planner. Define a JSON array of steps. "
+        "Available agents: 'chat_agent', 'image_agent', 'research_agent'. "
+        f"Complexity Level: {complexity}/10. Use more specialized steps for higher complexity."
+        "Output ONLY valid JSON array of objects with 'step' and 'agent'."
+    )
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": f"Task: {user_input}"}
+    ]
+    
+    plan_json = await call_lightweight_llm(messages)
+    # ... (rest of the parsing logic same as before)
     
     if intent == "generate_image":
         return [

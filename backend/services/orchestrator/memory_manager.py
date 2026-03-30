@@ -38,15 +38,25 @@ class MemoryManager:
             return []
 
     @staticmethod
-    async def get_long_term_memory(user_id: str) -> Dict[str, Any]:
+    async def get_long_term_memory(user_id: str, query: str = "") -> Dict[str, Any]:
         """Get semantic facts and preferences about the user."""
         if not user_id: return {}
         
         try:
+            # 1. Base Preferences from Profile
+            profile = {}
             doc = firestore_db.collection("user_profiles").document(user_id).get()
             if doc.exists:
-                return doc.to_dict().get("preferences", {})
-            return {}
+                profile = doc.to_dict().get("preferences", {})
+            
+            # 2. Semantic Search for Relevant Facts (LTM Upgrade)
+            from .memory_utils import search_relevant_facts
+            facts = await search_relevant_facts(user_id, query)
+            
+            return {
+                "profile": profile,
+                "relevant_facts": facts
+            }
         except Exception as e:
             logger.error(f"Error fetching long-term memory: {e}")
             return {}
@@ -61,21 +71,29 @@ class MemoryManager:
             "timestamp": datetime.utcnow().isoformat()
         })
         save_conversation(session_id, history, user_id=user_id)
-        
-        # Potentially update long-term personality traits here 
-        # (e.g., if LLM detects a preference)
 
     @staticmethod
-    async def get_combined_context(user_id: str, session_id: str) -> Dict[str, Any]:
+    async def process_new_interaction(user_id: str, user_input: str, bot_response: str):
+        """Background task to extract and store facts from interaction."""
+        from .memory_utils import extract_facts, store_facts
+        try:
+            facts = await extract_facts(user_input, bot_response)
+            if facts:
+                await store_facts(user_id, facts)
+        except Exception as e:
+            logger.error(f"Failed to process interaction for memory: {e}")
+
+    @staticmethod
+    async def get_combined_context(user_id: str, session_id: str, query: str = "") -> Dict[str, Any]:
         """Retrieve and combine memory layers for the current prompt."""
         short_term = MemoryManager.get_short_term_memory(session_id)
         
-        # Mid/Long term fetches (could be parallelized)
-        long_term = await MemoryManager.get_long_term_memory(user_id)
+        # Mid/Long term fetches
+        long_term = await MemoryManager.get_long_term_memory(user_id, query)
         
         return {
             "history": short_term,
-            "preferences": long_term,
+            "long_term": long_term, # Contains profile and relevant_facts
             "current_session": session_id,
             "user_id": user_id
         }
