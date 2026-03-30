@@ -108,6 +108,28 @@ async def like_item(item_type: str, item_id: str, user_id: str = "anonymous"):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/my_gallery")
+async def get_my_gallery_items(
+    current_user: dict = Depends(get_current_user),
+    limit: int = 20
+):
+    uid = current_user.get("uid")
+    try:
+        feed_ref = firestore_db.collection("feed_items")
+        query = feed_ref.where("user_id", "==", uid)\
+            .order_by("timestamp", direction=google_firestore.Query.DESCENDING)\
+            .limit(limit)
+        docs = query.get()
+        return [{"id": d.id, **{k: v for k, v in d.to_dict().items() 
+                  if k != "image_b64"}, 
+                 "image": d.to_dict().get("image_url") or d.to_dict().get("image_b64"),
+                 "time": d.to_dict().get("timestamp").isoformat() 
+                         if d.to_dict().get("timestamp") else None}
+                for d in docs]
+    except Exception as e:
+        logger.error(f"Gallery error: {e}")
+        return []
+
 @router.post("/search_quotes", response_model=List[dict])
 async def search_quotes(request: Request, query: Query):
     """
