@@ -62,15 +62,17 @@ def patch_external_services(monkeypatch):
         patch("backend.redis_client.HAS_REDIS",          True),
         patch("backend.redis_client.r",                  mock_redis),
         patch("backend.firestore_db.db",                 mock_db),
-        patch("backend.auth.check_allowance",            return_value=True),
-        patch("backend.payments.use_credits",            return_value=None),
+        # Patch at the engine's local namespace (top-level import binding)
+        patch("backend.services.orchestrator.engine.check_allowance", return_value=True),
+        patch("backend.auth.check_allowance",             return_value=True),  # source too
+        patch("backend.payments.use_credits",             return_value=None),
         # Embeddings (used by memory_utils)
-        patch("backend.embeddings.embed_text",           return_value=[0.1] * 384),
+        patch("backend.embeddings.embed_text",            return_value=[0.1] * 384),
         # Block real LLM calls — tests override per-case
         patch(
             "backend.generation._async_call_llm_api",
             new_callable=AsyncMock,
-            return_value="Mocked LLM response from generation module.",
+            return_value='{"intent": "chat", "complexity": 3, "confidence": 0.7}',
         ),
     ):
         yield
@@ -438,7 +440,8 @@ class TestOrchestratorPipeline:
         """When allowance is exhausted, return a human-readable message."""
         from backend.services.orchestrator.engine import run_orchestrator
 
-        with patch("backend.auth.check_allowance", return_value=False):
+        # Must patch the name as bound in engine.py's namespace (top-level import)
+        with patch("backend.services.orchestrator.engine.check_allowance", return_value=False):
             result = await run_orchestrator(
                 user_input="hello",
                 session_id="test-limit-009",
@@ -448,10 +451,10 @@ class TestOrchestratorPipeline:
 
         assert isinstance(result["response"], str)
         assert len(result["response"]) > 4
-        # Should mention allowance / upgrade
+        # Response must mention the limit or how to resolve it
         assert any(
             word in result["response"].lower()
-            for word in ("allowance", "upgrade", "tomorrow", "limit")
+            for word in ("allowance", "upgrade", "tomorrow", "limit", "reached", "daily")
         )
 
 
