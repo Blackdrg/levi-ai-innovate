@@ -57,3 +57,14 @@ celerybeat-schedule.dir
 
 # Redis dump (if running locally)
 dump.rdb
+
+# Dev helper batch scripts (not needed in repo)
+commit_*.bat
+
+# Local env overrides
+.env.local
+
+# Pytest / coverage
+.pytest_cache/
+htmlcov/
+.coverage
