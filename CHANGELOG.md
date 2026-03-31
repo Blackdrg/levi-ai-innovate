@@ -1,3 +1,23 @@
+# LEVI v6.8 — The Sovereign Transformation 🏺
+## Changelog
+
+## [6.8.0] - 2026-03-31 "The Sovereign Transformation" 🏺
+### Added
+- **Sovereign Reasoning Engine**: Integrated `llama-cpp-python` (GGUF) for 100% local-first, zero-cost reasoning.
+- **Hybrid Memory Model**: Persistent FAISS vector indices (`user_faiss.bin` / `global_faiss.bin`) for sub-millisecond semantic retrieval.
+- **Unified Activity Stream**: Real-time SSE 'Intelligence Pulses' (Intent, Memory, Routing) delivered before response generation.
+- **Deterministic Routing**: Hardened 3-tier complexity routing (L0-L4) with autonomous model selection.
+- **Sovereign Maintenance**: Celery-based background FAISS garbage collection and evolutionary distillation.
+- **Atomic Concurrency**: Redis-based distributed locks for credit deduction and shared memory writes.
+- **Sovereignty Audit**: Automated verification suite (`tests/verify_sovereignty.py`) for routing/memory validation.
+
+### Changed
+- **SSE Format**: Transitioned to unified `activity` / `metadata` / `choices` chunk structure.
+- **Memory Dimensions**: Aligned FAISS and `sentence-transformers` (MiniLM) to 384-dimensional space.
+- **Plan Synthesis**: Refined `executor.py` with multi-turn reflection (PEOC Loop).
+
+---
+
 # LEVI v5.0 — The Soul 🌌
 ## Changelog
 
