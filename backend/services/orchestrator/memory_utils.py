@@ -146,32 +146,69 @@ async def store_facts(user_id: str, new_facts: List[Dict[str, Any]]):
 
 
 async def search_relevant_facts(user_id: str, query: str, limit: int = 5) -> List[Dict[str, Any]]:
-    """Perform semantic search for relevant user facts."""
+    """
+    Perform semantic search for relevant user facts.
+    Includes both Firestore (long-term) and Redis (immediate) facts.
+    """
     if not user_id: return []
+    from backend.redis_client import HAS_REDIS, r as redis_client
     
     try:
-        query_embedding = np.array(await asyncio.to_thread(embed_text, query))
+        # 1. Semantic Query Embedding (Cached for 5 min)
+        query_hash = hashlib.md5(query.lower().strip().encode()).hexdigest()
+        cache_key = f"emb_cache:{query_hash}"
         
+        query_embedding = None
+        if HAS_REDIS:
+            cached = redis_client.get(cache_key)
+            if cached: query_embedding = np.array(json.loads(cached))
+            
+        if query_embedding is None:
+            query_embedding = np.array(await asyncio.to_thread(embed_text, query))
+            if HAS_REDIS:
+                redis_client.setex(cache_key, 300, json.dumps(query_embedding.tolist()))
+
+        # 2. Fetch Firestore facts
         docs = firestore_db.collection("user_facts") \
             .where("user_id", "==", user_id) \
-            .limit(100) \
+            .limit(150) \
             .stream()
         
+        all_facts = [doc.to_dict() for doc in docs]
+        
+        # 3. Fetch "Immediate" facts from Redis buffer
+        if HAS_REDIS:
+            buffered = await _get_buffered_facts(user_id)
+            all_facts.extend(buffered)
+        
+        # 4. Rank & Score
         scored_facts = []
-        for doc in docs:
-            data = doc.to_dict()
+        seen_fact_ids = set()
+        
+        for data in all_facts:
+            f_id = data.get("fact_id")
+            if f_id in seen_fact_ids: continue
+            
             fact_text = data.get("fact")
-            if fact_text is None: continue # Issue Fix: Avoid None facts
+            if not fact_text: continue
 
             fact_emb = np.array(data.get("embedding", []))
             if fact_emb.size > 0:
                 score = cosine_sim(query_embedding, fact_emb)
+                
+                # Category Weighting (Preferences/Traits carry more weight in Chat)
+                weight = 1.0
+                cat = data.get("category", "factual")
+                if cat == "preference": weight = 1.2
+                elif cat == "trait": weight = 1.1
+
                 scored_facts.append({
                     "fact": fact_text,
-                    "category": data.get("category"),
-                    "score": score,
-                    "id": doc.id
+                    "category": cat,
+                    "score": score * weight,
+                    "id": f_id
                 })
+                seen_fact_ids.add(f_id)
         
         scored_facts.sort(key=lambda x: x["score"], reverse=True)
         return scored_facts[:limit]

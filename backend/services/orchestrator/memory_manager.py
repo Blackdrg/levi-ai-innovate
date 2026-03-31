@@ -97,30 +97,24 @@ class MemoryManager:
         try:
             from .memory_utils import search_relevant_facts, prune_old_facts
 
-            # Trigger 30-day pruning (maintenance, fire-and-forget, non-blocking)
-            try:
-                asyncio.create_task(prune_old_facts(user_id))
-            except RuntimeError:
-                # No running event loop (e.g. test environments) — skip silently
-                pass
+            # 1. Maintenance (Background)
+            asyncio.create_task(prune_old_facts(user_id))
 
-            relevant_facts = await search_relevant_facts(user_id, query, limit=10)
-            return {
-                "preferences": [
-                    f["fact"] for f in relevant_facts if f["category"] == "preference"
-                ],
-                "traits":      [
-                    f["fact"] for f in relevant_facts if f["category"] == "trait"
-                ],
-                "history":     [
-                    f["fact"] for f in relevant_facts if f["category"] == "history"
-                ],
-                "other":       [
-                    f["fact"] for f in relevant_facts if f["category"] == "factual"
-                ],
+            # 2. Vector Search (Immediate Buffer + Firestore)
+            relevant_facts = await search_relevant_facts(user_id, query, limit=12)
+            
+            # 3. Categorization & Quality Filter
+            facts = {
+                "preferences": [f["fact"] for f in relevant_facts if f["category"] == "preference" and f["score"] > 0.65],
+                "traits":      [f["fact"] for f in relevant_facts if f["category"] == "trait" and f["score"] > 0.65],
+                "history":     [f["fact"] for f in relevant_facts if f["category"] == "history" and f["score"] > 0.7],
+                "other":       [f["fact"] for f in relevant_facts if f["category"] == "factual" and f["score"] > 0.7],
                 "profile":     {},
                 "relevant_facts": relevant_facts,
             }
+            
+            logger.info("[%s] LTM Retrieval: %d facts found.", user_id, len(relevant_facts))
+            return facts
         except Exception as e:
             logger.error("Error fetching long-term memory for %s: %s", user_id, e)
             return default_shape
@@ -170,13 +164,15 @@ class MemoryManager:
         """
         def _sync_store():
             try:
+                from backend.redis_client import get_conversation, save_conversation_buffered
                 history = get_conversation(session_id)
                 history.append({
                     "user":      user_input,
                     "bot":       bot_response,
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 })
-                save_conversation(session_id, history, user_id=user_id)
+                # Use buffered save to minimize Firestore costs
+                save_conversation_buffered(session_id, history, user_id=user_id)
             except Exception as e:
                 logger.error("store_memory sync error: %s", e)
 

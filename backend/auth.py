@@ -57,13 +57,27 @@ async def get_current_user(cred: HTTPAuthorizationCredentials = Depends(security
         if HAS_REDIS:
             cached_user = redis_client.get(cache_key)
             if cached_user:
-                return json.loads(cached_user)
+                user_data = json.loads(cached_user)
+                # Phase 4: JTI Blacklist check even on cache hit
+                from backend.redis_client import is_jti_blacklisted
+                jti = user_data.get("jti")
+                if jti and is_jti_blacklisted(jti):
+                     redis_client.delete(cache_key) # Clear invalid cache
+                     raise credentials_exception
+                return user_data
 
         # 2. Firebase Verification
         try:
             decoded_token = firebase_auth.verify_id_token(token, check_revoked=True)
             uid = decoded_token.get("uid")
             email = decoded_token.get("email")
+            jti = decoded_token.get("jti") or decoded_token.get("sub") # sub is often used as JTI proxy in Firebase
+            
+            # Phase 4: JTI Blacklist verification
+            from backend.redis_client import is_jti_blacklisted
+            if jti and is_jti_blacklisted(jti):
+                raise credentials_exception
+                
             if not uid: raise credentials_exception
         except Exception as fe:
             logger.warning(f"Firebase token verification failed: {fe}")
@@ -71,7 +85,7 @@ async def get_current_user(cred: HTTPAuthorizationCredentials = Depends(security
         
         # 3. User Synchronization
         user_ref = firestore_db.collection("users").document(uid)
-        user_doc = user_ref.get(timeout=5)
+        user_doc = user_ref.get(timeout=5.0)
         
         if not user_doc.exists:
             base_username = email.split('@')[0] if email else f"user_{uid[:8]}"
@@ -89,6 +103,9 @@ async def get_current_user(cred: HTTPAuthorizationCredentials = Depends(security
             user_data = user_doc.to_dict()
             user_data["uid"] = uid
             user_ref.update({"last_active": datetime.utcnow()})
+
+        # Inject JTI for cache-level blacklisting
+        user_data["jti"] = jti
 
         # Inject Tier Config
         user_data["tier_config"] = TIERS.get(user_data.get("tier", "free"))

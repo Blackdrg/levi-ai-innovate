@@ -197,3 +197,61 @@ def flush_all_memory_buffers(self):
         logger.error(f"flush_all_memory_buffers error: {e}", exc_info=True)
 
     return {"dispatched": dispatched}
+
+
+@celery_app.task(
+    name="backend.services.orchestrator.memory_tasks.flush_conversation_buffer",
+    bind=True,
+)
+def flush_conversation_buffer(self):
+    """
+    Periodic task to flush buffered conversations from Redis to Firestore.
+    Reduces write frequency to Firestore.
+    """
+    redis_client, has_redis = _get_redis()
+    if not has_redis or redis_client is None:
+        return {"flushed": 0}
+
+    db = _get_firestore()
+    flushed = 0
+    
+    try:
+        # Atomic pull
+        pipe = redis_client.pipeline()
+        pipe.lrange("conv_buffer", 0, -1)
+        pipe.delete("conv_buffer")
+        results = pipe.execute()
+        
+        raw_payloads = results[0]
+        if not raw_payloads:
+            return {"flushed": 0}
+
+        # Deduplicate: only the latest version of a session in this batch needs to be saved
+        deduplicated = {}
+        for raw in raw_payloads:
+            payload = json.loads(raw)
+            sid = payload.get("session_id")
+            if sid:
+                deduplicated[sid] = payload
+
+        batch = db.batch()
+        count = 0
+        for sid, data in deduplicated.items():
+            doc_ref = db.collection("conversations").document(sid)
+            batch.set(doc_ref, data, merge=True)
+            count += 1
+            flushed += 1
+            if count >= 500:
+                batch.commit()
+                batch = db.batch()
+                count = 0
+        
+        if count > 0:
+            batch.commit()
+            
+        logger.info(f"Successfully flushed {flushed} conversations from buffer.")
+        return {"flushed": flushed}
+        
+    except Exception as e:
+        logger.error(f"Error flushing conversion buffer: {e}")
+        return {"error": str(e)}
