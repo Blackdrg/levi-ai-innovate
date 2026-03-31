@@ -229,7 +229,40 @@ async def validate_response(
 # Stage 8: Main Orchestrator Pipeline
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Global LeviBrain Instance
+# ---------------------------------------------------------------------------
+from .brain import LeviBrain
+_BRAIN = LeviBrain()
+
 async def run_orchestrator(
+    user_input: str,
+    session_id: str,
+    user_id: str = "guest",
+    background_tasks: Any = None,
+    user_tier: str = "free",
+    mood: str = "philosophical",
+    streaming: bool = False,
+) -> Any:
+    """
+    Main orchestrator entry point.
+    Delegates to the class-based LeviBrain for a structured, product-ready 
+    decision flow.
+    """
+    return await _BRAIN.route(
+        user_input=user_input,
+        user_id=user_id,
+        session_id=session_id,
+        user_tier=user_tier,
+        mood=mood,
+        background_tasks=background_tasks,
+        streaming=streaming
+    )
+
+# Keeping old pipeline stages below for compatibility with internal cross-calls 
+# during Phase 1 transition.
+
+async def _legacy_run_orchestrator(
     user_input: str,
     session_id: str,
     user_id: str = "guest",
@@ -238,9 +271,7 @@ async def run_orchestrator(
     mood: str = "philosophical",
 ) -> Dict[str, Any]:
     """
-    The central brain pipeline — all 8 stages.
-
-    NEVER throws. Always returns a dict with a non-empty 'response'.
+    Deprecated 8-stage pipeline.
     """
     request_id = f"req_{uuid.uuid4().hex[:8]}"
     route = EngineRoute.API  # default for error path
