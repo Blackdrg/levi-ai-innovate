@@ -1,128 +1,80 @@
-# LEVI — Full Integration Guide
+# LEVI-AI: v5.0 Integration & API Reference 🚀
 
-## What was broken & what was fixed
-
-| Issue | Root Cause | Fix |
-|-------|-----------|-----|
-| Login didn't persist | Backend sets httpOnly cookie, but JS tried to read `levi_token` from localStorage | `auth.html` now calls `/users/me` after login and stores user **display data** (not tokens) in localStorage |
-| Chat 401 errors | `chat.js` sent `Authorization: Bearer <null>` header | Removed all manual headers — cookies are sent automatically via `credentials:'include'` |
-| Backend unreachable on page load | No auto-connect logic | `auth-manager.js` pings `/health` on every page load |
-| Nav showed "Sign In" when logged in | User info never stored | `auth-manager.js` reads cached user and updates nav |
-| Studio / Gallery broken | Same token issue + wrong API_BASE | `studio.js` now uses cookie auth |
+This document provides the definitive API reference and integration guide for the hardened LEVI-AI orchestrator.
 
 ---
 
-## Files to deploy
+## 📡 1. Primary Chat & Streaming API
 
-Copy these files to your project:
+The orchestrator combines `sanitization`, `memory`, `intent`, and `decision` into a single endpoint.
 
-```
-frontend/js/auth-manager.js   ← NEW — load on every page
-frontend/js/api.js            ← UPDATED — cookie-based, no tokens
-frontend/js/chat.js           ← UPDATED — cookie-based
-frontend/js/studio.js         ← UPDATED — cookie-based
-frontend/auth.html            ← UPDATED — stores profile after login
-backend/entrypoint.sh         ← UPDATED — runs migrations on start
-```
+### `POST /api/v1/chat/message`
+Primary message handler. Supports both synchronous and asynchronous (SSE) responses.
 
----
-
-## How to add `auth-manager.js` to every HTML page
-
-Add **before** the closing `</body>` tag on every page:
-
-```html
-<script src="js/auth-manager.js"></script>
+**Request Body (`application/json`):**
+```json
+{
+    "message": "Write a python script for...",
+    "session_id": "sess-456",
+    "mood": "philosophical",
+    "is_streaming": true
+}
 ```
 
-It handles:
-- `window.API_BASE` detection (localhost vs production)
-- Pinging `/health` every 30 s
-- Updating the nav button (Sign In ↔ username)
-- Refreshing user profile silently
-
----
-
-## How the auth flow works now
-
-```
-User fills auth.html form
-        ↓
-POST /login  (JSON body, credentials:'include')
-        ↓
-Backend sets httpOnly cookie (access_token + refresh_token)
-        ↓
-Browser auto-sends cookies on every subsequent request
-        ↓
-auth.html calls GET /users/me to get profile for display
-        ↓
-Stores { id, username, email, tier, credits } in localStorage
-        ↓
-Redirects to studio.html
-```
-
-**Important:** The actual JWT is **never accessible to JavaScript** (httpOnly). Only non-sensitive display data is stored in localStorage.
-
----
-
-## Local development quick start
-
-```bash
-# 1. Install dependencies
-cd backend && pip install -r requirements.txt
-
-# 2. Copy environment
-cp .env.example .env.local
-# Edit .env.local — at minimum set SECRET_KEY
-
-# 3. Run migrations + server
-alembic upgrade head
-python seed.py
-uvicorn main:app --host 0.0.0.0 --port 8000
-
-# 4. Serve frontend (new terminal)
-python -m http.server 8080 --directory frontend
-
-# 5. Visit http://localhost:8080
-```
-
-Or use the all-in-one runner:
-```bash
-python run_app.py
+**Response (SSE Streaming):**
+Chunks are sent with `data: ` prefix:
+```text
+data: {"token": "Hello", "intent": "greeting", "route": "local", "job_id": null}
+data: {"token": " world", "intent": "greeting", "route": "local", "job_id": null}
+data: {"token": "!", "intent": "greeting", "route": "local", "job_id": null}
+data: [DONE]
 ```
 
 ---
 
-## Production (Firebase + Cloud Run)
+## 🧠 2. Learning & Profile API
 
-1. **Backend** → Google Cloud Run, Docker, `backend/Dockerfile.prod`
-   - Use `./firebase-deploy.ps1` or `./firebase-deploy.sh` to automate.
-   - Env vars are set via `gcloud` or GCP Console.
+The learning system (`backend/services/learning/router.py`) allows AI personalization based on user interactions.
 
-2. **Frontend** → Firebase Hosting
-   - `firebase.json` rewrites `/api/*` → your Cloud Run backend service.
-   - The `API_BASE` in `auth-manager.js` auto-detects this via `${window.location.origin}/api`.
+### `POST /api/v1/learning/feedback`
+Submit rating (1-5) for an AI response. Updates the user's preference model and memory graph.
+
+**Request Body:**
+```json
+{
+    "session_id": "sess-456",
+    "rating": 5,
+    "user_message": "...",
+    "bot_response": "..."
+}
+```
+
+### `GET /api/v1/learning/profile` (Auth Required)
+Returns the current learned AI profile for the authenticated user.
+- **Includes**: `preferred_moods`, `system_prompt_preview`, `memory_graph_summary`.
 
 ---
 
-## Testing the connection
+## 📈 3. Decision Objects & Metadata
 
-Open browser DevTools → Console after loading any page. You should see:
+Every interaction returns structured metadata to the frontend.
 
-```
-[LEVI] API Base: http://localhost:8000   (local)
-[LEVI] Backend status: ok
-```
-
-The nav button will show your username when logged in, and the green dot indicates the backend is reachable.
+### `DecisionLog` Structure
+| Field | Type | Purpose |
+|:---|:---|:---|
+| `intent` | `string` | Result of `planner.py` (e.g., `greeting`, `image`, `code`). |
+| `engine_route` | `string` | `local` (🟢), `tool` (🟡), or `api` (🔴). |
+| `confidence` | `float` | AI confidence score in the routing decision. |
+| `latency_ms` | `int` | Total processing time for the orchestrator. |
 
 ---
 
-## Troubleshooting
+## 🛡️ 4. Integration Best Practices
 
-| Symptom | Fix |
-|---------|-----|
-| CORS errors in console | Check `CORS_ORIGINS` in backend env vars matches your frontend URL |
-| 401 on every request | Clear cookies (`Application → Cookies → Clear`) and log in again |
-| `API_BASE` points to wrong host | `auth-manager.js` must be loaded before `api.js` on every page |
-| Login succeeds but profile not stored | Check `/users/me` returns 200 — may need email verification first |
+1. **Handle SSE Appropriately**: Use `EventSource` (browser) or an SSE-aware HTTP client with `stream=True`.
+2. **Badge UI**: Display the `engine_route` metadata with the corresponding color-coded badge (🟢/🟡/🔴) to communicate AI cost/depth to the user.
+3. **Session Persistence**: Always provide a consistent `session_id` to enable mid-term memory (MTM) retrieval across interactions.
+
+---
+
+**LEVI — Built for emergence. Integrated for depth.**

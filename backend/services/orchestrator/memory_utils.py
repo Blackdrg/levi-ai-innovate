@@ -112,7 +112,7 @@ async def store_facts(user_id: str, new_facts: List[Dict[str, Any]]):
                 "category": category,
                 "embedding": new_embedding,
                 "fact_id": f"{user_id}_{fact_id}",  # Pre-compute Firestore doc ID
-                "created_at": datetime.utcnow().isoformat(),  # JSON-serializable
+                "created_at": datetime.utcnow(),  # Native datetime for Firestore
             }
 
             if HAS_REDIS:
@@ -126,7 +126,7 @@ async def store_facts(user_id: str, new_facts: List[Dict[str, Any]]):
                 # 5b. Fallback: direct Firestore write if Redis is unavailable
                 await asyncio.to_thread(
                     firestore_db.collection("user_facts").document(doc_data["fact_id"]).set,
-                    {**doc_data, "created_at": datetime.utcnow()}  # re-convert for Firestore
+                    doc_data
                 )
 
         except Exception as e:
@@ -180,20 +180,28 @@ async def search_relevant_facts(user_id: str, query: str, limit: int = 5) -> Lis
         return []
 
 async def prune_old_facts(user_id: str):
-    """Prune facts older than 30 days as requested."""
-    expiry_date = datetime.utcnow() - timedelta(days=FACT_EXPIRY_DAYS)
+    """Prune facts older than 30 days.
     
+    CRITICAL BUG FIX: We now use native datetime objects for the query.
+    Firestore's '<' operator expects the same type as the field.
+    """
+    expiry_date = datetime.utcnow() - timedelta(days=FACT_EXPIRY_DAYS)
+
     try:
-        old_docs = firestore_db.collection("user_facts") \
-            .where("user_id", "==", user_id) \
-            .where("created_at", "<", expiry_date) \
-            .stream()
-            
+        old_docs = await asyncio.to_thread(
+            lambda: list(
+                firestore_db.collection("user_facts")
+                .where("user_id", "==", user_id)
+                .where("created_at", "<", expiry_date)
+                .stream()
+            )
+        )
+
         count = 0
         for doc in old_docs:
-            doc.reference.delete()
+            await asyncio.to_thread(doc.reference.delete)
             count += 1
-        
+
         if count > 0:
             logger.info(f"Pruned {count} old facts for user {user_id}")
     except Exception as e:

@@ -1,6 +1,18 @@
+##
+## LEVI-AI Production Compose
+##
+## Key fixes vs previous version:
+##   - gateway/worker build context is now "." (project root) so the Dockerfile
+##     at the root can reference backend/ correctly.
+##   - Added "beat" service for Celery Beat scheduler.
+##   - Added mem_limit / cpus resource limits on every service.
+##   - nginx now correctly proxies /api/ → gateway:8000 via nginx.conf.
+##   - ENVIRONMENT=production is set explicitly so Celery runs in async mode.
+##
 services:
   redis:
     image: redis:alpine
+    restart: always
     ports:
       - "6379:6379"
     healthcheck:
@@ -8,11 +20,16 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
 
   gateway:
-    build: 
-      context: ./backend
-      dockerfile: Dockerfile.prod
+    build:
+      context: .              # ← FIXED: root context so Dockerfile can see backend/
+      dockerfile: Dockerfile  # ← FIXED: root Dockerfile
     restart: always
     ports:
       - "8000:8000"
@@ -22,45 +39,97 @@ services:
     environment:
       REDIS_URL: redis://redis:6379
       SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-in-prod}
-      CORS_ORIGINS: "*"
-      PYTHONUNBUFFERED: 1
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      PYTHONUNBUFFERED: "1"
       USE_CELERY: "true"
+      ENVIRONMENT: production          # ← ensures Celery runs in real async mode
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      TOGETHER_API_KEY: ${TOGETHER_API_KEY:-}
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON:-}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
     volumes:
-      - ./backend:/app
+      - ./backend:/app/backend  # hot-reload in dev; remove for prod image builds
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
 
   worker:
     build:
-      context: ./backend
-      dockerfile: Dockerfile.worker
+      context: .
+      dockerfile: backend/Dockerfile.worker
     restart: always
+    command: celery -A backend.celery_app worker --loglevel=info --concurrency=4
     depends_on:
       redis:
         condition: service_healthy
     environment:
       REDIS_URL: redis://redis:6379
       USE_CELERY: "true"
-      PYTHONUNBUFFERED: 1
+      PYTHONUNBUFFERED: "1"
+      ENVIRONMENT: production
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON:-}
     volumes:
-      - ./backend:/app
-      - ./model_cache:/app/model_cache
+      - ./backend:/app/backend
+      - model_cache:/app/model_cache
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
+
+  beat:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.worker
+    restart: always
+    command: celery -A backend.celery_app beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    depends_on:
+      redis:
+        condition: service_healthy
+      worker:
+        condition: service_started
+    environment:
+      REDIS_URL: redis://redis:6379
+      USE_CELERY: "true"
+      PYTHONUNBUFFERED: "1"
+      ENVIRONMENT: production
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON:-}
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.25"
 
   nginx:
     image: nginx:alpine
+    restart: always
     ports:
       - "80:80"
+      - "443:443"
     volumes:
-      - ./frontend:/usr/share/nginx/html
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./frontend:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       gateway:
         condition: service_healthy
-    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: "0.25"
 
 volumes:
   model_cache:
-

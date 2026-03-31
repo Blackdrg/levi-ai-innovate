@@ -15,8 +15,7 @@ import threading
 import hashlib
 from mtranslate import translate  # type: ignore
 import groq  # type: ignore
-from backend.utils.network import standard_retry, DEFAULT_TIMEOUT, safe_request
-from backend.circuit_breaker import groq_breaker
+from backend.utils.network import standard_retry, DEFAULT_TIMEOUT, safe_request, groq_breaker, together_breaker
 
 from typing import Optional, Any, List, Dict
 
@@ -248,6 +247,51 @@ async def _async_call_llm_api(messages: List[Dict], temperature: float = 0.85,
         return None
 
 _async_call_groq_api = _async_call_llm_api
+
+
+async def async_stream_llm_response(
+    messages: List[Dict],
+    model: str = "llama-3.1-8b-instant",
+    temperature: float = 0.85,
+    max_tokens: int = 300,
+):
+    """
+    True token-by-token streaming from Groq API.
+    Yields raw text chunks as they arrive — no buffering.
+
+    Usage:
+        async for chunk in async_stream_llm_response(messages, model):
+            yield chunk  # forward to SSE
+
+    Falls back to single-shot non-streaming on error (yields full response as one chunk).
+    """
+    import groq as _groq_sdk
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        yield "LEVI is momentarily silent. Please check back shortly."
+        return
+
+    try:
+        client = _groq_sdk.AsyncGroq(api_key=api_key)
+        async with client.chat.completions.stream(
+            model=model,
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        ) as stream:
+            async for text_chunk in stream.text_stream:
+                if text_chunk:
+                    yield text_chunk
+    except Exception as e:
+        logger.warning(f"Groq streaming failed ({model}): {e}. Falling back to single-shot.")
+        # Graceful fallback: fire a normal request and yield it whole
+        result = await _async_call_llm_api(
+            messages=messages,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        yield result or "I encountered a momentary silence. Please try again."
 
 
 async def generate_council_response(

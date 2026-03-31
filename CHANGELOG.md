@@ -1,6 +1,23 @@
 # LEVI v2.0 — Changelog
 
-All notable changes to LEVI AI are documented here.
+All notable changes to this project will be documented in this file.
+
+## [5.0.0] - 2026-03-31
+### Added
+- **True SSE Streaming**: Full token-by-token streaming from Groq API via Server-Sent Events.
+- **Response Caching**: 30-minute Redis cache for identical search and chat queries.
+- **Webhook Alerts**: Circuit breaker now POSTs to `ALERT_WEBHOOK_URL` on service failure.
+- **Ops Runbook**: Centralized `RUNBOOK.md` for production operations.
+- **Nginx Ingress**: Production-ready Nginx configuration with SSE optimizations.
+
+### Fixed
+- **JTI Blacklist**: Corrected inverted logic in Firestore auth fallback.
+- **Memory Pruning**: Fixed `created_at` type mismatch; old facts are now correctly pruned.
+- **Docker Context**: Fixed build context issues in `docker-compose.yml`.
+
+### Changed
+- **Circuit Breaker**: Consolidated multiple implementations into `backend/utils/network.py`.
+- **System Version**: Bumped to v5.0 "Hardened Architecture".
 
 ---
 
