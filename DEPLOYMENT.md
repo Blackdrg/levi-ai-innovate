@@ -1,43 +1,139 @@
-# Deployment Guide — LEVI-AI (v5.0)
+# Deployment Guide — LEVI-AI v2.0 "The Brain"
 
-Follow these steps to deploy the **"Brain" Orchestrator** stack to Google Cloud Run and Firebase Hosting.
+Production deployment to **Google Cloud Run** (backend) + **Firebase Hosting** (frontend).
 
-## 🖥️ Hardware Infrastructure (v5.0 Core)
+---
 
-> [!IMPORTANT]
-> **Cloud Run RAM Recommendation**: Because LEVI now runs local embedding models and high-concurrency orchestration, you **MUST** configure the backend service with at least **2GB RAM** (4GB recommended for heavy Studio usage). Memory-limited instances (<1GB) will encounter `OOMKilled` errors during semantic extraction.
+## ⚙️ GitHub Secrets — Required
 
-## 💾 GitHub Secrets Checklist (v5.0 Optimized)
+Add all of these in **GitHub → Settings → Secrets and variables → Actions**:
 
-You MUST add these to GitHub Settings > Secrets and variables > Actions:
-
-### 🌐 Cloud & Persistence
-1. `GCP_SA_KEY`: Service Account JSON (Cloud Run Admin, Storage Admin).
-2. `FIREBASE_SERVICE_ACCOUNT_JSON`: Full JSON for Firestore and Analytics.
-3. `FIREBASE_PROJECT_ID`: e.g., `levi-ai-c23c6`.
-4. `REDIS_URL`: **Mandatory for Orchestrator Orchestration** (Use Upstash for serverless Redis).
+### 🌐 Cloud & Infrastructure
+| Secret | Description |
+|--------|-------------|
+| `GCP_SA_KEY` | GCP Service Account JSON (Cloud Run Admin + Storage Admin) |
+| `FIREBASE_SERVICE_ACCOUNT_JSON` | Firebase service account JSON string |
+| `FIREBASE_PROJECT_ID` | e.g. `levi-ai-c23c6` |
+| `REDIS_URL` | Upstash Redis URL — **required** for Celery + rate limiting |
 
 ### 🧠 AI & Intelligence
-5. `GROQ_API_KEY`: Primary inference for Intent and Planning.
-6. `TOGETHER_API_KEY`: High-fidelity synthesis and Image generation.
-7. `ADMIN_KEY`: X-Admin-Key for maintenance routes.
+| Secret | Description |
+|--------|-------------|
+| `GROQ_API_KEY` | Groq Cloud API key (intent detection + synthesis) |
+| `TOGETHER_API_KEY` | Together AI key (image generation via FLUX.1) |
 
-### 💳 Payments & Growth
-8. `RAZORPAY_KEY_ID`: Payment gateway ID.
-9. `RAZORPAY_KEY_SECRET`: Payment gateway Secret.
-10. `RAZORPAY_WEBHOOK_SECRET`: Webhook verification.
+### 💳 Payments
+| Secret | Description |
+|--------|-------------|
+| `RAZORPAY_KEY_ID` | Razorpay API key ID |
+| `RAZORPAY_KEY_SECRET` | Razorpay API key secret |
+| `RAZORPAY_WEBHOOK_SECRET` | Webhook signature verification |
 
-### 📦 Media & Observability
-11. `AWS_S3_BUCKET`: (Optional) Falling back to Base64/Firestore if not provided.
-12. `SENTRY_DSN`: Recommended for monitoring the new Orchestrator's retries.
+### 🔒 Security
+| Secret | Description |
+|--------|-------------|
+| `SECRET_KEY` | Long random string for JWT signing |
+| `ADMIN_KEY` | X-Admin-Key header for maintenance endpoints |
 
-## 🚀 Execution Strategy
+### 📦 Optional
+| Secret | Description |
+|--------|-------------|
+| `AWS_S3_BUCKET` | S3 bucket for image/video storage |
+| `AWS_ACCESS_KEY_ID` | AWS IAM key |
+| `AWS_SECRET_ACCESS_KEY` | AWS IAM secret |
+| `SENTRY_DSN` | Error monitoring (recommended for orchestrator retries) |
 
-1. **Push to master**: Triggers the GitHub Actions pipeline (`.github/workflows/master_deploy.yml`).
-2. **Backend**: Deployed to Cloud Run on port 8080.
-3. **Frontend**: Deployed to Firebase Hosting with proxy rewrites.
+---
 
-## 🧪 Production Verification
-- **Brain Check**: `https://levi-api.a.run.app/orchestrator/status`
-- **Health Check**: `https://levi-api.a.run.app/health`
-- **Launchpad**: `https://levi-ai-c23c6.web.app`
+## 🚀 Deployment Steps
+
+### 1. Push to trigger CI/CD
+```bash
+git push origin master:main
+```
+This triggers `.github/workflows/deploy-backend.yml` automatically.
+
+### 2. Backend (Cloud Run)
+- Deployed from `Dockerfile`
+- Port: `8080`
+- Memory: **2GB minimum** (4GB recommended — embedding models)
+- CPU: 2 vCPU
+- `ENVIRONMENT=production` env var set
+
+### 3. Frontend (Firebase Hosting)
+- Deployed from `.github/workflows/deploy-frontend.yml`
+- Rewrites `/api/**` → Cloud Run backend URL
+- SSE endpoint `/stream` proxied with streaming headers
+
+---
+
+## 🧪 Production Smoke Tests
+
+After deployment, verify each endpoint:
+
+```bash
+BASE=https://levi-api.a.run.app
+
+# Health check
+curl $BASE/health
+
+# Brain status
+curl $BASE/system/orchestrator/status
+
+# Chat (local route — tests zero-API path)
+curl -X POST $BASE/api/v1/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "hello", "session_id": "smoke_test"}'
+# Expected: route="local", instant response, no API cost
+
+# Full load test
+python scripts/load_test.py --users 50 --target $BASE
+```
+
+---
+
+## 🖥️ Cloud Run Configuration (Recommended)
+
+```yaml
+# service.yaml
+memory: 4Gi
+cpu: 2
+min-instances: 1         # Keep warm for < 5ms local responses
+max-instances: 10
+concurrency: 80
+timeout: 60s
+```
+
+> [!WARNING]
+> Do **not** set memory below 2GB. The Sentence-Transformers embedding model (`all-MiniLM-L6-v2`) requires ~400MB at load time. Memory-constrained containers will `OOMKilled` during semantic extraction.
+
+---
+
+## 📊 CI/CD Pipeline
+
+```
+git push master
+    │
+    ├─ deploy-backend.yml
+    │     1. Build Docker image
+    │     2. Push to Artifact Registry
+    │     3. Deploy to Cloud Run
+    │     4. Run smoke test /health
+    │
+    └─ deploy-frontend.yml
+          1. firebase deploy --only hosting
+```
+
+---
+
+## 🔄 Rollback
+
+```bash
+# List recent Cloud Run revisions
+gcloud run revisions list --service levi-backend --region us-central1
+
+# Pin to a specific revision
+gcloud run services update-traffic levi-backend \
+  --to-revisions REVISION_NAME=100 \
+  --region us-central1
+```
