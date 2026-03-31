@@ -301,11 +301,13 @@ async def strip_api_prefix(request: Request, call_next):
     return await call_next(request)
 
 # CORS
+# CORS (Phase 4 Hardened: Strictly Environment-Driven)
+# Removed hardcoded non-existent domains (levi-ai.cr)
 origins = [
     "http://localhost:3000", "http://127.0.0.1:3000",
+    "http://localhost:8080", "http://127.0.0.1:8080",
     "https://levi-ai-c23c6.web.app",
-    "https://levi-ai.cr",
-    "https://www.levi-ai.cr",
+    "https://levi-ai-c23c6.firebaseapp.com",
     "https://levi-ai.vercel.app"
 ]
 env_origins = os.getenv("CORS_ORIGINS", "").split(",")

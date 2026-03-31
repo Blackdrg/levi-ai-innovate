@@ -56,10 +56,18 @@ def create_studio_job(
         # For local dev without Celery, we'd need BackgroundTasks from a request
         # but in orchestrator we can use asyncio.create_task or similar 
         # (though Celery is preferred for prod)
+        # Phase 4: Safe Event Loop Handling for Local (Non-Celery) Execution
         from backend.services.studio.logic import run_studio_task
         import asyncio
-        asyncio.create_task(asyncio.to_thread(
-            run_studio_task, job_id, task_type, params, user_id, user_tier
-        ))
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(asyncio.to_thread(
+                run_studio_task, job_id, task_type, params, user_id, user_tier
+            ))
+        except RuntimeError:
+            # No running loop, use asyncio.run (standard for non-async callers)
+            asyncio.run(asyncio.to_thread(
+                run_studio_task, job_id, task_type, params, user_id, user_tier
+            ))
 
     return {"status": "queued", "job_id": job_id, "message": f"{task_type.capitalize()} job initiated."}

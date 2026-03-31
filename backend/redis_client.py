@@ -35,10 +35,10 @@ except Exception as e:
     error_msg = f"[Redis] Critical: Connection to Redis failed ({e})."
     
     if is_prod:
-        # Phase 3: Enforce Redis in Production
-        print(f"CRITICAL: {error_msg} Redis is MANDATORY in production for session memory, rate limiting, and caching.")
-        # In actual production, we might want to raise an error to stop the container
-        raise RuntimeError(error_msg)
+        # Phase 4: Soft-failure in Production (Degraded Mode)
+        # We NO LONGER raise RuntimeError here to prevent Cloud Run boot loops.
+        # The system will fallback to in-memory/Firestore-only mode.
+        print(f"CRITICAL: {error_msg} Starting in DEGRADED mode. Features requiring shared state across instances will be limited.")
     else:
         print(f"{error_msg} Falling back to in-memory cache (Local Dev).")
 

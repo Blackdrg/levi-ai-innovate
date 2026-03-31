@@ -2,13 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.0.0] - 2026-03-31 "Production Hardened v1.0" 🛡️
+## [1.0.1] - 2026-03-31 "Production Hardened v1.1" 🛡️
+### Fixed
+- **Redis Resilience**: Startup connection failures are now non-fatal (Degraded Mode).
+- **Import Error**: Fixed broken circuit breaker imports in analytics router.
+- **Monolith Conflict**: Retired `main.py` stub to resolve duplicate route registrations.
+- **Celery Beat**: Fixed schedule overwrite; memory flushes and daily tasks now coexist.
+- **Async Safety**: Resolved `RuntimeError` in Studio generation (loop detection).
+- **S3 Persistence**: Increased pre-signed URL TTL to 24 hours to match feed cache.
+
 ### Added
-- **Redis-Backed Debouncing**: Buffering for convo history and user facts to optimize Firestore costs.
-- **Autonomous Reasoning**: Dynamic 8-stage pipeline in `LeviBrain` with model orchestration.
-- **True SSE Streaming**: Real token-by-token response streaming from Groq API.
-- **JTI Blacklist**: Distributed session revocation and secure auth middleware.
-- **Tier Enforcement**: Strict feature gating for Search, Code, and High-Reasoning agents.
+- **Unified Feedback**: Consolidated `FeedbackRequest` across Chat, Studio, and Gallery.
+- **Config Hardening**: Frontend `config.js` now detects missing keys and warns in console.
+- **CORS Cleanup**: Removed non-existent high-level domains from whitelist.
 
 ## [0.5.0] - 2026-03-30
 ### Added

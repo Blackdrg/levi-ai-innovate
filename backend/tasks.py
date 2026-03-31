@@ -420,7 +420,8 @@ def reset_monthly_credits():
 
 from celery.schedules import crontab  # type: ignore
 
-celery_app.conf.beat_schedule = {
+# --- Update Beat Schedule (Phase 4: Preserving Memory Flushes) ---
+celery_app.conf.beat_schedule.update({
     "daily-wisdom-dispatch": {
         "task": "backend.tasks.dispatch_daily_emails",
         "schedule": crontab(hour=8, minute=0),
@@ -429,7 +430,7 @@ celery_app.conf.beat_schedule = {
         "task": "backend.tasks.reset_monthly_credits",
         "schedule": crontab(day_of_month=1, hour=0, minute=5),
     },
-}
+})
 
 # Import trainer schedule if available
 try:

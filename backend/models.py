@@ -67,10 +67,26 @@ class ContentRequest(BaseModel):
     }
 
 class FeedbackRequest(BaseModel):
-    item_id: str
-    item_type: str = "image"
+    """
+    Unified Feedback Model for AI responses (Chat) and generated assets (Studio/Gallery).
+    """
+    session_id: Optional[str] = Field(None, max_length=100)
+    item_id: Optional[str] = Field(None, max_length=100, description="message_id or image_id")
+    item_type: str = Field("chat", description="One of: chat, image, video")
     rating: int = Field(..., ge=1, le=5)
-    comment: Optional[str] = None
+    comment: Optional[str] = Field(None, max_length=500)
+    
+    # Metadata for Chat Learning (Optional)
+    user_message: Optional[str] = None
+    bot_response: Optional[str] = None
+    mood: Optional[str] = "neutral"
+    
+    @field_validator("rating")
+    @classmethod
+    def validate_rating_val(cls, v: int) -> int:
+        if not 1 <= v <= 5:
+            raise ValueError("Rating must be between 1 and 5")
+        return v
 
 class AdminAdjustCredits(BaseModel):
     user_id: str
