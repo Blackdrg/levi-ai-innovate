@@ -9,7 +9,7 @@ import logging
 
 from backend.auth import verify_admin # type: ignore
 from backend.firestore_db import db as firestore_db # type: ignore
-from backend.circuit_breaker import groq_breaker, together_breaker, CircuitBreaker # type: ignore
+from backend.utils.network import groq_breaker, together_breaker, CircuitBreaker # type: ignore
 from backend.redis_client import r as redis_client, HAS_REDIS # type: ignore
 
 logger = logging.getLogger(__name__)

@@ -1,11 +1,21 @@
-# LEVI — Autonomous AI Orchestrator (v1.0 "Production Hardened") 🧠
+# LEVI-AI v1.1 — Production Hardened 🛡️
+## "The Sentinel" Update
 
-> **Learning, Evolution, Vision, Intelligence**
+[![Status](https://img.shields.io/badge/Status-1.1--Hardened-brightgreen)](https://img.shields.io/badge/Status-1.1--Hardened-brightgreen)
+[![Reasoning](https://img.shields.io/badge/Pipeline-8--Stage-blue)](https://img.shields.io/badge/Pipeline-8--Stage-blue)
 
 LEVI is a production-hardened **AI Orchestration Platform** built for high-reliability, low-latency, and persistent semantic evolution. It routes user requests through an intelligent 8-stage pipeline—deciding locally, through specialized agents, or via large-scale LLMs—while building a persistent 3-layer "Soul" memory of every interaction.
 
+# LEVI Project Roadmap & TODO (v1.1) 🚀
+
+## 🟢 PHASE 1.1: STABILITY & HARDENING (100% COMPLETE)
+- [x] **Redis Resilience**: Degraded mode for production uptime.
+- [x] **Monolith Retirement**: Structured entry point via `gateway.py`.
+- [x] **Unified Models**: Consolidated feedback across all AI services.
+- [x] **Safe Async**: Corrected event loop handling for non-Celery contexts.
+
 > [!IMPORTANT]
-> **v1.0 Production Hardening is COMPLETE.**
+> **v1.1 Production Hardening is COMPLETE.**
 > 100% SSE Streaming reliability · Redis-backed memory debouncing · JTI Blacklist & Tier Enforcement · Consistently < 50ms latency for cached queries.
 
 ---

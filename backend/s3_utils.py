@@ -50,12 +50,14 @@ def upload_to_s3(file_bytes: bytes, filename: str, content_type: str, expires_in
         logger.error(f"S3 upload failed: {e}")
         return None
 
-def upload_image_to_s3(image_bytes: bytes, user_id: Optional[str] = None, expires_in: int = 3600) -> Optional[str]:
+def upload_image_to_s3(image_bytes: bytes, user_id: Optional[str] = None, expires_in: int = 86400) -> Optional[str]:
+    """Exposes images with 24-hour TTL (default) to match feed cache."""
     uid = str(user_id) if user_id else "anon"
     filename = f"images/{uid}/{uuid.uuid4().hex}.png"
     return upload_to_s3(image_bytes, filename, "image/png", expires_in=expires_in)
 
-def upload_video_to_s3(video_bytes: bytes, user_id: Optional[str] = None, expires_in: int = 3600) -> Optional[str]:
+def upload_video_to_s3(video_bytes: bytes, user_id: Optional[str] = None, expires_in: int = 86400) -> Optional[str]:
+    """Exposes videos with 24-hour TTL (default) to match feed cache."""
     uid = str(user_id) if user_id else "anon"
     filename = f"videos/{uid}/{uuid.uuid4().hex}.mp4"
     return upload_to_s3(video_bytes, filename, "video/mp4", expires_in=expires_in)

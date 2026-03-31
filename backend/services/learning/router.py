@@ -15,6 +15,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field, field_validator
+from backend.models import FeedbackRequest
 
 from backend.auth import get_current_user, get_current_user_optional
 from backend.learning import (
@@ -33,21 +34,7 @@ router = APIRouter(tags=["Learning"])
 
 # ── Pydantic Schemas ──────────────────────────────────────────────────────────
 
-class FeedbackRequest(BaseModel):
-    session_id: str
-    message_hash: str = ""
-    rating: int = Field(..., ge=1, le=5, description="Rating 1 (bad) to 5 (perfect)")
-    bot_response: str
-    user_message: str
-    mood: Optional[str] = "philosophical"
-    feedback_type: str = "star"
-
-    @field_validator("rating")
-    @classmethod
-    def validate_rating(cls, v: int) -> int:
-        if not 1 <= v <= 5:
-            raise ValueError("Rating must be between 1 and 5")
-        return v
+# Pydantic Schemas moved to backend/models.py
 
 
 # ── Explicit Feedback ─────────────────────────────────────────────────────────

@@ -1,12 +1,15 @@
-# LEVI Project Roadmap & TODO (v1.0) 🚀
+# LEVI Project Roadmap & TODO (v1.1) 🚀
 
-## 🟢 PHASE 1.0: PRODUCTION HARDENING (100% COMPLETE)
+## 🟢 PHASE 1.1: STABILITY & HARDENING (100% COMPLETE)
+- [x] **Redis Resilience**: Degraded mode for production uptime.
+- [x] **Monolith Retirement**: Structured entry point via `gateway.py`.
+- [x] **Unified Models**: Consolidated feedback across all AI services.
+- [x] **Safe Async**: Corrected event loop handling for non-Celery contexts.
 - [x] **Autonomous Reasoning**: 8-stage dynamic pipeline in `LeviBrain`.
 - [x] **Redis-Backed Debouncing**: Firestore cost optimization via buffered writes.
 - [x] **True SSE Streaming**: Direct token-by-token piping (Groq).
 - [x] **Soul Memory Lifecycle**: 30-day automated pruning cycle.
 - [x] **JTI & Tier Security**: Secure session revocation + feature gating.
-- [x] **Infrastructure Ingress**: Optimized Nginx + Redis v6.2+.
 
 ## 🟡 PHASE 6.0: ADVANCED COGNITION (IN PROGRESS)
 - [ ] **Multi-Agent Swarms**: Dynamic task delegation among specialized sub-agents.
