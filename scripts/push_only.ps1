@@ -11,7 +11,7 @@ Write-Host "Committing changes..."
 git commit -m "Update: Quick push ($timestamp)"
 
 # Push to currently set origin
-Write-Host "Pushing to master branch..."
-git push origin master
+Write-Host "Pushing to main branch..."
+git push origin main
 
 Write-Host "=== Push Complete! ==="

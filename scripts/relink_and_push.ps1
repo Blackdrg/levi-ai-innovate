@@ -24,8 +24,8 @@ $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm"
 Write-Host "Committing changes..."
 git commit -m "Migration: Push to levi-ai-innovate ($timestamp)"
 
-# Push to master
-Write-Host "Pushing to master branch..."
-git push -u origin master
+# Push to main
+Write-Host "Pushing to main branch..."
+git push -u origin main
 
 Write-Host "=== Migration Complete! ==="
