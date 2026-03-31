@@ -10,6 +10,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field, field_validator
 
+import asyncio
 from backend.auth import get_current_user, get_current_user_optional
 from backend.learning import (
     collect_training_sample,
@@ -49,7 +50,8 @@ async def submit_feedback(
     user_id = current_user.get("uid") if current_user else None
     
     try:
-        sample_id = collect_training_sample(
+        # Phase 12: Await the now-async collectors
+        sample_id = await collect_training_sample(
             user_message=req.user_message,
             bot_response=req.bot_response,
             mood=req.mood or "philosophical",
@@ -59,13 +61,8 @@ async def submit_feedback(
         )
 
         if user_id:
-            # Asynchronous background learning tasks
-            background_tasks.add_task(update_memory_graph, user_id, req.user_message)
-            background_tasks.add_task(
-                AdaptivePromptManager().record_outcome,
-                variant_idx=0,
-                rating=req.rating,
-            )
+            # Phase 12: Background tasks are managed within collect_training_sample
+            pass
 
         return {
             "status": "success",
@@ -84,11 +81,11 @@ async def get_learning_profile(current_user: dict = Depends(get_current_user)):
     user_id = current_user.get("uid")
     try:
         model = UserPreferenceModel(user_id)
-        profile = model.get_profile()
+        profile = await model.get_profile() # Phase 12: Async
         return {
             "user_id": user_id,
             "profile": profile,
-            "learned_traits": profile.get("traits", []),
+            "learned_traits": profile.get("structured_memory", {}).get("entities", {}).get("facts", []),
             "preferred_mood": (profile.get("preferred_moods") or ["philosophical"])[0]
         }
     except Exception as e:
@@ -104,14 +101,14 @@ async def get_learning_stats_api(current_user: dict = Depends(get_current_user))
     if tier not in ("admin", "creator", "pro"):
         raise HTTPException(status_code=403, detail="Privileged access required.")
     
-    return get_learning_stats()
+    return await asyncio.to_thread(get_learning_stats)
 
 @router.get("/status")
 async def model_status():
     """
     Public endpoint showing the current state of LEVI's neural model.
     """
-    stats = get_learning_stats()
+    stats = await asyncio.to_thread(get_learning_stats)
     return {
         "active_model": "groq/llama-3.1-8b-instant",
         "knowledge_base_entries": stats.get("learned_quotes", 0),
@@ -130,5 +127,6 @@ async def export_training_api(
     if current_user.get("tier") not in ("admin", "creator"):
         raise HTTPException(status_code=403, detail="Requires Creator access.")
 
-    background_tasks.add_task(export_training_data)
-    return {"status": "queued", "message": "Training export sequence initiated."}
+    # Phase 12: Async Export
+    await asyncio.to_thread(export_training_data)
+    return {"status": "success", "message": "Training export sequence completed."}

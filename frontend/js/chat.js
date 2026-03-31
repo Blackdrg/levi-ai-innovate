@@ -162,6 +162,18 @@ async function sendMessage() {
             (meta) => {
                 console.log("[LEVI] Received metadata:", meta);
                 metadataCaptured = meta;
+                
+                // ── LEVI v6: Dynamic Intelligence Status Rendering ──
+                if (meta.status_update) {
+                    let statusDiv = botDiv.querySelector('.levi-status-indicator');
+                    if (!statusDiv) {
+                        statusDiv = document.createElement('div');
+                        statusDiv.className = 'levi-status-indicator text-[10px] text-primary/60 font-mono italic mb-2 animate-pulse';
+                        botDiv.prepend(statusDiv);
+                    }
+                    statusDiv.innerText = `● ${meta.status_update}`;
+                }
+
                 if (meta.intent) {
                     botDiv.setAttribute('data-intent', meta.intent);
                 }

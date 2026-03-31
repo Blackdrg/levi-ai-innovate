@@ -209,31 +209,50 @@ document.querySelector('#gallery .border-dashed').onclick = () => {
 // 7. Scroll Effects
 // 8. Phase 44: Real-Time Cosmic Activity Ticker
 function initCosmicStream() {
-    const tickerContainer = document.createElement('div');
-    tickerContainer.id = 'cosmic-ticker';
-    tickerContainer.className = 'fixed bottom-24 right-6 z-[60] flex flex-col gap-3 pointer-events-none';
-    document.body.appendChild(tickerContainer);
+    // Phase 4: Init Ticker
+    let tickerContainer = document.getElementById('cosmic-ticker');
+    if (!tickerContainer) {
+        tickerContainer = document.createElement('div');
+        tickerContainer.id = 'cosmic-ticker';
+        tickerContainer.className = 'fixed bottom-24 right-6 z-[60] flex flex-col gap-3 pointer-events-none';
+        document.body.appendChild(tickerContainer);
+    }
 
-    // Initial state check
     if (typeof EventSource === 'undefined') return;
 
     const streamUrl = `${window.API_BASE.replace('/v1', '')}/v1/stream`;
-    const source = new EventSource(streamUrl);
+    let source = new EventSource(streamUrl);
+    let reconnectTimeout = null;
 
-    source.onmessage = (event) => {
-        try {
-            const payload = JSON.parse(event.data);
-            if (payload.event === 'connected') {
-                console.log("[Stream] Cosmic link established.");
-                return;
+    const connect = () => {
+        if (source) source.close();
+        source = new EventSource(streamUrl);
+        
+        source.onmessage = (event) => {
+            // Phase 4: Handle Heartbeats (ignore comments/empty messages)
+            if (!event.data || event.data.trim() === "") return;
+            
+            try {
+                const payload = JSON.parse(event.data);
+                if (payload.event === 'connected') {
+                    console.log("[Stream] Cosmic link established.");
+                    return;
+                }
+                showCosmicActivity(payload);
+            } catch (e) { 
+                // Ignore parsing errors for heartbeats or malformed chunks
             }
-            showCosmicActivity(payload);
-        } catch (e) { console.warn("Stream parse error:", e); }
+        };
+
+        source.onerror = () => {
+            console.warn("[Stream] Connection interrupted. Reconnecting in 5s...");
+            source.close();
+            clearTimeout(reconnectTimeout);
+            reconnectTimeout = setTimeout(connect, 5000); // Phase 4 Reconnection Logic
+        };
     };
 
-    source.onerror = () => {
-        console.warn("[Stream] Connection interrupted. Reconnecting...");
-    };
+    connect();
 }
 
 function showCosmicActivity(payload) {

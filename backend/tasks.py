@@ -12,12 +12,12 @@ import os
 import uuid
 import base64
 import logging
-import boto3  # type: ignore
 from io import BytesIO
 from typing import Any, Optional
 from datetime import datetime
 from celery import Celery  # type: ignore
-from botocore.exceptions import BotoCoreError, ClientError  # type: ignore
+
+from backend.gcs_utils import upload_image_to_gcs, upload_video_to_gcs, upload_to_gcs
 
 try:
     from pywebpush import webpush, WebPushException  # type: ignore
@@ -31,53 +31,7 @@ logger = logging.getLogger(__name__)
 from backend.celery_app import celery_app # type: ignore
 
 
-# ─────────────────────────────────────────────
-# S3 Utilities
-# ─────────────────────────────────────────────
-
-def get_s3_client():
-    return boto3.client(
-        "s3",
-        aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
-        aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
-        region_name=os.getenv("AWS_REGION", "us-east-1"),
-    )
-
-
-def upload_to_s3(file_bytes: bytes, filename: str, content_type: str = "image/png") -> str:
-    """Upload bytes to S3. Returns accessible URL."""
-    bucket = os.getenv("AWS_S3_BUCKET", "levi-media")
-    s3 = get_s3_client()
-
-    s3.put_object(
-        Bucket=bucket,
-        Key=filename,
-        Body=file_bytes,
-        ContentType=content_type,
-    )
-
-    cloudfront = os.getenv("CLOUDFRONT_DOMAIN")
-    if cloudfront:
-        return f"https://{cloudfront}/{filename}"
-
-    # Pre-signed URL (7 days)
-    return s3.generate_presigned_url(
-        "get_object",
-        Params={"Bucket": bucket, "Key": filename},
-        ExpiresIn=604800,
-    )
-
-
-def upload_image_to_s3(image_bytes: bytes, user_id: Optional[int] = None) -> str:
-    uid = str(user_id) if user_id else "anon"
-    filename = f"images/{uid}/{uuid.uuid4().hex}.png"
-    return upload_to_s3(image_bytes, filename, "image/png")
-
-
-def upload_video_to_s3(video_bytes: bytes, user_id: Optional[int] = None) -> str:
-    uid = str(user_id) if user_id else "anon"
-    filename = f"videos/{uid}/{uuid.uuid4().hex}.mp4"
-    return upload_to_s3(video_bytes, filename, "video/mp4")
+# GCS Utilities migrated to gcs_utils.py
 
 
 try:
@@ -85,17 +39,27 @@ try:
 except ImportError:
     from firestore_db import db as firestore_db # type: ignore
 
+from firebase_admin import firestore
+from backend.redis_client import distributed_lock
+
 def _refund_credits(user_id: str, amount: int) -> None:
-    """Refund credits to user after task failure in Firestore."""
+    """Refund credits to user after task failure in Firestore (Atomic)."""
     try:
         user_ref = firestore_db.collection("users").document(user_id)
-        user_doc = user_ref.get()
-        if user_doc.exists:
-            current = user_doc.to_dict().get("credits", 0)
-            user_ref.update({"credits": current + amount})
-            logger.info(f"[Refund] Refunded {amount} credits to user {user_id}")
+        
+        # Phase 50: Hardened atomic refund
+        with distributed_lock(f"credits:{user_id}", ttl=10, retries=3) as acquired:
+            if not acquired:
+                logger.warning(f"[Refund] Lock busy for user {user_id}. Refund deferred.")
+                return
+            
+            user_ref.update({
+                "credits": firestore.Increment(amount),
+                "updated_at": firestore.SERVER_TIMESTAMP
+            })
+            logger.info(f"[Refund] Atomic refund of {amount} units to {user_id}.")
     except Exception as e:
-        logger.error(f"[Refund] Failed: {e}")
+        logger.error(f"[Refund] Critical failure for {user_id}: {e}")
 
 
 # ─────────────────────────────────────────────
@@ -133,7 +97,7 @@ def generate_image_task(
             mood=mood,
             user_tier=user_tier,
             style=style,
-            upload_to_s3=bool(os.getenv("AWS_S3_BUCKET")),
+            upload_to_storage=bool(os.getenv("GCP_STORAGE_BUCKET")),
             user_id=user_id,
         )
 
@@ -147,11 +111,11 @@ def generate_image_task(
         else:
             img_bytes = result.getvalue() if hasattr(result, 'getvalue') else b""
 
-        if img_bytes and not image_url and os.getenv("AWS_S3_BUCKET"):
+        if img_bytes and not image_url and os.getenv("GCP_STORAGE_BUCKET"):
             try:
-                image_url = upload_image_to_s3(img_bytes, user_id)
+                image_url = upload_image_to_gcs(img_bytes, user_id)
             except Exception as upload_err:
-                logger.warning(f"[ImageTask] S3 upload failed: {upload_err}")
+                logger.warning(f"[ImageTask] GCS upload failed: {upload_err}")
 
         if not image_url and img_bytes:
             image_b64 = "data:image/png;base64," + base64.b64encode(img_bytes).decode()
@@ -217,13 +181,13 @@ def generate_video_task(
         )
         video_bytes = video_bio.read()
 
-        # Upload to S3
+        # Upload to GCS
         video_url = None
-        if os.getenv("AWS_S3_BUCKET"):
+        if os.getenv("GCP_STORAGE_BUCKET"):
             try:
-                video_url = upload_video_to_s3(video_bytes, user_id) # type: ignore
+                video_url = upload_video_to_gcs(video_bytes, user_id) # type: ignore
             except Exception as e:
-                logger.warning(f"[VideoTask] S3 upload failed: {e}")
+                logger.warning(f"[VideoTask] GCS upload failed: {e}")
 
         # Save to Firestore Feed collection
         feed_ref = firestore_db.collection("feed_items")
@@ -356,34 +320,48 @@ def send_daily_quote_email(user_email: str, user_id: str, liked_topics: list, la
 def dispatch_daily_emails():
     """Dispatch daily emails + push notifications to all users via Firestore."""
     try:
-        users_stream = firestore_db.collection("users").stream()
+        users_ref = firestore_db.collection("users")
         dispatched = 0
+        batch_size = 500
+        last_doc = None
 
-        for user_doc in users_stream:
-            try:
-                user = user_doc.to_dict()
-                u_id = user_doc.id
-                topics = list(user.get("liked_topics", [])) or ["existence"]
-                moods = list(user.get("mood_history", []))
-                last_mood = moods[-1] if moods else "philosophical"
+        while True:
+            query = users_ref.limit(batch_size)
+            if last_doc:
+                query = query.start_after(last_doc)
+            
+            docs = list(query.get())
+            if not docs:
+                break
+            
+            for user_doc in docs:
+                try:
+                    user = user_doc.to_dict()
+                    u_id = user_doc.id
+                    topics = list(user.get("liked_topics", [])) or ["existence"]
+                    moods = list(user.get("mood_history", []))
+                    last_mood = moods[-1] if moods else "philosophical"
 
-                # Email
-                email = user.get("email")
-                if email and user.get("is_verified", True):
-                    send_daily_quote_email.delay(email, u_id, topics, last_mood)
+                    # Email
+                    email = user.get("email")
+                    if email and user.get("is_verified", True):
+                        send_daily_quote_email.delay(email, u_id, topics, last_mood)
 
-                # Push
-                subs_stream = firestore_db.collection("push_subscriptions").where("user_id", "==", u_id).stream()
-                for sub_doc in subs_stream:
-                    s = sub_doc.to_dict()
-                    sid = sub_doc.id
-                    send_push_notification_task.delay(
-                        sid, s.get("endpoint"), s.get("p256dh"), s.get("auth"),
-                        "LEVI Daily Wisdom ✦", "New wisdom awaits you today."
-                    )
-                dispatched += 1
-            except Exception as e:
-                logger.warning(f"[Dispatch] Failed for user {user_doc.id}: {e}")
+                    # Push
+                    # Note: We still use stream() for sub-collection here as it's per-user and expected to be small (<100 subs)
+                    subs_stream = firestore_db.collection("push_subscriptions").where("user_id", "==", u_id).stream()
+                    for sub_doc in subs_stream:
+                        s = sub_doc.to_dict()
+                        sid = sub_doc.id
+                        send_push_notification_task.delay(
+                            sid, s.get("endpoint"), s.get("p256dh"), s.get("auth"),
+                            "LEVI Daily Wisdom ✦", "New wisdom awaits you today."
+                        )
+                    dispatched += 1
+                except Exception as e:
+                    logger.warning(f"[Dispatch] Failed for user {user_doc.id}: {e}")
+            
+            last_doc = docs[-1]
 
         logger.info(f"[Dispatch] Sent to {dispatched} users")
         return {"status": "completed", "dispatched": dispatched}
@@ -401,12 +379,27 @@ def reset_monthly_credits():
     """Reset credits for paid users on the 1st of each month in Firestore."""
     try:
         from backend.payments import get_tier_credits  # type: ignore
-        users_stream = firestore_db.collection("users").where("tier", "in", ["pro", "creator"]).stream()
+        users_ref = firestore_db.collection("users").where("tier", "in", ["pro", "creator"])
         count = 0
-        for user_doc in users_stream:
-            tier = user_doc.to_dict().get("tier")
-            user_doc.reference.update({"credits": get_tier_credits(tier or "free")})
-            count += 1
+        batch_size = 500
+        last_doc = None
+
+        while True:
+            query = users_ref.limit(batch_size)
+            if last_doc:
+                query = query.start_after(last_doc)
+            
+            docs = list(query.get())
+            if not docs:
+                break
+                
+            for user_doc in docs:
+                tier = user_doc.to_dict().get("tier")
+                user_doc.reference.update({"credits": get_tier_credits(tier or "free")})
+                count += 1
+            
+            last_doc = docs[-1]
+
         logger.info(f"[Credits] Reset {count} users")
         return {"status": "completed", "reset": count}
     except Exception as e:

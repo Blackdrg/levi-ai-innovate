@@ -1,7 +1,7 @@
 # pyright: reportMissingImports=false
 import pytest
 from fastapi.testclient import TestClient
-from backend.gateway import app
+from backend.main import app
 
 client = TestClient(app)
 

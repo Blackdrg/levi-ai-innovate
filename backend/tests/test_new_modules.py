@@ -198,7 +198,7 @@ class TestAPIRoutes:
         """POST /api/v1/content/generate should return 401 without a token."""
         # Provisionally clear the auth override to ensure it actually enforces security
         from backend.auth import get_current_user
-        from backend.gateway import app
+        from backend.main import app
         
         orig_override = app.dependency_overrides.get(get_current_user)
         app.dependency_overrides.pop(get_current_user, None) # Clear override to use real implementation

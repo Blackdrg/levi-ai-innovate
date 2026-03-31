@@ -2,7 +2,7 @@
 import pytest
 from fastapi.testclient import TestClient
 import uuid
-from backend.gateway import app
+from backend.main import app
 
 client = TestClient(app)
 

@@ -10,7 +10,7 @@ from unittest.mock import patch, MagicMock
 # conftest.py in the same directory will automatically provide fixtures
 # but we still need basic imports for mocking
 
-from backend.gateway import app
+from backend.main import app
 from backend.auth import get_current_user  # type: ignore
 
 # Globally mock get_current_user for all tests in this file - now handled by conftest.py's app_client fixture

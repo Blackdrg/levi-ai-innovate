@@ -33,7 +33,7 @@ HAS_NUMPY = False
 from backend.firestore_db import db as firestore_db  # type: ignore
 from backend.redis_client import cache_search, get_cached_search, HAS_REDIS  # type: ignore
 from backend.embeddings import embed_text  # type: ignore
-from backend.s3_utils import upload_to_s3  # type: ignore
+from backend.gcs_utils import upload_to_gcs  # type: ignore
 
 try:
     import numpy as np  # type: ignore

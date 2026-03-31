@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 # --- Configuration ---
 FACT_DEDUPLICATION_THRESHOLD = 0.85 # Cosine similarity threshold for deduplication
+FACT_CONFLICT_THRESHOLD = 0.90      # Threshold to consider facts 'comparable' for conflict check
 FACT_EXPIRY_DAYS = 30 # Prune facts older than this
 
 async def extract_facts(user_input: str, bot_response: str) -> List[Dict[str, Any]]:
@@ -84,20 +85,33 @@ async def store_facts(user_id: str, new_facts: List[Dict[str, Any]]):
     for item in new_facts:
         fact_text = item.get("fact")
         category = item.get("category", "factual")
+        importance = item.get("importance", 0.5) # LEVI v6: Captured from Grader
         if not fact_text: continue
 
         try:
             new_embedding = await asyncio.to_thread(embed_text, fact_text)
 
-            # 3. Deduplication check against Firestore + buffer
+            # 3. Deduplication & Conflict Check (Phase 3)
             is_duplicate = False
+            conflicting_fact_id = None
+            
             for old_fact in all_known_facts:
                 old_emb = np.array(old_fact.get("embedding", []))
                 if old_emb.size > 0:
                     similarity = cosine_sim(np.array(new_embedding), old_emb)
+                    
+                    # Exact duplicate check
                     if similarity > FACT_DEDUPLICATION_THRESHOLD:
                         logger.info(f"Deduplicated fact: '{fact_text}' matches existing '{old_fact.get('fact')}'")
                         is_duplicate = True
+                        break
+                    
+                    # Partial overlap / Potential Conflict (Phase 3)
+                    # Logic: If semantic similarity is high but not identical, 
+                    # and categories match, we treat it as an update/override.
+                    if similarity > 0.75 and category == old_fact.get("category"):
+                        logger.info(f"Potential conflict/update detected. New: '{fact_text}' | Old: '{old_fact.get('fact')}'")
+                        conflicting_fact_id = old_fact.get("fact_id")
                         break
 
             if is_duplicate:
@@ -111,9 +125,18 @@ async def store_facts(user_id: str, new_facts: List[Dict[str, Any]]):
                 "fact": fact_text,
                 "category": category,
                 "embedding": new_embedding,
-                "fact_id": f"{user_id}_{fact_id}",  # Pre-compute Firestore doc ID
-                "created_at": datetime.utcnow(),  # Native datetime for Firestore
+                "fact_id": f"{user_id}_{fact_id}", 
+                "importance": importance,  # LEVI v6: Significance Weight
+                "created_at": datetime.utcnow(),
+                "confidence": 0.9,
             }
+
+            # 5. Handle Overwrite (Conflict Resolution)
+            if conflicting_fact_id:
+                logger.info(f"Conflict Resolution: Overriding fact {conflicting_fact_id} with newer info.")
+                await asyncio.to_thread(
+                    firestore_db.collection("user_facts").document(conflicting_fact_id).delete
+                )
 
             if HAS_REDIS:
                 # 5a. Buffer write: push to Redis list (O(1) operation)
@@ -196,22 +219,55 @@ async def search_relevant_facts(user_id: str, query: str, limit: int = 5) -> Lis
             if fact_emb.size > 0:
                 score = cosine_sim(query_embedding, fact_emb)
                 
-                # Category Weighting (Preferences/Traits carry more weight in Chat)
+                # Category Weighting
                 weight = 1.0
                 cat = data.get("category", "factual")
-                if cat == "preference": weight = 1.2
-                elif cat == "trait": weight = 1.1
+                if cat == "preference": weight = 1.4  # Boosted for higher impact
+                elif cat == "trait": weight = 1.3
+                
+                # Recency bias (Phase 3)
+                created_at = data.get("created_at")
+                recency_weight = 1.0
+                if created_at:
+                    if isinstance(created_at, str):
+                        created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+                    age_days = (datetime.utcnow().replace(tzinfo=timezone.utc) - created_at.replace(tzinfo=timezone.utc)).days
+                    recency_weight = max(0.4, 1.0 - (age_days / 120.0)) # Slower decay for v6 (120 days)
+
+                # LEVI v6: Importance Weighting
+                importance = data.get("importance", 0.5)
 
                 scored_facts.append({
                     "fact": fact_text,
                     "category": cat,
-                    "score": score * weight,
-                    "id": f_id
+                    "score": score * weight * recency_weight * (1.0 + importance),
+                    "importance": importance,
+                    "id": f_id,
+                    "embedding": fact_emb # Keep for diversity filter
                 })
                 seen_fact_ids.add(f_id)
         
         scored_facts.sort(key=lambda x: x["score"], reverse=True)
-        return scored_facts[:limit]
+
+        # 5. Diversity Filter (Phase 3 Hardened)
+        # Prevents retrieving 5 versions of "User likes coffee"
+        diverse_facts = []
+        for candidate in scored_facts:
+            if len(diverse_facts) >= limit: break
+            
+            is_redundant = False
+            for existing in diverse_facts:
+                sim = cosine_sim(candidate["embedding"], existing["embedding"])
+                if sim > 0.88: # High similarity threshold
+                    is_redundant = True
+                    break
+            
+            if not is_redundant:
+                # Remove embedding before returning to save bandwidth/noise
+                candidate.pop("embedding", None)
+                diverse_facts.append(candidate)
+
+        return diverse_facts
     except Exception as e:
         logger.error(f"Error searching relevant facts: {e}")
         return []

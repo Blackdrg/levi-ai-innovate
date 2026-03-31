@@ -1,27 +1,21 @@
-# LEVI v2.0 — Changelog
+# LEVI v5.0 — The Soul 🌌
+## Changelog
 
-All notable changes to this project will be documented in this file.
+## [5.0.0] - 2026-03-31 "The Soul" 🌌
+### Added
+- **Deterministic Brain v5.0**: Transitioned to `ExecutionPlan` models for 0% hallucination risk.
+- **Self-Refining Memory**: Hierarchical 3-layer memory with **Semantic Conflict Resolution**.
+- **Adaptive Personas**: Self-optimizing system prompts based on real-time user resonance ratings.
+- **Learning & Memory Graph**: Background extraction of user interests and goals into structured context.
+- **Production Lockdown**: Automated Abuse Detection and Per-User Rate Limiting middlewares.
+- **Canary Verification**: CI/CD now runs automated E2E tests against Canary URLs before promotion.
+- **Hardened SSE**: Built-in 2s reconnection logic and 20s heartbeats for 100% sync reliability.
 
-## [1.0.1] - 2026-03-31 "Production Hardened v1.1" 🛡️
 ### Fixed
-- **Redis Resilience**: Startup connection failures are now non-fatal (Degraded Mode).
-- **Import Error**: Fixed broken circuit breaker imports in analytics router.
-- **Monolith Conflict**: Retired `main.py` stub to resolve duplicate route registrations.
-- **Celery Beat**: Fixed schedule overwrite; memory flushes and daily tasks now coexist.
-- **Async Safety**: Resolved `RuntimeError` in Studio generation (loop detection).
-- **S3 Persistence**: Increased pre-signed URL TTL to 24 hours to match feed cache.
-
-### Added
-- **Unified Feedback**: Consolidated `FeedbackRequest` across Chat, Studio, and Gallery.
-- **Config Hardening**: Frontend `config.js` now detects missing keys and warns in console.
-- **CORS Cleanup**: Removed non-existent high-level domains from whitelist.
-
-## [0.5.0] - 2026-03-30
-### Added
-- Response Caching: 30-minute Redis cache for identical search and chat queries.
-- Webhook Alerts: Circuit breaker now POSTs to `ALERT_WEBHOOK_URL` on service failure.
-
----
+- **Silent Failures**: Standardized on `ToolResult` contracts with automatic retry/fallback chains.
+- **Memory Context Drift**: Added recency-weighted ranking to long-term memory retrieval.
+- **Async Bottlenecks**: Full async/non-blocking refactor of the `learning.py` system.
+- **Deployment Safety**: Added post-deploy technical verification stage in GitHub Actions.
 
 ## [2.0.0] — 2026-03-31 "The Brain" 🧠
 

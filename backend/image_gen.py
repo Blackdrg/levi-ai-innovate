@@ -28,11 +28,11 @@ from backend.circuit_breaker import groq_breaker, together_breaker
 
 logger = logging.getLogger(__name__)
 
-from backend.s3_utils import upload_image_to_s3 # type: ignore
+from backend.gcs_utils import upload_image_to_gcs # type: ignore
 
 TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY")
 TOGETHER_API_URL = "https://api.together.xyz/v1/images/generations"
-AWS_S3_BUCKET = os.getenv("AWS_S3_BUCKET")
+GCP_STORAGE_BUCKET = os.getenv("GCP_STORAGE_BUCKET")
 
 Image.MAX_IMAGE_PIXELS = 50_000_000
 
@@ -141,10 +141,9 @@ def generate_quote_image(
     mood: str = "neutral",
     size: Tuple[int, int] = (1024, 1024),
     custom_bg: str = "",
-    user_tier: str = "free",
     style: str = "",
     return_pil: bool = False,
-    upload_to_s3: bool = False,
+    upload_to_storage: bool = False,
     user_id: Optional[int] = None,
 ) -> dict:
     """
@@ -227,13 +226,13 @@ def generate_quote_image(
     bg.convert("RGB").save(output, "PNG", optimize=True, quality=95)
     output.seek(0)
 
-    if upload_to_s3 and AWS_S3_BUCKET:
+    if upload_to_storage and GCP_STORAGE_BUCKET:
         img_bytes = output.getvalue()
-        s3_url = upload_image_to_s3(img_bytes, user_id)
-        if s3_url:
-            return {"data": s3_url, "engine": engineused, "success": True, "warnings": warnings, "bio": output}
+        gcs_url = upload_image_to_gcs(img_bytes, user_id)
+        if gcs_url:
+            return {"data": gcs_url, "engine": engineused, "success": True, "warnings": warnings, "bio": output}
         else:
-            warnings.append("S3 upload failed")
+            warnings.append("GCS upload failed")
 
     return {"data": output, "engine": engineused, "success": True, "warnings": warnings}
 

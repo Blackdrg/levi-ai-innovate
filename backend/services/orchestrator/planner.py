@@ -1,26 +1,24 @@
 """
 backend/services/orchestrator/planner.py
 
-Two-stage intent detection:
-  Stage 1: Fast regex rules  → zero latency, zero cost
-  Stage 2: LLM fallback      → lightweight 8B model, max 250 tokens
+Deterministic Task Planner v2.0
+Generates validated ExecutionPlans for all LEVI-AI inputs.
 """
+
 import os
 import json
 import logging
 import re
 from typing import List, Dict, Any, Optional
-from .orchestrator_types import IntentResult
+from .orchestrator_types import IntentResult, ExecutionPlan, PlanStep
 
 logger = logging.getLogger(__name__)
 
-
 # ---------------------------------------------------------------------------
-# Stage 1: Rule-Based Intent Detection (Fast / Zero-Cost)
+# Stage 1: Rule-Based Intent Detection
 # ---------------------------------------------------------------------------
 
 INTENT_RULES: List[Dict[str, Any]] = [
-    # ── Greeting ──────────────────────────────────────────────────────────
     {
         "intent": "greeting",
         "complexity": 1,
@@ -30,7 +28,6 @@ INTENT_RULES: List[Dict[str, Any]] = [
             r"^\s*hiya\s*$",
         ],
     },
-    # ── Simple Query ───────────────────────────────────────────────────────
     {
         "intent": "simple_query",
         "complexity": 2,
@@ -42,65 +39,47 @@ INTENT_RULES: List[Dict[str, Any]] = [
             r"\b(help me|what can you do|tell me about yourself)\b",
         ],
     },
-    # ── Tool Request ───────────────────────────────────────────────────────
-    {
-        "intent": "tool_request",
-        "complexity": 5,
-        "patterns": [
-            r"\b(run|execute|use|call|trigger|activate)\b.*\b(tool|function|plugin|skill)\b",
-            r"\b(check the weather|weather (in|for|at))\b",
-            r"\b(convert|calculate|compute|evaluate)\b",
-        ],
-    },
-    # ── Image Generation ───────────────────────────────────────────────────
     {
         "intent": "image",
         "complexity": 5,
         "patterns": [
             r"\b(generate|create|draw|make|show|paint)\b.*\b(image|picture|photo|illustration|art|portrait)\b",
             r"\b(visualize|render)\b",
-            r"\b(canvas|sketch)\b",
             r"\b(imagine|wallpaper)\b",
         ],
     },
-    # ── Code ───────────────────────────────────────────────────────────────
     {
         "intent": "code",
-        "complexity": 6,
+        "complexity": 7,
         "patterns": [
             r"\b(write|create|generate|fix|debug|refactor|explain|architect)\b.*\b(code|script|program|function|algorithm|class|logic|snippet)\b",
             r"\b(python|javascript|html|css|cpp|java|rust|golang|sql|typescript|react|nextjs)\b",
             r"```[\s\S]*?```",
-            r"\b(how to build|how to code|build a|coding task)\b",
         ],
     },
-    # ── Search / Factual Lookup ────────────────────────────────────────────
+    {
+        "intent": "logic",
+        "complexity": 4,
+        "patterns": [
+            r"\b(calculate|compute|solve|math|equation|formula|percent|projection)\b",
+            r"\b(what is [0-9]+ (\+|\*|\/|\-|plus|times|minus|divided by) [0-9]+)\b",
+        ],
+    },
     {
         "intent": "search",
-        "complexity": 4,
+        "complexity": 5,
         "patterns": [
             r"\b(search|find|google|look up|research|who is|what is the latest|where is)\b",
             r"\b(news on|information about|check the status of|real-time data|current events)\b",
-            r"\b(factual insight|deep study|history of)\b",
         ],
     },
 ]
 
-
 def check_rules(user_input: str) -> Optional[IntentResult]:
-    """
-    Check input against ordered regex rules.
-    Returns the first match with high confidence (0.95).
-    Greeting patterns are anchored (^...$) to avoid false positives.
-    """
     text = user_input.lower().strip()
     for rule in INTENT_RULES:
         for pattern in rule["patterns"]:
             if re.search(pattern, text, re.IGNORECASE):
-                logger.debug(
-                    "Rule-based intent match: intent=%s pattern=%s",
-                    rule["intent"], pattern
-                )
                 return IntentResult(
                     intent=rule["intent"],
                     complexity=rule.get("complexity", 5),
@@ -109,16 +88,11 @@ def check_rules(user_input: str) -> Optional[IntentResult]:
                 )
     return None
 
-
 # ---------------------------------------------------------------------------
-# Stage 2: LLM-Based Intent Detection (Fallback)
+# Stage 2: LLM Fallback (Intent Detection)
 # ---------------------------------------------------------------------------
 
-async def call_lightweight_llm(
-    messages: List[Dict[str, str]],
-    temperature: float = 0.3,
-) -> Optional[str]:
-    """Uses llama-3.1-8b-instant for fast, cheap classification decisions."""
+async def call_lightweight_llm(messages: List[Dict[str, str]], temperature: float = 0.3) -> Optional[str]:
     from backend.generation import _async_call_llm_api
     return await _async_call_llm_api(
         messages=messages,
@@ -128,136 +102,113 @@ async def call_lightweight_llm(
         provider="groq",
     )
 
-
 def _parse_json_result(text: str, default_val: Any) -> Any:
-    """Robust JSON extraction — handles markdown fenced blocks."""
-    if not text:
-        return default_val
+    if not text: return default_val
     try:
         content = text.strip()
-        if "```json" in content:
-            content = content.split("```json")[1].split("```")[0]
-        elif "```" in content:
-            content = content.split("```")[1].split("```")[0]
+        if "```json" in content: content = content.split("```json")[1].split("```")[0]
+        elif "```" in content: content = content.split("```")[1].split("```")[0]
         return json.loads(content.strip())
-    except Exception as e:
-        logger.error("Failed to parse LLM JSON: %s | text=%s", e, text[:120])
+    except Exception:
         return default_val
 
-
 async def detect_intent(user_input: str) -> IntentResult:
-    """
-    Classify user intent using a two-stage pipeline:
-      1. Regex rules (instant, zero cost)
-      2. LLM fallback (8B model, ~0.1s)
-
-    Supported output intents:
-      greeting, simple_query, tool_request, image, code, search,
-      complex_query, chat, unknown
-
-    Never raises — always returns a valid IntentResult.
-    """
-    # Stage 1 — Rules (zero cost, instant)
     rule_match = check_rules(user_input)
-    if rule_match:
-        return rule_match
+    if rule_match: return rule_match
 
-    # Stage 2 — LLM fallback (safe: exceptions return default)
+    system_prompt = (
+        "You are the LEVI Intent Classifier. Categorize into ONE: "
+        "'greeting', 'simple_query', 'image', 'code', 'logic', 'search', 'chat', 'unknown'. "
+        "Output ONLY JSON: {\"intent\": \"chat\", \"complexity\": 5, \"confidence\": 0.8}"
+    )
     try:
-        system_prompt = (
-            "You are the LEVI Intent Classifier. Categorize the user's input into "
-            "EXACTLY ONE of these intents: "
-            "'greeting', 'simple_query', 'tool_request', 'image', 'code', "
-            "'search', 'complex_query', 'chat', 'unknown'. "
-            "Also score complexity (1-10) and confidence (0.0-1.0). "
-            "Output ONLY valid JSON: "
-            '{"intent": "chat", "complexity": 5, "confidence": 0.8}'
-        )
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_input},
-        ]
-
-        raw = await call_lightweight_llm(messages)
-        data = _parse_json_result(
-            raw,
-            {"intent": "chat", "complexity": 3, "confidence": 0.5},
-        )
-
-        try:
-            return IntentResult(**data)
-        except Exception:
-            return IntentResult(intent="chat", complexity=3, confidence=0.4)
-
-    except Exception as e:
-        logger.error("detect_intent LLM fallback failed: %s — defaulting to 'chat'", e)
+        raw = await call_lightweight_llm([{"role": "system", "content": system_prompt}, {"role": "user", "content": user_input}])
+        data = _parse_json_result(raw, {"intent": "chat", "complexity": 3, "confidence": 0.5})
+        return IntentResult(**data)
+    except Exception:
         return IntentResult(intent="chat", complexity=3, confidence=0.3)
 
-
 # ---------------------------------------------------------------------------
-# Plan Generator
+# Plan Generator (The Deterministic Core)
 # ---------------------------------------------------------------------------
 
-async def generate_plan(
-    user_input: str,
-    intent_data: IntentResult,
-    context: Dict[str, Any],
-) -> List[Dict[str, Any]]:
+async def generate_plan(user_input: str, intent_data: IntentResult, context: Dict[str, Any]) -> ExecutionPlan:
     """
-    Generate a step-by-step agent plan based on intent and complexity.
-    All local-routed intents return empty plans (handled before planning).
+    Constructs a deterministic ExecutionPlan based on intent and complexity.
+    Unifies all interactions into the same structural flow.
     """
     intent = intent_data.intent
     complexity = intent_data.complexity
+    steps: List[PlanStep] = []
+    memory_needed: List[str] = ["user_profile", "session_mood"]
 
-    # Local engine intents — no plan needed (engine.py handles routing first)
+    # 1. Deterministic Step Assignment
     if intent in ("greeting", "simple_query"):
-        return [{"step": "local_response", "agent": "local_agent"}]
+        steps.append(PlanStep(
+            description="Generate immediate context-aware response",
+            agent="local_agent",
+            critical=True
+        ))
 
-    # Tool-specific single-step plans
-    if intent == "tool_request":
-        return [{"step": "invoke_tool", "agent": "chat_agent"}]
+    elif intent == "image":
+        memory_needed.append("visual_preferences")
+        steps.append(PlanStep(
+            description="Construct high-fidelity visual prompt",
+            agent="chat_agent",
+            tool_input={"task": "visual_prompt_refining"},
+            critical=False
+        ))
+        steps.append(PlanStep(
+            description="Trigger image generation job",
+            agent="image_agent",
+            critical=True
+        ))
 
-    if intent == "image":
-        return [
-            {"step": "refine_visual_prompt", "agent": "chat_agent"},
-            {"step": "synthesize_image", "agent": "image_agent"},
-        ]
+    elif intent == "code":
+        memory_needed.append("coding_history")
+        steps.append(PlanStep(
+            description="Architect and implement solution",
+            agent="code_agent",
+            critical=True
+        ))
+        # Add verification step for high-complexity code
+        if complexity >= 8:
+            steps.append(PlanStep(
+                description="Verify logic and edge cases via Python REPL",
+                agent="python_repl_agent",
+                critical=False
+            ))
 
-    if intent == "code":
-        return [
-            {"step": "architect_logic", "agent": "chat_agent"},
-            {"step": "generate_code", "agent": "code_agent"},
-        ]
+    elif intent == "logic":
+        steps.append(PlanStep(
+            description="Perform precise computational verification",
+            agent="python_repl_agent",
+            critical=True
+        ))
 
-    if intent == "search":
-        return [
-            {"step": "gather_information", "agent": "search_agent"},
-            {"step": "synthesize_results", "agent": "chat_agent"},
-        ]
+    elif intent == "search":
+        steps.append(PlanStep(
+            description="Execute real-time research with Tavily",
+            agent="search_agent",
+            critical=True
+        ))
+        steps.append(PlanStep(
+            description="Synthesize findings with philosophical depth",
+            agent="chat_agent",
+            critical=False
+        ))
 
-    # Simple conversational chat (low complexity)
-    if intent in ("chat", "simple_query") and complexity < 6:
-        return [{"step": "conversational_reply", "agent": "chat_agent"}]
+    # 2. Dynamic Planning Fallback for complex/chat tasks
+    if not steps or intent == "chat":
+        steps.append(PlanStep(
+            description="Synthesize personalized conversational response",
+            agent="chat_agent",
+            critical=True
+        ))
 
-    # Unknown / complex → single chat step (API engine handles model selection)
-    if intent in ("unknown", "complex_query") or complexity >= 8:
-        return [{"step": "deep_reasoning", "agent": "chat_agent"}]
-
-    # Dynamic multi-step planning via LLM (last resort)
-    system_prompt = (
-        "You are the LEVI Task Planner. Define a JSON array of steps for the task. "
-        "Available agents: 'chat_agent', 'image_agent', 'search_agent', 'code_agent'. "
-        "Each step MUST have: 'step' (descriptive name) and 'agent'. "
-        "Output ONLY a valid JSON array."
-    )
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": f"Task: {user_input}\nIntent: {intent}\nComplexity: {complexity}"},
-    ]
-
-    plan_raw = await call_lightweight_llm(messages)
-    return _parse_json_result(
-        plan_raw,
-        [{"step": "fallback_chat", "agent": "chat_agent"}],
+    return ExecutionPlan(
+        intent=intent,
+        steps=steps,
+        memory_needed=memory_needed,
+        estimated_complexity=complexity
     )

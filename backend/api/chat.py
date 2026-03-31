@@ -96,38 +96,84 @@ async def chat_endpoint(
             return json.loads(cached)
 
     # 3. Brain Orchestration
-    # Pass streaming flag to the Brain
-    result = await run_orchestrator(
+    request_id = getattr(request.state, "request_id", f"req_{uuid.uuid4().hex[:8]}")
+    
+    # Phase 8: Async Queue for real-time status updates
+    event_queue = asyncio.Queue()
+
+    async def _on_status(msg: str):
+        await event_queue.put({"type": "activity", "message": msg})
+
+    # Run orchestrator in a task so we can stream queue events in parallel
+    orch_task = asyncio.create_task(run_orchestrator(
         user_input=msg.message,
         session_id=msg.session_id,
         user_id=str(user_id),
         background_tasks=background_tasks,
         user_tier=user_tier,
         mood=msg.mood or "philosophical",
-        streaming=is_streaming
-    )
+        streaming=is_streaming,
+        request_id=request_id,
+        status_callback=_on_status
+    ))
 
-    # 4. Persistence & Response
-    if not str(user_id).startswith("guest:") and "stream" not in result:
-        background_tasks.add_task(lambda: redis.setex(cache_key, _CACHE_TTL, json.dumps(result, default=str)))
-
-    if is_streaming and "stream" in result:
-        # True LLM Streaming
+    # 4. Result Processing & Streaming
+    if is_streaming:
         async def _generator():
-            metadata = {k: v for k, v in result.items() if k != "stream"}
-            # Send metadata in first chunk
-            first_chunk = {"choices": [{"delta": {"content": ""}}], "metadata": metadata}
-            yield f"data: {json.dumps(first_chunk)}\n\n"
-            
-            async for token in result["stream"]:
-                chunk = {"choices": [{"delta": {"content": token}}]}
-                yield f"data: {json.dumps(chunk)}\n\n"
-            yield "data: [DONE]\n\n"
+            try:
+                # ── Step A: Stream Activity Events while Orchestrating ──
+                while not orch_task.done() or not event_queue.empty():
+                    # Check for disconnect
+                    if await request.is_disconnected():
+                        orch_task.cancel()
+                        return
+
+                    try:
+                        # Wait for an event with a small timeout to check orch_task status
+                        event = await asyncio.wait_for(event_queue.get(), timeout=0.1)
+                        yield f"data: {json.dumps(event)}\n\n"
+                    except asyncio.TimeoutError:
+                        continue
+
+                result = await orch_task
+                
+                # Standardized metadata chunk
+                metadata = {k: v for k, v in result.items() if k not in ("stream", "response")}
+                yield f"data: {json.dumps({'metadata': metadata})}\n\n"
+
+                if "stream" in result:
+                    # True LLM Streaming with disconnect check
+                    async for token in result["stream"]:
+                        if await request.is_disconnected():
+                            break
+                        
+                        chunk = {"choices": [{"delta": {"content": token}}]}
+                        yield f"data: {json.dumps(chunk)}\n\n"
+                else:
+                    # Simulated stream for static results (Local/Tool)
+                    response_text = result.get("response", "")
+                    words = response_text.split(" ")
+                    for i, word in enumerate(words):
+                        if await request.is_disconnected():
+                            break
+                        
+                        content = word + (" " if i < len(words) - 1 else "")
+                        chunk = {"choices": [{"delta": {"content": content}}]}
+                        yield f"data: {json.dumps(chunk)}\n\n"
+                        await asyncio.sleep(0.02)
+                
+                yield "data: [DONE]\n\n"
+            except Exception as e:
+                logger.error(f"Streaming error for {request_id}: {e}")
+                yield f"data: {json.dumps({'error': 'Stream interrupted'})}\n\n"
 
         return StreamingResponse(_generator(), media_type="text/event-stream")
-    
-    if is_streaming:
-        # Fallback to simulated stream for static results (Local/Tool)
-        return StreamingResponse(_stream_response(result, is_live=False), media_type="text/event-stream")
+
+    # Sync implementation
+    result = await orch_task
+
+    # Sync Cache Persistence
+    if HAS_REDIS and not str(user_id).startswith("guest:"):
+        background_tasks.add_task(redis.setex, cache_key, _CACHE_TTL, json.dumps(result, default=str))
 
     return result
