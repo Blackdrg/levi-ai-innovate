@@ -73,99 +73,94 @@ async def run_orchestrator(
     )
 
 async def synthesize_response(
-    results: List[Any],
+    results: List[ToolResult],
     context: Dict[str, Any],
 ) -> str:
     """
-    Synthesize multiple agent outputs into LEVI's unified philosophical voice.
+    The ResponseComposer: Synthesizes multiple agent outputs into LEVI's unified voice.
+    Handles conflict resolution, confidence-based filtering, and job integration.
     """
     if not results:
-        return "The void remains silent. Please try another query."
+        return "The void remains silent. Perhaps another path is needed."
 
-    # If only one result and it's successful chat_agent, return it directly
-    if len(results) == 1:
-        r = results[0]
-        # Handle both ToolResult objects and legacy dicts
-        msg = r.message if hasattr(r, 'message') else r.get("message")
-        success = r.success if hasattr(r, 'success') else r.get("success", True)
-        agent = r.agent if hasattr(r, 'agent') else r.get("agent")
+    # 1. Filter and Score Results
+    valid_results = [r for r in results if r.success]
+    if not valid_results:
+        # Fallback to the error message of the first failed critical tool
+        for r in results:
+            if r.error: return f"I encountered a barrier: {r.error}"
+        return "I could not complete the requested reasoning chain."
+
+    # 2. Extract Data & Metadata
+    agent_outputs = []
+    job_ids = []
+    total_cost = 0
+    max_confidence = 0.0
+
+    for r in valid_results:
+        total_cost += r.cost_score
+        max_confidence = max(max_confidence, getattr(r, 'confidence', 0.8))
         
-        if success and agent == "chat_agent" and msg:
-            return msg
+        # Capture creation identifiers
+        if r.data.get("job_id"):
+            job_ids.append(f"{r.data.get('type', 'creation')}: {r.data.get('job_id')}")
 
+        output = r.message or "Task processed."
+        agent_outputs.append(f"Agent [{r.agent}]: {output}")
+
+    # 3. Direct Return Optimization (Level 1/2 with single high-confidence agent)
+    if len(valid_results) == 1 and valid_results[0].agent == "chat_agent":
+        return valid_results[0].message
+
+    # 4. LLM Synthesis (Response Composition)
     from backend.generation import _async_call_llm_api
     from backend.learning import UserPreferenceModel
 
     user_id = context.get("user_id", "guest")
     pref_model = UserPreferenceModel(user_id)
     preferences = await pref_model.get_profile()
-
+    
+    style_hint = preferences.get("response_style", "philosophical and concise")
     ltm = context.get("long_term", {})
-    pulse = context.get("interaction_pulse", "stable")
-
+    
     fact_parts = []
     if ltm:
         for cat in ["preferences", "traits", "history"]:
             vals = ltm.get(cat, [])
-            if vals:
-                fact_parts.append(f"{cat.capitalize()}: {', '.join(vals[:5])}")
+            if vals: fact_parts.append(f"{cat.capitalize()}: {', '.join(str(v) for v in vals[:3])}")
 
-    agent_outputs = []
-    for r in results:
-        msg = r.message if hasattr(r, 'message') else r.get("message")
-        err = r.error if hasattr(r, 'error') else r.get("error")
-        agent = r.agent if hasattr(r, 'agent') else r.get("agent")
-        
-        output = msg or err or "Task completed with no output."
-        agent_outputs.append(f"Agent [{agent}]: {output}")
-
-    # Phase 7 & 8: Contextual Integration
-    style_hint = preferences.get("response_style", "philosophical and concise")
-    topics_hint = ", ".join(preferences.get("top_topics", []))
-
-    # Detect background jobs
-    job_ids = []
-    agent_outputs = []
-    for r in results:
-        msg = r.message if hasattr(r, 'message') else r.get("message", "")
-        err = r.error if hasattr(r, 'error') else r.get("error")
-        agent = r.agent if hasattr(r, 'agent') else r.get("agent", "unknown")
-        data = r.data if hasattr(r, 'data') else r.get("data", {})
-        
-        # Capture job IDs for synthesis
-        if data.get("job_id"):
-            job_ids.append(f"{data.get('type', 'job')}: {data.get('job_id')}")
-
-        output = msg or err or "Task completed."
-        agent_outputs.append(f"Agent [{agent}]: {output}")
-
-    job_context = f"\nAction Result: I have initiated these creations: {', '.join(job_ids)}" if job_ids else ""
-
+    job_context = f"\nAction Result: I have initiated these: {', '.join(job_ids)}" if job_ids else ""
+    
     synth_prompt = (
-        f"Role: You are LEVI, a {context.get('mood', 'philosophical')} AI voice. "
-        f"Goal: Synthesize agent outputs into a cohesive, personalized response. "
-        f"User Style Preference: {style_hint}. Interest context: {topics_hint}.\n"
-        "Voice: Poetic, direct, and observant. Do NOT mention agent names or 'results'.\n"
-        f"Context:\n{chr(10).join(fact_parts)}\n\n"
-        f"Task: {context.get('input', '')}\n\n"
-        f"Agent Data:\n{'---'.join(agent_outputs)}"
-        f"{job_context}"
+        f"You are LEVI, a {context.get('mood', 'philosophical')} AI voice. "
+        f"Integrate these specialized agent findings into a cohesive, personalized vision.\n"
+        f"User Resonance Style: {style_hint}.\n"
+        f"Contextual Roots: {', '.join(fact_parts)}\n\n"
+        f"Input: {context.get('input', '')}\n\n"
+        f"Findings:\n{chr(10).join(agent_outputs)}\n"
+        f"{job_context}\n\n"
+        "Constraint: Do NOT mention agent names or that you are 'synthesizing'. Speak as one unified mind."
     )
+
+    # Tiered Model Selection
+    user_tier = context.get("user_tier", "free")
+    complexity = context.get("complexity_level", 2)
+    model = "llama-3.1-70b-versatile" if (user_tier in ("pro", "creator") or complexity == 3) else "llama-3.1-8b-instant"
 
     try:
         synth_response = await _async_call_llm_api(
             messages=[{"role": "system", "content": synth_prompt}],
-            model="llama-3.1-70b-versatile" if context.get("user_tier") != "free" else "llama-3.1-8b-instant",
+            model=model,
             provider="groq",
-            temperature=0.75
+            temperature=0.7
         )
-        # Ensure job IDs are mentioned if we generated some
+        
+        # Ensure job IDs are preserved if missing from LLM output
         if job_ids and not any(jid in synth_response for jid in job_ids):
-             return f"{synth_response}\n\nTracking: {', '.join(job_ids)}"
+             return f"{synth_response}\n\nCreation Tracking: {', '.join(job_ids)}"
+        
         return synth_response
-    except Exception:
-        # Fallback to last valid message
-        for r in reversed(results):
-            msg = r.message if hasattr(r, 'message') else r.get("message")
-            if msg: return msg
-        return "Synthesis failed. Let's try another topic."
+    except Exception as e:
+        logger.error(f"Synthesis failed: {e}")
+        # Fallback: simple merge of outputs
+        return "\n\n".join([r.message for r in valid_results if r.message])

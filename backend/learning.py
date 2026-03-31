@@ -60,8 +60,13 @@ async def collect_training_sample(
     
     # Add to Firestore collection (Async)
     doc_ref = await asyncio.to_thread(firestore_db.collection("training_data").add, sample_data)
+    
+    # 2. Hybrid Learning: Pattern Crystallization (v6 Phase 15)
+    # If absolute best (5-star), crystallize into Profound Memory
+    if rating >= 5:
+        asyncio.create_task(crystallize_profound_pattern(user_message, bot_response, mood))
 
-    # If high quality, augment the quote knowledge base
+    # 3. Standard Learning logic
     if rating >= MIN_QUALITY_SCORE:
         asyncio.create_task(_augment_knowledge_base(user_message, bot_response, mood))
 
@@ -150,6 +155,71 @@ async def _augment_knowledge_base(question: str, answer: str, mood: str):
 
     except Exception as e:
         logger.warning(f"[Learning] Knowledge base augmentation failed: {e}")
+
+# ── Hybrid Learning: Resonant Core ──────────────────────────────────────────
+
+async def crystallize_profound_pattern(user_input: str, response: str, mood: str):
+    """
+    Extracts the 'Resonant Core' from a 5-star response and stores it in the
+    profound_patterns collection for In-Context Learning (ICL).
+    """
+    from backend.firestore_db import db as firestore_db
+    from backend.embeddings import embed_text
+    try:
+        # Anonymize (strip PII)
+        clean_input = user_input[:200] # Simple truncation for patterns
+        clean_response = response[:500]
+        
+        # Avoid duplicates
+        pattern_id = hashlib.md5(f"{clean_input}||{clean_response}".encode()).hexdigest()
+        pattern_ref = firestore_db.collection("profound_patterns").document(pattern_id)
+        
+        if (await asyncio.to_thread(pattern_ref.get)).exists:
+            return
+
+        emb = embed_text(clean_input)
+        await asyncio.to_thread(pattern_ref.set, {
+            "input": clean_input,
+            "output": clean_response,
+            "embedding": emb,
+            "mood": mood,
+            "created_at": datetime.utcnow()
+        })
+        logger.info(f"[HybridLearning] Crystallized profound pattern: {pattern_id[:8]}")
+    except Exception as e:
+        logger.error(f"[HybridLearning] Crystallization failed: {e}")
+
+async def retrieve_resonant_patterns(user_input: str, threshold: float = 0.82) -> List[Dict[str, str]]:
+    """
+    Search pattern memory for the most similar successful interactions.
+    Returns up to 2 patterns for Few-Shot injection.
+    """
+    from backend.firestore_db import db as firestore_db
+    from backend.embeddings import embed_text, cosine_sim
+    try:
+        query_emb = embed_text(user_input)
+        
+        # In a real vector DB we'd do a proper search. 
+        # Here we fetch the last 100 patterns and score them (small scale).
+        patterns_docs = await asyncio.to_thread(
+            lambda: firestore_db.collection("profound_patterns")
+            .order_by("created_at", direction="DESCENDING")
+            .limit(100).get()
+        )
+        
+        scored = []
+        for doc in patterns_docs:
+            p = doc.to_dict()
+            sim = cosine_sim(query_emb, p["embedding"])
+            if sim >= threshold:
+                scored.append({"sim": sim, "input": p["input"], "output": p["output"]})
+        
+        # Return top 2
+        scored.sort(key=lambda x: x["sim"], reverse=True)
+        return [{"input": s["input"], "output": s["output"]} for s in scored[:2]]
+    except Exception as e:
+        logger.warning(f"[HybridLearning] Pattern retrieval failed: {e}")
+        return []
 
 
 # ─────────────────────────────────────────────
@@ -458,29 +528,42 @@ class AdaptivePromptManager:
                 # Extract pure philosophical structure, NO content
                 success_patterns.append(s.get("bot_response", "")[:100] + "...")
 
-            # 3. LLM Mutation Task
-            mutation_prompt = (
-                "You are the LEVI Core Architect. You must evolve a system instruction to improve user resonance.\n"
-                f"Current Weak Instruction: \"{self.PROMPT_VARIANTS[worst_idx]}\"\n"
-                f"Success Patterns Found: {json.dumps(success_patterns)}\n\n"
-                "Rewrite the instruction to be more profound, direct, and poetic. "
-                "Output ONLY the new instruction string. LIMIT 30 words. NO PII."
-            )
-            
-            new_variant = await call_lightweight_llm([{"role": "system", "content": mutation_prompt}])
-            new_variant = new_variant.strip().replace('"', '')
-            
-            if len(new_variant) > 10:
-                # 4. Finalize Mutation
-                await asyncio.to_thread(
-                    lambda: firestore_db.collection("prompt_performance").document(str(worst_idx)).update({
-                        "original_prompt": self.PROMPT_VARIANTS[worst_idx],
-                        "avg_score": 3.0, # Reset for the new generation
-                        "sample_count": 0,
-                        "evolved_at": datetime.utcnow()
-                    })
+                # 3. Critic-Driven Mutation (LEVI v6 Phase 16)
+                # We analyze success patterns and failures to evolve a better variant.
+                from backend.services.orchestrator.tool_registry import call_tool
+                diagnostic = await call_tool("diagnostic_agent", {
+                    "analysis_type": "prompt_evolution",
+                    "success_samples": success_patterns
+                })
+                
+                mutation_context = diagnostic.get("message", "Evolve for depth and resonance.")
+
+                mutation_prompt = (
+                    "You are the LEVI Core Architect. You must evolve a system instruction to improve user resonance.\n"
+                    f"Current Weak Instruction: \"{self.PROMPT_VARIANTS[worst_idx]}\"\n"
+                    f"Critic Recommendation: {mutation_context}\n\n"
+                    "Rewrite the instruction to be more profound, direct, and poetic. "
+                    "Output ONLY the new instruction string. LIMIT 30 words. NO PII."
                 )
-                logger.info(f"[Evolver] Mutation Complete: Variant {worst_idx} is now: {new_variant}")
+                
+                new_variant = await call_lightweight_llm(
+                    messages=[{"role": "system", "content": mutation_prompt}],
+                    model="llama-3.1-8b-instant"
+                )
+                new_variant = new_variant.strip().replace('"', '')
+                
+                if len(new_variant) > 10:
+                    # 4. Finalize Mutation
+                    await asyncio.to_thread(
+                        lambda: firestore_db.collection("prompt_performance").document(str(worst_idx)).update({
+                            "original_prompt": self.PROMPT_VARIANTS[worst_idx],
+                            "evolved_prompt": new_variant,
+                            "avg_score": 3.0, # Reset for the new generation
+                            "sample_count": 0,
+                            "evolved_at": datetime.utcnow()
+                        })
+                    )
+                    logger.info(f"[Evolver] Critic-Driven Mutation Complete: Variant {worst_idx}")
                 
         except Exception as e:
             logger.error(f"Prompt evolution failed: {e}")

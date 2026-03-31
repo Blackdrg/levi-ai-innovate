@@ -119,12 +119,24 @@ async def instance_heartbeat(instance_id: str):
             logger.warning(f"Heartbeat failed: {e}")
         await asyncio.sleep(30)
 
+async def finetune_poller():
+    """Periodically check Together AI fine-tuning status."""
+    from backend.services.orchestrator.fine_tune_tasks import poll_finetune_status
+    while True:
+        try:
+            await poll_finetune_status()
+        except Exception as e:
+            logger.warning(f"Finetune poll failed: {e}")
+        await asyncio.sleep(300) # Poll every 5 mins
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info(f"Starting LEVI Heart [{INSTANCE_ID}]...")
     heartbeat_task = None
+    finetune_task = None
     if os.getenv("DISABLE_BACKGROUND_TASKS") != "true":
         heartbeat_task = asyncio.create_task(instance_heartbeat(INSTANCE_ID))
+        finetune_task = asyncio.create_task(finetune_poller())
     
     try:
         firestore_db.collection("health_check").document("status").get(timeout=5.0)
@@ -149,6 +161,8 @@ async def lifespan(app: FastAPI):
     yield
     if heartbeat_task:
         heartbeat_task.cancel()
+    if finetune_task:
+        finetune_task.cancel()
     if HAS_REDIS:
         redis_client.hdel("active_instances", INSTANCE_ID)
     logger.info(f"Stopping LEVI Heart [{INSTANCE_ID}]...")
@@ -252,6 +266,7 @@ from backend.api.orchestrator import router as orchestrator_router
 from backend.api.ai_studio import router as ai_studio_router
 from backend.api.privacy import router as privacy_router
 from backend.api.analytics import router as analytics_router
+from backend.api.monitor_routes import router as monitor_router
 
 app.include_router(auth_router, prefix="/auth", tags=["Auth"])
 app.include_router(chat_router, prefix="/chat", tags=["Chat"])
@@ -263,6 +278,7 @@ app.include_router(privacy_router, prefix="/user/privacy", tags=["Privacy"])
 app.include_router(learning_router, prefix="/learning", tags=["Learning"])
 app.include_router(orchestrator_router, prefix="/system/orchestrator", tags=["Orchestrator"])
 app.include_router(analytics_router, prefix="/system/analytics", tags=["Analytics"])
+app.include_router(monitor_router, prefix="/system/monitor", tags=["Monitoring"])
 
 
 # ── Global Error Handling ────────────────────────

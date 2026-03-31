@@ -171,12 +171,18 @@ def _get_random_persona(mood: str = "") -> Dict:
 
 
 def _build_dynamic_system_prompt(persona: Dict, user_memory: Any = None,
-                                  conversation_depth: int = 0) -> str:
+                                   conversation_depth: int = 0, few_shot_patterns: Optional[List[Dict]] = None) -> str:
     """
-    Builds a hyper-relevant system prompt using persona and semantic memory.
+    Builds a hyper-relevant system prompt using persona, semantic memory,
+    and resonant success patterns for few-shot learning (Phase 15).
     """
-    base = persona["prompt"]
-    memory_layer = ""
+    # ── Few-Shot ICL Injection (with BCCI Compression) ──
+    from .context_utils import compress_pattern
+    if few_shot_patterns:
+        pattern_layer = "\n\n[SUCCESS PATTERNS]:\n"
+        # Compress each pattern to save space (max 500 chars per example)
+        for p in few_shot_patterns:
+            pattern_layer += compress_pattern(p["input"], p["output"], max_chars=400) + "\n"
 
     if user_memory:
         # Handle dict-based memory from MemoryManager (Phase 5)
@@ -211,7 +217,7 @@ def _build_dynamic_system_prompt(persona: Dict, user_memory: Any = None,
         "Do not use repetitive openers like 'Ah,' or 'Indeed'. Be starkly original."
     )
 
-    return f"{base}\n\n[CONTEXT]:{memory_layer}{depth_hint}\n\n{guards}"
+    return f"{base}\n\n[CONTEXT]:{memory_layer}{depth_hint}{pattern_layer}\n\n{guards}"
 
 
 async def _async_call_llm_api(messages: List[Dict], temperature: float = 0.85,
@@ -220,12 +226,25 @@ async def _async_call_llm_api(messages: List[Dict], temperature: float = 0.85,
     if provider == "groq":
         api_key = os.getenv("GROQ_API_KEY")
         url = "https://api.groq.com/openai/v1/chat/completions"
+    elif provider == "together":
+        api_key = os.getenv("TOGETHER_API_KEY")
+        url = "https://api.together.xyz/v1/chat/completions"
     else:
+        # Custom or fine-tuned provider
         api_key = os.getenv("TOGETHER_API_KEY")
         url = "https://api.together.xyz/v1/chat/completions"
 
     if not api_key:
         return None
+    
+    # LEVI v6 Phase 13: Check for active fine-tuned model override
+    from backend.redis_client import HAS_REDIS, r as redis_client
+    if HAS_REDIS and provider != "groq":
+        ft_model = redis_client.get("system:finetuning:last_model_id")
+        if ft_model:
+            model = ft_model.decode()
+            logger.info(f"[Generation] Overriding base model with fine-tuned LEVI: {model}")
+
     try:
         from backend.utils.network import async_safe_request # type: ignore
         resp = await async_safe_request(

@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LEVI — Orchestrator Monitor</title>
+    <link href="./css/output.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Plus+Jakarta+Sans:wght@200;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .glass { background: rgba(19,19,23,0.85); backdrop-filter: blur(24px); }
+        .gold-text { background: linear-gradient(135deg, #f2ca50 0%, #d4af37 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+        .stat-card { background: rgba(27,27,31,0.6); border: 0.5px solid rgba(255,255,255,0.08); }
+        .evolve-bar { background: linear-gradient(90deg, #f2ca50 var(--progress), rgba(255,255,255,0.05) var(--progress)); }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-[#0e0e12] text-[#e5e1e7] font-sans antialiased min-h-screen">
+    <nav class="p-6 border-b border-white/5 flex justify-between items-center glass sticky top-0 z-50">
+        <div class="flex items-center gap-4">
+            <span class="font-headline italic text-xl gold-text">Orchestrator Monitor</span>
+            <span class="text-[10px] uppercase tracking-[0.3em] text-zinc-500 font-bold border-l border-white/10 pl-4">Adaptive Engine v6.5</span>
+        </div>
+        <div id="sync-status" class="flex items-center gap-2 text-[9px] font-bold uppercase tracking-widest text-emerald-500">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            Real-time Logic Stream
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto p-6 lg:p-10">
+        <!-- Top Stats -->
+        <div class="grid md:grid-cols-3 gap-6 mb-10">
+            <div class="stat-card rounded-3xl p-6">
+                <p class="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">Avg. Cost Weight</p>
+                <h3 id="stat-cost" class="text-4xl font-headline italic gold-text">0.00</h3>
+            </div>
+            <div class="stat-card rounded-3xl p-6">
+                <p class="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">Global Latency</p>
+                <div class="flex items-baseline gap-2">
+                    <h3 id="stat-latency" class="text-4xl font-headline italic">0</h3>
+                    <span class="text-xs text-zinc-500">ms</span>
+                </div>
+            </div>
+            <div class="stat-card rounded-3xl p-6">
+                <div class="flex justify-between items-start mb-2">
+                    <p class="text-[10px] uppercase tracking-widest text-zinc-500">Evolution Meter</p>
+                    <span id="evolve-percent" class="text-[10px] font-mono text-primary">0%</span>
+                </div>
+                <div class="h-1.5 w-full bg-white/5 rounded-full overflow-hidden mt-4">
+                    <div id="evolve-bar" class="h-full bg-primary transition-all duration-1000" style="width: 0%"></div>
+                </div>
+                <p class="text-[9px] text-zinc-600 mt-2 italic">Next mutation at 25 High-Q interactions</p>
+            </div>
+        </div>
+
+        <!-- Learning Loop & Active Model -->
+        <div class="grid md:grid-cols-2 gap-6 mb-10">
+            <div class="stat-card rounded-[2rem] p-8 relative overflow-hidden">
+                <div id="training-glow" class="absolute inset-0 bg-emerald-500/5 opacity-0 transition-opacity duration-1000"></div>
+                <div class="flex justify-between items-start mb-6">
+                    <div>
+                        <h4 class="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-1">Infinite Learning Loop</h4>
+                        <p id="learning-status" class="text-[9px] text-zinc-600 font-mono">STATUS: COLLECTING DATA</p>
+                    </div>
+                    <span id="active-job-tag" class="hidden px-2 py-1 rounded-md bg-emerald-500/10 text-emerald-500 text-[8px] font-bold uppercase tracking-widest animate-pulse">Training in Progress</span>
+                </div>
+                <div class="space-y-4">
+                    <div class="flex justify-between text-[10px] font-mono">
+                        <span class="text-zinc-500">HQ Sample Readiness</span>
+                        <span id="hq-sample-count" class="text-primary">0 / 500</span>
+                    </div>
+                    <div class="h-1 w-full bg-white/5 rounded-full overflow-hidden">
+                        <div id="learning-bar" class="h-full bg-primary transition-all duration-1000" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="stat-card rounded-[2rem] p-8 flex flex-col justify-center">
+                <p class="text-[10px] uppercase tracking-widest text-zinc-500 mb-2 font-bold text-center">Active Specialized Weights</p>
+                <div class="text-center">
+                    <h3 id="active-model-id" class="text-xl font-mono text-zinc-300">llama-3.1-8b-instant</h3>
+                    <p class="text-[9px] text-zinc-600 mt-2 italic">Optimized for Philosophical Depth & Creative Synthesis</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid lg:grid-cols-3 gap-8">
+            <!-- Distribution Charts -->
+            <div class="lg:col-span-2 space-y-8">
+                <div class="grid md:grid-cols-2 gap-8">
+                    <div class="stat-card rounded-[2rem] p-8">
+                        <h4 class="text-[10px] uppercase tracking-widest text-zinc-500 mb-6 font-bold">Route Distribution</h4>
+                        <canvas id="routeChart" height="200"></canvas>
+                    </div>
+                    <div class="stat-card rounded-[2rem] p-8">
+                        <h4 class="text-[10px] uppercase tracking-widest text-zinc-500 mb-6 font-bold">Complexity Spreading</h4>
+                        <canvas id="complexityChart" height="200"></canvas>
+                    </div>
+                </div>
+
+                <!-- Decision Audit -->
+                <div class="stat-card rounded-[2rem] p-8">
+                    <div class="flex justify-between items-center mb-6">
+                        <h4 class="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Decision Audit Log (Recent)</h4>
+                        <span class="text-[10px] text-zinc-600 font-mono">Live Firestore Stream</span>
+                    </div>
+                    <!-- Evolution State Widget (Phase 18) -->
+                    <div class="stat-card" id="evolution-card">
+                        <h3>Evolution State</h3>
+                        <div class="state-badge" id="state-status">HEALTHY</div>
+                        <p>System Adaptive Health</p>
+                    </div>
+                    
+                    <!-- Performance Metrics (Phase 18) -->
+                    <div class="stat-card">
+                        <h3>Quality & Confidence</h3>
+                        <div class="stat-value" id="avg-quality">4.5</div>
+                        <div class="sub-stat">Conf: <span id="avg-confidence">92%</span></div>
+                    </div>
+                    <div id="decision-log" class="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+                        <!-- Decisions here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Prompt Performance -->
+            <div class="space-y-8">
+                <div class="stat-card rounded-[2rem] p-8 overflow-hidden relative">
+                    <h4 class="text-[10px] uppercase tracking-widest text-zinc-500 mb-6 font-bold">Evolver: Prompt Variants</h4>
+                    <div id="prompt-list" class="space-y-4">
+                        <!-- Variants here -->
+                    </div>
+                </div>
+
+                <div class="stat-card rounded-[2rem] p-6 text-center">
+                    <span class="material-symbols-outlined text-primary mb-2 opacity-50">auto_awesome</span>
+                    <p class="text-xs font-light leading-relaxed text-zinc-500 italic">"Intelligence is not just answering; it is deciding HOW to answer."</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script type="module">
+        import { api } from './js/api.js';
+
+        let routeChart, complexityChart;
+
+        async function refresh() {
+            try {
+                // Fetch Stats
+                const response = await fetch('/api/v1/system/monitor/stats', {
+                    headers: { 'X-Admin-Key': localStorage.getItem('admin_key') }
+                });
+                const stats = await response.json();
+
+                // Update Stats
+                document.getElementById('avg-quality').innerText = stats.performance.avg_quality;
+                document.getElementById('avg-confidence').innerText = stats.performance.avg_confidence + '%';
+                
+                // Update Evolution State
+                const stateStatus = document.getElementById('state-status');
+                stateStatus.innerText = stats.evolution_state;
+                stateStatus.className = 'state-badge ' + stats.evolution_state.toLowerCase();
+                
+                // Update Distribution
+                const dist = stats.orchestration.route_distribution;
+
+                // Update Counters
+                document.getElementById('stat-cost').innerText = stats.averages.cost_weight.toFixed(2);
+                document.getElementById('stat-latency').innerText = Math.round(stats.averages.latency_ms);
+                document.getElementById('evolve-bar').style.width = stats.evolution_meter.progress_percent + '%';
+                document.getElementById('evolve-percent').innerText = stats.evolution_meter.progress_percent + '%';
+
+                // Update Learning Stats
+                const ls = stats.learning_system;
+                document.getElementById('hq-sample-count').innerText = `${ls.hq_samples} / ${ls.threshold}`;
+                document.getElementById('learning-bar').style.width = Math.min(100, (ls.hq_samples / ls.threshold) * 100) + '%';
+                document.getElementById('active-model-id').innerText = ls.last_model;
+                
+                if (ls.is_training) {
+                    document.getElementById('learning-status').innerText = `STATUS: TRAINING JOB [${ls.active_job}]`;
+                    document.getElementById('active-job-tag').classList.remove('hidden');
+                    document.getElementById('training-glow').style.opacity = '1';
+                } else {
+                    document.getElementById('learning-status').innerText = 'STATUS: COLLECTING DATA';
+                    document.getElementById('active-job-tag').classList.add('hidden');
+                    document.getElementById('training-glow').style.opacity = '0';
+                }
+
+                // Update Charts
+                updateCharts(stats);
+
+                // Fetch Audit Logs
+                const logRes = await fetch('/api/v1/system/monitor/decisions', {
+                    headers: { 'X-Admin-Key': localStorage.getItem('admin_key') }
+                });
+                const logs = await logRes.json();
+                renderAudit(logs.decisions);
+
+                // Fetch Prompt Variants
+                const promptRes = await fetch('/api/v1/system/monitor/prompts', {
+                    headers: { 'X-Admin-Key': localStorage.getItem('admin_key') }
+                });
+                const prompts = await promptRes.json();
+                renderPrompts(prompts.variants);
+
+            } catch (e) {
+                console.error("Monitor sync failed:", e);
+            }
+        }
+
+        function updateCharts(data) {
+            const ctxRoute = document.getElementById('routeChart').getContext('2d');
+            const ctxComp = document.getElementById('complexityChart').getContext('2d');
+
+            if (!routeChart) {
+                routeChart = new Chart(ctxRoute, {
+                    type: 'doughnut',
+                    data: {
+                        labels: Object.keys(data.route_distribution),
+                        datasets: [{
+                            data: Object.values(data.route_distribution),
+                            backgroundColor: ['#10b981', '#34d399', '#fbbf24', '#f43f5e'],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: { plugins: { legend: { position: 'bottom', labels: { color: '#71717a', font: { size: 10 } } } } }
+                });
+            } else {
+                routeChart.data.datasets[0].data = Object.values(data.route_distribution);
+                routeChart.update();
+            }
+
+            if (!complexityChart) {
+                complexityChart = new Chart(ctxComp, {
+                    type: 'bar',
+                    data: {
+                        labels: Object.keys(data.complexity_spreading),
+                        datasets: [{
+                            label: 'Requests',
+                            data: Object.values(data.complexity_spreading),
+                            backgroundColor: '#d4af37',
+                            borderRadius: 10
+                        }]
+                    },
+                    options: { 
+                        scales: { 
+                            y: { grid: { display: false }, ticks: { color: '#52525b', font: { size: 8 } } },
+                            x: { grid: { display: false }, ticks: { color: '#52525b', font: { size: 10 } } }
+                        },
+                        plugins: { legend: { display: false } }
+                    }
+                });
+            } else {
+                complexityChart.data.datasets[0].data = Object.values(data.complexity_spreading);
+                complexityChart.update();
+            }
+        }
+
+        function renderAudit(decisions) {
+            const container = document.getElementById('decision-log');
+            container.innerHTML = decisions.map(d => {
+                const color = d.route === 'api' ? 'rose-500' : 'emerald-500';
+                return `
+                    <div class="flex items-center justify-between p-3 stat-card rounded-2xl text-[10px] font-mono">
+                        <div class="flex items-center gap-3">
+                            <span class="text-${color}">●</span>
+                            <span class="text-zinc-400 capitalize">${d.intent_type}</span>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <span class="text-zinc-600">L${d.complexity_level}</span>
+                            <span class="text-primary/70">${d.estimated_cost_weight.toFixed(1)}w</span>
+                            <span class="text-zinc-700">${d.timestamp.split('T')[1].split('.')[0]}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderPrompts(variants) {
+            const container = document.getElementById('prompt-list');
+            container.innerHTML = variants.sort((a,b) => b.avg_score - a.avg_score).map(v => `
+                <div class="p-4 stat-card rounded-2xl space-y-2">
+                    <div class="flex justify-between items-center">
+                        <span class="text-[9px] uppercase tracking-widest text-zinc-500">Variant ${v.variant_idx}</span>
+                        <span class="text-xs font-bold gold-text">${v.avg_score.toFixed(2)}</span>
+                    </div>
+                    <p class="text-[10px] text-zinc-400 leading-relaxed line-clamp-2 italic">"${v.original_prompt || 'LEVI v6 Instruction'}"</p>
+                </div>
+            `).join('');
+        }
+
+        setInterval(refresh, 5000);
+        refresh();
+    </script>
+</body>
+</html>
