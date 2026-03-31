@@ -355,6 +355,34 @@ def get_user_credits(user_id: str) -> int:
     return 0
 
 
+# ── Generic JSON Caching (Phase 50) ─────────────────────────
+
+def cache_json(key: str, data: Any, ttl: int = 3600):
+    """Cache any JSON-serializable data in Redis."""
+    try:
+        if is_serializable(data):
+            _set(key, json.dumps(data), ex=ttl)
+    except Exception as e:
+        print(f"[Redis] cache_json failed for {key}: {e}")
+
+def get_cached_json(key: str) -> Optional[Any]:
+    """Retrieve cached JSON data from Redis."""
+    try:
+        raw = _get(key)
+        if raw:
+            return json.loads(cast(Any, raw))
+    except Exception as e:
+        print(f"[Redis] get_cached_json failed for {key}: {e}")
+    return None
+
+def invalidate_cache(key: str):
+    """Invalidate a cache key."""
+    if HAS_REDIS:
+        r.delete(key)
+    else:
+        _memory_cache.pop(key, None)
+
+
 # --- Enhanced Concurrency Control (Lua for Atomicity) ---
 
 ACQUIRE_SLOT_LUA = """
@@ -399,38 +427,49 @@ def release_concurrency_slot(limit_key: str):
 import time
 from contextlib import contextmanager
 
+# --- Distributed Lock (Phase 50 Hardened) ---
+
+LUA_RELEASE_SCRIPT = """
+if redis.call("get", KEYS[1]) == ARGV[1] then
+    return redis.call("del", KEYS[1])
+else
+    return 0
+end
+"""
+
 @contextmanager
-def distributed_lock(lock_name: str, ttl: int = 10):
+def distributed_lock(lock_name: str, ttl: int = 10, retries: int = 0, backoff: float = 0.1):
     """
-    Phase 41: Multi-instance distributed lock (Redlock pattern).
-    Ensures safe access to global resources (credits, jobs).
+    Hardened multi-instance distributed lock (Redlock pattern).
+    Uses Lua for atomic release and provides optional retry backoff.
     """
     if not HAS_REDIS:
-        # Local development fallback: no-op since multi-instance is unlikely
         yield True
         return
 
     lock_key = f"lock:{lock_name}"
-    lock_val = str(time.time())
+    lock_val = str(time.time() + ttl) # Unique token for ownership
     
-    # Try to acquire the lock: SET lock_key lock_val NX PX ttl*1000
-    acquired = r.set(lock_key, lock_val, nx=True, px=ttl * 1000)
-    
+    acquired = False
+    for i in range(retries + 1):
+        # Set if not exists, with millisecond TTL
+        acquired = r.set(lock_key, lock_val, nx=True, px=ttl * 1000)
+        if acquired:
+            break
+        if i < retries:
+            # Exponential backoff with jitter
+            import random
+            time.sleep(backoff * (2 ** i) + random.uniform(0, 0.05))
+
     try:
-        if not acquired:
-            print(f"[Redis] Lock {lock_name} is already held.")
-            yield False
-        else:
-            yield True
+        yield bool(acquired)
     finally:
         if acquired:
-            # Only release if we still hold it (check value)
-            current = _get(lock_key)
-            if current:
-                # Standardize to string for comparison
-                val = current.decode() if isinstance(current, bytes) else str(current)
-                if val == lock_val:
-                    r.delete(lock_key)
+            try:
+                # Atomically release only if we still own it
+                r.eval(LUA_RELEASE_SCRIPT, 1, lock_key, lock_val)
+            except Exception as e:
+                print(f"[Redis] Atomic lock release failed for {lock_name}: {e}")
 
 def is_rate_limited(user_id: str, limit: int = 5, window: int = 60) -> bool:
     """

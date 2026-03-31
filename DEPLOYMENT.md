@@ -1,164 +1,107 @@
-# Deployment Guide — LEVI-AI v2.0 "The Brain"
+# Deployment Guide — LEVI-AI v5.0+ "The Sovereign Brain"
 
-Production deployment to **Google Cloud Run** (backend) + **Firebase Hosting** (frontend).
-
----
-
-## ⚙️ GitHub Secrets — Required
-
-Add all of these in **GitHub → Settings → Secrets and variables → Actions**:
-
-### 🌐 Cloud & Infrastructure
-| Secret | Description |
-|--------|-------------|
-| `GCP_SA_KEY` | GCP Service Account JSON (Cloud Run Admin + Storage Admin) |
-| `FIREBASE_SERVICE_ACCOUNT_JSON` | Firebase service account JSON string |
-| `FIREBASE_PROJECT_ID` | e.g. `levi-ai-c23c6` |
-| `REDIS_URL` | Upstash Redis URL — **required** for Celery + rate limiting |
-
-### 🧠 AI & Intelligence
-| Secret | Description |
-|--------|-------------|
-| `GROQ_API_KEY` | Groq Cloud API key (intent detection + synthesis) |
-| `TOGETHER_API_KEY` | Together AI key (image generation via FLUX.1) |
-
-### 💳 Payments
-| Secret | Description |
-|--------|-------------|
-| `RAZORPAY_KEY_ID` | Razorpay API key ID |
-| `RAZORPAY_KEY_SECRET` | Razorpay API key secret |
-| `RAZORPAY_WEBHOOK_SECRET` | Webhook signature verification |
-
-### 🔒 Security
-| Secret | Description |
-|--------|-------------|
-| `SECRET_KEY` | Long random string for JWT signing |
-| `ADMIN_KEY` | X-Admin-Key header for maintenance endpoints |
-
-### 📦 Optional
-| Secret | Description |
-|--------|-------------|
-| `AWS_S3_BUCKET` | S3 bucket for image/video storage |
-| `AWS_ACCESS_KEY_ID` | AWS IAM key |
-| `AWS_SECRET_ACCESS_KEY` | AWS IAM secret |
-| `SENTRY_DSN` | Error monitoring (recommended for orchestrator retries) |
+Production-grade deployment to **Google Cloud Platform (GCP)** using managed serverless services.
 
 ---
 
-## LEVI-AI: v5.0 Deployment Guide 🚀
+## 🏗️ GCP-Native Architecture
 
-This guide outlines the production deployment process for the hardened LEVI-AI platform.
+LEVI v5.0+ has been architecturaly hardened for GCP to support 10,000+ users with zero-maintenance and high-cost efficiency.
 
-## 🏗️ Core Infrastructure
-LEVI follows a containerized architecture managed via **Docker Compose** or **Kubernetes/Cloud Run**.
-
-- **API Gateway**: FastAPI (Python 3.11+)
-- **Broker/Cache**: Redis
-- **Ingress**: Nginx (Custom SSE-optimized config)
-- **Database**: Firestore (GCP)
-- **Jobs**: Celery (Worker + Beat)
+- **API Layer**: [Cloud Run Service](https://cloud.google.com/run) (`levi-api`)
+- **Worker Layer**: [Cloud Run Jobs](https://cloud.google.com/run/docs/create-jobs) (`levi-video-job`)
+- **Queueing/Async**: [Cloud Tasks](https://cloud.google.com/tasks)
+- **Database**: [Firestore](https://cloud.google.com/firestore) (Native Mode)
+- **Cache/RL**: [Memorystore for Redis](https://cloud.google.com/memorystore)
+- **Storage**: [Google Cloud Storage](https://cloud.google.com/storage) (`gs://levi-media-*`)
+- **Secrets**: [Secret Manager](https://cloud.google.com/secret-manager)
 
 ---
 
-## 🛠️ Production Setup (Docker Compose)
+## 🚀 Initial Setup (Provisioning)
 
-The fastest way to deploy the full hardened stack is via the updated `docker-compose.yml`.
+Before deploying code, provision the project resources using the provided setup scripts:
 
-```bash
-# 1. Fill in production .env
-cp .env.example .env
-# Set ENVIRONMENT=production
-# Set ALERT_WEBHOOK_URL for circuit breaker alerts
+```powershell
+# Windows (PowerShell)
+.\scripts\setup_gcp.ps1
 
-# 2. Build and start services
-docker compose up --build -d
-
-# 3. Verify nginx upstream
-curl http://localhost/api/health
+# Linux/macOS (Bash)
+chmod +x ./scripts/setup_gcp.sh
+./scripts/setup_gcp.sh
 ```
 
----
-
-## ⚡ Critical Configuration for SSE
-
-For real-time token streaming to work, the reverse proxy (Nginx/Cloudflare) **must not buffer the response**.
-
-The v5.0 `nginx.conf` included in the repo handles this via:
-- `proxy_buffering off;`
-- `chunked_transfer_encoding on;`
-- MIME type: `text/event-stream`
+> [!IMPORTANT]
+> After running the setup scripts, navigate to the [GCP Secret Manager Console](https://console.cloud.google.com/security/secret-manager) and populate the values for `GROQ_API_KEY`, `TOGETHER_API_KEY`, and `SECRET_KEY`.
 
 ---
 
-## 📖 Operational Procedures
-For detailed maintenance, logs management, and troubleshooting, refer to the **[RUNBOOK.md](RUNBOOK.md)**.
+## 🔧 Environment Configuration
 
-## 🧪 Post-Deployment Checklist
-- [ ] `/health` returns all OK.
-- [ ] Test chat streaming (tokens should arrive piece-by-piece).
-- [ ] Verify Celery `beat` logs for successful memory flushes.
-- [ ] Confirm `ENVIRONMENT=production` is set in all workers.
-- Rewrites `/api/**` → Cloud Run backend URL
-- SSE endpoint `/stream` proxied with streaming headers
+| Variable | Description | Recommendation |
+|----------|-------------|----------------|
+| `ENVIRONMENT` | Deployment stage | `production` |
+| `GCP_STORAGE_BUCKET` | Media storage | `levi-media-[PROJECT_ID]` |
+| `USE_GCP_JOBS` | Enable Cloud Run Jobs | `true` |
+| `LOG_LEVEL` | Logging verbosity | `INFO` |
 
 ---
 
-## 🧪 Production Smoke Tests
+## ⚡ Cloud Run Sizing (Recommended)
 
-After deployment, verify each endpoint:
+### `levi-api` (Cloud Run Service)
+- **Memory**: 4Gi (Required for Sentence-Transformers `all-MiniLM-L6-v2`)
+- **CPU**: 2 vCPU
+- **Min Instances**: 1 (Essential for Zero Cold Start)
+- **Concurrency**: 80
 
-```bash
-BASE=https://levi-api.a.run.app
-
-# Health check
-curl $BASE/health
-
-# Brain status
-curl $BASE/system/orchestrator/status
-
-# Chat (local route — tests zero-API path)
-curl -X POST $BASE/api/v1/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "hello", "session_id": "smoke_test"}'
-# Expected: route="local", instant response, no API cost
-
-# Full load test
-python scripts/load_test.py --users 50 --target $BASE
-```
-
----
-
-## 🖥️ Cloud Run Configuration (Recommended)
-
-```yaml
-# service.yaml
-memory: 4Gi
-cpu: 2
-min-instances: 1         # Keep warm for < 5ms local responses
-max-instances: 10
-concurrency: 80
-timeout: 60s
-```
-
-> [!WARNING]
-> Do **not** set memory below 2GB. The Sentence-Transformers embedding model (`all-MiniLM-L6-v2`) requires ~400MB at load time. Memory-constrained containers will `OOMKilled` during semantic extraction.
+### `levi-video-job` (Cloud Run Job)
+- **Memory**: 8Gi to 32Gi (High-intensity rendering)
+- **CPU**: 4 vCPU
+- **Timeout**: 3600s (1 hour)
 
 ---
 
 ## 📊 CI/CD Pipeline
 
+The repository includes GitHub Actions workflows for seamless deployment:
+
+1. **`deploy-backend.yml`**:
+   - Builds `Dockerfile` for the API.
+   - Deploys to Cloud Run Service with a `production` tag.
+   - Triggers `gcloud run services update-traffic` for zero-downtime rolls.
+
+2. **`deploy-jobs.yml`**:
+   - Builds `Dockerfile.job`.
+   - Updates `levi-video-job` definition in Cloud Run.
+
+---
+
+## 🧪 Post-Deployment Verification
+
+After deployment, verify each component:
+
+```bash
+BASE=https://levi-api.a.run.app
+
+# 1. Health check (Verify Firestore + Redis)
+curl $BASE/health
+
+# 2. Evolution Monitoring (Verify Learning Layer)
+curl $BASE/health/evolution -H "X-Admin-Key: $ADMIN_KEY"
+
+# 3. SSE Streaming Test
+# Use a tool like 'curl -N' to verify token-by-token delivery
+curl -N -X GET $BASE/stream
 ```
-git push main
-    │
-    ├─ deploy-backend.yml
-    │     1. Build Docker image
-    │     2. Push to Artifact Registry
-    │     3. Deploy to Cloud Run
-    │     4. Run smoke test /health
-    │
-    └─ deploy-frontend.yml
-          1. firebase deploy --only hosting
-```
+
+---
+
+## 🔄 Scaling & Costs
+
+- **Scale-to-Zero**: Video workers (Jobs) cost $0/month when not in use.
+- **Memorystore**: Standard Tier is recommended for HA.
+- **Firestore**: Use the **Redis-First** read pattern implemented in `MemoryManager` to minimize Firestore read costs.
 
 ---
 
@@ -166,10 +109,10 @@ git push main
 
 ```bash
 # List recent Cloud Run revisions
-gcloud run revisions list --service levi-backend --region us-central1
+gcloud run revisions list --service levi-api --region us-central1
 
 # Pin to a specific revision
-gcloud run services update-traffic levi-backend \
+gcloud run services update-traffic levi-api \
   --to-revisions REVISION_NAME=100 \
   --region us-central1
 ```

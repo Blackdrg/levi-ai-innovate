@@ -34,6 +34,13 @@ celery_app.conf.update(
     task_track_started=True,
     task_time_limit=300,  # 5 minutes max per task
     worker_concurrency=int(os.getenv("CELERY_CONCURRENCY", "4")),
+    # Phase 6 Hardening: Reliability & Backpressure
+    task_acks_late=True,                  # Only ACK once task is actually finished
+    worker_prefetch_multiplier=1,          # Don't hog tasks; pull one at a time
+    task_reject_on_worker_lost=True,       # Reschedule if worker crashes during task
+    worker_send_task_events=True,          # Essential for real-time flower monitoring
+    task_queue_max_priority=10,            # Support priority routing if added
+
     # ── Local Dev: run tasks inline, no broker/worker needed ──────────
     # Set ENVIRONMENT=production to disable this.
     task_always_eager=IS_DEV,

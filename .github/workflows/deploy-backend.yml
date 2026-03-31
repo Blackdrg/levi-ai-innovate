@@ -103,36 +103,29 @@ jobs:
             --set-env-vars "^|^ENVIRONMENT=production|GOOGLE_CLOUD_PROJECT=${{ env.PROJECT_ID }}|REDIS_URL=$REDIS_URL|FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID|FIREBASE_SERVICE_ACCOUNT_JSON=$FIREBASE_SERVICE_ACCOUNT_JSON|AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY|AWS_S3_BUCKET=$AWS_S3_BUCKET|GROQ_API_KEY=$GROQ_API_KEY|TOGETHER_API_KEY=$TOGETHER_API_KEY|USE_CELERY=true|SENTRY_DSN=$SENTRY_DSN|CELERY_CONCURRENCY=4" \
             --port 8080
 
-      - name: Post-Deploy Health Check (Canary)
+      - name: Post-Deploy Technical Verification (Phase 9 & 10)
+        env:
+            API_BASE_URL: ${{ env.CANARY_URL }}
+            GROQ_API_KEY: '${{ secrets.GROQ_API_KEY }}'
+            FIREBASE_PROJECT_ID: '${{ secrets.FIREBASE_PROJECT_ID }}'
+            FIREBASE_SERVICE_ACCOUNT_JSON: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}'
         run: |
-          echo "Verifying deployment at $CANARY_URL..."
-          for i in {1..15}; do
-            echo "Attempt $i..."
-            HEALTH_JSON=$(curl -s -f "$CANARY_URL/health")
-            
-            echo "Health Response: $HEALTH_JSON"
-            
-            STATUS=$(echo $HEALTH_JSON | grep -o '"status":"[^"]*"' | cut -d'"' -f4)
-            DB_STATUS=$(echo $HEALTH_JSON | grep -o '"database":"[^"]*"' | cut -d'"' -f4)
-            AUTH_STATUS=$(echo $HEALTH_JSON | grep -o '"auth":"[^"]*"' | cut -d'"' -f4)
-            REMOTE_SHA=$(echo $HEALTH_JSON | grep -o '"version":"[^"]*"' | cut -d'"' -f4)
-
-            if [ "$STATUS" = "ok" ]; then
-              echo "✅ Canary is healthy."
-              if [[ "${{ github.sha }}" == "$REMOTE_SHA"* ]] || [ "$REMOTE_SHA" = "local" ]; then
-                echo "✅ Version matches or is local."
-                exit 0
-              else
-                echo "⚠️ Version mismatch (Remote: $REMOTE_SHA, New: ${{ github.sha }}). Waiting..."
-              fi
-            else
-              echo "❌ Health check failed: STATUS=$STATUS, DATABASE=$DB_STATUS, AUTH=$AUTH_STATUS"
-            fi
-            
-            sleep 6
-          done
-          echo "❌ Backend health check FAILED after 15 attempts."
-          exit 1
+          echo "🚀 Starting Technical Verification for Canary: $CANARY_URL"
+          
+          # Install minimal test dependencies in the runner
+          pip install pytest pytest-asyncio httpx
+          
+          # Run E2E Production Flow & Learning Integration Tests
+          # We pass the Canary URL as an environment variable so the tests target it
+          export TEST_TARGET_URL=$CANARY_URL
+          pytest backend/tests/test_production_flow.py backend/tests/test_learning_integration.py -v
+          
+          if [ $? -eq 0 ]; then
+            echo "✅ Technical Verification PASSED. Canary is battle-ready."
+          else
+            echo "❌ Technical Verification FAILED. Aborting promotion."
+            exit 1
+          fi
 
       - name: Swap Traffic to New Revision
         if: success()

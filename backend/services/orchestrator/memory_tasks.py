@@ -255,3 +255,59 @@ def flush_conversation_buffer(self):
     except Exception as e:
         logger.error(f"Error flushing conversion buffer: {e}")
         return {"error": str(e)}
+@celery_app.task(
+    name="backend.services.orchestrator.memory_tasks.distill_user_memories",
+    bind=True,
+)
+def distill_user_memories(self, user_id: str):
+    """
+    Celery task: Run the v6 Evolutionary Distillation (Dreaming) for a user.
+    Condenses fragmented facts into core traits.
+    """
+    from .memory_manager import MemoryManager
+    import asyncio
+    try:
+        asyncio.run(MemoryManager.distill_core_memory(user_id))
+        return {"status": "distilled", "user_id": user_id}
+    except Exception as e:
+        logger.error(f"Distillation task failed for {user_id}: {e}")
+        return {"status": "failed", "error": str(e)}
+
+@celery_app.task(
+    name="backend.services.orchestrator.memory_tasks.run_global_maintenance",
+    bind=True,
+)
+def run_global_maintenance(self):
+    """
+    Periodic task to discover all users and schedule memory distillation for active ones.
+    """
+    db = _get_firestore()
+    # In a real system, we'd only pick users active in the last 24h
+    # We use pagination to avoid memory issues with 10k+ sessions
+    conv_ref = db.collection("conversations")
+    uids = set()
+    batch_size = 500
+    last_doc = None
+
+    while True:
+        query = conv_ref.limit(batch_size)
+        if last_doc:
+            query = query.start_after(last_doc)
+        
+        docs = list(query.get())
+        if not docs:
+            break
+            
+        for u in docs:
+            uid = u.to_dict().get("user_id")
+            if uid:
+                uids.add(uid)
+        
+        last_doc = docs[-1]
+        if len(uids) >= 1000: # Safety cap for maintenance task in one run
+            break
+    
+    for uid in uids:
+        distill_user_memories.delay(uid)
+    
+    return {"scheduled": len(uids)}

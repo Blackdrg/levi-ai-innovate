@@ -5,7 +5,7 @@ import pytest  # type: ignore
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient  # type: ignore
 
-from backend.gateway import app # type: ignore
+from backend.main import app # type: ignore
 
 @patch('backend.firestore_db.db')
 @patch('backend.services.studio.router.use_credits')

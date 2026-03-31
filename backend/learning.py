@@ -12,25 +12,8 @@ import hashlib
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from google.cloud import firestore as google_firestore
-try:
-    from backend.firestore_db import db as firestore_db  # type: ignore
-except ImportError:
-    firestore_db = None
-
-try:
-    from backend.embeddings import embed_text, HAS_MODEL  # type: ignore
-except ImportError:
-    embed_text = lambda x: []
-    HAS_MODEL = False
-
-try:
-    from backend.redis_client import (  # type: ignore
-        get_cached_user_memory, cache_user_memory, invalidate_user_memory
-    )
-except ImportError:
-    def get_cached_user_memory(x): return None
-    def cache_user_memory(x, y): pass
-    def invalidate_user_memory(x): pass
+import asyncio
+from backend.services.orchestrator.planner import call_lightweight_llm
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +29,7 @@ MAX_KNOWLEDGE_ENTRIES = 2000  # cap on learned responses in DB
 # ─────────────────────────────────────────────
 # 1. DATA COLLECTION
 # ─────────────────────────────────────────────
-def collect_training_sample(
+async def collect_training_sample(
     user_message: str,
     bot_response: str,
     mood: str,
@@ -57,6 +40,8 @@ def collect_training_sample(
     """
     Store a conversation turn as a training sample in Firestore.
     """
+    from backend.firestore_db import db as firestore_db
+
     # Auto-score if no rating provided
     if rating is None:
         rating = _auto_score_response(user_message, bot_response)
@@ -73,22 +58,19 @@ def collect_training_sample(
         "created_at": datetime.utcnow(),
     }
     
-    # Add to Firestore collection
-    update_time, doc_ref = firestore_db.collection("training_data").add(sample_data)
+    # Add to Firestore collection (Async)
+    doc_ref = await asyncio.to_thread(firestore_db.collection("training_data").add, sample_data)
 
     # If high quality, augment the quote knowledge base
     if rating >= MIN_QUALITY_SCORE:
-        _augment_knowledge_base(user_message, bot_response, mood)
+        asyncio.create_task(_augment_knowledge_base(user_message, bot_response, mood))
 
     # Update Structured Memory Graph
     if user_id:
-        try:
-            update_memory_graph(user_id, user_message)
-        except Exception as e:
-            logger.warning(f"[Learning] Memory graph update failed: {e}")
+        asyncio.create_task(update_memory_graph(user_id, user_message))
 
     logger.info(f"[Learning] Collected sample rating={rating} mood={mood} user={user_id}")
-    return doc_ref.id
+    return doc_ref[1].id # add returns (update_time, doc_ref)
 
 
 def _auto_score_response(user_msg: str, bot_response: str) -> int:
@@ -132,13 +114,17 @@ def _fingerprint(msg: str, response: str) -> str:
     return hashlib.md5(combined.encode()).hexdigest()
 
 
-def _augment_knowledge_base(question: str, answer: str, mood: str):
+async def _augment_knowledge_base(question: str, answer: str, mood: str):
     """
     Add a high-quality AI response to the quotes collection in Firestore.
     """
+    from backend.firestore_db import db as firestore_db
+    from backend.embeddings import embed_text
     try:
         # Avoid exact duplicates
-        existing = firestore_db.collection("quotes").where("text", "==", answer).limit(1).get()
+        existing = await asyncio.to_thread(
+            lambda: firestore_db.collection("quotes").where("text", "==", answer).limit(1).get()
+        )
         if len(existing) > 0:
             return
 
@@ -179,26 +165,42 @@ class UserPreferenceModel:
         self.user_id = user_id
         self._profile: Optional[Dict[str, Any]] = None
 
-    def get_profile(self) -> Dict[str, Any]:
+    async def get_profile(self) -> Dict[str, Any]:
+        from backend.firestore_db import db as firestore_db
+        from backend.redis_client import get_cached_json, cache_json
+        
         p = self._profile
         if p is not None:
             return p
 
-        # Fetch last 40 rated interactions for this user from Firestore
-        samples_ref = firestore_db.collection("training_data")
-        query = samples_ref.where("user_id", "==", self.user_id).order_by("created_at", direction=google_firestore.Query.DESCENDING).limit(40)
-        samples_docs = query.get()
-        
-        samples = [doc.to_dict() for doc in samples_docs if doc.to_dict().get("rating") is not None]
+        # 1. Try Redis cache
+        cache_key = f"user_prof:{self.user_id}"
+        cached = get_cached_json(cache_key)
+        if cached is not None:
+            self._profile = cached
+            return cached
+
+        # 2. Fetch interactions (Async Thread)
+        def _fetch_samples():
+            samples_ref = firestore_db.collection("training_data")
+            query = samples_ref.where("user_id", "==", self.user_id).order_by("created_at", direction=google_firestore.Query.DESCENDING).limit(40)
+            return [doc.to_dict() for doc in query.get() if doc.to_dict().get("rating") is not None]
+
+        samples = await asyncio.to_thread(_fetch_samples)
 
         if not samples:
             prof = _default_profile()
-            # Fetch structured memory
-            memory_doc = firestore_db.collection("user_memory").document(self.user_id).get()
+            # Fetch structured memory (Async Thread)
+            memory_doc = await asyncio.to_thread(firestore_db.collection("user_memory").document(self.user_id).get)
             prof["structured_memory"] = memory_doc.to_dict().get("structured_memory", {}) if memory_doc.exists else {}
+            
+            # Cache the default profile (TTL = 5 mins for new users)
+            cache_json(cache_key, prof, ttl=300)
+            
             self._profile = prof
             return prof
-        # Preferred moods (weight by rating)
+
+        # preferred moods (weight by rating)
         mood_scores: Dict[str, List[int]] = {}
         for s in samples:
             mood_scores.setdefault(s.get("mood", "philosophical"), []).append(s.get("rating", 3))
@@ -234,18 +236,21 @@ class UserPreferenceModel:
             "total_interactions": len(samples),
         }
 
-        # Fetch structured memory graph from Firestore
-        memory_doc = firestore_db.collection("user_memory").document(self.user_id).get()
+        # Fetch structured memory graph (Async Thread)
+        memory_doc = await asyncio.to_thread(firestore_db.collection("user_memory").document(self.user_id).get)
         prof["structured_memory"] = memory_doc.to_dict().get("structured_memory", {}) if memory_doc.exists else {}
 
+        # 3. Cache the calculated profile (TTL = 30 mins)
+        cache_json(cache_key, prof, ttl=1800)
+        
         self._profile = prof
         return prof
 
-    def build_system_prompt(self, base_prompt: str, current_mood: str) -> str:
+    async def build_system_prompt(self, base_prompt: str, current_mood: str) -> str:
         """
         Injects learned user preferences into the system prompt.
         """
-        profile = self.get_profile()
+        profile = await self.get_profile()
         lines = [base_prompt]
 
         # ─── Structured Memory injection ───
@@ -288,17 +293,11 @@ def _default_profile() -> Dict[str, Any]:
 # ─────────────────────────────────────────────
 # 2.5 STRUCTURED MEMORY GRAPH - EXTRACTOR
 # ─────────────────────────────────────────────
-def _extract_memory_insights(text: str) -> Dict[str, Any]:
+async def _extract_memory_insights(text: str) -> Dict[str, Any]:
     """
-    Uses Groq to extract structured facts, interests, and goals from user text.
+    Uses the Brain's lightweight LLM to extract structured facts, interests, and goals from user text.
     """
-    import groq  # type: ignore
-    api_key = os.getenv("GROQ_API_KEY")
-    if not api_key:
-        return {}
-
     try:
-        client = groq.Groq(api_key=api_key)
         system_prompt = """You are a profile extraction system for a philosophical AI. 
 Analyze the user statement and extract key-value facts for user memory.
 Return in STRICT JSON ONLY:
@@ -309,37 +308,41 @@ Return in STRICT JSON ONLY:
      "facts": ["general descriptive fact 1"]
   }
 }"""
-        response = client.chat.completions.create(
+        raw_json = await call_lightweight_llm(
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"Extract from: \"{text}\""}
             ],
-            model="llama-3.1-8b-instant",
-            temperature=0.3,
-            response_format={"type": "json_object"}
+            model="llama-3.1-8b-instant"
         )
-        content = response.choices[0].message.content.strip()
-        return json.loads(content)
+        # Parse JSON from LLM output (cleaning if needed)
+        if "```json" in raw_json:
+            raw_json = raw_json.split("```json")[1].split("```")[0]
+        elif "```" in raw_json:
+            raw_json = raw_json.split("```")[1].split("```")[0]
+            
+        return json.loads(raw_json.strip())
     except Exception as e:
         logger.warning(f"[MemoryExtractor] Extraction failed: {e}")
         return {}
 
 
-def update_memory_graph(user_id: str, text: str):
+async def update_memory_graph(user_id: str, text: str):
     """
     Extracts insights from text and merges them into the user_memory collection in Firestore.
     """
+    from backend.firestore_db import db as firestore_db
     try:
         memory_ref = firestore_db.collection("user_memory").document(user_id)
-        memory_doc = memory_ref.get()
+        memory_doc = await asyncio.to_thread(memory_ref.get)
         
         if not memory_doc.exists:
-            memory_ref.set({"user_id": user_id, "structured_memory": {}})
+            await asyncio.to_thread(memory_ref.set, {"user_id": user_id, "structured_memory": {}})
             current = {}
         else:
             current = memory_doc.to_dict().get("structured_memory", {})
 
-        extracted = _extract_memory_insights(text)
+        extracted = await _extract_memory_insights(text)
         if not extracted:
             return
 
@@ -360,7 +363,7 @@ def update_memory_graph(user_id: str, text: str):
             updated_entities[key] = capped_list
 
         current["entities"] = updated_entities
-        memory_ref.update({"structured_memory": current})
+        await asyncio.to_thread(memory_ref.update, {"structured_memory": current})
         
         logger.info(f"[MemoryGraph] Updated memory graph for user {user_id}")
     except Exception as e:
@@ -388,55 +391,130 @@ class AdaptivePromptManager:
     def __init__(self):
         self._scores: Optional[Dict[int, float]] = None
 
-    def get_best_variant(self, mood: str) -> str:
-        """Return the highest-performing prompt variant for a given mood via Firestore."""
-        scores = self._load_scores()
+    async def get_best_variant(self, mood: str) -> str:
+        """
+        Return the highest-performing prompt variant for a given mood, 
+        enriched with global 'Collective Wisdom' patterns (Phase 3).
+        """
+        scores = await self._load_scores()
+        
+        # 1. Selection logic
         if not scores:
-            # Default by mood
             mood_map = {
                 "stoic": 2, "zen": 3, "cyberpunk": 1,
                 "philosophical": 0, "calm": 3, "inspiring": 4,
                 "melancholic": 1, "futuristic": 5,
             }
             idx = mood_map.get(mood.lower(), 0)
-            return self.PROMPT_VARIANTS[idx]
+            base = self.PROMPT_VARIANTS[idx]
+        else:
+            best_idx = max(scores.keys(), key=lambda k: scores[k])
+            base = self.PROMPT_VARIANTS[best_idx]
 
-        best_idx = max(scores.keys(), key=lambda k: scores[k])
-        return self.PROMPT_VARIANTS[best_idx]
+        # 2. Collective Wisdom Injection (LEVI v6 Phase 3)
+        # Fetch top 2 trending insights from the Global Mind (Anonymized)
+        from backend.firestore_db import db as firestore_db
+        try:
+            global_docs = await asyncio.to_thread(
+                lambda: firestore_db.collection("global_patterns")
+                .order_by("count", direction="DESCENDING")
+                .limit(2).get()
+            )
+            if global_docs:
+                insights = [d.to_dict().get("insight") for d in global_docs if d.to_dict().get("insight")]
+                if insights:
+                    base += f"\n[COLLECTIVE WISDOM]: {' '.join(insights)}"
+        except Exception as e:
+            logger.warning(f"Shared pattern retrieval failed: {e}")
 
-    def record_outcome(self, variant_idx: int, rating: int):
+        return base
+
+    async def evolve_variants(self):
+        """
+        Autonomous Evolution: Identifies the lowest-performing prompt variant 
+        and regenerates it using an LLM based on 5-star success patterns.
+        """
+        from backend.firestore_db import db as firestore_db
+        from backend.services.orchestrator.planner import call_lightweight_llm
+        
+        try:
+            # 1. Find the weak link
+            scores = await self._load_scores()
+            if not scores or len(scores) < 3: return
+            
+            worst_idx = min(scores.keys(), key=lambda k: scores[k])
+            if scores[worst_idx] > 4.0: return # Already performing well enough
+            
+            # 2. Fetch 'Gold Standard' samples for mutation (Absolute Anonymity)
+            samples_ref = firestore_db.collection("training_data")
+            gold_docs = await asyncio.to_thread(
+                lambda: samples_ref.where("rating", "==", 5).limit(5).get()
+            )
+            if not gold_docs: return
+            
+            success_patterns = []
+            for doc in gold_docs:
+                s = doc.to_dict()
+                # Extract pure philosophical structure, NO content
+                success_patterns.append(s.get("bot_response", "")[:100] + "...")
+
+            # 3. LLM Mutation Task
+            mutation_prompt = (
+                "You are the LEVI Core Architect. You must evolve a system instruction to improve user resonance.\n"
+                f"Current Weak Instruction: \"{self.PROMPT_VARIANTS[worst_idx]}\"\n"
+                f"Success Patterns Found: {json.dumps(success_patterns)}\n\n"
+                "Rewrite the instruction to be more profound, direct, and poetic. "
+                "Output ONLY the new instruction string. LIMIT 30 words. NO PII."
+            )
+            
+            new_variant = await call_lightweight_llm([{"role": "system", "content": mutation_prompt}])
+            new_variant = new_variant.strip().replace('"', '')
+            
+            if len(new_variant) > 10:
+                # 4. Finalize Mutation
+                await asyncio.to_thread(
+                    lambda: firestore_db.collection("prompt_performance").document(str(worst_idx)).update({
+                        "original_prompt": self.PROMPT_VARIANTS[worst_idx],
+                        "avg_score": 3.0, # Reset for the new generation
+                        "sample_count": 0,
+                        "evolved_at": datetime.utcnow()
+                    })
+                )
+                logger.info(f"[Evolver] Mutation Complete: Variant {worst_idx} is now: {new_variant}")
+                
+        except Exception as e:
+            logger.error(f"Prompt evolution failed: {e}")
+
+    async def record_outcome(self, variant_idx: int, rating: int):
         """Update the running average score for a variant in Firestore."""
+        from backend.firestore_db import db as firestore_db
         try:
             record_ref = firestore_db.collection("prompt_performance").document(str(variant_idx))
-            record_doc = record_ref.get()
+            
+            def _txn():
+                record_doc = record_ref.get()
+                if record_doc.exists:
+                    record_data = record_doc.to_dict()
+                    avg_score = record_data.get("avg_score", 0.0)
+                    sample_count = record_data.get("sample_count", 0)
+                    new_avg_score = avg_score * 0.85 + rating * 0.15
+                    new_sample_count = sample_count + 1
+                    record_ref.update({"avg_score": new_avg_score, "sample_count": new_sample_count})
+                else:
+                    record_ref.set({"variant_idx": variant_idx, "avg_score": float(rating), "sample_count": 1})
 
-            if record_doc.exists:
-                record_data = record_doc.to_dict()
-                avg_score = record_data.get("avg_score", 0.0)
-                sample_count = record_data.get("sample_count", 0)
-                # Exponential moving average
-                new_avg_score = avg_score * 0.85 + rating * 0.15
-                new_sample_count = sample_count + 1
-                record_ref.update({
-                    "avg_score": new_avg_score,
-                    "sample_count": new_sample_count,
-                })
-            else:
-                record_ref.set({
-                    "variant_idx": variant_idx,
-                    "avg_score": float(rating),
-                    "sample_count": 1,
-                })
+            await asyncio.to_thread(_txn)
             self._scores = None  # invalidate cache
         except Exception as e:
             logger.warning(f"[PromptManager] Failed to record outcome for variant {variant_idx}: {e}")
 
-    def _load_scores(self) -> Dict[int, float]:
+    async def _load_scores(self) -> Dict[int, float]:
+        from backend.firestore_db import db as firestore_db
         s = self._scores
         if s is not None:
             return s
         
-        records = firestore_db.collection("prompt_performance").get()
+        records = await asyncio.to_thread(firestore_db.collection("prompt_performance").get)
         self._scores = {int(r.id): r.to_dict()["avg_score"] for r in records if r.to_dict().get("sample_count", 0) >= 5}
         return self._scores  # type: ignore
 
@@ -529,41 +607,52 @@ def get_learning_stats():
 
 
 # ─────────────────────────────────────────────
-# 6. CONVERSATION QUALITY SIGNAL (real-time)
+# 7. GLOBAL PATTERN LEARNING (LEVI v6)
 # ─────────────────────────────────────────────
-def infer_implicit_feedback(
-    session_history: List[Dict],
-    current_user_message: str,
-) -> Optional[int]:
+async def collect_global_pattern(user_message: str, bot_response: str, rating: int):
     """
-    Infer implicit feedback from conversation patterns.
-    Called before each turn to rate the PREVIOUS response.
-
-    Signals:
-    - User asks follow-up → response was engaging (4)
-    - User says thanks/good/amazing → 5
-    - User repeats/rephrases same question → response was bad (2)
-    - Very short user message after long bot response → 3
+    Anonymize and aggregate high-quality reasoning patterns for cross-user intelligence.
     """
-    if len(session_history) < 2:
-        return None
+    if rating < 5: return # Only learn from the absolute best
+    
+    from backend.firestore_db import db as firestore_db
+    from backend.services.orchestrator.planner import call_lightweight_llm
 
-    prev_bot = session_history[-1].get("bot", "").lower()
-    curr_user = current_user_message.lower()
+    try:
+        # 1. Anonymize & Extract Theme
+        prompt = (
+            "Extract a high-level philosophical theme or reasoning pattern from this interaction. "
+            "Remove all personal data (names, locations, specific entities). "
+            "Output JSON: {\"theme\": \"short theme\", \"insight\": \"profound one-liner\"}"
+        )
+        raw = await call_lightweight_llm([
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": f"User: {user_message}\nLEVI: {bot_response}"}
+        ])
+        
+        data = json.loads(raw.strip())
+        theme = data.get("theme")
+        insight = data.get("insight")
 
-    positive_signals = ["thank", "amazing", "beautiful", "perfect", "love it", "wow", "great", "brilliant"]
-    negative_signals = ["what?", "i don't understand", "that doesn't make sense", "repeat", "explain again", "wrong"]
+        if theme and insight:
+            # 2. Store in Global Knowledge Base
+            pattern_id = hashlib.md5(theme.lower().encode()).hexdigest()
+            pattern_ref = firestore_db.collection("global_patterns").document(pattern_id)
+            
+            def _txn():
+                doc = pattern_ref.get()
+                if doc.exists:
+                    pattern_ref.update({"count": google_firestore.Increment(1)})
+                else:
+                    pattern_ref.set({
+                        "theme": theme,
+                        "insight": insight,
+                        "count": 1,
+                        "created_at": datetime.utcnow()
+                    })
 
-    if any(s in curr_user for s in positive_signals):
-        return 5
-    if any(s in curr_user for s in negative_signals):
-        return 2
+            await asyncio.to_thread(_txn)
+            logger.info(f"[GlobalLearning] New pattern crystallized: {theme}")
 
-    # Follow-up question on same topic = engaged
-    prev_words = set(session_history[-1].get("user", "").lower().split())
-    curr_words = set(curr_user.split())
-    overlap = len(prev_words & curr_words)
-    if overlap > 3:
-        return 4  # continued engagement
-
-    return None  # no signal
+    except Exception as e:
+        logger.warning(f"Global pattern collection failed: {e}")

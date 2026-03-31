@@ -1,42 +1,62 @@
-from typing import Dict, Any, Callable, Awaitable
+"""
+backend/services/orchestrator/tool_registry.py
+
+Unified registry for the hardened LEVI-AI tool system.
+"""
+
 import logging
+from typing import Dict, Any, Type, Optional
+from .tool_base import BaseTool
+from .agents.chat_agent import ChatAgent
+from .agents.image_agent import ImageAgent
+from .agents.code_agent import CodeAgent
+from .agents.search_agent import SearchAgent
+from .agents.local_agent import LocalAgent
+from .agents.python_repl_agent import PythonREPLAgent
+from .agents.video_agent import VideoAgent
 
 logger = logging.getLogger(__name__)
 
-# Type definition for atomic tool calls
-ToolFunc = Callable[[Dict[str, Any]], Awaitable[Any]]
+# Registry of tool instances
+_TOOL_INSTANCES: Dict[str, BaseTool] = {
+    "chat_agent":   ChatAgent(),
+    "image_agent":  ImageAgent(),
+    "code_agent":   CodeAgent(),
+    "search_agent": SearchAgent(),
+    "local_agent":  LocalAgent(),
+    "python_repl_agent": PythonREPLAgent(),
+    "video_agent": VideoAgent(),
+}
 
-TOOLS: Dict[str, ToolFunc] = {}
+def get_tool(name: str) -> Optional[BaseTool]:
+    """Retrieve a tool instance by name."""
+    return _TOOL_INSTANCES.get(name)
 
-def register_tool(name: str):
-    def decorator(func: ToolFunc):
-        TOOLS[name] = func
-        return func
-    return decorator
-
-async def call_tool(name: str, params: Dict[str, Any]) -> Any:
-    if name not in TOOLS:
-        logger.error(f"Tool {name} not found in registry.")
-        return {"error": f"Tool {name} not found"}
+async def call_tool(name: str, params: Dict[str, Any], context: Dict[str, Any] = None) -> Any:
+    """
+    Entry point for calling a tool by name.
+    Ensures execution logic (validation/retry/timeout) from BaseTool is triggered.
+    """
+    tool = get_tool(name)
+    if not tool:
+        logger.error(f"Tool '{name}' not found in registry.")
+        return {
+            "success": False,
+            "error": f"Tool '{name}' not found.",
+            "agent": name
+        }
     
-    logger.info(f"Calling tool: {name}")
     try:
-        return await TOOLS[name](params)
+        # This will trigger BaseTool.execute()
+        return await tool.execute(params, context)
     except Exception as e:
-        logger.exception(f"Error executing tool {name}: {e}")
-        return {"error": str(e)}
+        logger.exception(f"Fatal error in call_tool for '{name}': {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "agent": name
+        }
 
-# --- Placeholder Tools ---
-
-@register_tool("image_gen")
-async def tool_image_gen(params: Dict[str, Any]) -> Any:
-    return {"status": "success", "action": "trigger_image_generation", "params": params}
-
-@register_tool("db_write")
-async def tool_db_write(params: Dict[str, Any]) -> Any:
-    # This would call firestore_db/redis_client
-    return {"status": "success", "action": "database_write", "params": params}
-
-@register_tool("search_api")
-async def tool_search_api(params: Dict[str, Any]) -> Any:
-    return {"status": "success", "results": [{"title": "AI Trends", "snippet": "Future is bright."}]}
+def list_tools() -> Dict[str, str]:
+    """Returns a map of tool names and their descriptions."""
+    return {name: tool.description for name, tool in _TOOL_INSTANCES.items()}

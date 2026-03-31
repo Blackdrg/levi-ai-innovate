@@ -55,29 +55,27 @@ def auth_headers():
 
 @pytest.fixture
 def app_client(test_user):
-    """FastAPI TestClient wrapping the Gateway app with auth overrides."""
+    """FastAPI TestClient wrapping the unified local app with auth overrides."""
     from fastapi.testclient import TestClient
-    from backend.gateway import app
+    from backend.main import app
     from backend.auth import get_current_user, get_current_user_optional
     
     # Global overrides for all tests using app_client
     app.dependency_overrides[get_current_user] = lambda: test_user
     app.dependency_overrides[get_current_user_optional] = lambda: test_user
     
-    # Mock HAS_REDIS and provide a mock Redis client to avoid connection timeouts
+    # Mock HAS_REDIS and provide a mock Redis client
     mock_r = MagicMock()
     mock_r.ping.return_value = True
-    mock_r.get.return_value = "[]" # Default to empty JSON list for conversation history
+    mock_r.get.return_value = "[]" 
     mock_r.set.return_value = True
     mock_r.incr.return_value = 1
-    mock_r.pipeline.return_value.execute.return_value = [0.0] # For metrics/spend increment
+    mock_r.pipeline.return_value.execute.return_value = [0.0]
     
-    with patch("backend.gateway.HAS_REDIS", True), \
-         patch("backend.services.analytics.router.HAS_REDIS", True), \
+    with patch("backend.main.HAS_REDIS", True), \
          patch("backend.auth.HAS_REDIS", True), \
          patch("backend.redis_client.HAS_REDIS", True), \
-         patch("backend.redis_client.r", mock_r), \
-         patch("backend.services.chat.router.redis_client", mock_r):
+         patch("backend.redis_client.r", mock_r):
         client = TestClient(app)
         yield client
         # Clear overrides after test

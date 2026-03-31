@@ -1,75 +1,60 @@
-# LEVI-AI: v5.0 Maintenance & Lifecycle Guide 🛠️
+# LEVI-AI: v6.0 "Sovereign" Maintenance & Lifecycle Guide 🛠️
 
-This guide outlines the routine operational tasks and lifecycle management for the hardened LEVI-AI platform.
+This guide outlines the routine operational tasks for the self-evolving LEVI-AI v6 platform.
 
 ---
 
-## ⚙️ 1. Celery Background Jobs
+## ⚙️ 1. The Revolution Lifecycle (Celery)
 
-The backend relies on the `celery` and `celery_beat` services to handle non-blocking workloads.
+The v6 engine manages the "Dreaming" (Memory Distillation) and "Evolution" (Prompt Mutation) tasks.
 
-### Scheduled Tasks (Beat)
 | Task | Schedule | Purpose |
 |:---|:---|:---|
-| `flush_all_memory_buffers` | Every 30s | Flushes user facts from Redis to Firestore (The Pulse). |
-| `dispatch_daily_emails` | Daily (08:00) | Personalized wisdom dispatch via Resend API. |
-| `reset_monthly_credits` | Monthly (1st) | Resets Pro/Creator credits (The Balance). |
+| `evolve_system_prompts` | Interaction-based | Mutates low-performing prompts after 100 global 5-star ratings. |
+| `distill_user_persona` | Every 20 interactions | Background task that consolidates user facts into high-level traits. |
+| `prune_shared_patterns` | Weekly | Cleans up the anonymized collective wisdom pool to prevent drift. |
+| `piston_heartbeat` | Every 5 min | Verifies Piston API sandbox health; toggles local fallback if failed. |
 
-### Monitoring Workers
+---
+
+## 💾 2. The Reflex Ledger (Redis)
+
+The real-time tool performance ledger is stored in Redis.
+
+### Viewing Ledger Health
 ```bash
-# Verify worker connectivity and status
-celery -A backend.celery_app status
+# Get success/failure stats for image_agent
+redis-cli HGETALL ledger:agent:image_agent
+```
 
-# View live task activity
-celery -A backend.celery_app events
+### Resetting Metrics
+If a tool enters a new version or fix, reset its metrics to allow the Meta-Brain to re-learn:
+```bash
+redis-cli DEL ledger:agent:image_agent
 ```
 
 ---
 
-## 💾 2. Database & Data Pruning
+## 🛡️ 3. Prompt Versioning & Rollback
 
-LEVI-AI is designed for data privacy. The 30-day pruning policy is the core of "The Soul" memory lifecycle.
+v6 stores the "Original" prompt in Firestore before any mutation.
 
-### Manual Pruning Query (Firestore)
-If automated pruning fails, use the following manual trigger:
-```bash
-# Manually trigger a pruning cycle for a specific user_id
-python -c "from backend.services.orchestrator.memory_utils import prune_old_facts; import asyncio; asyncio.run(prune_old_facts('user_123'))"
-```
-
-### Redis Key Management
-Flush caches selectively without impacting sessions:
-```bash
-# Flush only LLM response caches (30-min TTL)
-redis-cli --scan --pattern "chat:*" | xargs redis-cli DEL
-redis-cli --scan --pattern "search:*" | xargs redis-cli DEL
-```
+### Emergency Rollback
+If a mutated prompt results in degraded performance:
+1.  Access Firestore: `prompt_performance` collection.
+2.  Copy `original_prompt` back to the variant array in `backend/learning.py`.
+3.  Set `avg_score` to 5.0 to prevent immediate re-mutation.
 
 ---
 
-## 🛡️ 3. Health & Scaling Operations
+## 🧪 4. Sandbox Health (Piston API)
 
-### Resource Limits
-Default constraints in `docker-compose.yml`:
-- **Gateway**: 1.0 CPU, 1GB RAM.
-- **Worker**: 1.0 CPU, 1GB RAM (to handle embedding model memory).
-- **Beat**: 0.25 CPU, 256MB RAM.
+LEVI v6 uses the Piston API for secure execution.
 
-### Scaling UP
-Scale your workers horizontally to handle higher message concurrency:
-```bash
-docker compose up -d --scale worker=3
-```
+- **Endpoint**: `https://emkc.org/api/v2/piston` (Default)
+- **Monitoring**: If `piston_heartbeat` fails, LEVI logs a `CRITICAL` alert and switches to the restricted `LocalExecutor`.
+- **Restoration**: Once the heartbeat returns, the system automatically restores the secure sandbox.
 
 ---
 
-## 📝 4. Log Rotation & Archiving
-
-Standard operational logs are stored in the `/logs` directory within the container.
-- **Gateway Logs**: `app.log` (Structured JSON).
-- **Worker Logs**: `worker.log`.
-- **Retention**: Use `logrotate` to keep 30 days of archives.
-
----
-
-**LEVI — Built for emergence. Maintained for depth.**
+**LEVI — Built for emergence. Hardened for scale. Sovereign by design.**

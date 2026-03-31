@@ -8,7 +8,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from fastapi.testclient import TestClient  # type: ignore
-from backend.gateway import app # type: ignore
+from backend.main import app # type: ignore
 import hmac
 import hashlib
 import json

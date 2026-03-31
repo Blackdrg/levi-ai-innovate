@@ -3,6 +3,9 @@ import logging
 import hashlib
 import json
 
+from .tool_contracts import ToolContract
+from .orchestrator_types import ToolResult
+
 logger = logging.getLogger(__name__)
 
 # Type definition for local handlers
@@ -16,22 +19,27 @@ def register_agent(name: str):
         return func
     return decorator
 
-async def call_agent(name: str, context: Dict[str, Any]) -> Dict[str, Any]:
+async def call_agent(name: str, context: Dict[str, Any]) -> ToolResult:
     if name not in AGENTS:
         logger.error(f"Agent {name} not found in registry.")
-        return {"error": f"Agent {name} not found"}
+        return ToolContract.wrap_result(name, success=False, error=f"Agent {name} not found")
     
     logger.info(f"Calling agent: {name}")
     try:
-        return await AGENTS[name](context)
+        res = await AGENTS[name](context)
+        if isinstance(res, ToolResult):
+            return res
+        # If it's a legacy dict, wrap it
+        return ToolContract.wrap_result(
+            name, 
+            success=res.get("success", res.get("status") == "success"),
+            message=res.get("message", ""),
+            data=res or {},
+            error=res.get("error")
+        )
     except Exception as e:
         logger.exception(f"Error executing agent {name}: {e}")
-        return {
-            "status": "error",
-            "error": str(e),
-            "agent": name,
-            "retryable": True # Default to retryable for unexpected exceptions
-        }
+        return ToolContract.wrap_result(name, success=False, error=str(e))
 
 # --- Specialized Agents ---
 
@@ -61,21 +69,12 @@ async def chat_handler(context: Dict[str, Any]) -> Dict[str, Any]:
         mood=mood,
         user_tier=user_tier
     )
-    result = {
-        "message": response,
-        "agent": "chat_agent",
-        "status": "success",
-        "retryable": False
-    }
-
-    # Cache the result (30 min) for authenticated users without history context
-    if user_id and not str(user_id).startswith("guest:") and not history:
-        try:
-            cache_search(cache_key, result, ttl=1800)  # type: ignore
-        except Exception:
-            pass
-
-    return result
+    
+    return ToolContract.wrap_result(
+        "chat_agent",
+        success=True,
+        message=response
+    )
 
 @register_agent("image_agent")
 async def image_handler(context: Dict[str, Any]) -> Dict[str, Any]:
@@ -95,19 +94,18 @@ async def image_handler(context: Dict[str, Any]) -> Dict[str, Any]:
     )
     
     if result.get("status") == "error":
-        return {
-            "status": "error",
-            "message": result.get("error", "Studio failed."),
-            "agent": "image_agent",
-            "retryable": True
-        }
+        return ToolContract.wrap_result(
+            "image_agent",
+            success=False,
+            error=result.get("error", "Studio failed.")
+        )
 
-    return {
-        "message": f"I have visualized your concept: '{message}'. The masterpiece is being rendered.",
-        "job_id": result.get("job_id"),
-        "agent": "image_agent",
-        "status": "success"
-    }
+    return ToolContract.wrap_result(
+        "image_agent",
+        success=True,
+        message=f"I have visualized your concept: '{message}'. The masterpiece is being rendered.",
+        data={"job_id": result.get("job_id")}
+    )
 
 @register_agent("search_agent")
 async def search_handler(context: Dict[str, Any]) -> Dict[str, Any]:
@@ -173,20 +171,11 @@ async def search_handler(context: Dict[str, Any]) -> Dict[str, Any]:
         provider="groq"
     )
 
-    result = {
-        "message": search_results or "The collective knowledge is silent on this matter.",
-        "agent": "search_agent",
-        "status": "success",
-        "retryable": False
-    }
-
-    # ── Cache write: store for 30 minutes ─────────────────────────────────────
-    try:
-        cache_search(cache_key, result, ttl=1800)
-    except Exception:
-        pass  # Caching is non-critical
-
-    return result
+    return ToolContract.wrap_result(
+        "search_agent",
+        success=True,
+        message=search_results or "The collective knowledge is silent on this matter."
+    )
 
 @register_agent("code_agent")
 async def code_handler(context: Dict[str, Any]) -> Dict[str, Any]:
@@ -239,10 +228,9 @@ async def code_handler(context: Dict[str, Any]) -> Dict[str, Any]:
         provider="groq"
     )
     
-    return {
-        "message": code_output or "I could not construct the logic you requested.",
-        "agent": "code_agent",
-        "status": "success",
-        "retryable": False
-    }
+    return ToolContract.wrap_result(
+        "code_agent",
+        success=True,
+        message=code_output or "I could not construct the logic you requested."
+    )
 

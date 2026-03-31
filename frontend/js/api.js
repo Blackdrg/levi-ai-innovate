@@ -88,14 +88,23 @@ async function chatStream(message, sessionId, onChunk, onMetadata) {
         partial = lines.pop(); // Keep last incomplete line
 
         for (const line of lines) {
-            if (line.startsWith('data: ')) {
+            if (line.trim().startsWith('data: ')) {
                 const data = line.slice(6).trim();
                 if (data === '[DONE]') break;
                 try {
                     const json = JSON.parse(data);
+                    
+                    // LEVI v6: Support for real-time activity/status notifications
+                    if (json.type === "activity" && json.message) {
+                        if (onMetadata) onMetadata({ status_update: json.message });
+                    }
+                    
+                    // Unified metadata chunk
                     if (json.metadata && Object.keys(json.metadata).length > 0) {
                         onMetadata(json.metadata);
                     }
+                    
+                    // Content chunk
                     if (json.choices?.[0]?.delta?.content) {
                         onChunk(json.choices[0].delta.content);
                     }

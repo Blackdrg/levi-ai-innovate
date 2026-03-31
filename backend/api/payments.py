@@ -13,6 +13,7 @@ import razorpay
 from typing import Optional, Dict, Any
 
 from fastapi import APIRouter, HTTPException, Depends, Request
+from firebase_admin import firestore
 from backend.firestore_db import db as firestore_db
 from backend.auth import get_current_user_optional
 from backend.config import TIERS, COST_MATRIX
@@ -56,38 +57,48 @@ def use_credits(user_id: str, action: str = "chat", amount: Optional[int] = None
     Deducts AI units or credits from a user's account.
     Prioritizes Tier Allowance -> Credits fallback.
     """
-    cost = amount if amount is not None else COST_MATRIX.get(action, 1)
+    cost = amount if amount is not None else COST_MATRIX.get(action, 1) or 1
     user_ref = firestore_db.collection("users").document(user_id)
-    user_doc = user_ref.get()
     
+    # 1. Tier Allowance Check (Fast Path - Optimistic)
+    # This check is non-locking for performance, as daily limits are high reset window is large.
+    daily_spend = get_daily_ai_spend(user_id)
+    
+    # We fetch tier info just once
+    user_doc = user_ref.get()
     if not user_doc.exists:
         raise LEVIException("User entity not found.", status_code=404)
-        
     user_data = user_doc.to_dict()
     tier = user_data.get("tier", "free")
-    current_credits = int(user_data.get("credits", 0))
     limit = TIERS.get(tier, TIERS["free"])["daily_limit"]
-    
-    # 1. Tier Allowance Check
-    daily_spend = get_daily_ai_spend(user_id)
+
     if daily_spend + cost <= limit:
         incr_daily_ai_spend(user_id, float(cost))
         return {"status": "success", "source": "allowance"}
 
-    # 2. Credits Fallback (Locked)
+    # 2. Credits Fallback (Atomic Locked Path)
     if not HAS_REDIS:
          raise LEVIException("Credit transaction requires Redis.", status_code=503)
 
-    with distributed_lock(f"credits:{user_id}", ttl=10) as acquired:
+    # Acquire lock with retries to handle brief contention
+    with distributed_lock(f"credits:{user_id}", ttl=10, retries=3, backoff=0.2) as acquired:
         if not acquired:
-            raise LEVIException("Transaction in progress.", status_code=429)
+            raise LEVIException("Transaction in progress. Please retry.", status_code=429)
             
+        # Re-fetch user data INSIDE the lock to prevent double-spending
+        user_doc_locked = user_ref.get()
+        user_data_locked = user_doc_locked.to_dict()
+        current_credits = int(user_data_locked.get("credits", 0))
+
         if current_credits < cost:
-            raise LEVIException("Insufficient cosmic credits.", status_code=402)
+            raise LEVIException(f"Insufficient cosmic credits. ({current_credits} < {cost})", status_code=402)
         
-        new_credits = current_credits - cost
-        user_ref.update({"credits": new_credits})
-        return {"status": "success", "source": "credits", "balance": new_credits}
+        # Use atomic increment (negative) for final safety
+        user_ref.update({
+            "credits": firestore.Increment(-cost)
+        })
+        
+        return {"status": "success", "source": "credits", "balance": current_credits - cost}
 
 # --- Endpoints ---
 
@@ -114,7 +125,7 @@ async def verify_payment_endpoint(
             bonus = 100 if plan == "pro" else 500 if plan == "creator" else 0
             firestore_db.collection("users").document(user_id).update({
                 "tier": plan,
-                "credits": google_firestore.Increment(bonus)
+                "credits": firestore.Increment(bonus)
             })
             logger.info(f"User {user_id} upgraded to {plan}")
         return {"status": "success", "message": "Transaction verified. Field upgraded."}

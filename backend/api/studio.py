@@ -20,6 +20,7 @@ from backend.services.studio.tasks import generate_image_task, generate_video_ta
 from backend.payments import use_credits
 from backend.redis_client import is_rate_limited
 from backend.utils.robustness import standard_retry, TimeoutHandler
+from backend.gcp_jobs import enqueue_video_task
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="", tags=["Studio"])
@@ -118,6 +119,19 @@ async def gen_video(
         }
         
         firestore_db.collection("jobs").document(job_id).set(job_data)
+
+        if os.getenv("USE_GCP_JOBS", "false").lower() == "true":
+            # Phase 50: Use GCP Cloud Run Jobs for video
+            job_id = enqueue_video_task({
+                "quote": req.text,
+                "mood": req.mood,
+                "author": req.author,
+                "user_id": user_id,
+                "user_tier": user_tier
+            })
+            if not job_id:
+                raise LEVIException("GCP Job Dispatch failed.", status_code=500)
+            return {"status": "queued", "task_id": job_id, "message": "Video job dispatched to Cloud Run."}
 
         if os.getenv("USE_CELERY", "true").lower() == "true":
             generate_video_task.delay(

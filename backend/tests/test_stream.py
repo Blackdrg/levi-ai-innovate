@@ -8,9 +8,9 @@ from unittest.mock import patch, MagicMock, AsyncMock
 async def test_broadcast_activity_pushes_to_redis():
     """Verify that broadcast_activity publishes to the correct Redis channel."""
     mock_redis = MagicMock()
-    with patch('backend.gateway.HAS_REDIS', True):
-        with patch('backend.gateway.redis_client', mock_redis):
-            from backend.gateway import broadcast_activity
+    with patch('backend.main.HAS_REDIS', True):
+        with patch('backend.main.redis_client', mock_redis):
+            from backend.main import broadcast_activity
             broadcast_activity("test_event", {"key": "value"})
             
             mock_redis.publish.assert_called_once()

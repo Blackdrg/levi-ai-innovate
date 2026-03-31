@@ -1,91 +1,82 @@
-# LEVI-AI v1.1 — Production Hardened 🛡️
-## "The Sentinel" Update
+# LEVI-AI v6.0 — The Evolutionary Mind 🧠
+## Sovereign Autonomous Intelligence
 
-[![Status](https://img.shields.io/badge/Status-1.1--Hardened-brightgreen)](https://img.shields.io/badge/Status-1.1--Hardened-brightgreen)
-[![Reasoning](https://img.shields.io/badge/Pipeline-8--Stage-blue)](https://img.shields.io/badge/Pipeline-8--Stage-blue)
+[![Status](https://img.shields.io/badge/Status-v6.0--Evolutionary-gold)](https://img.shields.io/badge/Status-v6.0--Evolutionary-gold)
+[![Architecture](https://img.shields.io/badge/Architecture-Feedback--Aware-red)](https://img.shields.io/badge/Architecture-Feedback--Aware-red)
 
-LEVI is a production-hardened **AI Orchestration Platform** built for high-reliability, low-latency, and persistent semantic evolution. It routes user requests through an intelligent 8-stage pipeline—deciding locally, through specialized agents, or via large-scale LLMs—while building a persistent 3-layer "Soul" memory of every interaction.
+LEVI v6 is a production-hardened **Sovereign AI Ecosystem**. Built upon a multi-agent orchestrator, it features a self-evolving brain that adapts through real-time feedback (The Reflex), autonomous persona growth (The Dream), and collective cross-user intelligence (Shared Learning).
 
-# LEVI Project Roadmap & TODO (v1.1) 🚀
+# LEVI Project Roadmap (v6.0 Sovereign) 🚀
 
-## 🟢 PHASE 1.1: STABILITY & HARDENING (100% COMPLETE)
-- [x] **Redis Resilience**: Degraded mode for production uptime.
-- [x] **Monolith Retirement**: Structured entry point via `gateway.py`.
-- [x] **Unified Models**: Consolidated feedback across all AI services.
-- [x] **Safe Async**: Corrected event loop handling for non-Celery contexts.
+## 🔴 PHASE 6.0: THE EVOLUTIONARY MIND (CURRENT)
+- [x] **Reflex Ledger**: Real-time tool performance tracking and adaptive routing.
+- [x] **Silent Distillation**: Background persona consolidation into "Core Traits."
+- [x] **Collective Wisdom**: Anonymized pattern sharing across user interactions.
+- [x] **Instruction Mutation**: Autonomous system prompt refinement based on ratings.
+- [x] **Cross-Service Bridge**: Unified context sharing between Chat, Studio, and Gallery.
 
 > [!IMPORTANT]
-> **v1.1 Production Hardening is COMPLETE.**
-> 100% SSE Streaming reliability · Redis-backed memory debouncing · JTI Blacklist & Tier Enforcement · Consistently < 50ms latency for cached queries.
+> **v6.0 Revolutionary Architecture is LIVE.**
+> Adaptive Meta-Planning · Autonomous Self-Mutation · Secure Piston-Containerized Execution · Sovereign Identity Distillation.
 
 ---
 
-## 🏗️ Architecture: The 8-Stage Pipeline
+## 🏗️ Architecture: The Evolutionary Loop
 
-The `LeviBrain` orchestrator (`brain.py`) is the central intelligence hub. Every request flows through these deterministic stages within a structured, class-based decision flow:
+The `LeviBrain` orchestrator now features a closed-loop feedback system that refines its own reasoning strategy in real-time:
 
 ```mermaid
 graph TD
-    User((User)) -->|HTTPS / SSE| GW[FastAPI Gateway]
+    User((User)) -->|Standardized Context| GW[FastAPI Gateway]
 
-    subgraph Brain ["🧠 LeviOrchestrator v5.0"]
-        GW --> San[1. Sanitize]
-         San --> Cache{2. Cache Check}
-        Cache -->|Hit| Out[8. Final Output]
-        Cache -->|Miss| Mem[3. Memory Retrieve]
-        Mem --> Int[4. Intent Detect]
-        Int --> Dec{5. Decision Engine}
+    subgraph Brain ["🧠 LeviBrain v6.0 Sovereign"]
+        GW --> Mem[1. Memory Retrieve]
+        Mem -->|Cross-Service| Bridge[2. Studio Bridge]
+        Bridge --> Int[3. Intent Detect]
+        Int --> Meta[4. Meta-Planner]
+        
+        subgraph Evolution ["🌀 The Evolutionary Core"]
+            Ledger[(Reflex Ledger)] -.->|Performance Advisory| Meta
+            Meta --> Exec[5. Resilient Executor]
+            Exec -->|Latency/Error Patterns| Ledger
+            Exec --> Val[6. Self-Critique]
+        end
 
-        Dec -->|Greeting / Identity| Local[🟢 Local Engine]
-        Dec -->|Image / Code / Search| Tool[🟡 Tool Engine]
-        Dec -->|Complex / Chat| API[🔴 API / Groq 70B]
-
-        Local --> Val[7. Validate & Fallback]
-        Tool  --> Val
-        API   --> Val
-        Val   --> Store[7. Memory Store]
-        Store --> Out
+        Val --> Synth[7. Synthesis]
+        Synth --> Opt[8. Soul Optimizer]
+        Opt --> Out[9. Final Response]
+        
+        Out --> Learn[10. Background Evolution]
+        Learn -->|Distill Core Traits| Memory
+        Learn -->|Mutate Instructions| Prompts
     end
 
-    subgraph Storage ["💾 3-Layer Soul Memory"]
-        Mem -.-> Redis[(Redis\nSession STM)]
-        Mem -.-> FS[(Firestore\nMid-Term Log)]
-        Store -.-> Redis
-        Store -.-> FS
-        Store -.-> Vec[(Vector\nSemantic LTM)]
+    subgraph Collective ["🌐 Global Intelligence"]
+        Learn -.->|Anonymized Patterns| Shared[(Collective Wisdom)]
+        Shared -.->|Success Injections| Prompts
     end
 ```
 
-### 1. The Stages Breakdown
-1.  **Sanitization**: `_sanitize` collapses whitespace, normalizes Unicode, and strips dangerous injection patterns while preserving casing for entity recognition.
-2.  **Cache Check**: 30-minute TTL Redis-based response cache for identical search and chat queries.
-3.  **Memory Retrieve**: Parallel retrieval from all 3 layers (Redis, Firestore, Vector) merged into a single `context` object.
-4.  **Intent Detection**: 
-    - **Stage 1 (Regex)**: Zero-latency matching for greetings, tool calls, and high-frequency patterns.
-    - **Stage 2 (LLM Fallback)**: Lightweight `llama-3.1-8b` classification for complex natural language.
-5.  **Decision Engine**: 3-tier routing:
-    - 🟢 **LOCAL**: Instant responses for greetings/identity with complexity ≤ 3.
-    - 🟡 **TOOL**: Agent dispatch (Search, Image, Code) using `llama-3.1-8b`.
-    - 🔴 **API**: Complex reasoning using `llama-3.1-70b-versatile` (Pro/Creator tiers).
-6.  **Execute & Stream**: True token-by-token SSE streaming via the Groq API, with metadata delivered in the first chunk.
-7.  **Validate & Fallback**: Self-healing chain (`primary` → `chat_agent retry` → `local_engine` → `safe_default`).
-8.  **Memory Store**: Background persistence and automatic 30-day pruning of old facts.
+### 1. The v6 Sovereignty Stages
+1.  **Context Standardizing**: Enforced session isolation and mult-user intelligence via `X-User-Context` headers.
+2.  **Studio Bridge**: Real-time recall of recent creative activity (Jobs, Gallery) within conversation.
+3.  **Reflex Ledger**: Real-time tracking of tool success/failure, enabling the **Meta-Planner** to dynamically avoid unstable agents.
+4.  **Resilient Execution**: Sandbox-hardened code execution via the **Piston API** with local fallback.
+5.  **The Dream (Silent Distillation)**: Background task that consildates fragmented facts into high-level permanent personality traits.
+6.  **Instruction Mutation**: Autonomous refinement of system prompts based on 5-star resonance scores.
 
 ---
 
-## ⚡ Key Hardened Features
+## ⚡ Key evolutionary Features
 
-### 🛡️ Webhook-Integrated Circuit Breaker
-Located in `backend/utils/network.py`, the circuit breaker monitors external service health.
-- **CLOSED**: Normal health.
-- **OPEN**: Service down. Automated fallback to `local_engine` triggers, and a POST alert is sent to `ALERT_WEBHOOK_URL`.
-- **HALF_OPEN**: Proactive healing phase.
+### 🌀 The Reflex Ledger
+Located in `backend/redis_client.py` and `executor.py`, this ledger monitors every tool call. If an agent (e.g., `image_agent`) drops below a 70% success rate, the Meta-Brain automatically triggers a "System Advisory" to pivot strategies.
 
-### 💾 "The Soul" Memory Lifecycle
-- **Short-Term (Redis)**: Session awareness and instant context window.
-- **Mid-Term (Firestore)**: Persistent conversation history and user "pulse" derivation.
-- **Long-Term (Vector)**: Semantic user facts extracted in the background using `sentence-transformers`.
-- **Automatic Pruning**: Daily background job removes facts older than 30 days using native Firestore Timestamps to manage costs and data privacy.
+### 🎭 Silent Persona Distillation
+LEVI no longer just "remembers"; it *evolves*. Every 20 interactions, the `MemoryManager` identifies underlying themes in your history and synthesizes them into "Core Identity Traits" that guide all future philosophical alignment.
+
+### 🛡️ Secure Containerized Sandbox
+Code execution is delegated to a public Piston API instance, ensuring that dangerous Python/JS operations never touch the host OS. A restricted local `exec()` fallback is maintained for critical offline reliability.
 
 ---
 
@@ -93,61 +84,38 @@ Located in `backend/utils/network.py`, the circuit breaker monitors external ser
 
 | Layer | Technology | Status |
 |:---|:---|:---|
-| **Backend** | FastAPI, asyncio, Gunicorn/Uvicorn | Hardened |
-| **Inference** | Groq `llama-3.1-8b-instant` & `llama-3.1-70b-versatile` | Production |
-| **Images** | Together AI `FLUX.1-schnell` | Operational |
-| **Memory** | Redis, Firestore, Sentence-Transformers | Robust |
-| **Task Queue** | Celery + Redis Broker + Celery Beat Scheduler | Scalable |
-| **Ingress** | Nginx (SSE optimized, buffering disabled) | Production |
-| **Observability** | Sentry, Structured JSON Logging | Enabled |
-
----
-
-## 📂 Repository Mastery (File Map)
-
-### Backend (`/backend`)
-- `api/`: Centralized API routers for all services (hardened architecture).
-- `services/orchestrator/`: The core brain (`brain.py`), planner, and memory manager.
-- `utils/robustness.py`: Standardized retry (Tenacity) and timeout logic.
-- `utils/error_handler.py`: Global exception management and sanitized responses.
-- `celery_app.py`: Background task definitions for memory flushes and pruning.
-- `auth.py`: Firebase JWT validation and JTI blacklist management.
-
-### Frontend (`/frontend`)
-- `js/chat.js`: SSE-aware UI with real-time route badge (🟢/🟡/🔴) updates.
-- `js/ui.js`: Modern vanilla JS components and micro-animations.
-- `css/main.css`: Premium dark-mode design system.
+| **Language** | Python 3.10+, JavaScript (ES6+) | Modern |
+| **Logic** | Pydantic v2, Tenacity, CircuitBreaker | Hardened |
+| **Sandbox** | Piston Code Execution API | Secure |
+| **Evolution** | Redis (Ledger), Firestore (Memory), LLM-Critique | Sovereign |
 
 ---
 
 ## 🚀 Quick Start (Production Setup)
 
 ```bash
-# 1. Clone & Env
+# 1. Initialize v6 Sovereign
 git clone https://github.com/Blackdrg/levi-ai-innovate.git && cd levi-ai-innovate
 cp .env.example .env
 
-# 2. Production Environment
-export ENVIRONMENT=production  # Enables async Celery
-export ALERT_WEBHOOK_URL=https://discord.com/api/webhooks/...
+# 2. Modern Telemetry
+export ADMIN_KEY=your_secret_admin_key
+curl http://localhost/api/health/evolution
 
-# 3. Docker Launch
-docker compose up --build -d
-
-# 4. Verify SSE Health
-curl http://localhost/api/health
+# 3. Monitor Growth
+# Access the Evolution Dashboard to see mutation rates and pattern strength.
 ```
 
 ---
 
 ## 📖 Related Documentation
-- [**RUNBOOK.md**](RUNBOOK.md): The definitive Ops & Troubleshooting guide.
-- [**INTEGRATION.md**](INTEGRATION.md): Full API Reference and response shapes.
-- [**MAINTENANCE.md**](MAINTENANCE.md): Scheduled tasks and data lifecycle.
-- [**DIAGNOSTICS_MASTER.md**](DIAGNOSTICS_MASTER.md): Health signals and log analysis.
-- [**DEPLOYMENT.md**](DEPLOYMENT.md): Step-by-step hardened production setup.
+- [**RUNBOOK.md**](RUNBOOK.md): Ops & v6 Troubleshooting.
+- [**MAINTENANCE.md**](MAINTENANCE.md): The Evolution Lifecycle.
+- [**INTEGRATION.md**](INTEGRATION.md): Sovereign IP Reference.
 
 ---
 
-**LEVI — Architected for depth. Hardened for scale. Built to never fail.**  
+**LEVI — The AI that evolves with you. Sovereign. Secure. Self-Learning.**  
+*Blackdrg/levi-ai-innovate · Apache 2.0*
+Hardened for scale. Built to never fail.**  
 *Blackdrg/levi-ai-innovate · Apache 2.0*
