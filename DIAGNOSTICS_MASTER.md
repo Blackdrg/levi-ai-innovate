@@ -1,21 +1,21 @@
-# LEVI-AI: Hardened Diagnostics & Health Master (v5.0) 🔍
+# LEVI-AI: Hardened Diagnostics & Health Master (v6.8) 🔍
 
-This guide provides technical signals, log analysis patterns, and troubleshooting steps for the hardened LEVI-AI platform.
+This guide provides technical signals, log analysis patterns, and troubleshooting steps for the hardened LEVI-AI v6.8 Sovereign platform.
 
 ---
 
 ## 📈 1. Primary Health Signals
 
-### `/health` Endpoint
+### `/health/sovereign` Endpoint
 Expects: `HTTP 200` with JSON body:
 - `status`: `ok` (Global)
-- `database`: `connected` (Firestore)
+- `local_engine`: `ready` (Llama-CPP)
+- `memory`: `synced` (FAISS Indices)
 - `redis`: `reachable` (Session/Cache)
-- `auth`: `verified` (Firebase)
-- `version`: `5.0`
+- `version`: `6.8.4`
 
-### Metric: `metrics:total_requests` (Redis-backed)
-Tracks real-time system throughput. Monitor for sudden drops which could indicate an Nginx ingress failure.
+### Metric: `metrics:sovereign_routing_ratio`
+Tracks the percentage of requests handled by the local engine vs. cloud fallbacks. Target: >80%.
 
 ---
 
@@ -23,69 +23,69 @@ Tracks real-time system throughput. Monitor for sudden drops which could indicat
 
 All logs follow a JSON format for integration with Cloud Logging / Sentry.
 
-### Example: Decision Log
+### Example: Sovereign Decision Log
 ```json
 {
-    "timestamp": "2026-03-31T12:00:00Z",
+    "timestamp": "2026-04-01T12:00:00Z",
     "level": "INFO",
-    "request_id": "req-abc123",
-    "trace_id": "tr-xyz789",
+    "request_id": "orch_abc123",
     "intent": "complex_query",
-    "engine_route": "api",
-    "latency_ms": 1245,
-    "cached": false,
+    "engine_route": "sovereign",
+    "model": "llama-3-8b.gguf",
+    "memory_hits": 4,
+    "latency_ms": 450,
     "circuit_breaker": "CLOSED"
 }
 ```
 
 ### Log Queries
-- **Find all API-routed requests**: `jsonPayload.engine_route="api"`
-- **Monitor cache hit rate**: `jsonPayload.cached=true`
-- **Track Circuit Breaker trips**: `jsonPayload.circuit_breaker="OPEN"`
+- **Find all local-routed requests**: `jsonPayload.engine_route="sovereign"`
+- **Monitor FAISS hit rate**: `jsonPayload.memory_hits > 0`
+- **Track Local Engine failures**: `jsonPayload.level="ERROR" AND jsonPayload.engine_route="sovereign"`
 
 ---
 
 ## 🛡️ 3. Circuit Breaker Diagnostics
 
-The circuit breaker (`network.py`) prevents cascading failures when external LLM providers (Groq, Together) are unreachable.
+The circuit breaker (`network.py`) prevents cascading failures when the Local Engine or Cloud providers (Together) are unstable.
 
 | State | Indication | Action |
 |:---|:---|:---|
 | **CLOSED** | Healthy | Normal operation. |
-| **OPEN** | SERVICE DOWN | Automated fallback to `local_engine` active; Webhook alert sent. |
-| **HALF_OPEN** | HEALING | Testing connection with single-request probe. |
+| **OPEN** | ENGINE DOWN | Automated fallback to Cloud (Together) active; Webhook alert sent. |
+| **HALF_OPEN** | HEALING | Testing engine with single-request probe. |
 
 ---
 
-## ❌ 4. Common Hardened Errors
+## ❌ 4. Common Sovereign Errors
 
-### `LEVI_AUTH_99 — JTI Blacklisted`
-- **Cause**: User token has been revoked or session invalidated.
-- **Diagnostics**: Check `redis_client.py` logs for specific JTI match.
+### `LEVI_SOVEREIGN_01 — Model Not Found`
+- **Cause**: `.gguf` weight file missing from `backend/models/`.
+- **Diagnostics**: Check `LOCAL_MODEL_PATH` in `.env`.
 
-### `LEVI_MEMORY_50 — Pruning Stalled`
-- **Cause**: Background Celery job failed or `ENVIRONMENT` not set to `production`.
-- **Diagnostics**: Check `celery worker` logs for `prune_old_facts` task.
+### `LEVI_MEMORY_88 — FAISS Corruption`
+- **Cause**: Index file corrupted on disk or memory mismatch.
+- **Diagnostics**: Run `python scripts/verify_indices.py`.
 
-### `LEVI_SSE_10 — Buffer Timeout`
-- **Cause**: Nginx is buffering responses, blocking tokens until the stream ends.
-- **Diagnostics**: Verify `proxy_buffering off;` in `nginx.conf`.
+### `LEVI_SSE_20 — Pulse Drop`
+- **Cause**: Nginx buffer timeout or high CPU usage on local inference.
+- **Diagnostics**: Check `top` for `levi-api` CPU spikes.
 
 ---
 
 ## 🛠️ 5. Instant Diagnostic Tools
 
 ```bash
-# Verify redis connectivity from within the gateway container
-redis-cli ping
+# Verify local model loading
+python -c "from backend.sd_engine import LocalEngine; print(LocalEngine().status())"
 
-# View the last 100 decision logs
-tail -n 100 /var/log/levi/orchestrator.log | grep "engine_route"
+# View the last 100 intelligence pulses
+tail -n 100 /var/log/levi/orchestrator.log | grep "type: activity"
 
-# Manually trigger a memory buffer flush
-python -c "from backend.services.orchestrator.memory_tasks import flush_all_memory_buffers; flush_all_memory_buffers()"
+# Manually trigger a FAISS index consolidation
+celery -A backend.celery_app call backend.services.orchestrator.memory_tasks.run_global_maintenance
 ```
 
 ---
 
-**LEVI — Architected for depth. Documented for clarity.**
+**LEVI v6.8 — Architected for depth. Documented for clarity. Sovereign by design.**

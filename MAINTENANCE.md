@@ -11,12 +11,10 @@ The v6.8 engine manages intensive background tasks across two specialized queues
 | Task | Queue | Schedule | Purpose |
 |:---|:---|:---|:---|
 | `run_autonomous_evolution` | `default` | Daily (24h) | Mutates weak system prompts based on 5-star patterns. |
-| `update_analytics_snapshot` | `default` | Every 4h | Flushes expensive aggregate counts to the dashboard cache. |
-| `generate_video_task` | `heavy` | On-Demand | High-intensity cinematic video synthesis (600s timeout). |
+| `update_analytics_snapshot` | `default` | Every 4h | Flushes system health metrics to the dashboard cache. |
+| `run_global_maintenance` | `heavy` | Daily | Consolidates FAISS indices and prunes orphaned memory vectors. |
 | `flush_all_memory_buffers` | `default` | Every 30s | Syncs real-time interaction memory from Redis to Firestore. |
-| `prune_expired_data` | `default` | Daily | Auto-cleans temp uploads and stale indices (Phase 6 Hardening). |
-| `consolidate_global_wisdom`| `default` | Daily | Ensures Global Knowledge Index is persisted to disk regularly. |
-| `cleanup_stuck_jobs` | `default` | Hourly | Auto-cleans Studio jobs lost in the 'processing' state. |
+| `prune_expired_data` | `default` | Daily | Auto-cleans temp uploads and stale session data. |
 
 ---
 
@@ -26,15 +24,15 @@ The 3-layer memory matrix is the core of LEVI's consciousness.
 
 ### Viewing Memory Health
 ```bash
-# Check the status of the local FAISS index
+# Check the status of the local FAISS indices
 ls -lh backend/data/memory/*.bin
 
-# Verify the Redis-to-Firestore buffer depth
-redis-cli LLEN memory_buffer:test_user
+# Verify model weight integrity
+sha256sum backend/models/*.gguf
 ```
 
 ### Manual Index Maintenance
-If the Global Wisdom index requires a refresh or if retrieval scores are drifting:
+If retrieval scores are drifting or latency is increasing:
 ```bash
 # Trigger a background maintenance cycle
 celery -A backend.celery_app call backend.services.orchestrator.memory_tasks.run_global_maintenance
@@ -44,13 +42,13 @@ celery -A backend.celery_app call backend.services.orchestrator.memory_tasks.run
 
 ## 🛡️ 3. Prompt Mutation & Rollback
 
-v6.8 uses an autonomous mutator. The "Original" prompt is always preserved in Firestore.
+v6.8 uses an autonomous mutator to refine reasoning.
 
 ### Emergency Rollback
 1.  Access Firestore: **`prompt_performance`** collection.
-2.  Locate the failed variant (usually the one with a recent `evolved_at` timestamp).
-3.  Copy the `original_prompt` back to the active array in `backend/learning.py`.
-4.  Set `avg_score` to 5.0 to lock the variant from further mutation until re-evaluated.
+2.  Locate the failed variant (recent `evolved_at` timestamp).
+3.  Revert the `active_prompt` to the `original_prompt` value.
+4.  Restart the `levi-api` service to clear the prompt cache.
 
 ---
 
@@ -58,17 +56,17 @@ v6.8 uses an autonomous mutator. The "Original" prompt is always preserved in Fi
 
 LEVI v6.8 provides a deep diagnostic probe.
 
-### Running the System Audit
-Run the definitive smoke test to verify all 8-stage decision boundaries:
+### Running the Sovereignty Audit
+Verify all 8-stage decision boundaries and local inference:
 ```bash
-python tests/complete_verify_v6.py
+python tests/verify_sovereignty.py
 ```
 
 ### Real-Time Activity Monitoring
-Subscribe to the Global Activity stream to witness the Meta-Brain's internal strategy:
+Subscribe to the Intelligence Pulse stream:
 ```bash
 # Using curl (SSE)
-curl -N http://localhost/api/stream
+curl -N http://localhost/api/stream | grep "type: activity"
 ```
 
 ---
@@ -82,5 +80,5 @@ LEVI prioritizes non-cloud reasoning via local Llama-3-8B-Instruct.
 
 ---
 
-**LEVI — Sovereign. Efficient. Self-Scaling.**
-*Infinite Loop Initiated.*
+**LEVI v6.8 — Sovereign. Efficient. Self-Scaling.**
+*Infinite Learning Loop Hardened.*

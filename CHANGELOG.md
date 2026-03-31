@@ -1,5 +1,8 @@
-# LEVI v6.8 — The Sovereign Transformation 🏺
-## Changelog
+## [6.8.4] - 2026-03-31 "The Sovereign Hardening" 💎
+### Fixed
+- **Memory Leak**: Resolved long-running FAISS index fragmentation in Celery workers.
+- **Race Condition**: Hardened Lua scripts for multi-user credit deduction under high concurrency.
+- **SSE Stability**: Improved buffer management in Nginx for consistent 50ms pulse delivery.
 
 ## [6.8.0] - 2026-03-31 "The Sovereign Transformation" 🏺
 ### Added

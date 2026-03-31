@@ -1,22 +1,3 @@
-# Security Hardening Walkthrough  LEVI-AI Backend
-
-I have implemented and verified 12 critical security hardening measures across the LEVI-AI backend. The changes ensure robust protection against common vulnerabilities such as prompt injection, SSRF, brute-force attacks on admin endpoints, and insecure token handling.
-
-## Changes Made
-
-### 1. Entropy & Environment Validation
-- **SECRET_KEY Entropy Guard**: `main.py` now asserts that `SECRET_KEY` is at least 32 bytes. It raises a `RuntimeError` at startup if the key is insufficient, preventing insecure deployments.
-- **CSP Headers**: Added a strict `Content-Security-Policy` to the FastAPI middleware, ensuring all API responses include browser-level security instructions.
-
-### 2. API & CORS Hardening
-- **Explicit CORS Headers**: Hardened `CORSMiddleware` by replacing the wildcard `allow_headers=["*"]` with an explicit whitelist.
-- **Prompt Injection Defense**: Expanded the `sanitize_text` and `sanitize_message` blocklists from 4 to 12 common jailbreak patterns.
-
-### 3. Admin & Auth Security
-- **Admin Rate Limiting**: All `/admin/*` endpoints now have a per-IP rate limit of 5 requests per minute using `slowapi`.
-- **Constant-Time Comparison**: Replaced standard string comparison with `hmac.compare_digest` for the `X-Admin-Key` header to prevent timing attacks.
-- **OAuth One-Time Code Flow**: Replaced the insecure `?token=` redirect with an opaque one-time code system. The frontend now exchanges this code via a secure `POST /auth/exchange` call.
-- **Logout Transparency**: The `/logout` endpoint now returns a 503 error if Redis is unavailable, instead of silently failing, ensuring session revocation is reliable.
 
 ### 4. Token & Session Management
 - **Refresh Token Support**: Added a full refresh token rotation flow. Tokens- **Cache Isolation**: Enforced global `Vary` headers (`Accept-Encoding`, `Trace-Parent`, `Authorization`) in the gateway to prevent cache leaks across different user contexts.
