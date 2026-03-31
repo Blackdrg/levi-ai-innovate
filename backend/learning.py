@@ -595,48 +595,57 @@ def export_training_data(
 # ─────────────────────────────────────────────
 # 5. LEARNING ANALYTICS
 # ─────────────────────────────────────────────
-def get_learning_stats():
-    """Returns learning system statistics from Firestore."""
+def update_system_analytics(metric: str, value: Any = 1, increment: bool = True):
+    """
+    Phase 12: Atomic analytics update in a single document for scalability.
+    """
+    from backend.firestore_db import db as firestore_db
     try:
-        # Firestore counts (Safe-access)
-        total_samples = 0
-        high_quality = 0
-        avg_rating = 0
-        learned_quotes = 0
+        ref = firestore_db.collection("system").document("analytics")
+        if increment:
+            ref.update({metric: google_firestore.Increment(value)})
+        else:
+            ref.update({metric: value})
+    except Exception as e:
+        logger.warning(f"Sovereign Analytics update failed: {metric} - {e}")
+
+def get_learning_stats():
+    """
+    LEVI v6.8: Scalable dashboard stats.
+    Prioritizes the 'system/analytics' cache over full collection scans.
+    """
+    from backend.firestore_db import db as firestore_db
+    try:
+        ref = firestore_db.collection("system").document("analytics")
+        doc = ref.get()
         
-        try:
-            total_samples = len(firestore_db.collection("training_data").get())
-            hq_docs = firestore_db.collection("training_data").where("rating", ">=", 4).get()
-            high_quality = len(hq_docs)
-            if high_quality > 0:
-                avg_rating = sum(d.to_dict().get("rating", 0) for d in hq_docs) / high_quality
-            learned_quotes = len(firestore_db.collection("quotes").where("topic", "==", "__learned__").get())
-        except Exception as e:
-            logger.warning(f"Firestore stats failed: {e}")
+        if not doc.exists:
+            # Fallback for first-time init (expensive, once)
+            total = len(firestore_db.collection("training_data").get())
+            learned = len(firestore_db.collection("quotes").where("topic", "==", "__learned__").get())
+            ref.set({
+                "total_samples": total,
+                "learned_quotes": learned,
+                "avg_rating": 3.0,
+                "best_variant": 0,
+                "best_score": 0.0,
+                "updated_at": datetime.utcnow()
+            }, merge=True)
+            return {"total_training_samples": total, "learned_quotes": learned}
 
-        # Prompt Performance from Firestore
-        best_variant = 0
-        best_score = 0.0
-        try:
-            perf_docs = firestore_db.collection("prompt_performance").order_by("avg_score", direction=google_firestore.Query.DESCENDING).limit(1).get()
-            if perf_docs:
-                best_variant = int(perf_docs[0].id)
-                best_score = perf_docs[0].to_dict().get("avg_score", 0.0)
-        except Exception:
-            pass
-
+        stats = doc.to_dict()
         return {
-            "total_training_samples": total_samples,
-            "high_quality_samples":   high_quality,
-            "avg_response_rating":    round(float(avg_rating or 0), 2),
-            "learned_quotes":         learned_quotes,
-            "best_prompt_variant":    best_variant,
-            "best_prompt_score":      round(best_score, 2),
-            "knowledge_base_health":  "good" if learned_quotes > 50 else "growing",
+            "total_training_samples": stats.get("total_samples", 0),
+            "high_quality_samples":   stats.get("hq_samples", 0),
+            "avg_response_rating":    round(float(stats.get("avg_rating", 3.0)), 2),
+            "learned_quotes":         stats.get("learned_quotes", 0),
+            "best_prompt_variant":    stats.get("best_variant", 0),
+            "best_prompt_score":      round(stats.get("best_score", 0.0), 2),
+            "knowledge_base_health":  "hardened" if stats.get("learned_quotes", 0) > 100 else "stable",
         }
     except Exception as e:
         logger.error(f"Critical stats failure: {e}")
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": "Collective memory unavailable."}
 
 
 # ─────────────────────────────────────────────

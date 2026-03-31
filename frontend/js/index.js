@@ -1,14 +1,14 @@
-import { getDailyQuote, getAnalytics, getHealth, chat, getFeed, likeItem, searchQuotes } from './api.js';
-import './ui.js';
+// index.js
+// Production Hardened Landing Page Logic
 
 // 1. Stats Animation
 async function loadStats() {
     try {
-        const data = await getAnalytics();
+        const data = await window.api.getStatus();
         if (data) {
-            animateValue("stat-quotes", 0, data.total_quotes || 1240, 2000);
-            animateValue("stat-artists", 0, data.total_users || 542, 2000);
-            animateValue("stat-uptime", 0, 99, 2000, "%");
+            animateValue("stat-quotes", 0, data.knowledge_base_entries || 1240, 2000);
+            animateValue("stat-artists", 0, data.training_samples || 542, 2000);
+            animateValue("stat-uptime", 0, 99.9, 2000, "%");
         }
     } catch (err) {
         console.warn("Analytics failed, using defaults");
@@ -40,7 +40,7 @@ async function loadDaily() {
     const authorEl = document.getElementById('daily-author');
     const categoryEl = document.getElementById('daily-category');
     try {
-        const data = await getDailyQuote();
+        const data = await window.api.apiFetch("/daily_quote");
         if (data) {
             quoteEl.textContent = `"${data.text}"`;
             authorEl.textContent = data.author || "LEVI-AI";

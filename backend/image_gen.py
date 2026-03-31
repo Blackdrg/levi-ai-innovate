@@ -139,12 +139,16 @@ def generate_quote_image(
     quote: str,
     author: str = "",
     mood: str = "neutral",
-    size: Tuple[int, int] = (1024, 1024),
+    size: Optional[Tuple[int, int]] = None,
+    aspect_ratio: str = "1:1",
     custom_bg: str = "",
-    style: str = "",
+    style: str = "cinematic",
+    negative_prompt: str = "",
+    seed: Optional[int] = None,
     return_pil: bool = False,
     upload_to_storage: bool = False,
-    user_id: Optional[int] = None,
+    user_id: Optional[str] = None,
+    user_tier: str = "free",
 ) -> dict:
     """
     Generate a complete quote image with AI background and text overlay.
@@ -153,6 +157,17 @@ def generate_quote_image(
     warnings = []
     engineused = "fallback"
     bg: Optional[Image.Image] = None
+
+    # Handle Size from Aspect Ratio
+    if not size:
+        ar_map = {
+            "1:1": (1024, 1024),
+            "16:9": (1280, 720),
+            "9:16": (720, 1280),
+            "4:3": (1024, 768),
+            "3:4": (768, 1024)
+        }
+        size = ar_map.get(aspect_ratio, (1024, 1024))
 
     # 1. Custom Background
     if custom_bg and custom_bg.startswith("data:image"):
@@ -170,13 +185,17 @@ def generate_quote_image(
     # 2. Try Local SD
     if bg is None:
         try:
-            try:
-                from backend.sd_engine import generate as sd_generate  # type: ignore
-            except ImportError:
-                from sd_engine import generate as sd_generate  # type: ignore
+            from backend.sd_engine import generate as sd_generate  # type: ignore
             prompt, p_warns = build_prompt(quote, mood, style, enhance=False)
             warnings.extend(p_warns)
-            sd_result = sd_generate(prompt, style=style or "default", size=size, enhance=False)
+            sd_result = sd_generate(
+                prompt, 
+                style=style or "cinematic", 
+                size=size, 
+                enhance=False,
+                negative_prompt=negative_prompt,
+                seed=seed
+            )
             if sd_result:
                 bg = Image.open(sd_result).convert("RGBA")
                 engineused = "local_sd"
@@ -189,8 +208,13 @@ def generate_quote_image(
         try:
             prompt, p_warns = build_prompt(quote, mood, style, enhance=True)
             warnings.extend(p_warns)
-            logger.info(f"Together AI generating: '{prompt[:60]}...'")
-            bg = generate_via_together(prompt, size)
+            logger.info(f"Together AI generating [{aspect_ratio}]: '{prompt[:60]}...'")
+            bg = generate_via_together(
+                prompt=prompt, 
+                size=size, 
+                negative_prompt=negative_prompt,
+                seed=seed
+            )
             engineused = "together_ai"
             logger.info("Using Together AI background")
         except Exception as e:
@@ -226,13 +250,15 @@ def generate_quote_image(
     bg.convert("RGB").save(output, "PNG", optimize=True, quality=95)
     output.seek(0)
 
-    if upload_to_storage and GCP_STORAGE_BUCKET:
+    if upload_to_storage and (os.getenv("AWS_S3_BUCKET") or GCP_STORAGE_BUCKET):
         img_bytes = output.getvalue()
-        gcs_url = upload_image_to_gcs(img_bytes, user_id)
-        if gcs_url:
-            return {"data": gcs_url, "engine": engineused, "success": True, "warnings": warnings, "bio": output}
+        # Phase 8: Unified S3/GCS Upload
+        from backend.s3_utils import upload_image_to_s3
+        store_url = upload_image_to_s3(img_bytes, user_id)
+        if store_url:
+            return {"data": store_url, "engine": engineused, "success": True, "warnings": warnings, "bio": output}
         else:
-            warnings.append("GCS upload failed")
+            warnings.append("Storage upload failed")
 
     return {"data": output, "engine": engineused, "success": True, "warnings": warnings}
 

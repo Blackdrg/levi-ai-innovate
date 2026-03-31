@@ -18,6 +18,7 @@ from backend.utils.robustness import standard_retry
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="", tags=["Privacy"])
 
+@router.get("")
 @router.get("/facts")
 async def get_my_facts(current_user: dict = Depends(get_current_user)):
     """
@@ -26,6 +27,7 @@ async def get_my_facts(current_user: dict = Depends(get_current_user)):
     user_id = current_user.get("uid")
     try:
         # Maintenance: Prune facts older than 30 days
+        from backend.services.orchestrator.memory_utils import prune_old_facts
         await prune_old_facts(user_id)
         
         docs = firestore_db.collection("user_facts") \
@@ -47,6 +49,32 @@ async def get_my_facts(current_user: dict = Depends(get_current_user)):
     except Exception as e:
         logger.error(f"Memory retrieval failure: {e}")
         raise LEVIException("Failed to retrieve personalized memory.", status_code=500)
+
+@router.post("/save")
+async def save_fact(payload: dict, current_user: dict = Depends(get_current_user)):
+    """
+    Manually saves a fact to the user's cosmic memory.
+    """
+    user_id = current_user.get("uid")
+    fact = payload.get("fact")
+    category = payload.get("category", "general")
+    
+    if not fact:
+        raise LEVIException("Fact content is required.", status_code=400)
+    
+    try:
+        from datetime import datetime
+        doc_ref = firestore_db.collection("user_facts").document()
+        doc_ref.set({
+            "user_id": user_id,
+            "fact": fact,
+            "category": category,
+            "created_at": datetime.utcnow()
+        })
+        return {"status": "success", "message": "Fact crystallized in memory.", "id": doc_ref.id}
+    except Exception as e:
+        logger.error(f"Memory save failure: {e}")
+        raise LEVIException("Failed to crystallize memory.", status_code=500)
 
 @router.delete("/facts/{fact_id}")
 async def delete_fact(

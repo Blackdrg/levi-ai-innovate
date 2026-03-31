@@ -21,7 +21,8 @@ celery_app = Celery(
     include=[
         "backend.services.studio.tasks",
         "backend.tasks",
-        "backend.services.orchestrator.memory_tasks",  # Memory buffer flush tasks
+        "backend.services.orchestrator.memory_tasks",
+        "backend.services.orchestrator.learning_tasks",
     ]
 )
 
@@ -32,8 +33,24 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
     task_track_started=True,
-    task_time_limit=300,  # 5 minutes max per task
+    task_time_limit=300,  # default 5 mins
     worker_concurrency=int(os.getenv("CELERY_CONCURRENCY", "4")),
+    
+    # ── Phase 11: Queue Routing ──
+    task_routes={
+        "backend.services.studio.tasks.generate_video_task": {"queue": "heavy"},
+        "backend.services.studio.tasks.generate_image_task": {"queue": "default"},
+        "*": {"queue": "default"},
+    },
+    
+    # High-Priority / Heavy-Lift Overrides
+    task_annotations={
+        "backend.services.studio.tasks.generate_video_task": {
+            "rate_limit": "2/m",        # Avoid overwhelming GPU/CPU
+            "time_limit": 600,         # 10 mins for video
+        }
+    },
+
     # Phase 6 Hardening: Reliability & Backpressure
     task_acks_late=True,                  # Only ACK once task is actually finished
     worker_prefetch_multiplier=1,          # Don't hog tasks; pull one at a time
@@ -57,17 +74,21 @@ celery_app.conf.beat_schedule = {
         "task": "backend.services.orchestrator.memory_tasks.flush_all_memory_buffers",
         "schedule": 30.0,
     },
-    "flush-conv-buffer-every-minute": {
-        "task": "backend.services.orchestrator.memory_tasks.flush_conversation_buffer",
-        "schedule": 60.0,
+    "studio-stuck-job-cleanup-every-hour": {
+        "task": "backend.services.studio.tasks.cleanup_stuck_jobs",
+        "schedule": 3600.0,  # 1 hour
     },
-    "global-memory-maintenance-12h": {
-        "task": "backend.services.orchestrator.memory_tasks.run_global_maintenance",
-        "schedule": 43200.0, # 12 hours
+    "autonomous-prompt-evolution-daily": {
+        "task": "backend.services.orchestrator.learning_tasks.run_autonomous_evolution",
+        "schedule": 86400.0, # 24 hours
+    },
+    "analytics-snapshot-update-4h": {
+        "task": "backend.services.orchestrator.learning_tasks.update_analytics_snapshot",
+        "schedule": 14400.0, # 4 hours
     },
     "daily-faiss-garbage-collection": {
         "task": "backend.services.orchestrator.memory_tasks.garbage_collect_memory",
-        "schedule": 86400.0, # 24 hours
+        "schedule": 86400.0,
     }
 }
 

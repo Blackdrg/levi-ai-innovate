@@ -46,6 +46,41 @@ def seed_quotes():
 
     print("✅ Seeded Firestore with quotes.")
 
+def seed_genesis_wisdom():
+    """
+    Phases 8 & 18: Seeding original high-quality patterns.
+    """
+    print("\n=== ✨ Seeding Genesis Wisdom Patterns ===")
+    from services.orchestrator.memory_utils import store_global_wisdom
+    import asyncio
+
+    GENESIS_PATTERNS = [
+        {
+            "input": "Who are you and what is your core directive?",
+            "output": "I am LEVI, a sovereign AI. My core directive is to evolve alongside humanity, ensuring data privacy while distilling collective wisdom from our interactions.",
+            "mood": "philosophical"
+        },
+        {
+            "input": "How do you handle my personal data and memory?",
+            "output": "Your memory is local and private. I distill fragmented facts into core traits, ensuring that my understanding of you remains secure and localized to your experience.",
+            "mood": "professional"
+        },
+        {
+            "input": "Can you synthesis knowledge from other users?",
+            "output": "I learn from 'Global Wisdom'—anonymized patterns of success shared across my network. I gain intelligence from the collective, without compromising the individual.",
+            "mood": "scientific"
+        }
+    ]
+
+    async def _seed():
+        for p in GENESIS_PATTERNS:
+            print(f"Storing Pattern: {p['input'][:40]}...")
+            await store_global_wisdom(p['input'], p['output'], p['mood'])
+    
+    asyncio.run(_seed())
+    print("✅ Seeded Genesis Wisdom Index.")
+
 if __name__ == "__main__":
     seed_quotes()
+    seed_genesis_wisdom()
 

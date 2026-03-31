@@ -1,95 +1,86 @@
-# LEVI-AI: v6.0 "Sovereign" Maintenance & Lifecycle Guide 🛠️
+# LEVI-AI: v6.8 "Sovereign" Maintenance & Lifecycle Guide 🛠️
 
-This guide outlines the routine operational tasks for the self-evolving LEVI-AI v6 platform.
-
----
-
-## ⚙️ 1. The Revolution Lifecycle (Celery)
-
-The v6 engine manages the "Dreaming" (Memory Distillation) and "Evolution" (Prompt Mutation) tasks.
-
-| Task | Schedule | Purpose |
-|:---|:---|:---|
-| `evolve_system_prompts` | Interaction-based | Mutates low-performing prompts after 100 global 5-star ratings. |
-| `distill_user_persona` | Every 20 interactions | Background task that consolidates user facts into high-level traits. |
-| `prune_shared_patterns` | Weekly | Cleans up the anonymized collective wisdom pool to prevent drift. |
-| `piston_heartbeat` | Every 5 min | Verifies Piston API sandbox health; toggles local fallback if failed. |
+This guide outlines the routine operational tasks for the self-evolving LEVI-AI v6.8 Sovereign platform.
 
 ---
 
-## 💾 2. The Reflex Ledger (Redis)
+## ⚙️ 1. The Sovereign Lifecycle (Celery)
 
-The real-time tool performance ledger is stored in Redis.
+The v6.8 engine manages intensive background tasks across two specialized queues.
 
-### Viewing Ledger Health
+| Task | Queue | Schedule | Purpose |
+|:---|:---|:---|:---|
+| `run_autonomous_evolution` | `default` | Daily (24h) | Mutates weak system prompts based on 5-star patterns. |
+| `update_analytics_snapshot` | `default` | Every 4h | Flushes expensive aggregate counts to the dashboard cache. |
+| `generate_video_task` | `heavy` | On-Demand | High-intensity cinematic video synthesis (600s timeout). |
+| `flush_all_memory_buffers` | `default` | Every 30s | Syncs real-time interaction memory from Redis to Firestore. |
+| `prune_expired_data` | `default` | Daily | Auto-cleans temp uploads and stale indices (Phase 6 Hardening). |
+| `consolidate_global_wisdom`| `default` | Daily | Ensures Global Knowledge Index is persisted to disk regularly. |
+| `cleanup_stuck_jobs` | `default` | Hourly | Auto-cleans Studio jobs lost in the 'processing' state. |
+
+---
+
+## 💾 2. The Memory Matrix (Redis & FAISS)
+
+The 3-layer memory matrix is the core of LEVI's consciousness.
+
+### Viewing Memory Health
 ```bash
-# Get success/failure stats for image_agent
-redis-cli HGETALL ledger:agent:image_agent
+# Check the status of the local FAISS index
+ls -lh backend/data/memory/*.bin
+
+# Verify the Redis-to-Firestore buffer depth
+redis-cli LLEN memory_buffer:test_user
 ```
 
-### Resetting Metrics
-If a tool enters a new version or fix, reset its metrics to allow the Meta-Brain to re-learn:
+### Manual Index Maintenance
+If the Global Wisdom index requires a refresh or if retrieval scores are drifting:
 ```bash
-redis-cli DEL ledger:agent:image_agent
-```
-
----
-
-## 🛡️ 3. Prompt Versioning & Rollback
-
-v6 stores the "Original" prompt in Firestore before any mutation.
-
-### Emergency Rollback
-If a mutated prompt results in degraded performance:
-1.  Access Firestore: `prompt_performance` collection.
-2.  Copy `original_prompt` back to the variant array in `backend/learning.py`.
-3.  Set `avg_score` to 5.0 to prevent immediate re-mutation.
-
----
-
-## 🧪 4. Sandbox Health (Piston API)
-
-LEVI v6 uses the Piston API for secure execution.
-
-- **Endpoint**: `https://emkc.org/api/v2/piston` (Default)
-- **Monitoring**: If `piston_heartbeat` fails, LEVI logs a `CRITICAL` alert and switches to the restricted `LocalExecutor`.
-- **Restoration**: Once the heartbeat returns, the system automatically restores the secure sandbox.
-
----
-
-## 💾 5. Sovereign Vector Memory (FAISS)
-
-The v6.8 "Hybrid Model" uses persistent FAISS indices for sub-millisecond semantic recall.
-
-### Manual Index Rebuild
-If the vector index becomes corrupted or requires a dimensionality shift:
-```bash
-# Trigger a background rebuild via Celery
+# Trigger a background maintenance cycle
 celery -A backend.celery_app call backend.services.orchestrator.memory_tasks.run_global_maintenance
 ```
 
-### Storage Paths
-- **User Index**: `backend/data/memory/user_faiss.bin`
-- **Global Wisdom**: `backend/data/memory/global_faiss.bin`
-- **Metadata**: `backend/data/memory/*_meta.json`
+---
+
+## 🛡️ 3. Prompt Mutation & Rollback
+
+v6.8 uses an autonomous mutator. The "Original" prompt is always preserved in Firestore.
+
+### Emergency Rollback
+1.  Access Firestore: **`prompt_performance`** collection.
+2.  Locate the failed variant (usually the one with a recent `evolved_at` timestamp).
+3.  Copy the `original_prompt` back to the active array in `backend/learning.py`.
+4.  Set `avg_score` to 5.0 to lock the variant from further mutation until re-evaluated.
 
 ---
 
-## 🧠 6. Local Engine Lifecycle (GGUF)
+## 🧪 4. Sovereign Health Diagnostics 👁️
 
-LEVI prioritizes local reasoning via `llama-cpp-python`.
+LEVI v6.8 provides a deep diagnostic probe.
 
-### Swapping Models
-1.  Download a new `.gguf` model (e.g., Llama-3.1-8B-Instruct-Q4_K_M).
-2.  Update `LOCAL_MODEL_PATH` in `.env`.
-3.  Restart the backend worker.
-
-### Health Check (Sovereignty)
-Run the automated audit to verify routing logic:
+### Running the System Audit
+Run the definitive smoke test to verify all 8-stage decision boundaries:
 ```bash
-python tests/verify_sovereignty.py
+python tests/complete_verify_v6.py
+```
+
+### Real-Time Activity Monitoring
+Subscribe to the Global Activity stream to witness the Meta-Brain's internal strategy:
+```bash
+# Using curl (SSE)
+curl -N http://localhost/api/stream
 ```
 
 ---
 
-**LEVI — Built for emergence. Hardened for scale. Sovereign by design.**
+## 💾 5. Local Engine (Sovereignty)
+
+LEVI prioritizes non-cloud reasoning via local Llama-3-8B-Instruct.
+
+- **Check Local Health**: The `/health` API will report `sovereign_v6: hardened` if the local route is active.
+- **Model Upgrades**: When swapping `.gguf` files, ensure they are placed in the `models/` directory and `LOCAL_MODEL_PATH` is updated in `.env`.
+
+---
+
+**LEVI — Sovereign. Efficient. Self-Scaling.**
+*Infinite Loop Initiated.*

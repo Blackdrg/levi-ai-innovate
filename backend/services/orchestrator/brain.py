@@ -76,6 +76,27 @@ class LeviBrain:
         await _notify("Analyzing intent complexity...")
         intent = await detect_intent(user_input)
 
+        # 2.5 🛡️ Transactional Sovereignty (Phase 8 Credit Lock)
+        # We perform an atomic credit check before any high-cost computation.
+        from backend.api.payments import use_credits
+        from backend.config import COST_MATRIX
+        
+        if intent.intent_type in COST_MATRIX and intent.intent_type != "chat":
+            await _notify(f"Verifying cosmic resonance ({intent.intent_type})...")
+            try:
+                # use_credits raises LEVIException if insufficient
+                use_credits(user_id, action=intent.intent_type)
+                logger.info("[Brain] Credit lock acquired for: %s", intent.intent_type)
+            except Exception as e:
+                logger.warning("[Brain] Credit Check Failed: %s", str(e))
+                # Return graceful error instead of crashing
+                return {
+                    "response": f"Cosmic energy depleted for this action. {str(e)}",
+                    "intent": "error_insufficient_credits",
+                    "route": "blocked",
+                    "request_id": request_id
+                }
+
         # 3. Context Builder & Memory Injection
         await _notify("Hydrating atmospheric context...")
         context = await self.memory.get_combined_context(user_id, session_id, user_input)
@@ -192,10 +213,10 @@ class LeviBrain:
         return {
             "response": response,
             "intent": intent.intent_type,
-            "route": EngineRoute.API.value if intent.complexity_level > 1 else EngineRoute.LOCAL.value,
+            "route": decision.route.value,
             "request_id": request_id,
-            "plan": plan.dict(),
-            "results": [r.dict() for r in execution_results],
+            "plan": plan.dict() if 'plan' in locals() else None,
+            "results": [r.dict() for r in execution_results] if 'execution_results' in locals() else [],
             "decision": decision.as_dict()
         }
 
@@ -209,9 +230,33 @@ class LeviBrain:
         """Handles the token-by-token streaming version of the pipeline."""
         logger.info("Entering Stream Pipeline")
         
-        # For streaming, we currently only support 1-step conversational flow.
-        # If the intent requires more, it will be handled by the non-streaming reasoning engine.
+        # 3. Hybrid Model Selection (Cost-Optimized)
+        from .local_engine import is_locally_handleable, generate_local_response
         
+        can_handle_locally = is_locally_handleable(intent.intent_type, intent.complexity_level)
+        
+        if can_handle_locally:
+            logger.info("Streaming via LOCAL engine")
+            # Build local-friendly messages
+            local_messages = [
+                {"role": "system", "content": "You are LEVI, a helpful AI assistant. Be concise and profound."},
+                {"role": "user", "content": user_input}
+            ]
+            return {
+                "intent": intent.intent_type,
+                "route": EngineRoute.LOCAL.value,
+                "request_id": request_id,
+                "stream": generate_local_response(local_messages)
+            }
+
+        # API Path
+        user_tier = context.get("user_tier", "free")
+        if user_tier in ("pro", "creator") or intent.complexity_level == 3:
+            model = "llama-3.1-70b-versatile"
+        else:
+            model = "llama-3.1-8b-instant"
+        
+        # ... (rest of system prompt building remains same)
         mood = context.get("mood", "philosophical")
         base_variant = await self.prompts.get_best_variant(mood)
         
@@ -229,31 +274,8 @@ class LeviBrain:
              messages.append({"role": "user", "content": turn.get("user", "")})
              messages.append({"role": "assistant", "content": turn.get("bot", "")})
         messages.append({"role": "user", "content": user_input})
-        
-        # 3. Hybrid Model Selection (Cost-Optimized)
-        from .local_engine import is_locally_handleable, generate_local_response
-        
-        if is_locally_handleable(intent.intent_type, intent.complexity_level):
-            logger.info("Streaming via LOCAL engine")
-            # Wrap standard message format for local engine
-            local_messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_input}
-            ]
-            return {
-                "intent": intent.intent_type,
-                "route": EngineRoute.LOCAL.value,
-                "request_id": request_id,
-                "stream": generate_local_response(local_messages)
-            }
 
-        user_tier = context.get("user_tier", "free")
-        if user_tier in ("pro", "creator") or intent.complexity_level == 3:
-            model = "llama-3.1-70b-versatile"
-        else:
-            model = "llama-3.1-8b-instant"
-        
-        logger.info("Routing to API: %s (Tier %d)", model, 3 if "70b" in model else 2)
+        logger.info("Routing to API: %s (Tier %s)", model, user_tier)
         
         return {
             "intent": intent.intent_type,
@@ -284,6 +306,13 @@ class LeviBrain:
                 user_id=user_id
             ))
 
+            # 2.5 Cache Storage (Exact & Semantic)
+            from backend.redis_client import store_exact_match, store_semantic_match
+            store_exact_match(user_id, user_input, context.get("mood", "philosophical"), response)
+            asyncio.create_task(asyncio.to_thread(
+                store_semantic_match, user_id, user_input, context.get("mood", "philosophical"), response
+            ))
+
             # 3. LEVI v6 Phase 18: Learning Escalation Metrics
             from .learning_escalation import EscalationManager
             # We use an estimated quality score if no real rating yet
@@ -295,9 +324,11 @@ class LeviBrain:
             # 3. LEVI v6: Shared Pattern Learning (Anonymized)
             # If any execution result was a failure, we log it to a global 'failure' pool 
             # for system-level Meta-Brain fine-tuning.
-            results = context.get("execution_history", [])
             for res in results:
                 if not res.success:
+                    # 5. Increment Failure Counter for Fine-Tune Triggering
+                    from backend.redis_client import incr_failure_count
+                    incr_failure_count(res.agent)
                     asyncio.create_task(self._log_anonymized_failure(res, user_tier))
 
             # 4. LEVI v6 Phase 3: Global Evolution Triggers

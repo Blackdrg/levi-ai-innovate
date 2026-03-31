@@ -11,8 +11,12 @@
 <!-- Firebase & Auth Init (Early) -->
 <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
-<script src="js/config.js"></script>
-<script src="js/auth-manager.js"></script>
+<script src="js/config.js?v=5"></script>
+<script src="js/api.js?v=5"></script>
+<script src="js/ui.js?v=5"></script>
+<script src="js/auth-manager.js?v=5"></script>
+<script src="js/status.js?v=5"></script>
+<script src="js/features.js?v=5"></script>
 <script id="tailwind-config">
       tailwind.config = {
         darkMode: "class",
@@ -219,14 +223,7 @@
   </nav>
 </div>
 <div id="levi-toast" class="toast-container"></div>
-<script>
-function toggleMobileMenu(){const m=document.getElementById('mobile-menu');if(!m)return;m.classList.toggle('hidden')}
-    function showToast(msg, type) { const t = document.getElementById('levi-toast'); t.innerHTML = '<div class="toast-inner-feed"><span class="toast-text-feed">' + msg + '</span></div>'; t.style.opacity = '1'; t.style.transform = 'translateX(-50%) translateY(0)'; clearTimeout(t._timer); t._timer = setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateX(-50%) translateY(12px)' }, 3000) }
-function toggleLanguage(){showToast('Hindi translation coming soon')}
-// Auth nav update
-const _u=localStorage.getItem('levi_user');if(_u){try{const o=JSON.parse(_u);const btn=document.querySelector('nav > button');if(btn)btn.textContent=o.username||'Account'}catch{}}
-</script>
-
+<script src="js/feed.js"></script>
 <script src="js/animations.js" type="module"></script>
 <script src="js/feedback.js" type="module"></script>
 </body></html>

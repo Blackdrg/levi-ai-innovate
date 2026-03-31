@@ -581,3 +581,18 @@ def is_rate_limited(user_id: str, limit: int = 5, window: int = 60) -> bool:
     except Exception as e:
         print(f"[Firestore] Rate limit check failed: {e}")
         return False
+
+def incr_failure_count(agent_name: str):
+    """Increments the failure counter for a specific agent."""
+    if HAS_REDIS:
+        key = f"stats:failures:{agent_name}"
+        r.incr(key)
+        r.expire(key, 604800) # 7 days rolling window
+
+def get_failure_count(agent_name: str) -> int:
+    """Retrieves the failure count for a specific agent."""
+    if HAS_REDIS:
+        key = f"stats:failures:{agent_name}"
+        val = r.get(key)
+        return int(val) if val else 0
+    return 0

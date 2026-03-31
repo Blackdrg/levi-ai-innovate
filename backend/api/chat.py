@@ -20,6 +20,7 @@ from backend.auth import get_current_user_optional
 from backend.redis_client import is_rate_limited, get_daily_ai_spend, HAS_REDIS
 from backend.services.orchestrator import run_orchestrator
 from backend.utils.robustness import standard_retry, TimeoutHandler
+from backend.utils.sanitization import sanitize_input
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="", tags=["Chat"])
@@ -41,7 +42,7 @@ async def _stream_response(orchestrator_data: Dict[str, Any], is_live: bool = Fa
     if is_live:
         # Phase 3: True Streaming integration
         # In Phase 1, we delegate to the existing live stream logic
-        from backend.services.chat.router import _true_groq_stream
+        # LEVI v6: Consolidated Production Streaming Logic
         async for chunk in _true_groq_stream(
             user_input=orchestrator_data.get("user_input", ""),
             session_id=orchestrator_data.get("session_id", ""),
@@ -65,6 +66,98 @@ async def _stream_response(orchestrator_data: Dict[str, Any], is_live: bool = Fa
             await asyncio.sleep(0.01)
         yield "data: [DONE]\n\n"
 
+async def _true_groq_stream(
+    user_input: str,
+    session_id: str,
+    user_tier: str,
+    mood: str,
+    orchestrator_data: Dict[str, Any],
+) -> AsyncGenerator[str, None]:
+    """
+    True Groq token-by-token streaming for API-route requests.
+    Sends orchestrator metadata with the first chunk, then streams tokens live.
+    """
+    from backend.generation import async_stream_llm_response, _build_dynamic_system_prompt, _get_random_persona
+    from backend.services.orchestrator.planner import detect_intent
+
+    # Build messages for the streaming call (same persona/history logic)
+    intent = await detect_intent(user_input)
+    persona = _get_random_persona(mood)
+    system_prompt = _build_dynamic_system_prompt(persona)
+
+    history = orchestrator_data.get("history", [])
+    messages = [{"role": "system", "content": system_prompt}]
+    for turn in (history[-4:] if len(history) > 4 else history):
+        if turn.get("user"):
+            messages.append({"role": "user", "content": turn["user"]})
+        if turn.get("bot"):
+            messages.append({"role": "assistant", "content": turn["bot"]})
+    messages.append({"role": "user", "content": user_input})
+
+    # Determine model from route
+    ec = orchestrator_data.get("engine_config", {})
+    model = ec.get("model", "llama-3.1-8b-instant")
+
+    # First chunk: send metadata
+    metadata = {
+        "intent": orchestrator_data.get("intent", "chat"),
+        "route": orchestrator_data.get("route", "api"),
+        "session_id": session_id,
+        "request_id": orchestrator_data.get("request_id", ""),
+        "job_ids": orchestrator_data.get("job_ids", []),
+        "streaming": True,
+    }
+    first_chunk = {"choices": [{"delta": {"content": ""}}], "metadata": metadata}
+    yield f"data: {json.dumps(first_chunk)}\n\n"
+
+    # Stream tokens live from Groq
+    async for token in async_stream_llm_response(
+        messages=messages,
+        model=model,
+        temperature=persona.get("temperature", 0.85),
+        max_tokens=600,
+    ):
+        chunk = {"choices": [{"delta": {"content": token}}]}
+        yield f"data: {json.dumps(chunk)}\n\n"
+
+    yield "data: [DONE]\n\n"
+
+@router.get("/history")
+async def get_chat_history(
+    limit: int = 20,
+    current_user: Optional[dict] = Depends(get_current_user_optional)
+):
+    """
+    Fetches the latest chat history for the current user.
+    """
+    if not current_user:
+        return {"history": []}
+    
+    user_id = current_user.get("uid")
+    try:
+        from backend.firestore_db import db as firestore
+        docs = (
+            firestore.collection("chat_history")
+            .where("user_id", "==", user_id)
+            .order_by("timestamp", direction="DESCENDING")
+            .limit(limit)
+            .get()
+        )
+        
+        history = []
+        for doc in reversed(list(docs)): # Reverse to show chronological order
+            data = doc.to_dict()
+            history.append({
+                "role": data.get("role"),
+                "content": data.get("content"),
+                "timestamp": data.get("timestamp")
+            })
+            
+        return {"history": history}
+    except Exception as e:
+        logger.error(f"History retrieval failed: {e}")
+        return {"history": [], "error": str(e)}
+
 # ── Endpoint ─────────────────────────────────────────────────────────────────
 
 @router.post("")
@@ -80,6 +173,9 @@ async def chat_endpoint(
         else f"guest:{request.client.host or 'anonymous'}"
     )
     user_tier = current_user.get("tier", "free") if current_user else "free"
+    
+    # 0. Sanitization
+    msg.message = sanitize_input(msg.message)
 
     # 1. Protection
     if is_rate_limited(str(user_id), limit=20):
@@ -177,3 +273,16 @@ async def chat_endpoint(
         background_tasks.add_task(redis.setex, cache_key, _CACHE_TTL, json.dumps(result, default=str))
 
     return result
+
+@router.post("/stream")
+async def chat_stream_endpoint(
+    request: Request,
+    msg: ChatMessage,
+    background_tasks: BackgroundTasks,
+    current_user: Optional[dict] = Depends(get_current_user_optional),
+):
+    """
+    Explicit streaming endpoint for LEVI-AI.
+    """
+    msg.stream = True # Force streaming
+    return await chat_endpoint(request, msg, background_tasks, current_user)

@@ -7,6 +7,7 @@ Unified registry for the hardened LEVI-AI tool system.
 import logging
 from typing import Dict, Any, Type, Optional
 from .tool_base import BaseTool
+from backend.utils.network import standard_retry, ai_service_breaker
 from .agents.chat_agent import ChatAgent
 from .agents.image_agent import ImageAgent
 from .agents.code_agent import CodeAgent
@@ -17,6 +18,7 @@ from .agents.video_agent import VideoAgent
 from .agents.critic_agent import ValidatorAgent
 from .agents.diagnostic_agent import DiagnosticAgent
 from .agents.optimizer_agent import OptimizerAgent
+from .agents.document_agent import DocumentAgent
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +34,7 @@ _TOOL_INSTANCES: Dict[str, BaseTool] = {
     "critic_agent": ValidatorAgent(),
     "diagnostic_agent": DiagnosticAgent(),
     "optimizer_agent": OptimizerAgent(),
+    "document_agent": DocumentAgent(),
 }
 
 def get_tool(name: str) -> Optional[BaseTool]:
@@ -52,14 +55,21 @@ async def call_tool(name: str, params: Dict[str, Any], context: Dict[str, Any] =
             "agent": name
         }
     
+    
     try:
-        # This will trigger BaseTool.execute()
-        return await tool.execute(params, context)
+        # Phase 6 Hardening: Apply Circuit Breaker and Retries
+        async def _core_call():
+             return await tool.execute(params, context)
+
+        # We wrap the core call in a standard retry and then the circuit breaker
+        return await ai_service_breaker.async_call(
+            standard_retry.wraps(_core_call)
+        )
     except Exception as e:
-        logger.exception(f"Fatal error in call_tool for '{name}': {e}")
+        logger.exception(f"Resilient call_tool failure for '{name}': {e}")
         return {
             "success": False,
-            "error": str(e),
+            "error": f"The {name} encountered a cosmic barrier: {str(e)}",
             "agent": name
         }
 

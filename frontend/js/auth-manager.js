@@ -1,46 +1,32 @@
 /* frontend/js/auth-manager.js */
 console.log("[LEVI] auth-manager.js executing...");
 
-// ==========================================
-// 1. Firebase Initialization & Configuration
-// ==========================================
-const firebaseConfig = window.firebaseConfig;
-
-if (typeof firebase !== 'undefined' && !firebase.apps.length) {
-    if (!firebaseConfig || !firebaseConfig.apiKey || firebaseConfig.apiKey.includes("__FIREBASE_")) {
-        console.warn("[LEVI] Using Auth STUB (Local Mode)");
-        window.firebase.auth = () => ({
-            currentUser: { uid: "local-user", email: "local@example.com", getIdToken: async () => "local-token" },
-            onAuthStateChanged: (cb) => { 
-                const user = { uid: "local-user", email: "local@example.com", displayName: "Local Seeker" };
-                cb(user); 
-                return () => {}; 
-            },
-            signOut: async () => { console.log("Logged out from stub"); }
-        });
-    } else {
-        try {
-            firebase.initializeApp(firebaseConfig);
-            console.log("[LEVI] Firebase Initialized.");
-        } catch (e) {
-            console.error("[LEVI] Firebase Init Failed:", e);
-        }
+document.addEventListener('DOMContentLoaded', () => {
+    // Sync UI on load
+    const user = JSON.parse(localStorage.getItem('levi_user') || 'null');
+    window.updateUIState(user);
+    if (user && !window.levi_user_token) {
+        window.levi_user_token = localStorage.getItem('levi_token');
     }
-}
+});
 
 // ==========================================
-// 2. Global UI State Sync
+// 1. Global UI State Sync
 // ==========================================
 window.updateUIState = (user) => {
     const navBtn = document.getElementById('nav-auth-btn');
     const creditsDisplay = document.getElementById('credits-display');
-    const localUser = JSON.parse(localStorage.getItem('levi_user') || '{}');
+    const userDisplay = document.getElementById('user-display');
 
     if (user && navBtn) {
         navBtn.textContent = 'Account';
         navBtn.href = 'my-gallery.html';
         navBtn.classList.remove('btn-gold');
         navBtn.classList.add('ghost-border', 'px-6', 'py-2', 'text-zinc-300', 'hover:text-primary');
+        
+        if (userDisplay) {
+            userDisplay.textContent = user.username || user.email;
+        }
     } else if (navBtn) {
         navBtn.textContent = 'Sign In';
         navBtn.href = 'auth.html';
@@ -48,92 +34,69 @@ window.updateUIState = (user) => {
         navBtn.classList.remove('ghost-border', 'text-zinc-300');
     }
 
-    if (creditsDisplay && localUser.credits !== undefined) {
-        creditsDisplay.textContent = `${localUser.credits} units`;
+    if (creditsDisplay && user && user.credits !== undefined) {
+        creditsDisplay.textContent = `${user.credits} units`;
         creditsDisplay.parentElement.classList.remove('hidden');
     }
 };
 
 // ==========================================
-// 3. User State Synchronization
+// 2. User State Synchronization
 // ==========================================
 window.syncUser = async () => {
     try {
-        if (!window.levi_user_token || window.levi_user_token === "local-token") return;
-        
-        const res = await originalFetch(`${window.API_BASE}/auth/me`, {
-            headers: { 'Authorization': `Bearer ${window.levi_user_token}` }
-        });
-        
-        if (res.ok) {
-            const data = await res.json();
-            localStorage.setItem('levi_user', JSON.stringify(data));
-            window.updateUIState(firebase.auth().currentUser || { uid: 'local' });
-            console.log("[LEVI] User state synchronized.");
-        }
+        const data = await window.api.getMe();
+        localStorage.setItem('levi_user', JSON.stringify(data));
+        window.updateUIState(data);
+        console.log("[LEVI] Profile synchronized.");
+        return data;
     } catch (e) {
         console.warn("[LEVI] User sync failed:", e);
     }
 };
 
 // ==========================================
-// 4. Token & Authorization
+// 3. Authentication Actions
 // ==========================================
-window.waitForToken = () => {
-    return new Promise((resolve) => {
-        const isReady = typeof firebase !== 'undefined' && firebase.apps.length > 0;
-        const auth = isReady ? firebase.auth() : null;
-        if (!auth) { resolve("local-token"); return; }
+window.handleLogin = async (email, password) => {
+    try {
+        // In a real production-ready app, we might still use Firebase Client SDK 
+        // to get the ID Token, then pass it to our login endpoint for session verification.
+        // For this transformation, we follow the "Connect UI to backend" rule.
         
-        const user = auth.currentUser;
-        if (user) {
-            user.getIdToken(true).then(resolve).catch(() => resolve("local-token"));
-        } else {
-            const unsubscribe = auth.onAuthStateChanged(async (u) => {
-                unsubscribe();
-                if (u) resolve(await u.getIdToken(true));
-                else resolve("local-token");
-            });
-            setTimeout(() => { unsubscribe(); resolve("local-token"); }, 5000);
-        }
-    });
+        // 1. Firebase Login (Client Side) - Still needed for token generation in standard Firebase setups
+        const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
+        const token = await userCredential.user.getIdToken(true);
+        
+        // 2. Backend Handshake
+        const res = await window.api.apiFetch("/auth/login", { 
+            method: "POST", 
+            body: { uid: userCredential.user.uid, email: email } 
+        });
+
+        // 3. Persistence
+        localStorage.setItem('levi_token', token);
+        window.levi_user_token = token;
+        
+        await window.syncUser();
+        window.location.href = 'index.html';
+    } catch (error) {
+        console.error("Login failed:", error);
+        throw error;
+    }
 };
 
-// --- Auth State Interceptor ---
-if (typeof firebase !== 'undefined' && firebase.auth) {
+window.handleSignup = async (email, password, username) => {
     try {
-        firebase.auth().onAuthStateChanged(async (user) => {
-            const isAuthPage = window.location.pathname.includes('auth.html');
-            if (user) {
-                window.levi_user_token = await user.getIdToken(true);
-                await window.syncUser();
-                
-                // Smart Redirect: Move away from Auth page if logged in
-                if (isAuthPage) {
-                    window.location.href = 'my-gallery.html';
-                }
-            } else {
-                window.levi_user_token = "local-token";
-                localStorage.removeItem('levi_user');
-                window.updateUIState(null);
-            }
-        });
-    } catch(e) { console.error("[LEVI] Auth listener failed:", e); }
-}
-
-// --- Global Fetch Interceptor ---
-const originalFetch = window.fetch;
-window.fetch = async function (resource, config = {}) {
-    const url = typeof resource === 'string' ? resource : (resource && resource.url ? resource.url : '');
-    if (url.includes('/api/v1/') || url.includes(':8000/')) {
-        config.headers = config.headers || {};
-        if (typeof firebase !== 'undefined' && firebase.auth() && firebase.auth().currentUser) {
-            try { window.levi_user_token = await firebase.auth().currentUser.getIdToken(); } catch (e) {}
-        }
-        config.headers['Authorization'] = `Bearer ${window.levi_user_token}`;
-        config.headers['X-LEVI-Source'] = 'frontend-web';
+        // 1. Backend Signup (Creates user in Firebase via Admin SDK)
+        const res = await window.api.signup(email, password, username);
+        
+        // 2. Login immediately after signup
+        return window.handleLogin(email, password);
+    } catch (error) {
+        console.error("Signup failed:", error);
+        throw error;
     }
-    return originalFetch(resource, config);
 };
 
 window.logout = () => {
@@ -142,5 +105,33 @@ window.logout = () => {
             localStorage.clear();
             window.location.href = 'auth.html'; 
         });
-    } else { window.location.href = 'auth.html'; }
+    } else {
+        localStorage.clear();
+        window.location.href = 'auth.html';
+    }
+};
+
+// ==========================================
+// 4. Token Waiter (Compatibility)
+// ==========================================
+window.waitForToken = () => {
+    return new Promise((resolve) => {
+        const token = localStorage.getItem('levi_token');
+        if (token) resolve(token);
+        else {
+            // Fallback to Firebase observer if token not yet in storage
+            const auth = typeof firebase !== 'undefined' ? firebase.auth() : null;
+            if (!auth) { resolve("local-token"); return; }
+            
+            const unsubscribe = auth.onAuthStateChanged(async (u) => {
+                unsubscribe();
+                if (u) {
+                    const t = await u.getIdToken(true);
+                    localStorage.setItem('levi_token', t);
+                    resolve(t);
+                } else resolve("local-token");
+            });
+            setTimeout(() => { unsubscribe(); resolve("local-token"); }, 3000);
+        }
+    });
 };

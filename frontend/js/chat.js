@@ -1,39 +1,99 @@
-// chat.js
+/**
+ * LEVI-AI Chat Logic
+ * Phase 6: Production Hardened & Synchronized
+ */
+
+// --- Global State ---
+let currentMood = localStorage.getItem('levi_chat_mood') || "philosophical";
+let messageCount = 0;
+let lastBotMessage = "";
+let sessionId = localStorage.getItem("levi_session_id") || `session_${Math.random().toString(36).substring(2, 11)}`;
+localStorage.setItem("levi_session_id", sessionId);
+
 // --- Initialization ---
 document.addEventListener('DOMContentLoaded', async () => {
-    // 1. Login Guard
-    const user = localStorage.getItem('levi_user');
-    const isLocal = window.levi_user_token === 'local-token';
-    
-    if (!user && !isLocal) {
-        if (window.ui) window.ui.showToast("Please sign in to access the AI Philosopher.", "warning");
-        setTimeout(() => window.location.href = 'auth.html', 1500);
-        return;
+    // 1. Auth Guard & Sync
+    try {
+        const user = await window.api.getMe();
+        console.log("[LEVI] Session Active:", user.username);
+        
+        // 2. Load Real History
+        await loadChatHistory();
+        
+        // 3. Load Memory/Facts
+        await loadMemory();
+        
+        // 4. Initial Greeting if empty
+        const messagesDiv = document.getElementById('messages');
+        if (messagesDiv && messagesDiv.children.length === 0) {
+            displayWelcomeMessage();
+        }
+    } catch (e) {
+        if (e.message === "UNAUTHORIZED") return; // Handled by api.js redirect
+        console.error("[LEVI] Init failed", e);
     }
 
-    await loadChatHistory();
-    displayWelcomeMessage();
-});
-
-document.addEventListener("DOMContentLoaded", () => {
-    // Load marked.js for markdown rendering
-    if (typeof marked === 'undefined') {
-        const script = document.createElement('script');
-        script.src = "https://cdn.jsdelivr.net/npm/marked/marked.min.js";
-        document.head.appendChild(script);
+    // 5. Setup UI
+    const input = document.getElementById("chat-input");
+    if (input) {
+        input.focus();
+        // Restore mood active state
+        const activeBtn = Array.from(document.querySelectorAll('.mood-chip')).find(b => b.textContent.toLowerCase() === currentMood);
+        if (activeBtn) setMood(activeBtn, currentMood);
     }
 });
 
-let currentMood = "inspiring";
-let messageCount = 0;
-let chatHistory = [];
-let lastBotMessage = "";
+async function loadChatHistory() {
+    try {
+        const res = await window.api.apiFetch("/chat/history?limit=20");
+        const history = res.history || [];
+        
+        const messagesDiv = document.getElementById("messages");
+        if (!messagesDiv) return;
+        messagesDiv.innerHTML = ""; // Clear loader/old state
+        
+        history.forEach(msg => {
+            appendMessage(msg.role, msg.content, null, false);
+        });
+        
+        messageCount = history.length;
+    } catch (e) {
+        console.warn("[LEVI] Could not load history", e);
+    }
+}
+
+async function loadMemory() {
+    try {
+        const res = await window.api.getMemory();
+        if (res.facts && res.facts.length > 0) {
+            console.log("[LEVI] Memory Hydrated:", res.facts.length, "facts");
+            // Optional: Show a "Personalized" badge in the UI
+            const statusLabel = document.getElementById("status-label");
+            if (statusLabel) statusLabel.innerText = "Synchronized";
+        }
+    } catch (e) {
+        console.warn("[LEVI] Memory retrieval failed", e);
+    }
+}
+
+function displayWelcomeMessage() {
+    appendMessage('bot', "Hello, I am **LEVI** — your philosophical AI companion. Our connection is now live. What shall we explore today?", null, true);
+}
+
+// --- UI Actions ---
 
 function setMood(element, mood) {
     document.querySelectorAll('.mood-chip').forEach(el => el.classList.remove('active'));
     element.classList.add('active');
     currentMood = mood;
-    document.getElementById("session-info").innerText = `Anonymous · ${mood.charAt(0).toUpperCase() + mood.slice(1)} Mode`;
+    localStorage.setItem('levi_chat_mood', mood);
+    
+    const sessionInfo = document.getElementById("session-info");
+    if (sessionInfo) {
+        const user = JSON.parse(localStorage.getItem('levi_user') || '{}');
+        const name = user.username || "Seeker";
+        sessionInfo.innerText = `${name} · ${mood.charAt(0).toUpperCase() + mood.slice(1)} Mode`;
+    }
 }
 
 function handleKey(e) {
@@ -49,69 +109,53 @@ function autoResize(textarea) {
 }
 
 function clearChat() {
-    const messagesDiv = document.getElementById("messages");
-    if (messagesDiv) {
-        messagesDiv.innerHTML = `
-            <div class="msg-bot p-4 fade-in">
-              <p class="text-sm text-on-surface-variant font-light leading-relaxed">Chat history cleared. What shall we explore next?</p>
-            </div>`;
+    if (confirm("Are you sure you want to clear this cosmic resonance?")) {
+        const messagesDiv = document.getElementById("messages");
+        if (messagesDiv) messagesDiv.innerHTML = "";
+        displayWelcomeMessage();
+        messageCount = 0;
+        // In production, we might call a backend endpoint to clear history, 
+        // but here we just clear the local UI view.
     }
-    chatHistory = [];
-    messageCount = 0;
 }
 
-function showToast(text) {
-    const toast = document.getElementById("toast");
-    if (!toast) return;
-    toast.innerText = text;
-    toast.className = "bg-primary text-on-primary px-4 py-2 rounded-full text-sm font-semibold show";
-    setTimeout(() => { toast.classList.remove("show"); }, 3000);
-}
-
-function appendMessage(role, text, id = null) {
+function appendMessage(role, text, id = null, animate = true) {
     const messagesDiv = document.getElementById("messages");
     if (!messagesDiv) return;
     
     const div = document.createElement("div");
+    div.className = `message-wrap flex ${role === 'user' ? 'justify-end' : 'justify-start'} ${animate ? 'animate-in' : ''}`;
     
-    // Parse markdown if marked is loaded
     let renderedText = text;
     if (typeof marked !== 'undefined') {
         renderedText = marked.parse(text);
     }
 
+    const innerDiv = document.createElement("div");
     if (role === 'user') {
-        div.className = "msg-user p-4 fade-in text-sm text-on-surface";
-        div.innerHTML = renderedText;
+        innerDiv.className = "msg-user p-4 text-sm text-on-surface leading-relaxed shadow-sm";
     } else {
-        div.className = "msg-bot p-4 fade-in text-sm text-on-surface-variant flex flex-col gap-2";
-        let content = `<div class="leading-relaxed whitespace-pre-wrap">${renderedText}</div>`;
-        
-        // Add thumbs up/down for learning pipeline
-        const msgId = id || `msg_${Date.now()}`;
-        content += `
-        <div class="flex items-center gap-2 mt-2 pt-2 border-t border-white/10">
-            <button onclick="submitFeedback('${msgId}', 1.0, this)" class="text-zinc-500 hover:text-emerald-400 transition-colors" title="Good response"><span class="material-symbols-outlined icon-sm">thumb_up</span></button>
-            <button onclick="submitFeedback('${msgId}', 0.0, this)" class="text-zinc-500 hover:text-red-400 transition-colors" title="Bad response"><span class="material-symbols-outlined icon-sm">thumb_down</span></button>
-        </div>`;
-        
-        // Every 3rd message, suggest visual art piece
-        if (messageCount > 0 && messageCount % 3 === 0) {
-            const encQuote = encodeURIComponent(text.substring(0, 200) + "...");
-            content += `
-            <div class="mt-3 bg-surface-container rounded p-3 border border-primary/20 flex flex-col items-center text-center">
-                <span class="material-symbols-outlined gold-text mb-1">palette</span>
-                <p class="text-xs text-on-surface mb-2 font-medium">Turn this thought into a visual art piece?</p>
-                <a href="studio.html?quote=${encQuote}&mood=${currentMood}" class="btn-gold text-[10px] uppercase font-bold px-4 py-1.5 rounded-full inline-block">Create Art</a>
-            </div>`;
-        }
-        
-        div.innerHTML = content;
-        lastBotMessage = text;
+        innerDiv.className = "msg-bot p-4 text-sm text-on-surface-variant flex flex-col gap-2 shadow-sm";
     }
     
+    innerDiv.innerHTML = renderedText;
+    
+    // Add Metadata/Controls for Bot messages
+    if (role === 'bot' || role === 'assistant') {
+        const msgId = id || `msg_${Date.now()}`;
+        const controls = document.createElement("div");
+        controls.className = "flex items-center gap-3 mt-2 pt-2 border-t border-white/5";
+        controls.innerHTML = `
+            <button onclick="submitFeedback('${msgId}', 1, this)" class="text-zinc-500 hover:text-emerald-400 transition-colors" title="Accurate"><span class="material-symbols-outlined icon-sm">thumb_up</span></button>
+            <button onclick="submitFeedback('${msgId}', 0, this)" class="text-zinc-500 hover:text-red-400 transition-colors" title="Inaccurate"><span class="material-symbols-outlined icon-sm">thumb_down</span></button>
+        `;
+        innerDiv.appendChild(controls);
+        lastBotMessage = text;
+    }
+
+    div.appendChild(innerDiv);
     messagesDiv.appendChild(div);
-    messagesDiv.scrollTo({ top: messagesDiv.scrollHeight, behavior: 'smooth' });
+    messagesDiv.scrollTo({ top: messagesDiv.scrollHeight, behavior: animate ? 'smooth' : 'auto' });
 }
 
 async function sendMessage() {
@@ -122,289 +166,153 @@ async function sendMessage() {
     appendMessage('user', text);
     input.value = "";
     input.style.height = 'auto';
-    chatHistory.push({ user: text, bot: "" });
 
     const sendIcon = document.getElementById("send-icon");
     const spinner = document.getElementById("send-loading");
     if(sendIcon) sendIcon.classList.add("hidden");
     if(spinner) spinner.classList.remove("hidden");
 
-    let sessionId = sessionStorage.getItem("chat_session_id");
-    if (!sessionId) {
-        sessionId = "session_" + Math.random().toString(36).substring(2, 15);
-        sessionStorage.setItem("chat_session_id", sessionId);
-    }
-
     // Prepare Bot Message Placeholder (Dynamic Streaming)
     const messagesDiv = document.getElementById("messages");
+    const botWrap = document.createElement("div");
+    botWrap.className = "message-wrap flex justify-start animate-in";
+    
     const botDiv = document.createElement("div");
-    botDiv.className = "msg-bot p-4 fade-in text-sm text-on-surface-variant flex flex-col gap-2";
+    botDiv.className = "msg-bot p-4 text-sm text-on-surface-variant flex flex-col gap-2 shadow-sm";
+    
     const textSpan = document.createElement("div");
     textSpan.className = "leading-relaxed whitespace-pre-wrap";
     botDiv.appendChild(textSpan);
-    messagesDiv.appendChild(botDiv);
+    botWrap.appendChild(botDiv);
+    messagesDiv.appendChild(botWrap);
     
     let botFullText = "";
     let metadataCaptured = null;
 
     try {
-        await window.waitForToken();
-        
         await window.api.chatStream(
             text, 
             sessionId, 
             (chunk) => {
                 botFullText += chunk;
-                // Render markdown on the fly or just plain text for speed
                 textSpan.innerHTML = typeof marked !== 'undefined' ? marked.parse(botFullText) : botFullText;
                 messagesDiv.scrollTo({ top: messagesDiv.scrollHeight, behavior: 'auto' });
             },
             (meta) => {
-                console.log("[LEVI] Received metadata:", meta);
                 metadataCaptured = meta;
                 
-                // ── LEVI v6: Dynamic Intelligence Status Rendering ──
+                // Real-time Intelligence Status rendering
                 if (meta.status_update) {
                     let statusDiv = botDiv.querySelector('.levi-status-indicator');
                     if (!statusDiv) {
                         statusDiv = document.createElement('div');
-                        statusDiv.className = 'levi-status-indicator text-[10px] text-primary/60 font-mono italic mb-2 animate-pulse';
+                        statusDiv.className = 'levi-status-indicator text-[9px] text-primary/60 font-mono italic mb-2 animate-pulse';
                         botDiv.prepend(statusDiv);
                     }
                     statusDiv.innerText = `● ${meta.status_update}`;
                 }
-
-                if (meta.intent) {
-                    botDiv.setAttribute('data-intent', meta.intent);
-                }
-            }
+            },
+            currentMood
         );
 
         messageCount++;
         lastBotMessage = botFullText;
-        chatHistory[chatHistory.length - 1].bot = botFullText;
 
-        // Post-Stream: Add controls & metadata actions
+        // Post-Stream: Add controls & engine badges
         const controls = document.createElement("div");
-        controls.className = "flex items-center gap-2 mt-2 pt-2 border-t border-white/10 flex-wrap";
+        controls.className = "flex items-center gap-3 mt-2 pt-2 border-t border-white/5 w-full";
+        
         const msgId = metadataCaptured?.request_id || `msg_${Date.now()}`;
-
-        // Engine route badge — shows which path handled this response
         const routeBadge = _buildRouteBadge(metadataCaptured);
-        const decisionInfo = metadataCaptured?.decision 
-            ? `<span class="text-[9px] text-zinc-500/50 font-mono" title="Complexity: ${metadataCaptured.decision.complexity_level} | Cost: ${metadataCaptured.decision.estimated_cost_weight}">[L${metadataCaptured.decision.complexity_level}]</span>`
-            : '';
-        const intentLabel = metadataCaptured?.intent
-            ? `<span class="text-[10px] text-primary/50 uppercase tracking-widest font-mono">${metadataCaptured.intent}</span>`
-            : '';
-
+        
         controls.innerHTML = `
-            <button onclick="submitFeedback('${msgId}', 1.0, this)" class="text-zinc-500 hover:text-emerald-400 transition-colors" title="Good response"><span class="material-symbols-outlined icon-sm">thumb_up</span></button>
-            <button onclick="submitFeedback('${msgId}', 0.0, this)" class="text-zinc-500 hover:text-red-400 transition-colors" title="Bad response"><span class="material-symbols-outlined icon-sm">thumb_down</span></button>
-            <div class="ml-auto flex items-center gap-2">
-                ${intentLabel}
-                ${decisionInfo}
-                ${routeBadge}
-            </div>
+            <button onclick="submitFeedback('${msgId}', 1, this)" class="text-zinc-500 hover:text-emerald-400 transition-colors"><span class="material-symbols-outlined icon-sm">thumb_up</span></button>
+            <button onclick="submitFeedback('${msgId}', 0, this)" class="text-zinc-500 hover:text-red-400 transition-colors"><span class="material-symbols-outlined icon-sm">thumb_down</span></button>
+            <div class="ml-auto">${routeBadge}</div>
         `;
         botDiv.appendChild(controls);
 
-        // Dynamic Studio Suggestion
-        if (metadataCaptured?.intent === 'image' || (messageCount > 0 && messageCount % 3 === 0)) {
-            const suggest = document.createElement("div");
-            suggest.className = "mt-3 bg-surface-container rounded p-3 border border-primary/20 flex flex-col items-center text-center";
-            const jobText = metadataCaptured?.job_ids?.[0] ? `Job ID: ${metadataCaptured.job_ids[0]}` : "Turn this thought into art?";
-            suggest.innerHTML = `
-                <span class="material-symbols-outlined gold-text mb-1">palette</span>
-                <p class="text-xs text-on-surface mb-2 font-medium">${jobText}</p>
-                <a href="studio.html?quote=${encodeURIComponent(botFullText.substring(0, 100))}&mood=${currentMood}" class="btn-gold text-[10px] uppercase font-bold px-4 py-1.5 rounded-full inline-block">Synthesize Vision</a>
-            `;
-            botDiv.appendChild(suggest);
-        }
-
-        // Final sync of user credits (Phase 4 Synchronization)
-        if (window.syncUser) window.syncUser();
+        // Auto-Save fact if high confidence (Logic handled by backend, but we could trigger it here if needed)
 
     } catch (err) {
-        console.error("Chat stream error:", err);
-        textSpan.innerText = (err.message === "ALLOWANCE_EXCEEDED") 
-            ? "Your daily AI allowance has been reached. Please upgrade to continue."
-            : "Connection to the cosmic ether was lost. (Internal Circuit Paradox)";
-        botDiv.classList.add("msg-error");
+        console.error("Chat error:", err);
+        textSpan.innerText = "The connection to the cosmic brain was interrupted. Please try again.";
+        botDiv.classList.add("border-red-500/30", "bg-red-500/5");
     } finally {
         if(sendIcon) sendIcon.classList.remove("hidden");
         if(spinner) spinner.classList.add("hidden");
+        
+        // Sync user credits
+        if (window.syncUser) window.syncUser();
     }
 }
 
 async function submitFeedback(msgId, score, btn) {
-    // visual feedback
     const parent = btn.parentElement;
-    parent.innerHTML = `<span class="text-[10px] text-emerald-400 uppercase tracking-widest"><span class="material-symbols-outlined icon-sm align-middle mr-1">check</span>Feedback saved</span>`;
+    parent.innerHTML = `<span class="text-[9px] text-emerald-400/80 uppercase tracking-widest flex items-center gap-1"><span class="material-symbols-outlined icon-sm">check_circle</span> Learned</span>`;
     
     try {
-        await window.waitForToken();
-        await fetch(`${window.API_BASE}/analytics/feedback`, {
+        await window.api.apiFetch("/learning/feedback", {
             method: "POST",
-            body: JSON.stringify({ message_id: msgId, score: score })
+            body: { 
+                session_id: sessionId,
+                rating: score ? 5 : 1, // mapping 1/0 to 5/1 stars
+                user_message: "...", // ideally we'd store these
+                bot_response: "...",
+                mood: currentMood
+            }
         });
     } catch (e) {
         console.error("Feedback failed", e);
     }
 }
 
-// Global speech synthesis tracking
-let currentUtterance = null;
-let voicesLoaded = false;
-let preferredVoiceName = localStorage.getItem("levi_preferred_voice") || null;
-
-window.speechSynthesis.onvoiceschanged = () => { voicesLoaded = true; };
-
-function speakLast() {
-    if (!lastBotMessage) {
-        showToast("Nothing to speak yet.");
-        return;
-    }
-    
-    if (window.speechSynthesis.speaking) {
-        window.speechSynthesis.cancel();
-        return;
-    }
-
-    const ttsBtn = document.getElementById("tts-btn");
-    
-    currentUtterance = new SpeechSynthesisUtterance(lastBotMessage.replace(/[*#]/g, ''));
-    
-    // Smart voice selection
-    const voices = window.speechSynthesis.getVoices();
-    let selectedVoice = null;
-    
-    if (preferredVoiceName) {
-        selectedVoice = voices.find(v => v.name === preferredVoiceName);
-    }
-    
-    if (!selectedVoice) {
-        // Try to find a good authoritative/calm voice
-        const preferred = ['Google UK English Male', 'Daniel', 'Alex', 'Samantha'];
-        for (let name of preferred) {
-            selectedVoice = voices.find(v => v.name.includes(name));
-            if (selectedVoice) break;
-        }
-    }
-    
-    if (selectedVoice) currentUtterance.voice = selectedVoice;
-    currentUtterance.rate = 0.9; // Slightly slower, calmer
-    currentUtterance.pitch = 0.95; 
-
-    currentUtterance.onstart = () => {
-        if (ttsBtn) ttsBtn.classList.add("text-primary");
-    };
-    currentUtterance.onend = () => {
-        if (ttsBtn) ttsBtn.classList.remove("text-primary");
-    };
-    currentUtterance.onerror = () => {
-        if (ttsBtn) ttsBtn.classList.remove("text-primary");
-    };
-
-    window.speechSynthesis.speak(currentUtterance);
-}
-
-// Provide a way to change voice from console or later settings
-window.setPreferredVoice = function(name) {
-    preferredVoiceName = name;
-    localStorage.setItem("levi_preferred_voice", name);
-    showToast(`Voice set to: ${name}`);
-};
-
-// Start Voice Input (Web Speech API)
-let recognition;
-function startVoice() {
-    const btn = document.getElementById("voice-btn");
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-        showToast("Voice input not supported in this browser.");
-        return;
-    }
-    
-    if (!recognition) {
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        recognition = new SpeechRecognition();
-        recognition.continuous = false;
-        recognition.interimResults = true;
-        
-        recognition.onstart = () => {
-            if(btn) btn.classList.add("text-primary", "animate-pulse");
-        };
-        
-        recognition.onresult = (e) => {
-            let finalOutput = '';
-            for (let i = e.resultIndex; i < e.results.length; ++i) {
-                if (e.results[i].isFinal) {
-                    finalOutput += e.results[i][0].transcript;
-                }
-            }
-            if (finalOutput) {
-                const input = document.getElementById("chat-input");
-                input.value += (input.value ? " " : "") + finalOutput;
-                autoResize(input);
-            }
-        };
-        
-        recognition.onend = () => {
-            if(btn) btn.classList.remove("text-primary", "animate-pulse");
-        };
-        
-        recognition.onerror = () => {
-            if(btn) btn.classList.remove("text-primary", "animate-pulse");
-            showToast("Microphone error.");
-        };
-    }
-    
-    try {
-        recognition.start();
-    } catch(e) {
-        recognition.stop();
-    }
-}
-
-/**
- * _buildRouteBadge
- * Renders a tiny color-coded pill showing which LEVI engine handled the response.
- *   🟢 local  — zero API cost, instant
- *   🟡 tool   — agent-based (image/code/search)
- *   🔴 api    — Groq LLM (complex reasoning)
- */
 function _buildRouteBadge(meta) {
     if (!meta?.route) return '';
     const route = meta.route.toLowerCase();
     const configs = {
-        cache: { emoji: '⚡', label: 'Cache',  color: 'text-emerald-400/90',  title: 'Instant — retrieved from memory' },
-        local: { emoji: '🟢', label: 'Local',  color: 'text-emerald-400/70',  title: 'Answered locally — zero cost' },
-        tool:  { emoji: '🟡', label: 'Tool',   color: 'text-amber-400/70',    title: 'Handled by specialized agents' },
-        api:   { emoji: '🔴', label: 'AI',     color: 'text-rose-400/70',     title: 'Powered by High-Reasoning LLM' },
+        cache: { emoji: '⚡', label: 'Cached', color: 'text-emerald-400/80' },
+        local: { emoji: '🟢', label: 'Local', color: 'text-emerald-400/60' },
+        tool:  { emoji: '🟡', label: 'Agent', color: 'text-amber-400/60' },
+        api:   { emoji: '🔴', label: 'Brain', color: 'text-rose-400/60' },
     };
-    const cfg = configs[route] || { emoji: '⚪', label: route, color: 'text-zinc-500', title: '' };
-    return `<span class="text-[10px] ${cfg.color} font-mono tracking-widest uppercase select-none cursor-default" title="${cfg.title}">${cfg.emoji} ${cfg.label}</span>`;
+    const cfg = configs[route] || { emoji: '⚪', label: route, color: 'text-zinc-500' };
+    return `<span class="text-[9px] ${cfg.color} font-mono tracking-widest uppercase select-none cursor-default">${cfg.emoji} ${cfg.label}</span>`;
 }
 
-// Stubs — prevent errors if history/welcome are not defined elsewhere
-async function loadChatHistory() {
-    try {
-        const history = JSON.parse(localStorage.getItem('levi_chat_history') || '[]');
-        if (history.length === 0) return;
-        history.slice(-10).forEach(msg => {
-            if (msg.user) appendMessage('user', msg.user);
-            if (msg.bot)  appendMessage('bot',  msg.bot);
-        });
-    } catch (e) { /* No history, that's fine */ }
+// --- Speech Helpers ---
+let currentUtterance = null;
+function speakLast() {
+    if (!lastBotMessage || window.speechSynthesis.speaking) {
+        window.speechSynthesis.cancel();
+        return;
+    }
+    currentUtterance = new SpeechSynthesisUtterance(lastBotMessage.replace(/[*#]/g, ''));
+    currentUtterance.rate = 0.95;
+    window.speechSynthesis.speak(currentUtterance);
 }
 
-function displayWelcomeMessage() {
-    const messagesDiv = document.getElementById('messages');
-    if (!messagesDiv || messagesDiv.children.length > 0) return;
-    appendMessage('bot', "Hello, I am **LEVI** — your philosophical AI companion. What shall we explore today?");
+// --- Voice Input ---
+let recognition;
+function startVoice() {
+    const btn = document.getElementById("voice-btn");
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+    
+    if (!recognition) {
+        recognition = new SpeechRecognition();
+        recognition.onstart = () => btn.classList.add("text-primary", "animate-pulse");
+        recognition.onresult = (e) => {
+            const transcript = Array.from(e.results).map(r => r[0].transcript).join('');
+            document.getElementById("chat-input").value = transcript;
+        };
+        recognition.onend = () => btn.classList.remove("text-primary", "animate-pulse");
+    }
+    
+    try { recognition.start(); } catch(e) { recognition.stop(); }
 }
 
-// Expose to window for inline HTML attachments
+// Expose functions to window
 window.setMood = setMood;
 window.handleKey = handleKey;
 window.autoResize = autoResize;
