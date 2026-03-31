@@ -1,35 +1,49 @@
-# 🚀 LEVI AI v4.3 Master Launch Manifest
+# LEVI-AI: v5.0 Launch Manifest (Pre-Flight) 🚀
 
-This manifest documents the completion of all **43 Development Phases**, transforming LEVI AI from a prototype into a high-performance, globally distributed, and secure AI platform.
-
-## 🛡️ Security & Hardening (Phases 1-39)
-- `[x]` **Phase 37**: Edge-Level Security (CSP, HSTS, Expect-CT).
-- `[x]` **Phase 38**: Identity & Brand Isolation.
-- `[x]` **Phase 39**: Absolute Project Finality & Security Isolation.
-- `[x]` **Prompt Injection Shield**: 12-pattern blocklist active.
-- `[x]` **Admin Protection**: Constant-time HMAC & Rate Limiting.
-- `[x]` **SSRF Mitigation**: Background image fetch removed.
-- `[x]` **OAuth Hardening**: Opaque one-time code exchange flow.
-- `[x]` **Session Security**: Redis-backed token rotation.
-
-## 📈 Observability & Scale (Phases 40-42)
-- `[x]` **Phase 40**: Distributed Tracing (`X-Trace-ID`).
-- `[x]` **Phase 41**: Distributed Resource Sovereignty (Redlock).
-- `[x]` **Phase 42**: Edge-Level Cache Strategy (SWR & ETags).
-- `[x]` **Performance V2**: Real-time p95 latency & cluster monitoring.
-- `[x]` **Cluster Heartbeats**: Horizontal node tracking active.
-
-## 🧠 Advanced Intelligence (Phase 43)
-- `[x]` **Council of Models**: Parallel Llama-70B, Mixtral, and Gemma orchestration.
-- `[x]` **Synthesis Judge**: Automatic response quality scoring.
-- `[x]` **Async Engine**: Fully non-blocking AI orchestration.
-
-## 🌍 Global Synchronization (Final Readiness)
-- `[x]` **Frontend Sync**: `api.js` updated for Trace-ID and 304 handling.
-- `[x]` **Vercel Caching**: Immutable 1-year headers for static assets.
-- `[x]` **Credit Safety**: atomic `use_credits` with global Redis locking.
+This document lists the mandatory pre-flight checks for the hardened LEVI-AI platform.
 
 ---
 
-### 🏁 System Status: **READY FOR LAUNCH** 🚀
-**Architect's Note:** All core services have been stress-tested and logic-verified. The platform is now optimized for global scale and zero-trust production safety.
+## 🛠️ 1. Infrastructure Checks
+
+- [ ] **Redis**: Reachable? `redis-cli ping`
+- [ ] **Firestore**: Connectivity verified? Check `/health`
+- [ ] **Nginx**: `proxy_buffering off;` set? (Required for SSE)
+- [ ] **Celery**: `beat` scheduler is running? `docker compose logs beat`
+
+---
+
+## 🛡️ 2. Security & Auth
+
+- [ ] **JTI Logic**: Verified in `redis_client.py`?
+- [ ] **Environment**: `ENVIRONMENT=production` set in `.env`?
+- [ ] **Webhook**: `ALERT_WEBHOOK_URL` configured for circuit breaker alerts?
+- [ ] **Secrets**: `SECRET_KEY` and `ADMIN_KEY` are long, random strings?
+
+---
+
+## 💾 3. Memory & Data Lifecycle
+
+- [ ] **Pruning**: `FACT_EXPIRY_DAYS=30` configured correctly?
+- [ ] **Timestamps**: Native Firestore Timestamps used for `created_at`?
+- [ ] **Buffers**: Memory buffering tests passed? `pytest backend/tests/test_memory_buffering.py`
+
+---
+
+## 🚄 4. Performance & LLM
+
+- [ ] **Streaming**: True token-by-token streaming verified? Check `/chat` endpoint.
+- [ ] **Caching**: Response caching active? Identical queries should reach `cached: true`.
+- [ ] **Limits**: Concurrency slots and rate limiting verified via `scripts/load_test.py`?
+
+---
+
+## 📖 5. Documentation Review
+
+- [ ] **README**: Updated to v5.0 branding?
+- [ ] **RUNBOOK**: Operations and troubleshooting guide verified?
+- [ ] **DIAGNOSTICS**: Health signals and log patterns documented?
+
+---
+
+**LEVI — Built for emergence. Launched for depth.**

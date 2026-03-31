@@ -374,6 +374,7 @@ from backend.services.gallery.router import router as gallery_router # type: ign
 from backend.services.analytics.router import router as analytics_router # type: ignore
 from backend.payments import router as payments_router # type: ignore
 from backend.services.studio.ai_router import router as ai_router # type: ignore
+from backend.services.learning.router import router as learning_router # type: ignore
 
 # Phase 2: Standardized Route Architecture
 # Note: Middleware strips /api/v1 and /api, so we register canonical paths.
@@ -386,6 +387,7 @@ app.include_router(privacy_router, prefix="/user/privacy", tags=["Privacy"])
 app.include_router(analytics_router, prefix="/system/analytics", tags=["Analytics"])
 app.include_router(orchestrator_router, prefix="/system/orchestrator", tags=["Orchestrator"])
 app.include_router(gallery_router, prefix="/gallery", tags=["Gallery"])
+app.include_router(learning_router, prefix="", tags=["Learning"])  # /feedback, /learning/*, /model/*
 
 # ── Global Error Handling ───────────────────────────
 from backend.utils.exceptions import LEVIException

@@ -217,22 +217,39 @@ def store_jti(jti: str, expires_in: int):
             print(f"[Firestore] Failed to store JTI: {e}")
 
 def is_jti_blacklisted(jti: str) -> bool:
-    """Check if JTI is explicitly blacklisted in Redis."""
+    """Check if JTI is explicitly blacklisted in Redis or Firestore.
+    Returns True ONLY if the token is in the blacklist AND not yet expired.
+    Fails open (returns False / allows) on error to avoid locking out all users.
+    """
     if HAS_REDIS:
         return _get(f"jti:{jti}") is not None
-    
-    # Fallback to Firestore
+
+    # Firestore fallback (when Redis unavailable)
     try:
         doc = firestore_db.collection("blacklisted_jtis").document(jti).get()
-        if doc.exists:
-            from datetime import datetime
-            expires_at = doc.to_dict().get("expires_at")
-            # If still valid, it's blacklisted
-            if expires_at and expires_at.replace(tzinfo=None) > datetime.utcnow(): # type: ignore
-                return False # Actually the caller logic said 'is None' returns True?
-        return True # Whitelist: if not in DB, it's blacklisted (wait, logic is flipped?)
-    except Exception:
-        return True
+        if not doc.exists:
+            return False  # Not in blacklist → allowed (Corrected logic)
+        
+        data = doc.to_dict()
+        expires_at = data.get("expires_at")
+        
+        if expires_at is None:
+            return True  # In blacklist, no expiry → permanently blocked
+            
+        # Standard Firestore Timestamp to Python datetime handling
+        from datetime import datetime
+        now = datetime.utcnow()
+        
+        # Normalize to naive datetime for comparison
+        if hasattr(expires_at, "replace"):
+            exp_naive = expires_at.replace(tzinfo=None) # type: ignore
+        else:
+            exp_naive = now # Fallback for malformed data
+            
+        return exp_naive > now  # True = still valid blacklist entry (blocked)
+    except Exception as e:
+        print(f"[Firestore] Blacklist check error: {e}")
+        return False  # Fail open: don't block users when Firestore is unreachable
 
 def delete_jti(jti: str):
     """Remove JTI from Redis/Firestore."""

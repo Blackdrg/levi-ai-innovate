@@ -1,0 +1,193 @@
+"""
+backend/services/learning/router.py
+
+LEVI Learning System — FastAPI Router
+Provides endpoints for:
+  - /feedback        : User rates a response 1-5 (explicit feedback)
+  - /learning/profile: User's learned AI preference profile
+  - /learning/stats  : Learning system analytics (admin)
+  - /model/status    : Which model is active right now
+  - /model/export    : Trigger training data export (admin)
+"""
+import logging
+import hashlib
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from pydantic import BaseModel, Field, field_validator
+
+from backend.auth import get_current_user, get_current_user_optional
+from backend.learning import (
+    collect_training_sample,
+    UserPreferenceModel,
+    AdaptivePromptManager,
+    get_learning_stats,
+    infer_implicit_feedback,
+    update_memory_graph,
+    export_training_data,
+)
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(tags=["Learning"])
+
+
+# ── Pydantic Schemas ──────────────────────────────────────────────────────────
+
+class FeedbackRequest(BaseModel):
+    session_id: str
+    message_hash: str
+    rating: int = Field(..., ge=1, le=5, description="Rating 1 (bad) to 5 (perfect)")
+    bot_response: str
+    user_message: str
+    mood: Optional[str] = "philosophical"
+    feedback_type: str = "star"
+
+    @field_validator("rating")
+    @classmethod
+    def validate_rating(cls, v: int) -> int:
+        if not 1 <= v <= 5:
+            raise ValueError("Rating must be between 1 and 5")
+        return v
+
+
+# ── Explicit Feedback ─────────────────────────────────────────────────────────
+
+@router.post("/feedback")
+async def submit_feedback(
+    req: FeedbackRequest,
+    background_tasks: BackgroundTasks,
+    current_user: Optional[dict] = Depends(get_current_user_optional),
+):
+    """
+    User rates a response 1-5.
+    - Stores a training sample in Firestore immediately.
+    - High-quality responses (4+) are added to the knowledge base.
+    - Memory graph is updated in the background.
+    """
+    user_id: Optional[str] = current_user.get("uid") if current_user else None
+
+    # Verify message_hash matches digest of user_message (anti-tampering)
+    expected_hash = hashlib.sha256(req.user_message.strip().encode()).hexdigest()[:16]
+    if req.message_hash and req.message_hash != expected_hash:
+        logger.warning(f"Feedback hash mismatch for user {user_id}. Proceeding anyway.")
+
+    try:
+        sample_id = collect_training_sample(
+            user_message=req.user_message,
+            bot_response=req.bot_response,
+            mood=req.mood or "philosophical",
+            rating=req.rating,
+            session_id=req.session_id,
+            user_id=user_id,
+        )
+
+        # Update adaptive prompt performance tracker in background
+        if user_id:
+            background_tasks.add_task(
+                AdaptivePromptManager().record_outcome,
+                variant_idx=0,  # default variant; can be extended to track which variant was used
+                rating=req.rating,
+            )
+            # Update structured memory graph with this interaction
+            background_tasks.add_task(update_memory_graph, user_id, req.user_message)
+
+        return {
+            "status": "success",
+            "sample_id": sample_id,
+            "rating": req.rating,
+            "message": f"Thank you. Your rating of {req.rating}/5 helps LEVI learn.",
+        }
+
+    except Exception as e:
+        logger.error(f"Feedback submission error for user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to record feedback. Please try again.")
+
+
+# ── User Learning Profile ─────────────────────────────────────────────────────
+
+@router.get("/learning/profile")
+async def get_my_learning_profile(
+    current_user: dict = Depends(get_current_user),
+):
+    """Returns the AI's current learned profile for this user."""
+    user_id: str = current_user.get("uid", "")
+    if not user_id:
+        raise HTTPException(status_code=400, detail="Invalid user.")
+
+    try:
+        model = UserPreferenceModel(user_id)
+        profile = model.get_profile()
+        prompt_manager = AdaptivePromptManager()
+        best_variant = prompt_manager.get_best_variant(
+            profile.get("preferred_moods", ["philosophical"])[0]
+        )
+        return {
+            "user_id": user_id,
+            "profile": profile,
+            "system_prompt_preview": model.build_system_prompt(best_variant, "philosophical")[:300] + "...",
+        }
+    except Exception as e:
+        logger.error(f"Profile retrieval failed for {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Could not retrieve learning profile.")
+
+
+# ── Learning Stats (Admin/Creator) ────────────────────────────────────────────
+
+@router.get("/learning/stats")
+async def get_learning_stats_route(
+    current_user: dict = Depends(get_current_user),
+):
+    """Returns learning system statistics. Requires authentication."""
+    tier = current_user.get("tier", "free")
+    if tier not in ("admin", "creator", "pro"):
+        raise HTTPException(status_code=403, detail="Learning stats require Pro or Creator tier.")
+    try:
+        stats = get_learning_stats()
+        return stats
+    except Exception as e:
+        logger.error(f"Learning stats error: {e}")
+        raise HTTPException(status_code=500, detail="Could not retrieve learning stats.")
+
+
+# ── Model Status (Public) ─────────────────────────────────────────────────────
+
+@router.get("/model/status")
+async def model_status():
+    """Public endpoint: returns which model is powering LEVI right now."""
+    try:
+        stats = get_learning_stats()
+        return {
+            "active_model": "groq/llama-3.1-8b-instant",
+            "is_fine_tuned": False,
+            "training_samples_collected": stats.get("total_training_samples", 0),
+            "high_quality_samples": stats.get("high_quality_samples", 0),
+            "knowledge_base_entries": stats.get("learned_quotes", 0),
+            "knowledge_base_health": stats.get("knowledge_base_health", "unknown"),
+        }
+    except Exception as e:
+        logger.error(f"Model status error: {e}")
+        return {"active_model": "groq/llama-3.1-8b-instant", "status": "degraded"}
+
+
+# ── Training Export (Creator/Admin) ──────────────────────────────────────────
+
+@router.post("/model/export")
+async def export_training(
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(get_current_user),
+):
+    """Export high-quality training data as JSONL. Creator/Admin only."""
+    tier = current_user.get("tier", "free")
+    if tier not in ("admin", "creator"):
+        raise HTTPException(status_code=403, detail="Requires Creator tier.")
+
+    def _export():
+        path, count = export_training_data()
+        logger.info(f"Training export complete: {count} samples at {path}")
+
+    background_tasks.add_task(_export)
+    return {
+        "status": "queued",
+        "message": "Training data export queued. Data will be written to /tmp/levi_training.jsonl",
+    }

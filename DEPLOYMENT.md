@@ -45,23 +45,59 @@ Add all of these in **GitHub → Settings → Secrets and variables → Actions*
 
 ---
 
-## 🚀 Deployment Steps
+## LEVI-AI: v5.0 Deployment Guide 🚀
 
-### 1. Push to trigger CI/CD
+This guide outlines the production deployment process for the hardened LEVI-AI platform.
+
+## 🏗️ Core Infrastructure
+LEVI follows a containerized architecture managed via **Docker Compose** or **Kubernetes/Cloud Run**.
+
+- **API Gateway**: FastAPI (Python 3.11+)
+- **Broker/Cache**: Redis
+- **Ingress**: Nginx (Custom SSE-optimized config)
+- **Database**: Firestore (GCP)
+- **Jobs**: Celery (Worker + Beat)
+
+---
+
+## 🛠️ Production Setup (Docker Compose)
+
+The fastest way to deploy the full hardened stack is via the updated `docker-compose.yml`.
+
 ```bash
-git push origin master:main
+# 1. Fill in production .env
+cp .env.example .env
+# Set ENVIRONMENT=production
+# Set ALERT_WEBHOOK_URL for circuit breaker alerts
+
+# 2. Build and start services
+docker compose up --build -d
+
+# 3. Verify nginx upstream
+curl http://localhost/api/health
 ```
-This triggers `.github/workflows/deploy-backend.yml` automatically.
 
-### 2. Backend (Cloud Run)
-- Deployed from `Dockerfile`
-- Port: `8080`
-- Memory: **2GB minimum** (4GB recommended — embedding models)
-- CPU: 2 vCPU
-- `ENVIRONMENT=production` env var set
+---
 
-### 3. Frontend (Firebase Hosting)
-- Deployed from `.github/workflows/deploy-frontend.yml`
+## ⚡ Critical Configuration for SSE
+
+For real-time token streaming to work, the reverse proxy (Nginx/Cloudflare) **must not buffer the response**.
+
+The v5.0 `nginx.conf` included in the repo handles this via:
+- `proxy_buffering off;`
+- `chunked_transfer_encoding on;`
+- MIME type: `text/event-stream`
+
+---
+
+## 📖 Operational Procedures
+For detailed maintenance, logs management, and troubleshooting, refer to the **[RUNBOOK.md](RUNBOOK.md)**.
+
+## 🧪 Post-Deployment Checklist
+- [ ] `/health` returns all OK.
+- [ ] Test chat streaming (tokens should arrive piece-by-piece).
+- [ ] Verify Celery `beat` logs for successful memory flushes.
+- [ ] Confirm `ENVIRONMENT=production` is set in all workers.
 - Rewrites `/api/**` → Cloud Run backend URL
 - SSE endpoint `/stream` proxied with streaming headers
 

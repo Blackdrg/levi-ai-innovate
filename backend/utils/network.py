@@ -30,7 +30,21 @@ class CircuitBreaker:
         self.recovery_time = recovery_time
         self.failures = 0
         self.last_failure_time = 0
-        self.state = "CLOSED" # CLOSED, OPEN, HALF-OPEN
+        self.state = "CLOSED"  # CLOSED, OPEN, HALF-OPEN
+        self.webhook_url = os.getenv("ALERT_WEBHOOK_URL")
+
+    def _send_alert(self, message: str):
+        """Send a proactive Discord/Slack-compatible alert when circuit trips."""
+        if not self.webhook_url:
+            return
+        try:
+            payload = {
+                "content": f"🚨 **LEVI-AI ALERT**: Circuit Breaker **[{self.name}]** {message}",
+                "username": "LEVI Monitoring",
+            }
+            requests.post(self.webhook_url, json=payload, timeout=2.0)
+        except Exception as e:
+            logger.error(f"Failed to send circuit-breaker alert for {self.name}: {e}")
 
     def call(self, func: Callable, *args, **kwargs):
         if self.state == "OPEN":
@@ -56,7 +70,7 @@ class CircuitBreaker:
             raise e
 
     async def async_call(self, func: Callable, *args, **kwargs):
-        """Phase 43: Async support for circuit breaking."""
+        """Async support for circuit breaking."""
         if self.state == "OPEN":
             if time.time() - self.last_failure_time > self.recovery_time:
                 self.state = "HALF-OPEN"
@@ -75,11 +89,11 @@ class CircuitBreaker:
                 status_code = getattr(e.response, "status_code", None)
                 if status_code == 429:
                     is_rate_limit = True
-            
+
             if is_rate_limit:
                 logger.warning(f"Async Rate limit hit in {self.name}. Circuit remains {self.state}.")
                 raise e
-                
+
             self.on_failure()
             raise e
 
@@ -93,11 +107,16 @@ class CircuitBreaker:
         self.failures += 1
         self.last_failure_time = time.time()
         if self.failures >= self.threshold:
+            was_open = self.state == "OPEN"
             self.state = "OPEN"
-            logger.critical(f"Circuit {self.name} has OPENED due to {self.failures} failures.")
+            if not was_open:
+                logger.critical(f"Circuit {self.name} has OPENED due to {self.failures} failures.")
+                self._send_alert("TRIPPED! Transitioned to OPEN state due to repeated failures.")
 
-# Global circuit breakers
+# Global circuit breakers (single source of truth — circuit_breaker.py is deprecated)
 ai_service_breaker = CircuitBreaker("AI_SERVICE", threshold=3, recovery_time=30)
+groq_breaker = CircuitBreaker("Groq", threshold=3, recovery_time=30)
+together_breaker = CircuitBreaker("TogetherAI", threshold=5, recovery_time=60)
 
 def safe_request(method: str, url: str, **kwargs) -> requests.Response:
     """
