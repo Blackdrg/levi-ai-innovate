@@ -30,35 +30,18 @@ from slowapi import _rate_limit_exceeded_handler # type: ignore
 from slowapi.errors import RateLimitExceeded # type: ignore
 from slowapi import _rate_limit_exceeded_handler # type: ignore
 
-# ── Environment & Logging ───────────────────────────
+from backend.utils.logger import setup_logging, get_logger
+from backend.utils.logging_context import log_request_id, log_user_id, log_session_id
+from prometheus_fastapi_instrumentator import Instrumentator
+
+# ── Environment & Logging (Phase 4 Hardened) ────────────────
 if os.path.exists(".env.local"):
     load_dotenv(".env.local")
 else:
     load_dotenv()
 
-class CustomJsonFormatter(JsonFormatter):
-    def add_fields(self, log_record, record, message_dict):
-        super(CustomJsonFormatter, self).add_fields(log_record, record, message_dict)
-        if not log_record.get('timestamp'):
-            now = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%fZ')
-            log_record['timestamp'] = now
-        if log_record.get('level'):
-            log_record['level'] = log_record['level'].upper()
-        else:
-            log_record['level'] = record.levelname
-        
-        # Add context-aware fields
-        log_record['request_id'] = log_request_id.get()
-        log_record['user_id'] = log_user_id.get()
-        log_record['instance_id'] = os.getenv("INSTANCE_ID", "unknown")
-
-logger = logging.getLogger("gateway")
-logHandler = logging.StreamHandler()
-formatter = CustomJsonFormatter(fmt='%(timestamp)s %(level)s %(name)s %(message)s') # type: ignore
-logHandler.setFormatter(formatter)
-logger.addHandler(logHandler)
-logger.setLevel(logging.INFO)
-logger.propagate = False
+setup_logging()
+logger = get_logger("gateway")
 
 # Sentry Initialization
 SENTRY_DSN = os.getenv("SENTRY_DSN")
@@ -256,77 +239,53 @@ async def add_request_tracking(request: Request, call_next):
     # For now, initialize with guest or trace_id
     log_user_id.set(request.headers.get("X-User-ID", "anonymous"))
     
-    start_time = time.time()
-    
-    # Process request
-    response = await call_next(request)
-    
-    # Calculate performance metrics
-    duration = (time.time() - start_time) * 1000
-    p_size = response.headers.get("Content-Length", "0")
-    
-    response.headers["X-Request-ID"] = request_id
-    response.headers["X-Trace-ID"] = trace_id
-    
-    # Phase 42: Cache Isolation (Vary)
-    response.headers["Vary"] = "Accept-Encoding, Authorization, X-Trace-ID"
-    
-    # Phase 45: Real-Time Metric Accumulation (Redis Aggregation)
-    if HAS_REDIS:
+class LoggingMiddleware(BaseHTTPMiddleware):
+    """
+    Standardized logging and tracing middleware.
+    """
+    async def dispatch(self, request: Request, call_next):
+        start_time = time.time()
+        rid = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+        sid = request.cookies.get("session_id", "none")
+        
+        # Inject context for logger
+        t_rid = log_request_id.set(rid)
+        t_sid = log_session_id.set(sid)
+        
         try:
-            # 1. Throughput increment
-            redis_client.incr("metrics:total_requests")
+            response = await call_next(request)
+            duration = (time.time() - start_time) * 1000
             
-            # 2. Latency aggregation (p95 history)
-            redis_client.lpush("metrics:latency_ms", int(duration))
-            redis_client.ltrim("metrics:latency_ms", 0, 99) # Keep last 100 durations
+            logger.info(
+                f"Request {request.method} {request.url.path} handled",
+                extra={
+                    "status_code": response.status_code,
+                    "duration_ms": int(duration),
+                    "method": request.method,
+                    "path": request.url.path
+                }
+            )
             
-            # 3. Error monitoring
-            if response.status_code >= 500:
-                redis_client.incr("metrics:error_count")
-        except Exception as e:
-            logger.warning(f"Metric push failed: {e}")
+            # Security Headers (Phase 2 & 4 Hardened)
+            response.headers["X-Request-ID"] = rid
+            response.headers["X-Content-Type-Options"] = "nosniff"
+            response.headers["X-Frame-Options"] = "DENY"
+            response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+            
+            if os.getenv("ENVIRONMENT") == "production":
+                 response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+            
+            return response
+        finally:
+            log_request_id.reset(t_rid)
+            log_session_id.reset(t_sid)
 
-    logger.info("gateway_request_completed", extra={
-        "request_id": request_id, 
-        "trace_id": trace_id,
-        "method": request.method,
-        "path": request.url.path, 
-        "status_code": response.status_code,
-        "duration_ms": int(duration),
-        "payload_size_kb": round(int(p_size) / 1024, 2) if p_size.isdigit() else 0,
-        "cache_hit": response.headers.get("X-Cache", "MISS")
-    })
-    
-    # ── Phase 22: Ultimate Security Hardening ──────────────────
-    # Content Security Policy (CSP)
-    csp_parts = [
-        "default-src 'self'",
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com https://checkout.razorpay.com https://cdn.jsdelivr.net https://www.googletagmanager.com",
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net",
-        "img-src 'self' data: blob: https://images.unsplash.com https://*.firebasestorage.app https://*.s3.amazonaws.com https://www.google-analytics.com",
-        "connect-src 'self' https://*.firebaseio.com https://*.googleapis.com https://api.razorpay.com https://www.google-analytics.com https://stats.g.doubleclick.net",
-        "font-src 'self' https://fonts.gstatic.com",
-        "frame-src 'self' https://checkout.razorpay.com",
-        "object-src 'none'",
-        "upgrade-insecure-requests"
-    ]
-    response.headers["Content-Security-Policy"] = "; ".join(csp_parts)
-    
-    # HSTS (force HTTPS)
-    if os.getenv("ENVIRONMENT") == "production":
-        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
-    
-    # Standard Security Headers
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
-    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-    response.headers["X-DNS-Prefetch-Control"] = "off"
-    response.headers["Expect-CT"] = "max-age=86400, enforce"
-    response.headers["X-Permitted-Cross-Domain-Policies"] = "none"
-    
-    return response
+# Registration
+app.add_middleware(LoggingMiddleware)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# Metrics Entry Point
+Instrumentator().instrument(app).expose(app, endpoint="/metrics")
 
 @app.middleware("http")
 async def strip_api_prefix(request: Request, call_next):

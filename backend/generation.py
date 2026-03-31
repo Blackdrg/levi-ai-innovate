@@ -172,45 +172,46 @@ def _get_random_persona(mood: str = "") -> Dict:
 
 def _build_dynamic_system_prompt(persona: Dict, user_memory: Any = None,
                                   conversation_depth: int = 0) -> str:
-    """Build a dynamic system prompt with memory and depth awareness."""
+    """
+    Builds a hyper-relevant system prompt using persona and semantic memory.
+    """
     base = persona["prompt"]
-
-    # Add memory context if available
     memory_layer = ""
+
     if user_memory:
-        topics = getattr(user_memory, 'liked_topics', []) or []
-        moods = getattr(user_memory, 'mood_history', []) or []
-        count = getattr(user_memory, 'interaction_count', 0) or 0
+        # Handle dict-based memory from MemoryManager (Phase 5)
+        if isinstance(user_memory, dict):
+            prefs = user_memory.get("preferences", [])
+            traits = user_memory.get("traits", [])
+            history = user_memory.get("history", [])
+            
+            if prefs:
+                memory_layer += f" User Preferences: {', '.join(prefs[:5])}."
+            if traits:
+                memory_layer += f" User Traits: {', '.join(traits[:5])}."
+            if history:
+                memory_layer += " Recent relevant history is available for context."
 
-        if topics:
-            memory_layer += f" This person gravitates toward: {', '.join(list(topics)[:3])}."
-        if moods:
-            recent_mood = list(moods)[-1] if moods else None
-            if recent_mood:
-                memory_layer += f" Their recent emotional state: {recent_mood}."
-        if count > 5:
-            memory_layer += " You've spoken before — build on that depth. Don't repeat yourself."
+        # Support for legacy/object-based memory
+        else:
+            topics = getattr(user_memory, 'liked_topics', []) or []
+            if topics:
+                memory_layer += f" User Interests: {', '.join(list(topics)[:3])}."
 
-    # Depth layers — longer conversations get deeper responses
-    depth_instruction = ""
-    if conversation_depth > 6:
-        depth_instruction = (
-            " This is a DEEP conversation. Go further than the surface. "
-            "Reference earlier points if relevant. Build. Evolve."
-        )
-    elif conversation_depth > 3:
-        depth_instruction = " We're building momentum. Go one layer deeper."
+    # Depth-aware dynamic instructions
+    depth_hint = ""
+    if conversation_depth > 5:
+        depth_hint = " This is a deep, ongoing dialogue. Evolve the philosophy. Don't be static."
+    elif conversation_depth > 2:
+        depth_hint = " The conversation is gaining momentum."
 
-    # Anti-repetition instruction (always included)
-    anti_repeat = (
-        " CRITICAL: Never use these clichéd phrases: 'profound', 'tapestry', 'realm', "
-        "'cosmic dance', 'the universe has a plan', 'everything happens for a reason', "
-        "'in the grand scheme', 'journey of discovery'. "
-        "Avoid starting responses with 'Ah,' or 'Indeed,' or 'Certainly'. "
-        "Be ORIGINAL. Surprise yourself."
+    # Strict Output Guards (No clichés)
+    guards = (
+        " [GUARDS]: Avoid cliches like 'profound', 'tapestry', 'realm', 'everything happens for a reason'. "
+        "Do not use repetitive openers like 'Ah,' or 'Indeed'. Be starkly original."
     )
 
-    return base + memory_layer + depth_instruction + anti_repeat
+    return f"{base}\n\n[CONTEXT]:{memory_layer}{depth_hint}\n\n{guards}"
 
 
 async def _async_call_llm_api(messages: List[Dict], temperature: float = 0.85,

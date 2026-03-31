@@ -119,10 +119,8 @@ def is_serializable(obj: Any) -> bool:
         return False
 
 def save_conversation(session_id: str, conversation: list, user_id: str = None):
-    # 1. Save to Redis
+    """Legacy/Direct save (use save_conversation_buffered for production)."""
     _set(f"conv:{session_id}", json.dumps(conversation), ex=3600)
-    
-    # 2. Save to Firestore for durability
     try:
         from datetime import datetime
         firestore_db.collection("conversations").document(session_id).set({
@@ -133,6 +131,33 @@ def save_conversation(session_id: str, conversation: list, user_id: str = None):
         }, merge=True)
     except Exception as e:
         print(f"[Firestore] Error saving conversation {session_id}: {e}")
+
+def save_conversation_buffered(session_id: str, conversation: list, user_id: str = None):
+    """
+    Phase 47: Buffered Save.
+    Updates Redis cache immediately and pushes a persist request to the write buffer.
+    """
+    # 1. Update Redis cache for immediate subsequent reads
+    _set(f"conv:{session_id}", json.dumps(conversation), ex=3600)
+    
+    # 2. Push to Write Buffer for async Firestore flushing
+    if HAS_REDIS:
+        try:
+            from datetime import datetime
+            payload = {
+                "session_id": session_id,
+                "user_id": user_id,
+                "history": conversation,
+                "updated_at": datetime.utcnow().isoformat()
+            }
+            r.rpush("conv_buffer", json.dumps(payload))
+            r.expire("conv_buffer", 3600)
+        except Exception as e:
+            print(f"[Redis] Error buffering conversation {session_id}: {e}")
+            # Fallback to direct save on Redis buffer failure
+            save_conversation(session_id, conversation, user_id)
+    else:
+        save_conversation(session_id, conversation, user_id)
 
 
 

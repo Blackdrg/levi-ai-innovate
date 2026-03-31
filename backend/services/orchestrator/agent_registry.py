@@ -131,6 +131,18 @@ async def search_handler(context: Dict[str, Any]) -> Dict[str, Any]:
         cached["cache_hit"] = True
         return cached
 
+    # Phase 4: Tier Enforcement (Search requires 'search' feature)
+    user_tier = context.get("user_tier", "free")
+    from backend.config import TIERS
+    tier_config = TIERS.get(user_tier, TIERS["free"])
+    if "search" not in tier_config.get("features", []):
+         return {
+            "status": "error",
+            "message": "The Deep Search agent requires a Pro or Creator subscription.",
+            "agent": "search_agent",
+            "retryable": False
+        }
+
     # Phase 4: Credit Deduction (Search = 1 credit) — only on cache miss
     if user_id and not user_id.startswith("guest:"):
         try:
@@ -185,6 +197,18 @@ async def code_handler(context: Dict[str, Any]) -> Dict[str, Any]:
     user_id = context.get("user_id", "guest")
     task = context.get("input", "")
     
+    # Phase 4: Tier Enforcement (Code requires 'high_reasoning' feature)
+    user_tier = context.get("user_tier", "free")
+    from backend.config import TIERS
+    tier_config = TIERS.get(user_tier, TIERS["free"])
+    if "high_reasoning" not in tier_config.get("features", []):
+         return {
+            "status": "error",
+            "message": "The Logic Architect (Code Agent) requires a Pro or Creator subscription.",
+            "agent": "code_agent",
+            "retryable": False
+        }
+
     # Phase 4: Credit Deduction (Code = 2 credits)
     if user_id and not user_id.startswith("guest:"):
         try:
