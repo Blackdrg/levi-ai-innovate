@@ -174,12 +174,22 @@ async function sendMessage() {
 
         // Post-Stream: Add controls & metadata actions
         const controls = document.createElement("div");
-        controls.className = "flex items-center gap-2 mt-2 pt-2 border-t border-white/10";
+        controls.className = "flex items-center gap-2 mt-2 pt-2 border-t border-white/10 flex-wrap";
         const msgId = metadataCaptured?.request_id || `msg_${Date.now()}`;
+
+        // Engine route badge — shows which path handled this response
+        const routeBadge = _buildRouteBadge(metadataCaptured);
+        const intentLabel = metadataCaptured?.intent
+            ? `<span class="text-[10px] text-primary/50 uppercase tracking-widest font-mono">${metadataCaptured.intent}</span>`
+            : '';
+
         controls.innerHTML = `
             <button onclick="submitFeedback('${msgId}', 1.0, this)" class="text-zinc-500 hover:text-emerald-400 transition-colors" title="Good response"><span class="material-symbols-outlined icon-sm">thumb_up</span></button>
             <button onclick="submitFeedback('${msgId}', 0.0, this)" class="text-zinc-500 hover:text-red-400 transition-colors" title="Bad response"><span class="material-symbols-outlined icon-sm">thumb_down</span></button>
-            ${metadataCaptured?.intent ? `<span class="ml-auto text-[10px] text-primary/60 uppercase tracking-widest font-bold">${metadataCaptured.intent} Agent</span>` : ''}
+            <div class="ml-auto flex items-center gap-2">
+                ${intentLabel}
+                ${routeBadge}
+            </div>
         `;
         botDiv.appendChild(controls);
 
@@ -338,6 +348,43 @@ function startVoice() {
     } catch(e) {
         recognition.stop();
     }
+}
+
+/**
+ * _buildRouteBadge
+ * Renders a tiny color-coded pill showing which LEVI engine handled the response.
+ *   🟢 local  — zero API cost, instant
+ *   🟡 tool   — agent-based (image/code/search)
+ *   🔴 api    — Groq LLM (complex reasoning)
+ */
+function _buildRouteBadge(meta) {
+    if (!meta?.route) return '';
+    const route = meta.route.toLowerCase();
+    const configs = {
+        local: { emoji: '🟢', label: 'Local',  color: 'text-emerald-400/70',  title: 'Answered locally — zero API cost' },
+        tool:  { emoji: '🟡', label: 'Tool',   color: 'text-amber-400/70',    title: 'Handled by a specialized agent' },
+        api:   { emoji: '🔴', label: 'AI',     color: 'text-rose-400/70',     title: 'Powered by Groq LLM' },
+    };
+    const cfg = configs[route] || { emoji: '⚪', label: route, color: 'text-zinc-500', title: '' };
+    return `<span class="text-[10px] ${cfg.color} font-mono tracking-widest uppercase select-none cursor-default" title="${cfg.title}">${cfg.emoji} ${cfg.label}</span>`;
+}
+
+// Stubs — prevent errors if history/welcome are not defined elsewhere
+async function loadChatHistory() {
+    try {
+        const history = JSON.parse(localStorage.getItem('levi_chat_history') || '[]');
+        if (history.length === 0) return;
+        history.slice(-10).forEach(msg => {
+            if (msg.user) appendMessage('user', msg.user);
+            if (msg.bot)  appendMessage('bot',  msg.bot);
+        });
+    } catch (e) { /* No history, that's fine */ }
+}
+
+function displayWelcomeMessage() {
+    const messagesDiv = document.getElementById('messages');
+    if (!messagesDiv || messagesDiv.children.length > 0) return;
+    appendMessage('bot', "Hello, I am **LEVI** — your philosophical AI companion. What shall we explore today?");
 }
 
 // Expose to window for inline HTML attachments
