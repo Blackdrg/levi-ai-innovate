@@ -1,100 +1,149 @@
-# 🚀 LEVI Production Deployment Checklist
+# 🚀 LEVI v2.0 Production Deployment Checklist
 
-Follow these phases in order to launch LEVI with real payments, AI generation, and scalable storage.
-
-## Phase A: Razorpay Setup (15 min)
-
-1. **Create Account**: Log in to [dashboard.razorpay.com](https://dashboard.razorpay.com).
-2. **Generate API Keys**:
-    * Go to Settings -> API Keys -> Generate Key.
-    * Save `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET`.
-3. **Setup Webhook**:
-    * Go to Settings -> Webhooks -> Add New Webhook.
-    * Webhook URL: `https://your-backend-url.com/razorpay_webhook`.
-    * Secret: Create a random string and save as `RAZORPAY_WEBHOOK_SECRET`.
-    * Active Events: `payment.captured`.
-
-## Phase B: AWS S3 Setup (10 min)
-
-1. **Create Bucket**: Create a bucket named `levi-assets` (or similar).
-2. **IAM User**: Create an IAM user with `AmazonS3FullAccess`.
-3. **Get Credentials**: Save the `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`.
-4. **Set Region**: Note your region (e.g., `us-east-1`).
-5. **Public Access**:
-    * Ensure "Block all public access" is **OFF** for the bucket.
-    * Add a Bucket Policy to allow public reads (or use the code's `ACL='public-read'`):
-
-    ```json
-    {
-        "Version": "2012-10-17",
-        "Statement": [
-            {
-                "Sid": "PublicRead",
-                "Effect": "Allow",
-                "Principal": "*",
-                "Action": "s3:GetObject",
-                "Resource": "arn:aws:s3:::your-bucket-name/*"
-            }
-        ]
-    }
-    ```
-
-## Phase C: Together.AI & Groq (5 min)
-
-1. **Together.AI**: Go to [api.together.xyz/settings/api-keys](https://api.together.xyz/settings/api-keys) and get `TOGETHER_API_KEY`.
-2. **Groq Cloud**: Go to [console.groq.com/keys](https://console.groq.com/keys) and get `GROQ_API_KEY`.
-
-## Phase D: Environment Variables
-
-Add these to your Google Cloud Run / Firebase environment:
-
-* `DATABASE_URL`: Your production Postgres URL.
-* `REDIS_URL`: Your production Redis URL.
-* `SECRET_KEY`: A long random string for JWT.
-* `RAZORPAY_KEY_ID`: From Phase A.
-* `RAZORPAY_KEY_SECRET`: From Phase A.
-* `RAZORPAY_WEBHOOK_SECRET`: From Phase A.
-* `RAZORPAY_PRO_PLAN_AMOUNT`: 29900 (₹299 in paise).
-* `RAZORPAY_CREATOR_PLAN_AMOUNT`: 59900 (₹599 in paise).
-* `AWS_ACCESS_KEY_ID`: From Phase B.
-* `AWS_SECRET_ACCESS_KEY`: From Phase B.
-* `AWS_REGION`: From Phase B.
-* `AWS_S3_BUCKET`: From Phase B.
-* `TOGETHER_API_KEY`: From Phase C.
-* `GROQ_API_KEY`: From Phase C.
-* `RESEND_API_KEY`: Your Resend API key for emails.
-* `USE_CELERY`: Set to `true` for production.
-* `FRONTEND_URL`: `https://levi-ai.create.app` (or your custom domain).
-* `VAPID_PUBLIC_KEY`: Your public VAPID key.
-* `VAPID_PRIVATE_KEY`: Your private VAPID key.
-* `VAPID_ADMIN_EMAIL`: Your admin email (e.g., `admin@yourdomain.com`).
-* `ADMIN_KEY`: A secret key for accessing `/admin` endpoints.
-* `CLOUDFRONT_DOMAIN`: (Optional) Your CloudFront domain (e.g., `d123.cloudfront.net`) for faster image delivery.
-
-## Phase E: Web Push Notifications (5 min)
-
-1. **Generate Keys**: Run `npx web-push generate-vapid-keys`.
-2. **Add to Env**: Add the public, private, and email to your environment.
-3. **Frontend Button**: The "Get Daily Wisdom Notifications" button in the Studio will now work.
-
-## Phase F: Deploy
-
-1. **Frontend Build**: Run `cd frontend && npm run build` to generate the production CSS.
-2. **Push Code**: `git push origin main`.
-3. **Verify**: Check Cloud Run logs for "Database tables ready" and "Uvicorn running".
-4. **Test**: Perform a test purchase and verify credits in the Studio.
+Work through each phase in order. Check off as you go.
 
 ---
 
-## Final Production Status
+## Phase A: API Keys (15 min)
 
-✅ Real DB auth (SQLAlchemy)
-✅ Groq Llama3 (Text) + Together FLUX (Image)
-✅ Razorpay payments (Orders + Webhooks)
-✅ Credit system (free/pro/creator tiers)
-✅ S3 video/image storage
-✅ ImageMagick + ffmpeg in Docker
-✅ Daily email system (Resend)
-✅ Web Push notifications (pywebpush)
-✅ Celery background tasks
-✅? Frontend + Backend connected (Firebase Hosting + Cloud Run)
+### Groq (LLM Inference)
+- [ ] Go to [console.groq.com/keys](https://console.groq.com/keys)
+- [ ] Create key → save as `GROQ_API_KEY`
+
+### Together AI (Image Generation)
+- [ ] Go to [api.together.xyz/settings/api-keys](https://api.together.xyz/settings/api-keys)
+- [ ] Create key → save as `TOGETHER_API_KEY`
+
+---
+
+## Phase B: Firebase Setup (10 min)
+
+- [ ] Go to [console.firebase.google.com](https://console.firebase.google.com)
+- [ ] Create project or open `levi-ai-c23c6`
+- [ ] **Firestore**: Enable in Native mode
+- [ ] **Authentication**: Enable Email/Password + Google providers
+- [ ] **Service Account**: Project Settings → Service Accounts → Generate new private key
+  - Save JSON as `FIREBASE_SERVICE_ACCOUNT_JSON`
+- [ ] Save `FIREBASE_PROJECT_ID`
+
+---
+
+## Phase C: Redis Setup (5 min)
+
+- [ ] Create account at [upstash.com](https://upstash.com)
+- [ ] Create Redis database → copy `REDIS_URL` (format: `redis://default:...@...upstash.io:...`)
+- [ ] **Required for**: Celery workers, rate limiting, session cache, memory debouncer
+
+---
+
+## Phase D: Razorpay Payments (15 min)
+
+- [ ] Log in to [dashboard.razorpay.com](https://dashboard.razorpay.com)
+- [ ] Settings → API Keys → Generate Key
+  - Save `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET`
+- [ ] Settings → Webhooks → Add New Webhook
+  - URL: `https://your-backend-url.run.app/user/payments/razorpay_webhook`
+  - Secret → save as `RAZORPAY_WEBHOOK_SECRET`
+  - Active events: `payment.captured`
+
+---
+
+## Phase E: Google Cloud Run (20 min)
+
+- [ ] Enable APIs: Cloud Run, Artifact Registry, Cloud Build
+- [ ] Create service account with roles:
+  - Cloud Run Admin
+  - Storage Admin  
+  - Artifact Registry Writer
+- [ ] Download key JSON → save as `GCP_SA_KEY` GitHub secret
+- [ ] Set Cloud Run service config:
+  ```
+  Memory: 4Gi (minimum 2Gi)
+  CPU: 2
+  Min instances: 1
+  Max instances: 10
+  Port: 8080
+  ```
+
+---
+
+## Phase F: GitHub Secrets (5 min)
+
+Go to **GitHub → repo → Settings → Secrets and variables → Actions** and add:
+
+| Secret | Value |
+|--------|-------|
+| `GCP_SA_KEY` | GCP service account JSON |
+| `FIREBASE_SERVICE_ACCOUNT_JSON` | Firebase service account JSON |
+| `FIREBASE_PROJECT_ID` | `levi-ai-c23c6` |
+| `REDIS_URL` | Upstash Redis URL |
+| `GROQ_API_KEY` | Groq API key |
+| `TOGETHER_API_KEY` | Together AI key |
+| `SECRET_KEY` | Random 64-char string |
+| `ADMIN_KEY` | Random admin key |
+| `RAZORPAY_KEY_ID` | Razorpay key ID |
+| `RAZORPAY_KEY_SECRET` | Razorpay secret |
+| `RAZORPAY_WEBHOOK_SECRET` | Razorpay webhook secret |
+| `SENTRY_DSN` | *(optional)* Sentry DSN |
+
+---
+
+## Phase G: Deploy
+
+```bash
+# Trigger full CI/CD pipeline
+git push origin master:main
+```
+
+- [ ] Backend CI/CD passes (`.github/workflows/deploy-backend.yml`)
+- [ ] Frontend CI/CD passes (`.github/workflows/deploy-frontend.yml`)
+
+---
+
+## Phase H: Smoke Tests
+
+Run after deployment completes:
+
+```bash
+BASE=https://levi-api.a.run.app
+
+# 1. Health check
+curl $BASE/health
+# Expected: {"status":"ok","database":"ok","redis":"ok"}
+
+# 2. Local route (zero API cost)
+curl -X POST $BASE/api/v1/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message":"hello","session_id":"smoke_01"}'
+# Expected: route="local", < 100ms
+
+# 3. Frontend loads
+curl -I https://levi-ai-c23c6.web.app
+# Expected: 200 OK
+```
+
+- [ ] `/health` returns `{"status":"ok"}`
+- [ ] Chat endpoint responds with `route: "local"` for greeting
+- [ ] Frontend loads at Firebase Hosting URL
+- [ ] Celery workers running (`celery -A backend.celery_app status`)
+
+---
+
+## ✅ Production Status Checklist
+
+| Component | Status |
+|-----------|--------|
+| LeviOrchestrator v2.0 | ✅ 42/42 tests passing |
+| Local engine (zero-API) | ✅ Greetings, FAQ, simple queries |
+| 3-layer memory | ✅ Redis + Firestore + Embeddings |
+| Response validation | ✅ 3-tier fallback, never empty |
+| Async memory writes | ✅ Non-blocking background tasks |
+| Structured logging | ✅ JSON logs with request_id correlation |
+| Redis memory debouncing | ✅ Celery Beat flush every 5 min |
+| Rate limiting | ✅ slowapi, 15 req/min/user |
+| JWT auth | ✅ Firebase tokens |
+| Payments | ✅ Razorpay orders + webhooks |
+| Image generation | ✅ Together AI FLUX.1 |
+| Celery workers | ✅ Background processing |
+| Sentry monitoring | ✅ Error tracking (if DSN configured) |
+| CI/CD pipelines | ✅ Auto-deploy on push |
