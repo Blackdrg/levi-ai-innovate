@@ -30,9 +30,10 @@ class DecisionLog:
     """Immutable audit record emitted at the Decision Engine boundary."""
     request_id: str
     user_id: str
-    intent: str
-    complexity: int
-    confidence: float
+    intent_type: str
+    complexity_level: int
+    confidence_score: float
+    estimated_cost_weight: str
     route: EngineRoute
     model: str = "none"
     provider: str = "none"
@@ -40,15 +41,16 @@ class DecisionLog:
 
     def as_dict(self) -> Dict[str, Any]:
         return {
-            "request_id":  self.request_id,
-            "user_id":     self.user_id,
-            "intent":      self.intent,
-            "complexity":  self.complexity,
-            "confidence":  self.confidence,
-            "route":       self.route.value,
-            "model":       self.model,
-            "provider":    self.provider,
-            "notes":       self.notes,
+            "request_id":            self.request_id,
+            "user_id":               self.user_id,
+            "intent_type":           self.intent_type,
+            "complexity_level":      self.complexity_level,
+            "confidence_score":      self.confidence_score,
+            "estimated_cost_weight": self.estimated_cost_weight,
+            "route":                 self.route.value,
+            "model":                 self.model,
+            "provider":              self.provider,
+            "notes":                 self.notes,
         }
 
 
@@ -59,22 +61,11 @@ class DecisionLog:
 class IntentResult(BaseModel):
     """
     The output of the intent classifier.
-
-    Supported intents
-    -----------------
-    greeting      - Hello, Hi, Hey, Good morning, etc.
-    simple_query  - One-liners with a clear, low-complexity answer
-    tool_request  - Explicit tool use: image gen, code, search
-    image         - Image / art generation
-    code          - Programming / scripting tasks
-    search        - Real-time lookup, facts, news
-    complex_query - Multi-step reasoning, creative writing, debates
-    chat          - General conversational exchange (catch-all)
-    unknown       - Cannot be classified; will be routed to API with low confidence
     """
-    intent: str = "chat"
-    complexity: int = Field(3, ge=1, le=10)
-    confidence: float = Field(1.0, ge=0.0, le=1.0)
+    intent_type: str = "chat"
+    complexity_level: int = Field(2, ge=0, le=3)
+    estimated_cost_weight: str = "medium" # low, medium, high
+    confidence_score: float = Field(0.8, ge=0.0, le=1.0)
     parameters: Dict[str, Any] = Field(default_factory=dict)
 
 
@@ -93,6 +84,7 @@ class ToolResult(BaseModel):
     error: Optional[str] = None
     agent: str = "unknown"
     latency_ms: int = 0
+    cost_score: int = 0
     total_tokens: int = 0
     retryable: bool = True
 
@@ -113,7 +105,7 @@ class ExecutionPlan(BaseModel):
     intent: str
     steps: List[PlanStep]
     memory_needed: List[str] = Field(default_factory=list) # e.g., ['user_mood', 'past_topics']
-    estimated_complexity: int = 5
+    complexity_level: int = 2
     priority: int = 1
 
 class OrchestratorResponse(BaseModel):

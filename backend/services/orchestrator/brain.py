@@ -13,7 +13,7 @@ from typing import Dict, Any, List, Optional, AsyncGenerator
 from .planner import detect_intent, generate_plan
 from .executor import execute_plan
 from .memory_manager import MemoryManager
-from .orchestrator_types import IntentResult, EngineRoute, OrchestratorResponse, ToolResult
+from .orchestrator_types import IntentResult, EngineRoute, OrchestratorResponse, ToolResult, DecisionLog
 from backend.utils.robustness import standard_retry, TimeoutHandler
 from backend.generation import async_stream_llm_response, _build_dynamic_system_prompt
 from backend.learning import AdaptivePromptManager, collect_training_sample
@@ -53,52 +53,102 @@ class LeviBrain:
                 else:
                     status_callback(msg)
 
-        # 1. Parallel Context & Intent Retrieval
-        await _notify("Analyzing atmospheric intent...")
-        context_task = self.memory.get_combined_context(user_id, session_id, user_input)
-        intent_task = detect_intent(user_input)
+        # 1. Exact Match Cache Check (Step 1)
+        from backend.redis_client import check_exact_match, store_exact_match
+        cached_res = check_exact_match(user_id, user_input, kwargs.get("mood", "philosophical"))
+        if cached_res:
+             logger.info("[Brain] Exact Match Cache Hit.")
+             return {
+                 "response": cached_res,
+                 "intent": "cached",
+                 "route": "cache",
+                 "request_id": request_id
+             }
         
-        context, intent = await asyncio.gather(context_task, intent_task)
-        
-        # Enrich context
-        context.update(kwargs)
-        context.update({
-            "user_id": user_id,
-            "session_id": session_id,
-            "request_id": request_id,
-            "input": user_input,
-            "intent": intent.intent,
-            "complexity": intent.complexity,
-            "status_callback": status_callback # Propagate to executor
-        })
+        # 1.1 Semantic Cache Check (LEVI v6 Phase 12)
+        from backend.redis_client import check_semantic_match, store_semantic_match
+        semantic_res = check_semantic_match(user_id, user_input, kwargs.get("mood", "philosophical"), threshold=0.92)
+        if semantic_res:
+             logger.info("[Brain] Semantic Cache Hit (Similarity > 0.92)")
+             return {
+                 "response": semantic_res,
+                 "intent": "cached_semantic",
+                 "route": "cache",
+                 "request_id": request_id
+             }
 
-        # 2. Meta-Brain Planning (Phase 1 Evolution)
-        from .meta_planner import decompose_goal, map_strategy_to_plan
-        
-        await _notify(f"Meta-Brain: Decomposing {intent.intent} goal...")
-        strategy = await decompose_goal(user_input, intent, context)
-        
-        # Stream the high-level strategy to the user for transparency
-        await _notify(f"Strategy: {strategy.overall_strategy}")
-        
-        plan = map_strategy_to_plan(strategy, intent)
-        logger.info("Meta-Plan Generated: %s (%d steps)", strategy.overall_strategy[:30], len(plan.steps))
+        # 2. Context Builder & Memory Injection (Step 2 & 3)
+        await _notify("Hydrating atmospheric context...")
+        context = await self.memory.get_combined_context(user_id, session_id, user_input)
+        context.update(kwargs) # user_tier, mood, etc.
 
-        # ── 🟢 Local Path Short-Circuit (Optimization: Tier 1) ─────────────────
-        # If the plan only has local_agent and we're not streaming, return fast.
-        # This saves costs by using $0 internal logic before hitting any External APIs.
-        if len(plan.steps) == 1 and plan.steps[0].agent == "local_agent" and not streaming:
+        # 2.5 Brain-Controlled Context Injection (BCCI - Phase 17)
+        # 1. Allocate Token Budget
+        from .context_utils import allocate_budget
+        user_tier = kwargs.get("user_tier", "free")
+        budget = allocate_budget(intent.intent_type, user_tier, intent.complexity_level)
+        context["budget"] = budget
+        
+        # 2. Dynamic Few-Shot (ICL) Selection
+        # Only inject if complexity >= 2 or confidence < 0.85
+        from backend.learning import retrieve_resonant_patterns
+        if intent.complexity_level >= 2 or intent.confidence_score < 0.85:
+            patterns = await retrieve_resonant_patterns(user_input)
+            context["few_shot_patterns"] = patterns
+            if patterns:
+                 logger.info("[Brain] BCCI: %d successful patterns retrieved.", len(patterns))
+        else:
+            context["few_shot_patterns"] = []
+            logger.info("[Brain] BCCI: Zero-Pattern path selected for simple intent.")
+        
+        # 3. Intent Classification (Step 4)
+        await _notify("Analyzing intent complexity...")
+        intent = await detect_intent(user_input)
+        
+        # 4. 🔥 Decision Engine (NEW - Step 5)
+        decision = DecisionLog(
+            request_id=request_id,
+            user_id=user_id,
+            intent_type=intent.intent_type,
+            complexity_level=intent.complexity_level,
+            confidence_score=intent.confidence_score,
+            estimated_cost_weight=intent.estimated_cost_weight,
+            route=EngineRoute.LOCAL if intent.complexity_level <= 1 else EngineRoute.API
+        )
+        logger.info("[DecisionEngine] Path Selected: Level %d (%s)", decision.complexity_level, decision.intent_type)
+        
+        # 5. Engine Selector & Execution (Step 6)
+        # ── 🟢 Level 0: Trivial (Short-Circuit) ──
+        if decision.complexity_level == 0:
+            await _notify("Executing zero-engine fast path...")
             from .tool_registry import call_tool
             res = await call_tool("local_agent", {"input": user_input, "mood": context.get("mood")}, context)
+            response = res.get("message", "Greetings.")
+            # Store in exact match cache for next time
+            store_exact_match(user_id, user_input, context.get("mood", "philosophical"), response)
             return {
-                "response": res.get("message"),
-                "intent": intent.intent,
+                "response": response,
+                "intent": intent.intent_type,
                 "route": EngineRoute.LOCAL.value,
-                "request_id": request_id
+                "request_id": request_id,
+                "decision": decision.as_dict()
             }
 
-        # ── 🔴 Streaming Path (Tier 2 & 3) ───────────────────────────────────
-        if streaming and intent.intent in ("chat", "greeting", "simple_query"):
+        # ── 🟡 Level 1: Simple (Single cheap engine) ──
+        if decision.complexity_level == 1 and not streaming:
+            await _notify("Routing to single-engine path...")
+            from .tool_registry import call_tool
+            res = await call_tool("local_agent", {"input": user_input}, context)
+            return {
+                "response": res.get("message"),
+                "intent": intent.intent_type,
+                "route": EngineRoute.LOCAL.value,
+                "request_id": request_id,
+                "decision": decision.as_dict()
+            }
+
+        # ── 🔴 Streaming Path (Handled separately) ──
+        if streaming and decision.complexity_level <= 2:
             return await self._stream_pipeline(user_input, intent, context, request_id)
 
         # 3. Execution (Phase 2)
@@ -144,14 +194,18 @@ class LeviBrain:
         # 6. Background Tasks (Memory Storage / Learning)
         self._trigger_background_tasks(user_input, response, context)
 
+        # 9. Persistent Logging (Step 8)
+        asyncio.create_task(self._log_decision_path(decision))
+
         # Construct final payload
         return {
             "response": response,
-            "intent": intent.intent,
-            "route": EngineRoute.API.value if intent.complexity > 3 else EngineRoute.LOCAL.value,
+            "intent": intent.intent_type,
+            "route": EngineRoute.API.value if intent.complexity_level > 1 else EngineRoute.LOCAL.value,
             "request_id": request_id,
             "plan": plan.dict(),
-            "results": [r.dict() for r in execution_results]
+            "results": [r.dict() for r in execution_results],
+            "decision": decision.as_dict()
         }
 
     async def _stream_pipeline(
@@ -175,7 +229,8 @@ class LeviBrain:
             base_variant, 
             user_memory=context.get("long_term"), 
             conversation_depth=depth,
-            preferences=context.get("preferences")
+            preferences=context.get("preferences"),
+            few_shot_patterns=context.get("few_shot_patterns")
         )
         
         messages = [{"role": "system", "content": system_prompt}]
@@ -185,10 +240,8 @@ class LeviBrain:
         messages.append({"role": "user", "content": user_input})
         
         # 3. Hybrid Model Selection (Cost-Optimized)
-        # Tier 2: 8B for most users / simple intents
-        # Tier 3: 70B for Pro/Creator or Complex reasoning
         user_tier = context.get("user_tier", "free")
-        if user_tier in ("pro", "creator") or intent.complexity >= 8:
+        if user_tier in ("pro", "creator") or intent.complexity_level == 3:
             model = "llama-3.1-70b-versatile"
         else:
             model = "llama-3.1-8b-instant"
@@ -214,13 +267,23 @@ class LeviBrain:
             asyncio.create_task(self.memory.process_new_interaction(user_id, user_input, response))
             
             # 2. Personalized Learning Feedback
+            rating = context.get("rating") or context.get("auto_rating", 3)
             asyncio.create_task(collect_training_sample(
                 user_message=user_input,
                 bot_response=response,
                 mood=context.get("mood", "philosophical"),
+                rating=rating,
                 session_id=session_id,
                 user_id=user_id
             ))
+
+            # 3. LEVI v6 Phase 18: Learning Escalation Metrics
+            from .learning_escalation import EscalationManager
+            # We use an estimated quality score if no real rating yet
+            EscalationManager.record_interaction_metrics(
+                rating=rating,
+                confidence=context.get("confidence_score", 0.9)
+            )
 
             # 3. LEVI v6: Shared Pattern Learning (Anonymized)
             # If any execution result was a failure, we log it to a global 'failure' pool 
@@ -244,10 +307,45 @@ class LeviBrain:
                 # b) Autonomous Prompt Mutation (Weekly/Milestone trigger)
                 evolve_key = "system:evolution:interaction_count"
                 count = redis_client.incr(evolve_key)
-                if count >= 100: # Every 100 interactions system-wide, consider mutation
-                    logger.info("[Brain] Threshold reached. Triggering autonomous prompt evolution...")
-                    asyncio.create_task(self.prompts.evolve_variants())
-                    redis_client.set(evolve_key, 0)
+                if count >= 25: 
+                    from backend.redis_client import distributed_lock
+                    with distributed_lock("prompt_evolution_mutex", ttl=30) as acquired:
+                        if acquired:
+                            logger.info("[Brain] Lock Acquired. Triggering autonomous prompt evolution...")
+                            asyncio.create_task(self.prompts.evolve_variants())
+                            redis_client.set(evolve_key, 0)
+                        else:
+                            logger.info("[Brain] Evolution locked by another instance. Skipping.")
+
+    async def _log_decision_path(self, decision: DecisionLog):
+        """
+        Logs the adaptive decision path to Redis and Firestore.
+        """
+        from backend.redis_client import HAS_REDIS
+        data = decision.as_dict()
+        data["timestamp"] = datetime.now(timezone.utc).isoformat()
+        
+        # 1. Redis for real-time monitoring
+        if HAS_REDIS:
+            from backend.redis_client import r as redis_client
+            redis_client.lpush(f"audit:decisions:{decision.user_id}", json.dumps(data))
+            redis_client.ltrim(f"audit:decisions:{decision.user_id}", 0, 99) # Keep 100
+            
+            # --- Global Dashboard Stats ---
+            redis_client.incr(f"stats:route:{decision.route.value}")
+            redis_client.incr(f"stats:complexity:{decision.complexity_level}")
+            
+            # Moving average for cost
+            prev_avg = float(redis_client.get("stats:avg_cost_weight") or 0.0)
+            new_avg = (prev_avg * 0.95) + (decision.estimated_cost_weight * 0.05)
+            redis_client.set("stats:avg_cost_weight", str(new_avg))
+            
+        # 2. Firestore for persistent history
+        try:
+            from backend.firestore_db import db as firestore_db
+            firestore_db.collection("decision_audit").document(decision.request_id).set(data)
+        except Exception as e:
+            logger.error(f"Decision logging failed: {e}")
 
     async def _log_anonymized_failure(self, result: Any, tier: str):
         """

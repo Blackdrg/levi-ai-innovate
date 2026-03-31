@@ -19,27 +19,46 @@ def register_agent(name: str):
         return func
     return decorator
 
+# ── Adaptive Engine Costs ───────────────────────────────────
+AGENT_COSTS: Dict[str, int] = {
+    "local_agent": 1,
+    "chat_agent": 5,
+    "search_agent": 5,
+    "image_agent": 10,
+    "code_agent": 10,
+    "video_agent": 15,
+    "python_repl_agent": 2,
+    "critic_agent": 2,
+    "optimizer_agent": 3,
+}
+
 async def call_agent(name: str, context: Dict[str, Any]) -> ToolResult:
     if name not in AGENTS:
         logger.error(f"Agent {name} not found in registry.")
-        return ToolContract.wrap_result(name, success=False, error=f"Agent {name} not found")
+        return ToolResult(agent=name, success=False, error=f"Agent {name} not found")
     
     logger.info(f"Calling agent: {name}")
     try:
         res = await AGENTS[name](context)
-        if isinstance(res, ToolResult):
-            return res
-        # If it's a legacy dict, wrap it
-        return ToolContract.wrap_result(
-            name, 
-            success=res.get("success", res.get("status") == "success"),
-            message=res.get("message", ""),
-            data=res or {},
-            error=res.get("error")
-        )
+        
+        # Ensure result is ToolResult
+        if not isinstance(res, ToolResult):
+            # If it's a legacy dict, wrap it
+            res = ToolResult(
+                agent=name, 
+                success=res.get("success", res.get("status") == "success"),
+                message=res.get("message", ""),
+                data=res if isinstance(res, dict) else {"raw": res},
+                error=res.get("error") if isinstance(res, dict) else None
+            )
+            
+        # Assign costs from registry
+        res.cost_score = AGENT_COSTS.get(name, 5)
+        return res
+        
     except Exception as e:
         logger.exception(f"Error executing agent {name}: {e}")
-        return ToolContract.wrap_result(name, success=False, error=str(e))
+        return ToolResult(agent=name, success=False, error=str(e), cost_score=AGENT_COSTS.get(name, 5))
 
 # --- Specialized Agents ---
 
@@ -63,18 +82,27 @@ async def chat_handler(context: Dict[str, Any]) -> Dict[str, Any]:
             cached["cache_hit"] = True
             return cached
 
-    response = await generate_response(
-        prompt=prompt,
-        history=history,
-        mood=mood,
-        user_tier=user_tier
-    )
+    # Use Groq breaker for standardized LLM calls
+    from backend.utils.network import groq_breaker
     
-    return ToolContract.wrap_result(
-        "chat_agent",
-        success=True,
-        message=response
-    )
+    try:
+        response = await groq_breaker.async_call(
+            generate_response,
+            prompt=prompt,
+            history=history,
+            mood=mood,
+            user_tier=user_tier
+        )
+        
+        return ToolResult(
+            agent="chat_agent",
+            success=True,
+            message=response,
+            cost_score=AGENT_COSTS["chat_agent"]
+        )
+    except Exception as e:
+        logger.error(f"chat_agent failure: {e}")
+        return ToolResult(agent="chat_agent", success=False, error=str(e), cost_score=AGENT_COSTS["chat_agent"])
 
 @register_agent("image_agent")
 async def image_handler(context: Dict[str, Any]) -> Dict[str, Any]:
@@ -165,17 +193,25 @@ async def search_handler(context: Dict[str, Any]) -> Dict[str, Any]:
         {"role": "user", "content": f"Search Topic: {topic}"}
     ]
 
-    search_results = await _async_call_llm_api(
-        messages=messages,
-        model="llama-3.1-8b-instant",
-        provider="groq"
-    )
+    from backend.utils.network import groq_breaker
+    
+    try:
+        search_results = await groq_breaker.async_call(
+            _async_call_llm_api,
+            messages=messages,
+            model="llama-3.1-8b-instant",
+            provider="groq"
+        )
 
-    return ToolContract.wrap_result(
-        "search_agent",
-        success=True,
-        message=search_results or "The collective knowledge is silent on this matter."
-    )
+        return ToolResult(
+            agent="search_agent",
+            success=True,
+            message=search_results or "The collective knowledge is silent on this matter.",
+            cost_score=AGENT_COSTS["search_agent"]
+        )
+    except Exception as e:
+        logger.error(f"search_agent failure: {e}")
+        return ToolResult(agent="search_agent", success=False, error=str(e), cost_score=AGENT_COSTS["search_agent"])
 
 @register_agent("code_agent")
 async def code_handler(context: Dict[str, Any]) -> Dict[str, Any]:
@@ -222,15 +258,23 @@ async def code_handler(context: Dict[str, Any]) -> Dict[str, Any]:
         {"role": "user", "content": f"Code Task: {task}"}
     ]
     
-    code_output = await _async_call_llm_api(
-        messages=messages,
-        model="llama-3.1-70b-versatile", # Code requires more intelligence
-        provider="groq"
-    )
+    from backend.utils.network import groq_breaker
     
-    return ToolContract.wrap_result(
-        "code_agent",
-        success=True,
-        message=code_output or "I could not construct the logic you requested."
-    )
+    try:
+        code_output = await groq_breaker.async_call(
+            _async_call_llm_api,
+            messages=messages,
+            model="llama-3.1-70b-versatile",
+            provider="groq"
+        )
+        
+        return ToolResult(
+            agent="code_agent",
+            success=True,
+            message=code_output or "I could not construct the logic you requested.",
+            cost_score=AGENT_COSTS["code_agent"]
+        )
+    except Exception as e:
+        logger.error(f"code_agent failure: {e}")
+        return ToolResult(agent="code_agent", success=False, error=str(e), cost_score=AGENT_COSTS["code_agent"])
 

@@ -191,6 +191,9 @@ async function sendMessage() {
 
         // Engine route badge — shows which path handled this response
         const routeBadge = _buildRouteBadge(metadataCaptured);
+        const decisionInfo = metadataCaptured?.decision 
+            ? `<span class="text-[9px] text-zinc-500/50 font-mono" title="Complexity: ${metadataCaptured.decision.complexity_level} | Cost: ${metadataCaptured.decision.estimated_cost_weight}">[L${metadataCaptured.decision.complexity_level}]</span>`
+            : '';
         const intentLabel = metadataCaptured?.intent
             ? `<span class="text-[10px] text-primary/50 uppercase tracking-widest font-mono">${metadataCaptured.intent}</span>`
             : '';
@@ -200,6 +203,7 @@ async function sendMessage() {
             <button onclick="submitFeedback('${msgId}', 0.0, this)" class="text-zinc-500 hover:text-red-400 transition-colors" title="Bad response"><span class="material-symbols-outlined icon-sm">thumb_down</span></button>
             <div class="ml-auto flex items-center gap-2">
                 ${intentLabel}
+                ${decisionInfo}
                 ${routeBadge}
             </div>
         `;
@@ -373,9 +377,10 @@ function _buildRouteBadge(meta) {
     if (!meta?.route) return '';
     const route = meta.route.toLowerCase();
     const configs = {
-        local: { emoji: '🟢', label: 'Local',  color: 'text-emerald-400/70',  title: 'Answered locally — zero API cost' },
-        tool:  { emoji: '🟡', label: 'Tool',   color: 'text-amber-400/70',    title: 'Handled by a specialized agent' },
-        api:   { emoji: '🔴', label: 'AI',     color: 'text-rose-400/70',     title: 'Powered by Groq LLM' },
+        cache: { emoji: '⚡', label: 'Cache',  color: 'text-emerald-400/90',  title: 'Instant — retrieved from memory' },
+        local: { emoji: '🟢', label: 'Local',  color: 'text-emerald-400/70',  title: 'Answered locally — zero cost' },
+        tool:  { emoji: '🟡', label: 'Tool',   color: 'text-amber-400/70',    title: 'Handled by specialized agents' },
+        api:   { emoji: '🔴', label: 'AI',     color: 'text-rose-400/70',     title: 'Powered by High-Reasoning LLM' },
     };
     const cfg = configs[route] || { emoji: '⚪', label: route, color: 'text-zinc-500', title: '' };
     return `<span class="text-[10px] ${cfg.color} font-mono tracking-widest uppercase select-none cursor-default" title="${cfg.title}">${cfg.emoji} ${cfg.label}</span>`;

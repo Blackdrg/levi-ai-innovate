@@ -375,6 +375,70 @@ def get_cached_json(key: str) -> Optional[Any]:
         print(f"[Redis] get_cached_json failed for {key}: {e}")
     return None
 
+def check_exact_match(user_id: str, message: str, mood: str) -> Optional[str]:
+    """Check for an identical previous response for this user/message/mood."""
+    import hashlib
+    raw = f"{user_id}:{mood}:{message.strip().lower()}"
+    key = f"exact_match:{hashlib.sha256(raw.encode()).hexdigest()[:16]}"
+    raw_res = _get(key)
+    return raw_res.decode('utf-8') if isinstance(raw_res, bytes) else raw_res
+
+def store_exact_match(user_id: str, message: str, mood: str, response: str, ttl: int = 3600):
+    """Store an exact match for future reuse."""
+    import hashlib
+    raw = f"{user_id}:{mood}:{message.strip().lower()}"
+    key = f"exact_match:{hashlib.sha256(raw.encode()).hexdigest()[:16]}"
+    _set(key, response, ex=ttl)
+
+def check_semantic_match(user_id: str, message: str, mood: str, threshold: float = 0.92) -> Optional[str]:
+    """
+    LEVI v6 Phase 12: Semantic Caching.
+    Checks for semantically similar previous responses for this user/mood.
+    """
+    if not HAS_REDIS: return None
+    
+    from backend.embeddings import embed_text, cosine_sim
+    import numpy as np
+    
+    # 1. Embed current query
+    current_emb = np.array(embed_text(message))
+    
+    # 2. Fetch recent semantic buffer for this user/mood
+    buffer_key = f"semantic_buffer:{user_id}:{mood}"
+    raw_buffer = r.lrange(buffer_key, 0, 49) # Check last 50 entries
+    
+    for item in raw_buffer:
+        try:
+            data = json.loads(item)
+            past_emb = np.array(data["embedding"])
+            similarity = cosine_sim(current_emb, past_emb)
+            
+            if similarity >= threshold:
+                return data["response"]
+        except Exception: continue
+        
+    return None
+
+def store_semantic_match(user_id: str, message: str, mood: str, response: str):
+    """
+    Stores a query/response pair in the semantic buffer.
+    """
+    if not HAS_REDIS: return
+    
+    from backend.embeddings import embed_text
+    embedding = embed_text(message)
+    
+    buffer_key = f"semantic_buffer:{user_id}:{mood}"
+    payload = json.dumps({
+        "embedding": embedding,
+        "response": response,
+        "msg": message[:50] # For debugging
+    })
+    
+    r.lpush(buffer_key, payload)
+    r.ltrim(buffer_key, 0, 99) # Keep 100 entries
+    r.expire(buffer_key, 86400) # 24h freshness
+
 def invalidate_cache(key: str):
     """Invalidate a cache key."""
     if HAS_REDIS:

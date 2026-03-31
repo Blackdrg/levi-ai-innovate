@@ -21,7 +21,8 @@ logger = logging.getLogger(__name__)
 INTENT_RULES: List[Dict[str, Any]] = [
     {
         "intent": "greeting",
-        "complexity": 1,
+        "complexity_level": 0,
+        "cost_weight": "low",
         "patterns": [
             r"^\s*(hi|hello|hey|howdy|sup|what'?s up|greetings|good\s+(morning|afternoon|evening|night))\s*[!?.]*\s*$",
             r"^\s*yo\s*$",
@@ -30,7 +31,8 @@ INTENT_RULES: List[Dict[str, Any]] = [
     },
     {
         "intent": "simple_query",
-        "complexity": 2,
+        "complexity_level": 1,
+        "cost_weight": "low",
         "patterns": [
             r"\b(what (is|are|does|can) (levi|you))\b",
             r"\b(who (are|is) (you|levi))\b",
@@ -41,7 +43,8 @@ INTENT_RULES: List[Dict[str, Any]] = [
     },
     {
         "intent": "image",
-        "complexity": 5,
+        "complexity_level": 3,
+        "cost_weight": "high",
         "patterns": [
             r"\b(generate|create|draw|make|show|paint)\b.*\b(image|picture|photo|illustration|art|portrait)\b",
             r"\b(visualize|render)\b",
@@ -50,7 +53,8 @@ INTENT_RULES: List[Dict[str, Any]] = [
     },
     {
         "intent": "code",
-        "complexity": 7,
+        "complexity_level": 3,
+        "cost_weight": "high",
         "patterns": [
             r"\b(write|create|generate|fix|debug|refactor|explain|architect)\b.*\b(code|script|program|function|algorithm|class|logic|snippet)\b",
             r"\b(python|javascript|html|css|cpp|java|rust|golang|sql|typescript|react|nextjs)\b",
@@ -59,7 +63,8 @@ INTENT_RULES: List[Dict[str, Any]] = [
     },
     {
         "intent": "logic",
-        "complexity": 4,
+        "complexity_level": 2,
+        "cost_weight": "medium",
         "patterns": [
             r"\b(calculate|compute|solve|math|equation|formula|percent|projection)\b",
             r"\b(what is [0-9]+ (\+|\*|\/|\-|plus|times|minus|divided by) [0-9]+)\b",
@@ -67,7 +72,8 @@ INTENT_RULES: List[Dict[str, Any]] = [
     },
     {
         "intent": "search",
-        "complexity": 5,
+        "complexity_level": 2,
+        "cost_weight": "medium",
         "patterns": [
             r"\b(search|find|google|look up|research|who is|what is the latest|where is)\b",
             r"\b(news on|information about|check the status of|real-time data|current events)\b",
@@ -81,9 +87,10 @@ def check_rules(user_input: str) -> Optional[IntentResult]:
         for pattern in rule["patterns"]:
             if re.search(pattern, text, re.IGNORECASE):
                 return IntentResult(
-                    intent=rule["intent"],
-                    complexity=rule.get("complexity", 5),
-                    confidence=0.95,
+                    intent_type=rule["intent"],
+                    complexity_level=rule.get("complexity_level", 2),
+                    estimated_cost_weight=rule.get("cost_weight", "medium"),
+                    confidence_score=0.95,
                     parameters={"rule_matched": pattern},
                 )
     return None
@@ -117,16 +124,25 @@ async def detect_intent(user_input: str) -> IntentResult:
     if rule_match: return rule_match
 
     system_prompt = (
-        "You are the LEVI Intent Classifier. Categorize into ONE: "
-        "'greeting', 'simple_query', 'image', 'code', 'logic', 'search', 'chat', 'unknown'. "
-        "Output ONLY JSON: {\"intent\": \"chat\", \"complexity\": 5, \"confidence\": 0.8}"
+        "You are the LEVI Adaptive Decision Engine. Classify this request:\n"
+        "Output ONLY JSON: {\n"
+        "  'intent_type': 'greeting|factual|creative|technical|action|chat',\n"
+        "  'complexity_level': 0-3,\n"
+        "  'estimated_cost_weight': 'low|medium|high',\n"
+        "  'confidence_score': 0.0-1.0\n"
+        "}"
     )
     try:
         raw = await call_lightweight_llm([{"role": "system", "content": system_prompt}, {"role": "user", "content": user_input}])
-        data = _parse_json_result(raw, {"intent": "chat", "complexity": 3, "confidence": 0.5})
+        data = _parse_json_result(raw, {
+            "intent_type": "chat", 
+            "complexity_level": 2, 
+            "estimated_cost_weight": "medium",
+            "confidence_score": 0.5
+        })
         return IntentResult(**data)
     except Exception:
-        return IntentResult(intent="chat", complexity=3, confidence=0.3)
+        return IntentResult(intent_type="chat", complexity_level=2, confidence_score=0.3)
 
 # ---------------------------------------------------------------------------
 # Plan Generator (The Deterministic Core)
@@ -134,81 +150,64 @@ async def detect_intent(user_input: str) -> IntentResult:
 
 async def generate_plan(user_input: str, intent_data: IntentResult, context: Dict[str, Any]) -> ExecutionPlan:
     """
-    Constructs a deterministic ExecutionPlan based on intent and complexity.
-    Unifies all interactions into the same structural flow.
+    Adaptive Decision-Based Planning.
+    Assigns engines based on complexity level (0-3).
     """
-    intent = intent_data.intent
-    complexity = intent_data.complexity
+    intent = intent_data.intent_type
+    level = intent_data.complexity_level
     steps: List[PlanStep] = []
-    memory_needed: List[str] = ["user_profile", "session_mood"]
+    memory_needed: List[str] = ["user_profile"]
 
-    # 1. Deterministic Step Assignment
-    if intent in ("greeting", "simple_query"):
+    # ── Level 0: Trivial (Zero Engines) ──────────────────────────────────
+    if level == 0:
+        # Plans with no steps signify the Brain should return from Cache or Static logic
+        return ExecutionPlan(intent=intent, steps=[], complexity_level=0)
+
+    # ── Level 1: Simple (Single cheap engine) ───────────────────────────
+    if level == 1:
         steps.append(PlanStep(
-            description="Generate immediate context-aware response",
+            description="Direct contextual processing",
             agent="local_agent",
             critical=True
         ))
 
-    elif intent == "image":
-        memory_needed.append("visual_preferences")
+    # ── Level 2: Moderate (LLM + Supporting engine) ────────────────────
+    elif level == 2:
+        memory_needed.append("session_mood")
+        if intent == "search":
+             steps.append(PlanStep(description="Knowledge lookup", agent="search_agent", critical=True))
+        elif intent == "logic":
+             steps.append(PlanStep(description="Logic verification", agent="python_repl_agent", critical=True))
+        
         steps.append(PlanStep(
-            description="Construct high-fidelity visual prompt",
-            agent="chat_agent",
-            tool_input={"task": "visual_prompt_refining"},
-            critical=False
-        ))
-        steps.append(PlanStep(
-            description="Trigger image generation job",
-            agent="image_agent",
-            critical=True
-        ))
-
-    elif intent == "code":
-        memory_needed.append("coding_history")
-        steps.append(PlanStep(
-            description="Architect and implement solution",
-            agent="code_agent",
-            critical=True
-        ))
-        # Add verification step for high-complexity code
-        if complexity >= 8:
-            steps.append(PlanStep(
-                description="Verify logic and edge cases via Python REPL",
-                agent="python_repl_agent",
-                critical=False
-            ))
-
-    elif intent == "logic":
-        steps.append(PlanStep(
-            description="Perform precise computational verification",
-            agent="python_repl_agent",
-            critical=True
-        ))
-
-    elif intent == "search":
-        steps.append(PlanStep(
-            description="Execute real-time research with Tavily",
-            agent="search_agent",
-            critical=True
-        ))
-        steps.append(PlanStep(
-            description="Synthesize findings with philosophical depth",
-            agent="chat_agent",
-            critical=False
-        ))
-
-    # 2. Dynamic Planning Fallback for complex/chat tasks
-    if not steps or intent == "chat":
-        steps.append(PlanStep(
-            description="Synthesize personalized conversational response",
+            description="Moderate reasoning synthesis",
             agent="chat_agent",
             critical=True
         ))
+
+    # ── Level 3: Complex (Multi-engine pipeline) ───────────────────────
+    elif level == 3:
+        memory_needed.extend(["session_mood", "long_term_memory"])
+        
+        if intent == "image":
+            steps.append(PlanStep(description="Visual prompt architecting", agent="chat_agent", critical=False))
+            steps.append(PlanStep(description="High-fidelity rendering", agent="image_agent", critical=True))
+        
+        elif intent == "code":
+            steps.append(PlanStep(description="Architectural solution", agent="code_agent", critical=True))
+            steps.append(PlanStep(description="Implementation verification", agent="python_repl_agent", critical=False))
+        
+        else: # Complex Reasoning/Creative
+            steps.append(PlanStep(description="Contextual research", agent="search_agent", critical=False))
+            steps.append(PlanStep(description="Synthesis & Refinement", agent="chat_agent", critical=True))
+
+    # Safety Fallback
+    if not steps:
+        steps.append(PlanStep(description="Conversational synthesis", agent="chat_agent", critical=True))
 
     return ExecutionPlan(
         intent=intent,
         steps=steps,
         memory_needed=memory_needed,
-        estimated_complexity=complexity
+        complexity_level=level
     )

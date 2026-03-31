@@ -140,10 +140,44 @@ class MemoryManager:
                 facts["learned_knowledge"] = []
 
             logger.info("[%s] LTM Retrieval: %d facts found.", user_id, len(relevant_facts))
-            return facts
+            
+            # 5. Token-Aware Trimming (LEVI v6 Phase 12)
+            # We prune facts based on importance if the total context is too large.
+            trimmed_facts = self._trim_facts_by_tokens(facts, max_tokens=1500)
+            return trimmed_facts
         except Exception as e:
             logger.error("Error fetching long-term memory for %s: %s", user_id, e)
             return default_shape
+
+    @staticmethod
+    def _trim_facts_by_tokens(facts: Dict[str, Any], max_tokens: int = 1500) -> Dict[str, Any]:
+        """
+        Intelligently prunes facts to fit within the token limit.
+        Prioritizes: 
+        1. Traits (High importance)
+        2. Preferences
+        3. History 
+        4. Other
+        """
+        total_chars = 0
+        categories = ["traits", "preferences", "history", "other"]
+        pruned_facts = {cat: [] for cat in categories}
+        pruned_facts["profile"] = facts.get("profile", {})
+        pruned_facts["learned_knowledge"] = facts.get("learned_knowledge", [])
+        
+        # Approximate tokens: 4 chars = 1 token
+        char_limit = max_tokens * 4
+        
+        for cat in categories:
+            for fact in facts.get(cat, []):
+                fact_len = len(str(fact))
+                if total_chars + fact_len < char_limit:
+                    pruned_facts[cat].append(fact)
+                    total_chars += fact_len
+                else:
+                    break # Stop when we hit the limit
+                    
+        return pruned_facts
 
     # ── Combined Context ─────────────────────────────────────────────────────
 

@@ -1,19 +1,20 @@
-# LEVI-AI v6.0 — The Evolutionary Mind 🧠
-## Sovereign Autonomous Intelligence
+# LEVI-AI v6.8 — The Sovereign Mind 🧠
+## Sovereign Autonomous Intelligence & Context-Aware Efficiency
 
-[![Status](https://img.shields.io/badge/Status-v6.0--Evolutionary-gold)](https://img.shields.io/badge/Status-v6.0--Evolutionary-gold)
-[![Architecture](https://img.shields.io/badge/Architecture-Feedback--Aware-red)](https://img.shields.io/badge/Architecture-Feedback--Aware-red)
+[![Status](https://img.shields.io/badge/Status-v6.8--Sovereign-gold)](https://img.shields.io/badge/Status-v6.8--Sovereign-gold)
+[![Architecture](https://img.shields.io/badge/Architecture-Hybrid--Learning-red)](https://img.shields.io/badge/Architecture-Hybrid--Learning-red)
+[![Efficiency](https://img.shields.io/badge/Efficiency-BCCI--Optimized-blue)](https://img.shields.io/badge/Efficiency-BCCI--Optimized-blue)
 
-LEVI v6 is a production-hardened **Sovereign AI Ecosystem**. Built upon a multi-agent orchestrator, it features a self-evolving brain that adapts through real-time feedback (The Reflex), autonomous persona growth (The Dream), and collective cross-user intelligence (Shared Learning).
+LEVI v6.8 is a production-hardened **Sovereign AI Ecosystem**. Built upon a multi-agent orchestrator, it features a self-evolving brain that adapts through a **Hybrid Learning System** (Retrieval-Enhanced ICL + Selective Fine-Tuning). It dynamically manages its own context via **BCCI** and monitors system health through the **Learning Escalation Engine (LEE)**.
 
-# LEVI Project Roadmap (v6.0 Sovereign) 🚀
+# LEVI Project Roadmap (v6.8 Sovereign) 🚀
 
-## 🔴 PHASE 6.0: THE EVOLUTIONARY MIND (CURRENT)
-- [x] **Reflex Ledger**: Real-time tool performance tracking and adaptive routing.
-- [x] **Silent Distillation**: Background persona consolidation into "Core Traits."
-- [x] **Collective Wisdom**: Anonymized pattern sharing across user interactions.
-- [x] **Instruction Mutation**: Autonomous system prompt refinement based on ratings.
-- [x] **Cross-Service Bridge**: Unified context sharing between Chat, Studio, and Gallery.
+## 🔴 PHASE 6.8: THE SOVEREIGN HORIZON (CURRENT)
+- [x] **Hybrid Learning System**: Retrieval-based ICL and Feedback-driven Adaptation.
+- [x] **BCCI (Context Optimization)**: Brain-Controlled Token Budgeting and Compression.
+- [x] **Learning Escalation Engine (LEE)**: State-based Gatekeeper (HEALTHY/DEGRADED/CRITICAL).
+- [x] **Pattern Crystallization**: Instant 5-star learning from successful interactions.
+- [x] **Critic-Driven Evolution**: Diagnostic Agent analyzing performance for prompt mutation.
 
 > [!IMPORTANT]
 > **v6.0 Revolutionary Architecture is LIVE.**
@@ -35,8 +36,9 @@ graph TD
         Bridge --> Int[3. Intent Detect]
         Int --> Meta[4. Meta-Planner]
         
-        subgraph Evolution ["🌀 The Evolutionary Core"]
+        subgraph Evolution ["🌀 The Evolutionary Core (v6.8)"]
             Ledger[(Reflex Ledger)] -.->|Performance Advisory| Meta
+            BCCI[BCCI: Context Budgeter] --> Meta
             Meta --> Exec[5. Resilient Executor]
             Exec -->|Latency/Error Patterns| Ledger
             Exec --> Val[6. Self-Critique]
@@ -46,8 +48,9 @@ graph TD
         Synth --> Opt[8. Soul Optimizer]
         Opt --> Out[9. Final Response]
         
-        Out --> Learn[10. Background Evolution]
-        Learn -->|Distill Core Traits| Memory
+        Out --> Learn[10. Hybrid Evolution]
+        Learn -->|Crystallize Patterns| Memory
+        Learn -->|LEE State Gate| FineTune[(Together AI)]
         Learn -->|Mutate Instructions| Prompts
     end
 

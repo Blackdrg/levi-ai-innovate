@@ -58,6 +58,7 @@ async def _execute_step_with_resilience(
         
         latency = int((asyncio.get_event_loop().time() - start_time) * 1000)
         result.latency_ms = latency
+        # Cost score is already set in agent_registry.call_agent / tool_registry.call_tool (if updated)
         
         # ── LEVI v6: Metric Tracking (The Reflex Ledger) ──
         if HAS_REDIS:
@@ -128,7 +129,7 @@ async def execute_plan(plan: ExecutionPlan, context: Dict[str, Any]) -> List[Too
         # ── LEVI v6: Self-Correction Logic (v6 Reflection Loop) ──
         # Only run critique for reasoning/creative tasks (chat_agent/code_agent)
         # We trigger reflection if complexity is high AND result was successful but might need polish.
-        if result.success and step.agent in ("chat_agent", "code_agent") and context.get("complexity", 0) >= 5:
+        if result.success and step.agent in ("chat_agent", "code_agent") and context.get("complexity_level", 0) >= 2:
             # Avoid infinite loops / max reflection depth = 1 in this sequential executor
             if "critique" not in context:
                 logger.info(f"[Executor] Invoking v6 Validator for {step.agent}")
@@ -150,7 +151,22 @@ async def execute_plan(plan: ExecutionPlan, context: Dict[str, Any]) -> List[Too
                     
                     # One-time retry with critique context injected
                     context["critique"] = critique
-                    result = await _execute_step_with_resilience(step, context)
+                    corrected_result = await _execute_step_with_resilience(step, context)
+                    
+                    # ── LEVI v6: Learning From Reflection ──
+                    if corrected_result.success:
+                        from backend.learning import collect_training_sample
+                        logger.info(f"[Executor] Reporting Reflection Delta for {step.agent}")
+                        asyncio.create_task(collect_training_sample(
+                            user_message=f"CRITIQUE: {critique}\nORIGINAL: {result.message}",
+                            bot_response=corrected_result.message,
+                            mood=context.get("mood", "philosophical"),
+                            rating=5, # Reflections are forced high-quality training pairs
+                            session_id=context.get("session_id", "internal_reflection"),
+                            user_id=context.get("user_id")
+                        ))
+                    
+                    result = corrected_result
                     # Remove critique for next steps
                     context.pop("critique")
 
@@ -161,4 +177,13 @@ async def execute_plan(plan: ExecutionPlan, context: Dict[str, Any]) -> List[Too
             logger.error(f"Critical step '{step.description}' failed. Halting plan execution.")
             break
             
+    # ── LEVI v6: Final Latency instrumentation ──
+    from backend.redis_client import HAS_REDIS
+    if HAS_REDIS and results:
+        from backend.redis_client import r as redis_client
+        total_latency = sum(r.latency_ms for r in results)
+        prev_lt = float(redis_client.get("stats:avg_latency_ms") or 0.0)
+        new_lt = (prev_lt * 0.9) + (total_latency * 0.1)
+        redis_client.set("stats:avg_latency_ms", str(new_lt))
+        
     return results

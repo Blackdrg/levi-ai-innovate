@@ -48,3 +48,4 @@ google-cloud-firestore==2.15.0
 celery[redis]==5.3.6
 flower==2.0.0
 prometheus-fastapi-instrumentator==7.0.0
+together==1.1.0
