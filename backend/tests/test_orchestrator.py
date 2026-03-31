@@ -1,44 +1,167 @@
+"""
+backend/tests/test_orchestrator.py
+
+Legacy CI test suite — updated for v2.0 Brain API.
+
+Key API changes from v1.x:
+  - decide_engine()  → route_request() (sync, returns (EngineRoute, config))
+  - run_orchestrator() now returns Dict, not str
+"""
 import pytest
-import asyncio
+from unittest.mock import patch, AsyncMock
+
 from backend.services.orchestrator import run_orchestrator
-from backend.services.orchestrator.planner import detect_intent
-from backend.services.orchestrator.engine import decide_engine
-from backend.services.orchestrator.orchestrator_types import IntentResult
+from backend.services.orchestrator.planner import detect_intent, check_rules
+from backend.services.orchestrator.engine import route_request
+from backend.services.orchestrator.orchestrator_types import IntentResult, EngineRoute
 
-@pytest.mark.asyncio
-async def test_detect_intent_image():
-    result = await detect_intent("Can you draw a futuristic city?")
+
+# ---------------------------------------------------------------------------
+# Intent Detection
+# ---------------------------------------------------------------------------
+
+def test_detect_intent_image_via_rules():
+    """Regex rules should instantly classify image requests."""
+    result = check_rules("Can you draw a futuristic city?")
+    assert result is not None
     assert result.intent == "image"
-    assert result.complexity >= 5
 
-@pytest.mark.asyncio
-async def test_detect_intent_code():
-    result = await detect_intent("Write a python script to sort a list")
+
+def test_detect_intent_code_via_rules():
+    """Regex rules should instantly classify code requests."""
+    result = check_rules("Write a python script to sort a list")
+    assert result is not None
     assert result.intent == "code"
 
-@pytest.mark.asyncio
-async def test_decide_engine_free_tier():
-    intent = IntentResult(intent="chat", confidence=1.0, complexity=2)
+
+def test_detect_intent_greeting_via_rules():
+    """Regex rules should instantly classify greetings."""
+    result = check_rules("hello")
+    assert result is not None
+    assert result.intent == "greeting"
+
+
+# ---------------------------------------------------------------------------
+# Decision Engine (route_request — v2.0 name)
+# ---------------------------------------------------------------------------
+
+def test_route_request_free_tier_chat():
+    """Free tier chat → API route with lightweight model."""
+    intent = IntentResult(intent="chat", confidence=1.0, complexity=5)
     context = {"user_tier": "free"}
-    config = await decide_engine(intent, context)
+    route, config = route_request(intent, context)
+    assert route == EngineRoute.API
     assert config["model"] == "llama-3.1-8b-instant"
 
-@pytest.mark.asyncio
-async def test_decide_engine_pro_tier():
-    intent = IntentResult(intent="chat", confidence=1.0, complexity=2)
+
+def test_route_request_pro_tier_chat():
+    """Pro tier → API route with power model."""
+    intent = IntentResult(intent="chat", confidence=1.0, complexity=5)
     context = {"user_tier": "pro"}
-    config = await decide_engine(intent, context)
+    route, config = route_request(intent, context)
+    assert route == EngineRoute.API
     assert config["model"] == "llama-3.1-70b-versatile"
 
+
+def test_route_request_greeting_is_local():
+    """Greetings must always route LOCAL (zero API cost)."""
+    intent = IntentResult(intent="greeting", confidence=0.99, complexity=1)
+    context = {"user_tier": "free"}
+    route, config = route_request(intent, context)
+    assert route == EngineRoute.LOCAL
+    assert config["model"] == "none"
+
+
+def test_route_request_image_is_tool():
+    """Image intent must route TOOL."""
+    intent = IntentResult(intent="image", confidence=0.9, complexity=4)
+    context = {"user_tier": "free"}
+    route, config = route_request(intent, context)
+    assert route == EngineRoute.TOOL
+
+
+# ---------------------------------------------------------------------------
+# Full Orchestrator Pipeline
+# ---------------------------------------------------------------------------
+
 @pytest.mark.asyncio
-async def test_orchestrator_flow():
-    # This might require Mocks for LLM APIs if run in a pure CI environment
-    # For now, we test the logic flow
-    response = await run_orchestrator(
-        user_input="Hello LEVI, who are you?",
-        session_id="test_session",
-        user_id="test_user",
-        user_tier="free"
-    )
-    assert isinstance(response, str)
-    assert len(response) > 0
+async def test_orchestrator_returns_dict():
+    """
+    run_orchestrator must return a dict with 'response' key.
+    Mocks all external services to run fully offline.
+    """
+    mock_db = AsyncMock()
+    mock_db.collection.return_value.where.return_value \
+        .order_by.return_value.limit.return_value.stream.return_value = iter([])
+    mock_db.collection.return_value.where.return_value \
+        .limit.return_value.stream.return_value = iter([])
+
+    mock_redis = AsyncMock()
+    mock_redis.get.return_value = None
+    mock_redis.set.return_value = True
+
+    with (
+        patch("backend.redis_client.get_conversation",   return_value=[]),
+        patch("backend.redis_client.save_conversation",  return_value=None),
+        patch("backend.redis_client.HAS_REDIS",          True),
+        patch("backend.redis_client.r",                  mock_redis),
+        patch("backend.firestore_db.db",                 mock_db),
+        patch("backend.services.orchestrator.engine.check_allowance", return_value=True),
+        patch("backend.payments.use_credits",            return_value=None),
+        patch("backend.embeddings.embed_text",           return_value=[0.1] * 384),
+        patch(
+            "backend.generation._async_call_llm_api",
+            new_callable=AsyncMock,
+            return_value='{"intent": "chat", "complexity": 3, "confidence": 0.7}',
+        ),
+    ):
+        result = await run_orchestrator(
+            user_input="Hello LEVI, who are you?",
+            session_id="test_session",
+            user_id="test_user",
+            user_tier="free",
+        )
+
+    assert isinstance(result, dict)
+    assert "response" in result
+    assert isinstance(result["response"], str)
+    assert len(result["response"]) > 0
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_greeting_uses_local_route():
+    """
+    Greeting input must be served by LOCAL engine (no Groq call).
+    """
+    mock_db = AsyncMock()
+    mock_db.collection.return_value.where.return_value \
+        .order_by.return_value.limit.return_value.stream.return_value = iter([])
+    mock_db.collection.return_value.where.return_value \
+        .limit.return_value.stream.return_value = iter([])
+    mock_redis = AsyncMock()
+    mock_redis.get.return_value = None
+
+    with (
+        patch("backend.redis_client.get_conversation",   return_value=[]),
+        patch("backend.redis_client.save_conversation",  return_value=None),
+        patch("backend.redis_client.HAS_REDIS",          True),
+        patch("backend.redis_client.r",                  mock_redis),
+        patch("backend.firestore_db.db",                 mock_db),
+        patch("backend.services.orchestrator.engine.check_allowance", return_value=True),
+        patch("backend.payments.use_credits",            return_value=None),
+        patch("backend.embeddings.embed_text",           return_value=[0.1] * 384),
+        patch(
+            "backend.generation._async_call_llm_api",
+            new_callable=AsyncMock,
+            return_value='{"intent": "chat", "complexity": 1, "confidence": 0.9}',
+        ),
+    ):
+        result = await run_orchestrator(
+            user_input="hello",
+            session_id="test_greet",
+            user_id="test_user",
+            user_tier="free",
+        )
+
+    assert result["route"] == "local"
+    assert len(result["response"]) > 4
