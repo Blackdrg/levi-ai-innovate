@@ -1,18 +1,131 @@
 import json
 import logging
 import hashlib
+import os
+import asyncio
 import numpy as np
-from datetime import datetime, timedelta
+import faiss  # type: ignore
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
-from backend.embeddings import embed_text, cosine_sim
+
+from backend.embeddings import embed_text
 from backend.firestore_db import db as firestore_db
 
 logger = logging.getLogger(__name__)
 
 # --- Configuration ---
-FACT_DEDUPLICATION_THRESHOLD = 0.85 # Cosine similarity threshold for deduplication
-FACT_CONFLICT_THRESHOLD = 0.90      # Threshold to consider facts 'comparable' for conflict check
-FACT_EXPIRY_DAYS = 30 # Prune facts older than this
+FACT_DEDUPLICATION_THRESHOLD = 0.88 
+FACT_EXPIRY_DAYS = 90 # Extended for v6
+# Final Production Paths
+FAISS_USER_INDEX = os.getenv("FAISS_INDEX_PATH", "backend/data/memory/user_faiss.bin")
+FAISS_USER_META = os.getenv("FAISS_METADATA_PATH", "backend/data/memory/user_meta.json")
+FAISS_GLOBAL_INDEX = os.getenv("FAISS_GLOBAL_PATH", "backend/data/memory/global_faiss.bin")
+FAISS_GLOBAL_META = os.getenv("FAISS_GLOBAL_META", "backend/data/memory/global_meta.json")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FAISS ENGINE (Persistent Memory)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class FaissMemory:
+    """
+    Persistent FAISS-powered vector memory for User Facts.
+    """
+    _index = None
+    _metadata: List[Dict[str, Any]] = []
+    _lock = asyncio.Lock()
+
+    @classmethod
+    async def _init_engine(cls):
+        if cls._index is not None: return
+        async with cls._lock:
+            if cls._index is not None: return
+            os.makedirs(os.path.dirname(FAISS_USER_INDEX), exist_ok=True)
+            if os.path.exists(FAISS_USER_INDEX) and os.path.exists(FAISS_USER_META):
+                try:
+                    cls._index = faiss.read_index(FAISS_USER_INDEX)
+                    with open(FAISS_USER_META, "r") as f: cls._metadata = json.load(f)
+                except Exception: cls._index = None
+            if cls._index is None:
+                # Align with 'paraphrase-MiniLM-L6-v2' (384-dim)
+                cls._index = faiss.IndexFlatIP(384)
+                cls._metadata = []
+
+    @classmethod
+    async def add_record(cls, embedding: List[float], record_data: Dict[str, Any]):
+        await cls._init_engine()
+        async with cls._lock:
+            emb_np = np.array([embedding]).astype('float32')
+            cls._index.add(emb_np)
+            cls._metadata.append(record_data)
+            faiss.write_index(cls._index, FAISS_USER_INDEX)
+            with open(FAISS_USER_META, "w") as f: json.dump(cls._metadata, f, default=str)
+
+    @classmethod
+    async def search(cls, query_embedding: List[float], limit: int = 5) -> List[Dict[str, Any]]:
+        await cls._init_engine()
+        if cls._index.ntotal == 0: return []
+        async with cls._lock:
+            emb_np = np.array([query_embedding]).astype('float32')
+            scores, indices = cls._index.search(emb_np, limit)
+            results = []
+            for i, idx in enumerate(indices[0]):
+                if idx != -1 and idx < len(cls._metadata):
+                    meta = cls._metadata[idx].copy()
+                    meta["score"] = float(scores[0][i])
+                    results.append(meta)
+            return results
+
+class GlobalPatternMemory:
+    """
+    Sovereign Global Wisdom Index. Stores anonymized success patterns.
+    """
+    _index = None
+    _metadata: List[Dict[str, Any]] = []
+    _lock = asyncio.Lock()
+
+    @classmethod
+    async def _init_engine(cls):
+        if cls._index is not None: return
+        async with cls._lock:
+            if cls._index is not None: return
+            os.makedirs(os.path.dirname(FAISS_GLOBAL_INDEX), exist_ok=True)
+            if os.path.exists(FAISS_GLOBAL_INDEX) and os.path.exists(FAISS_GLOBAL_META):
+                try:
+                    cls._index = faiss.read_index(FAISS_GLOBAL_INDEX)
+                    with open(FAISS_GLOBAL_META, "r") as f: cls._metadata = json.load(f)
+                except Exception: cls._index = None
+            if cls._index is None:
+                cls._index = faiss.IndexFlatIP(384)
+                cls._metadata = []
+
+    @classmethod
+    async def add_pattern(cls, embedding: List[float], pattern_data: Dict[str, Any]):
+        await cls._init_engine()
+        async with cls._lock:
+            emb_np = np.array([embedding]).astype('float32')
+            cls._index.add(emb_np)
+            cls._metadata.append(pattern_data)
+            faiss.write_index(cls._index, FAISS_GLOBAL_INDEX)
+            with open(FAISS_GLOBAL_META, "w") as f: json.dump(cls._metadata, f, default=str)
+
+    @classmethod
+    async def search_patterns(cls, query_embedding: List[float], limit: int = 2) -> List[Dict[str, Any]]:
+        await cls._init_engine()
+        if cls._index.ntotal == 0: return []
+        async with cls._lock:
+            emb_np = np.array([query_embedding]).astype('float32')
+            scores, indices = cls._index.search(emb_np, limit)
+            results = []
+            for i, idx in enumerate(indices[0]):
+                if idx != -1 and idx < len(cls._metadata):
+                    meta = cls._metadata[idx].copy()
+                    meta["score"] = float(scores[0][i])
+                    results.append(meta)
+            return results
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PUBLIC INTERFACE
+# ─────────────────────────────────────────────────────────────────────────────
 
 async def extract_facts(user_input: str, bot_response: str) -> List[Dict[str, Any]]:
     """Uses LLM to extract categorized atomic facts about the user."""
@@ -35,267 +148,175 @@ async def extract_facts(user_input: str, bot_response: str) -> List[Dict[str, An
     if not facts_json: return []
     
     try:
-        if "```json" in facts_json:
-            facts_json = facts_json.split("```json")[1].split("```")[0]
-        elif "```" in facts_json:
-            facts_json = facts_json.split("```")[1].split("```")[0]
-        
-        return json.loads(facts_json.strip())
+        content = facts_json.strip()
+        if "```json" in content: content = content.split("```json")[1].split("```")[0]
+        elif "```" in content: content = content.split("```")[1].split("```")[0]
+        return json.loads(content.strip())
     except Exception as e:
         logger.error(f"Failed to parse extracted facts: {e}")
         return []
 
-import asyncio
-
-# Redis buffer key pattern: mem_buffer:{user_id} → Redis List of JSON fact strings
-MEMORY_BUFFER_MAX = 10  # Trigger immediate flush if buffer exceeds this size
-
-async def _get_buffered_facts(user_id: str) -> list:
-    """Read facts currently sitting in the Redis write buffer for deduplication."""
-    from backend.redis_client import HAS_REDIS, r as redis_client
-    if not HAS_REDIS:
-        return []
-    try:
-        raw_items = redis_client.lrange(f"mem_buffer:{user_id}", 0, -1)
-        return [json.loads(item) for item in raw_items]
-    except Exception:
-        return []
-
 async def store_facts(user_id: str, new_facts: List[Dict[str, Any]]):
-    """Embed and store facts with semantic deduplication.
-    
-    PHASE 47: Buffered Writes — facts are written to Redis first and flushed
-    to Firestore every 30 seconds by the Celery Beat task (memory_tasks.py).
-    This significantly reduces Firestore write costs under high traffic.
+    """
+    Sovereign Fact Storage with FAISS deduplication.
     """
     if not user_id or not new_facts: return
-    from backend.redis_client import HAS_REDIS, r as redis_client
 
-    # 1. Fetch existing Firestore facts for deduplication
-    existing_docs = firestore_db.collection("user_facts") \
-        .where("user_id", "==", user_id) \
-        .stream()
-    existing_facts = [doc.to_dict() for doc in existing_docs]
-
-    # 2. Also include facts currently in the Redis buffer (not yet flushed)
-    buffered_facts = await _get_buffered_facts(user_id)
-    all_known_facts = existing_facts + buffered_facts
-
-    newly_buffered = 0
     for item in new_facts:
         fact_text = item.get("fact")
         category = item.get("category", "factual")
-        importance = item.get("importance", 0.5) # LEVI v6: Captured from Grader
+        importance = item.get("importance", 0.5)
         if not fact_text: continue
 
         try:
-            new_embedding = await asyncio.to_thread(embed_text, fact_text)
-
-            # 3. Deduplication & Conflict Check (Phase 3)
-            is_duplicate = False
-            conflicting_fact_id = None
+            # 1. Embed Locally
+            embedding = await asyncio.to_thread(embed_text, fact_text)
             
-            for old_fact in all_known_facts:
-                old_emb = np.array(old_fact.get("embedding", []))
-                if old_emb.size > 0:
-                    similarity = cosine_sim(np.array(new_embedding), old_emb)
-                    
-                    # Exact duplicate check
-                    if similarity > FACT_DEDUPLICATION_THRESHOLD:
-                        logger.info(f"Deduplicated fact: '{fact_text}' matches existing '{old_fact.get('fact')}'")
-                        is_duplicate = True
-                        break
-                    
-                    # Partial overlap / Potential Conflict (Phase 3)
-                    # Logic: If semantic similarity is high but not identical, 
-                    # and categories match, we treat it as an update/override.
-                    if similarity > 0.75 and category == old_fact.get("category"):
-                        logger.info(f"Potential conflict/update detected. New: '{fact_text}' | Old: '{old_fact.get('fact')}'")
-                        conflicting_fact_id = old_fact.get("fact_id")
-                        break
+            # 2. Local Deduplication
+            existing = await FaissMemory.search(embedding, limit=1)
+            if existing and existing[0]["score"] > FACT_DEDUPLICATION_THRESHOLD:
+                if existing[0].get("user_id") == user_id:
+                    logger.info(f"FAISS: Deduplicated fact '{fact_text[:30]}...'")
+                    continue
 
-            if is_duplicate:
-                continue
-
-            # 4. Build fact payload (same shape as Firestore doc)
-            import hashlib
+            # 3. Create Record
             fact_id = hashlib.md5(fact_text.encode()).hexdigest()
             doc_data = {
                 "user_id": user_id,
                 "fact": fact_text,
                 "category": category,
-                "embedding": new_embedding,
                 "fact_id": f"{user_id}_{fact_id}", 
-                "importance": importance,  # LEVI v6: Significance Weight
-                "created_at": datetime.utcnow(),
-                "confidence": 0.9,
+                "importance": importance,
+                "created_at": datetime.now(timezone.utc).isoformat(),
             }
 
-            # 5. Handle Overwrite (Conflict Resolution)
-            if conflicting_fact_id:
-                logger.info(f"Conflict Resolution: Overriding fact {conflicting_fact_id} with newer info.")
-                await asyncio.to_thread(
-                    firestore_db.collection("user_facts").document(conflicting_fact_id).delete
-                )
+            # 4. Add to Local VM
+            await FaissMemory.add_record(embedding, doc_data)
 
-            if HAS_REDIS:
-                # 5a. Buffer write: push to Redis list (O(1) operation)
-                buffer_key = f"mem_buffer:{user_id}"
-                redis_client.rpush(buffer_key, json.dumps(doc_data, default=str))
-                redis_client.expire(buffer_key, 3600)  # Safety TTL: 1 hour
-                newly_buffered += 1
-                logger.info(f"Buffered new fact for user {user_id}: '{fact_text[:50]}'")
-            else:
-                # 5b. Fallback: direct Firestore write if Redis is unavailable
-                await asyncio.to_thread(
-                    firestore_db.collection("user_facts").document(doc_data["fact_id"]).set,
-                    doc_data
-                )
+            # 5. Backup to Firestore (Async Non-Blocking)
+            asyncio.create_task(asyncio.to_thread(
+                lambda: firestore_db.collection("user_facts").document(doc_data["fact_id"]).set(doc_data)
+            ))
 
         except Exception as e:
             logger.error(f"Error storing fact: {e}")
 
-    # 6. Check buffer size — trigger immediate flush if threshold exceeded
-    if HAS_REDIS and newly_buffered > 0:
-        try:
-            buffer_len = redis_client.llen(f"mem_buffer:{user_id}")
-            if buffer_len >= MEMORY_BUFFER_MAX:
-                logger.info(f"Buffer threshold reached ({buffer_len} facts) for {user_id}. Triggering immediate flush.")
-                from backend.services.orchestrator.memory_tasks import flush_memory_buffer
-                flush_memory_buffer.delay(user_id)
-        except Exception as e:
-            logger.warning(f"Immediate flush trigger failed (non-critical): {e}")
-
-
-
 async def search_relevant_facts(user_id: str, query: str, limit: int = 5) -> List[Dict[str, Any]]:
     """
-    Perform semantic search for relevant user facts.
-    Includes both Firestore (long-term) and Redis (immediate) facts.
+    Perform high-speed semantic search for relevant user facts via FAISS.
     """
     if not user_id: return []
-    from backend.redis_client import HAS_REDIS, r as redis_client
     
     try:
-        # 1. Semantic Query Embedding (Cached for 5 min)
-        query_hash = hashlib.md5(query.lower().strip().encode()).hexdigest()
-        cache_key = f"emb_cache:{query_hash}"
-        
-        query_embedding = None
-        if HAS_REDIS:
-            cached = redis_client.get(cache_key)
-            if cached: query_embedding = np.array(json.loads(cached))
-            
-        if query_embedding is None:
-            query_embedding = np.array(await asyncio.to_thread(embed_text, query))
-            if HAS_REDIS:
-                redis_client.setex(cache_key, 300, json.dumps(query_embedding.tolist()))
+        # 1. Embed Query
+        query_embedding = await asyncio.to_thread(embed_text, query)
 
-        # 2. Fetch Firestore facts
-        docs = firestore_db.collection("user_facts") \
-            .where("user_id", "==", user_id) \
-            .limit(150) \
-            .stream()
+        # 2. Search FAISS
+        all_results = await FaissMemory.search(query_embedding, limit=20)
         
-        all_facts = [doc.to_dict() for doc in docs]
-        
-        # 3. Fetch "Immediate" facts from Redis buffer
-        if HAS_REDIS:
-            buffered = await _get_buffered_facts(user_id)
-            all_facts.extend(buffered)
-        
-        # 4. Rank & Score
-        scored_facts = []
-        seen_fact_ids = set()
-        
-        for data in all_facts:
-            f_id = data.get("fact_id")
-            if f_id in seen_fact_ids: continue
-            
-            fact_text = data.get("fact")
-            if not fact_text: continue
-
-            fact_emb = np.array(data.get("embedding", []))
-            if fact_emb.size > 0:
-                score = cosine_sim(query_embedding, fact_emb)
-                
-                # Category Weighting
+        # 3. Filter by User-ID & Score
+        user_facts = []
+        for res in all_results:
+            if res.get("user_id") == user_id and res.get("score", 0) > 0.4:
+                # Recency bias logic
                 weight = 1.0
-                cat = data.get("category", "factual")
-                if cat == "preference": weight = 1.4  # Boosted for higher impact
+                cat = res.get("category", "factual")
+                if cat == "preference": weight = 1.4
                 elif cat == "trait": weight = 1.3
                 
-                # Recency bias (Phase 3)
-                created_at = data.get("created_at")
-                recency_weight = 1.0
-                if created_at:
-                    if isinstance(created_at, str):
-                        created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-                    age_days = (datetime.utcnow().replace(tzinfo=timezone.utc) - created_at.replace(tzinfo=timezone.utc)).days
-                    recency_weight = max(0.4, 1.0 - (age_days / 120.0)) # Slower decay for v6 (120 days)
+                res["final_score"] = res["score"] * weight * (1.0 + res.get("importance", 0.5))
+                user_facts.append(res)
 
-                # LEVI v6: Importance Weighting
-                importance = data.get("importance", 0.5)
+        user_facts.sort(key=lambda x: x["final_score"], reverse=True)
+        return user_facts[:limit]
 
-                scored_facts.append({
-                    "fact": fact_text,
-                    "category": cat,
-                    "score": score * weight * recency_weight * (1.0 + importance),
-                    "importance": importance,
-                    "id": f_id,
-                    "embedding": fact_emb # Keep for diversity filter
-                })
-                seen_fact_ids.add(f_id)
-        
-        scored_facts.sort(key=lambda x: x["score"], reverse=True)
-
-        # 5. Diversity Filter (Phase 3 Hardened)
-        # Prevents retrieving 5 versions of "User likes coffee"
-        diverse_facts = []
-        for candidate in scored_facts:
-            if len(diverse_facts) >= limit: break
-            
-            is_redundant = False
-            for existing in diverse_facts:
-                sim = cosine_sim(candidate["embedding"], existing["embedding"])
-                if sim > 0.88: # High similarity threshold
-                    is_redundant = True
-                    break
-            
-            if not is_redundant:
-                # Remove embedding before returning to save bandwidth/noise
-                candidate.pop("embedding", None)
-                diverse_facts.append(candidate)
-
-        return diverse_facts
     except Exception as e:
         logger.error(f"Error searching relevant facts: {e}")
         return []
 
 async def prune_old_facts(user_id: str):
-    """Prune facts older than 30 days.
-    
-    CRITICAL BUG FIX: We now use native datetime objects for the query.
-    Firestore's '<' operator expects the same type as the field.
     """
-    expiry_date = datetime.utcnow() - timedelta(days=FACT_EXPIRY_DAYS)
+    Deprecated: Use consolidated garbage_collect_index.
+    """
+    pass
 
+async def garbage_collect_index():
+    """
+    Long-term maintenance: Purges expired or low-importance memories from FAISS.
+    Rebuilds the index to maintain performance.
+    """
+    await FaissMemory._init_engine()
+    if not FaissMemory._metadata: return
+
+    async with FaissMemory._lock:
+        now = datetime.now(timezone.utc)
+        expiry_delta = timedelta(days=FACT_EXPIRY_DAYS)
+        
+        new_metadata = []
+        new_embeddings = []
+        
+        # 1. Filter Metadata & Track Indices
+        for i, meta in enumerate(FaissMemory._metadata):
+            created_at = datetime.fromisoformat(meta["created_at"])
+            importance = meta.get("importance", 0.5)
+            
+            # Pruning logic: 
+            # - Keep if within 90 days
+            # - Keep if importance > 0.1 regardless of age (Core Traits)
+            if (now - created_at < expiry_delta) or (importance > 0.8):
+                new_metadata.append(meta)
+                # Re-extract embedding (in a real system, we'd reconstruct from Index-ID if possible)
+                # Since we don't have reconstruct() on FlatIP easily here, we'll assume a rebuild is needed.
+                # However, FAISS IndexFlat does support reconstruction: index.reconstruct(i)
+                try:
+                    vec = FaissMemory._index.reconstruct(i)
+                    new_embeddings.append(vec)
+                except Exception: continue
+
+        if len(new_metadata) == len(FaissMemory._metadata):
+            logger.info("FAISS GC: No records pruned.")
+            return
+
+        # 2. Rebuild Index
+        new_index = faiss.IndexFlatIP(384)
+        if new_embeddings:
+            new_index.add(np.array(new_embeddings).astype('float32'))
+        
+        FaissMemory._index = new_index
+        FaissMemory._metadata = new_metadata
+        
+        # 3. Save to Disk
+        faiss.write_index(FaissMemory._index, FAISS_USER_INDEX)
+        with open(FAISS_USER_META, "w") as f:
+            json.dump(FaissMemory._metadata, f, default=str)
+        
+        logger.info(f"FAISS GC Complete: Pruned {len(FaissMemory._metadata) - len(new_metadata)} records.")
+
+async def store_global_wisdom(input_text: str, output_text: str, mood: str):
+    """Stores a successful pattern in the Global FAISS Index."""
     try:
-        old_docs = await asyncio.to_thread(
-            lambda: list(
-                firestore_db.collection("user_facts")
-                .where("user_id", "==", user_id)
-                .where("created_at", "<", expiry_date)
-                .stream()
-            )
-        )
-
-        count = 0
-        for doc in old_docs:
-            await asyncio.to_thread(doc.reference.delete)
-            count += 1
-
-        if count > 0:
-            logger.info(f"Pruned {count} old facts for user {user_id}")
+        embedding = await asyncio.to_thread(embed_text, input_text)
+        data = {
+            "input": input_text[:300],
+            "output": output_text[:600],
+            "mood": mood,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await GlobalPatternMemory.add_pattern(embedding, data)
+        # Backup to Firestore
+        pid = hashlib.md5(input_text.encode()).hexdigest()
+        asyncio.create_task(asyncio.to_thread(
+            lambda: firestore_db.collection("global_wisdom").document(pid).set(data)
+        ))
     except Exception as e:
-        logger.error(f"Failed to prune facts for {user_id}: {e}")
+        logger.error(f"Global wisdom storage failed: {e}")
+
+async def retrieve_resonant_patterns(query: str, limit: int = 2) -> List[Dict[str, str]]:
+    """Retrieves resonant success patterns from Global FAISS Index."""
+    try:
+        embedding = await asyncio.to_thread(embed_text, query)
+        patterns = await GlobalPatternMemory.search_patterns(embedding, limit)
+        return [{"input": p["input"], "output": p["output"]} for p in patterns if p.get("score", 0) > 0.8]
+    except Exception as e:
+        logger.error(f"Global pattern retrieval failed: {e}")
+        return []

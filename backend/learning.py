@@ -134,21 +134,20 @@ async def _augment_knowledge_base(question: str, answer: str, mood: str):
             return
 
         # Cap knowledge base size (naive count)
-        learned_quotes = firestore_db.collection("quotes").where("topic", "==", "__learned__").get()
+        learned_quotes = await asyncio.to_thread(lambda: firestore_db.collection("quotes").where("topic", "==", "__learned__").get())
         if len(learned_quotes) >= MAX_KNOWLEDGE_ENTRIES:
             # Remove oldest
-            oldest = firestore_db.collection("quotes").where("topic", "==", "__learned__").order_by("created_at").limit(1).get()
+            oldest = await asyncio.to_thread(lambda: firestore_db.collection("quotes").where("topic", "==", "__learned__").order_by("created_at").limit(1).get())
             if oldest:
                 oldest[0].reference.delete()
 
         emb = embed_text(answer)
-        firestore_db.collection("quotes").add({
+        await asyncio.to_thread(firestore_db.collection("quotes").add, {
             "text": answer,
             "author": "LEVI-AI",
             "topic": "__learned__",
             "mood": mood,
             "embedding": emb,
-            "likes": 0,
             "created_at": datetime.utcnow()
         })
         logger.info(f"[Learning] Added learned response to knowledge base (mood={mood})")
@@ -160,66 +159,17 @@ async def _augment_knowledge_base(question: str, answer: str, mood: str):
 
 async def crystallize_profound_pattern(user_input: str, response: str, mood: str):
     """
-    Extracts the 'Resonant Core' from a 5-star response and stores it in the
-    profound_patterns collection for In-Context Learning (ICL).
+    Deprecated in v6: Logic has migrated to the Global Wisdom FAISS Index.
     """
-    from backend.firestore_db import db as firestore_db
-    from backend.embeddings import embed_text
-    try:
-        # Anonymize (strip PII)
-        clean_input = user_input[:200] # Simple truncation for patterns
-        clean_response = response[:500]
-        
-        # Avoid duplicates
-        pattern_id = hashlib.md5(f"{clean_input}||{clean_response}".encode()).hexdigest()
-        pattern_ref = firestore_db.collection("profound_patterns").document(pattern_id)
-        
-        if (await asyncio.to_thread(pattern_ref.get)).exists:
-            return
-
-        emb = embed_text(clean_input)
-        await asyncio.to_thread(pattern_ref.set, {
-            "input": clean_input,
-            "output": clean_response,
-            "embedding": emb,
-            "mood": mood,
-            "created_at": datetime.utcnow()
-        })
-        logger.info(f"[HybridLearning] Crystallized profound pattern: {pattern_id[:8]}")
-    except Exception as e:
-        logger.error(f"[HybridLearning] Crystallization failed: {e}")
+    from backend.services.orchestrator.memory_utils import store_global_wisdom
+    await store_global_wisdom(user_input, response, mood)
 
 async def retrieve_resonant_patterns(user_input: str, threshold: float = 0.82) -> List[Dict[str, str]]:
     """
-    Search pattern memory for the most similar successful interactions.
-    Returns up to 2 patterns for Few-Shot injection.
+    Retrieves the top resonant patterns from the Global FAISS Index.
     """
-    from backend.firestore_db import db as firestore_db
-    from backend.embeddings import embed_text, cosine_sim
-    try:
-        query_emb = embed_text(user_input)
-        
-        # In a real vector DB we'd do a proper search. 
-        # Here we fetch the last 100 patterns and score them (small scale).
-        patterns_docs = await asyncio.to_thread(
-            lambda: firestore_db.collection("profound_patterns")
-            .order_by("created_at", direction="DESCENDING")
-            .limit(100).get()
-        )
-        
-        scored = []
-        for doc in patterns_docs:
-            p = doc.to_dict()
-            sim = cosine_sim(query_emb, p["embedding"])
-            if sim >= threshold:
-                scored.append({"sim": sim, "input": p["input"], "output": p["output"]})
-        
-        # Return top 2
-        scored.sort(key=lambda x: x["sim"], reverse=True)
-        return [{"input": s["input"], "output": s["output"]} for s in scored[:2]]
-    except Exception as e:
-        logger.warning(f"[HybridLearning] Pattern retrieval failed: {e}")
-        return []
+    from backend.services.orchestrator.memory_utils import retrieve_resonant_patterns as retrieve_faiss
+    return await retrieve_faiss(user_input, limit=2)
 
 
 # ─────────────────────────────────────────────
@@ -695,47 +645,10 @@ def get_learning_stats():
 async def collect_global_pattern(user_message: str, bot_response: str, rating: int):
     """
     Anonymize and aggregate high-quality reasoning patterns for cross-user intelligence.
+    Now uses FAISS-backed Global Wisdom Index.
     """
-    if rating < 5: return # Only learn from the absolute best
+    if rating < 5: return
     
-    from backend.firestore_db import db as firestore_db
-    from backend.services.orchestrator.planner import call_lightweight_llm
-
-    try:
-        # 1. Anonymize & Extract Theme
-        prompt = (
-            "Extract a high-level philosophical theme or reasoning pattern from this interaction. "
-            "Remove all personal data (names, locations, specific entities). "
-            "Output JSON: {\"theme\": \"short theme\", \"insight\": \"profound one-liner\"}"
-        )
-        raw = await call_lightweight_llm([
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": f"User: {user_message}\nLEVI: {bot_response}"}
-        ])
-        
-        data = json.loads(raw.strip())
-        theme = data.get("theme")
-        insight = data.get("insight")
-
-        if theme and insight:
-            # 2. Store in Global Knowledge Base
-            pattern_id = hashlib.md5(theme.lower().encode()).hexdigest()
-            pattern_ref = firestore_db.collection("global_patterns").document(pattern_id)
-            
-            def _txn():
-                doc = pattern_ref.get()
-                if doc.exists:
-                    pattern_ref.update({"count": google_firestore.Increment(1)})
-                else:
-                    pattern_ref.set({
-                        "theme": theme,
-                        "insight": insight,
-                        "count": 1,
-                        "created_at": datetime.utcnow()
-                    })
-
-            await asyncio.to_thread(_txn)
-            logger.info(f"[GlobalLearning] New pattern crystallized: {theme}")
-
-    except Exception as e:
-        logger.warning(f"Global pattern collection failed: {e}")
+    from backend.services.orchestrator.memory_utils import store_global_wisdom
+    await store_global_wisdom(user_message, bot_response, "philosophical")
+    logger.info(f"[GlobalLearning] Crystallized new global wisdom pattern.")

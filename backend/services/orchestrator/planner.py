@@ -120,6 +120,7 @@ def _parse_json_result(text: str, default_val: Any) -> Any:
         return default_val
 
 async def detect_intent(user_input: str) -> IntentResult:
+    # 1. High-Speed Rule-Based Detection
     rule_match = check_rules(user_input)
     if rule_match: return rule_match
 
@@ -132,14 +133,28 @@ async def detect_intent(user_input: str) -> IntentResult:
         "  'confidence_score': 0.0-1.0\n"
         "}"
     )
+    
+    messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_input}]
+    
+    # 2. Sovereign Local Detection (Primary Fallback)
+    from .local_engine import handle_local_sync
+    local_raw = await handle_local_sync(messages)
+    if local_raw:
+        data = _parse_json_result(local_raw, None)
+        if data:
+            logger.info("[Planner] Intent detected via local engine.")
+            return IntentResult(**data)
+
+    # 3. Cloud LLM Fallback (Secondary Fallback)
     try:
-        raw = await call_lightweight_llm([{"role": "system", "content": system_prompt}, {"role": "user", "content": user_input}])
+        raw = await call_lightweight_llm(messages)
         data = _parse_json_result(raw, {
             "intent_type": "chat", 
             "complexity_level": 2, 
             "estimated_cost_weight": "medium",
             "confidence_score": 0.5
         })
+        logger.info("[Planner] Intent detected via Cloud LLM.")
         return IntentResult(**data)
     except Exception:
         return IntentResult(intent_type="chat", complexity_level=2, confidence_score=0.3)

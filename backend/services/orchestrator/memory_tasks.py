@@ -255,6 +255,24 @@ def flush_conversation_buffer(self):
     except Exception as e:
         logger.error(f"Error flushing conversion buffer: {e}")
         return {"error": str(e)}
+
+@celery_app.task(
+    name="backend.services.orchestrator.memory_tasks.garbage_collect_memory",
+    bind=True,
+)
+def garbage_collect_memory(self):
+    """
+    Celery Beat task (Daily): Run the FAISS garbage collection process.
+    Prunes expired/low-importance facts from the vector index.
+    """
+    import asyncio
+    from .memory_utils import garbage_collect_index
+    try:
+        asyncio.run(garbage_collect_index())
+        return {"status": "gc_complete"}
+    except Exception as e:
+        logger.error(f"Memory GC task failed: {e}")
+        return {"status": "failed", "error": str(e)}
 @celery_app.task(
     name="backend.services.orchestrator.memory_tasks.distill_user_memories",
     bind=True,

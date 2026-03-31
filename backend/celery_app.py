@@ -55,8 +55,20 @@ celery_app.conf.update(
 celery_app.conf.beat_schedule = {
     "flush-memory-buffers-every-30s": {
         "task": "backend.services.orchestrator.memory_tasks.flush_all_memory_buffers",
-        "schedule": 30.0,  # seconds — matches agreed 30s durability window
+        "schedule": 30.0,
     },
+    "flush-conv-buffer-every-minute": {
+        "task": "backend.services.orchestrator.memory_tasks.flush_conversation_buffer",
+        "schedule": 60.0,
+    },
+    "global-memory-maintenance-12h": {
+        "task": "backend.services.orchestrator.memory_tasks.run_global_maintenance",
+        "schedule": 43200.0, # 12 hours
+    },
+    "daily-faiss-garbage-collection": {
+        "task": "backend.services.orchestrator.memory_tasks.garbage_collect_memory",
+        "schedule": 86400.0, # 24 hours
+    }
 }
 
 # ── Thread-local task context for log enrichment ─────────────

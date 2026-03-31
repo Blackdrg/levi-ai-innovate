@@ -124,66 +124,82 @@ async def execute_plan(plan: ExecutionPlan, context: Dict[str, Any]) -> List[Too
         # Convenience shortcut for the very last result
         context["last_result"] = results[-1].dict() if results else {}
         
+        # 1. 🚀 Primary Execution
         result = await _execute_step_with_resilience(step, context)
         
-        # ── LEVI v6: Self-Correction Logic (v6 Reflection Loop) ──
-        # Only run critique for reasoning/creative tasks (chat_agent/code_agent)
-        # We trigger reflection if complexity is high AND result was successful but might need polish.
-        if result.success and step.agent in ("chat_agent", "code_agent") and context.get("complexity_level", 0) >= 2:
-            # Avoid infinite loops / max reflection depth = 1 in this sequential executor
-            if "critique" not in context:
-                logger.info(f"[Executor] Invoking v6 Validator for {step.agent}")
+        # 2. ── LEVI v6: Sovereign Agent Loop (Observe -> Critique -> Improve) ──
+        # We trigger the autonomy loop for all reasoning-capable agents.
+        REASONING_AGENTS = ("chat_agent", "code_agent", "search_agent", "diagnostic_agent")
+        
+        if result.success and step.agent in REASONING_AGENTS and context.get("complexity_level", 0) >= 1:
+            # Max reflection turns based on task complexity
+            max_reflection_turns = 1 if context.get("complexity_level", 0) < 3 else 2
+            current_turn = 0
+            
+            while current_turn < max_reflection_turns:
+                logger.info(f"[AgentLoop] Turn {current_turn+1} Reflection for {step.agent}")
                 
-                # Call Validator (critic_agent)
+                # A. 🔍 Observe & Critique (critic_agent)
                 v_raw = await call_tool("critic_agent", {
-                    "goal": context.get("input", ""),
-                    "agent_output": result.message
+                    "goal": context.get("input", step.description),
+                    "agent_output": result.message,
+                    "complexity": context.get("complexity_level", 2)
                 }, context)
                 
                 v_res = ToolResult(**v_raw) if not isinstance(v_raw, ToolResult) else v_raw
                 
-                if not v_res.success:
-                    # Score was below threshold
-                    score = v_res.data.get("quality_score", 0.0)
-                    critique = v_res.data.get("critique", "Output lacks LEVI resonance.")
-                    
-                    logger.warning(f"[Executor] Self-Correction Triggered (Score: {score}). Critique: {critique[:60]}...")
-                    
-                    # One-time retry with critique context injected
-                    context["critique"] = critique
-                    corrected_result = await _execute_step_with_resilience(step, context)
-                    
-                    # ── LEVI v6: Learning From Reflection ──
-                    if corrected_result.success:
-                        from backend.learning import collect_training_sample
-                        logger.info(f"[Executor] Reporting Reflection Delta for {step.agent}")
-                        asyncio.create_task(collect_training_sample(
-                            user_message=f"CRITIQUE: {critique}\nORIGINAL: {result.message}",
-                            bot_response=corrected_result.message,
-                            mood=context.get("mood", "philosophical"),
-                            rating=5, # Reflections are forced high-quality training pairs
-                            session_id=context.get("session_id", "internal_reflection"),
-                            user_id=context.get("user_id")
-                        ))
-                    
-                    result = corrected_result
-                    # Remove critique for next steps
-                    context.pop("critique")
+                # B. Evaluation Logic
+                quality_score = v_res.data.get("quality_score", 1.0)
+                pass_threshold = 0.85 if context.get("complexity_level", 0) == 3 else 0.75
+                
+                if v_res.success and quality_score >= pass_threshold:
+                    logger.info(f"[AgentLoop] Quality Check Passed ({quality_score:.2f})")
+                    break
+                
+                # C. 💡 Self-Correction
+                critique = v_res.data.get("critique", "Enhance precision and depth.")
+                logger.warning(f"[AgentLoop] Quality Check Failed ({quality_score:.2f}). Critique: {critique[:100]}...")
+                
+                # Inject critique into context for the next attempt
+                context["critique"] = critique
+                context["reflection_count"] = current_turn + 1
+                
+                # D. Re-Execute with Correction
+                result = await _execute_step_with_resilience(step, context)
+                current_turn += 1
+                
+                # E. 📈 Learning Signal (Shared Intelligence)
+                if result.success:
+                    from backend.learning import collect_training_sample
+                    asyncio.create_task(collect_training_sample(
+                        user_message=f"CRITIQUE: {critique}\nORIGINAL_INPUT: {context.get('input', '')}",
+                        bot_response=result.message,
+                        mood=context.get("mood", "philosophical"),
+                        rating=5, 
+                        session_id=context.get("session_id", "reflect_loop"),
+                        user_id=context.get("user_id")
+                    ))
+
+            # Cleanup reflection context
+            context.pop("critique", None)
+            context.pop("reflection_count", None)
 
         results.append(result)
         
-        # Critical Step Enforcement: Halt if a mandatory component fails
+        # 3. ── Critical Step Enforcement ──
         if not result.success and step.critical:
             logger.error(f"Critical step '{step.description}' failed. Halting plan execution.")
             break
             
-    # ── LEVI v6: Final Latency instrumentation ──
+    # ── 4. Final Instrumentation ──
     from backend.redis_client import HAS_REDIS
     if HAS_REDIS and results:
         from backend.redis_client import r as redis_client
         total_latency = sum(r.latency_ms for r in results)
-        prev_lt = float(redis_client.get("stats:avg_latency_ms") or 0.0)
-        new_lt = (prev_lt * 0.9) + (total_latency * 0.1)
-        redis_client.set("stats:avg_latency_ms", str(new_lt))
+        try:
+            prev_lt = float(redis_client.get("stats:avg_latency_ms") or 0.0)
+            new_lt = (prev_lt * 0.9) + (total_latency * 0.1)
+            redis_client.set("stats:avg_latency_ms", str(new_lt))
+        except: pass
         
     return results

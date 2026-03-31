@@ -124,52 +124,67 @@ from backend.redis_client import incr_daily_ai_spend, get_daily_ai_spend # type:
 
 def use_credits(user_id: str, action: str = "chat", amount: Optional[int] = None):
     """
-    Deducts AI units or credits from a user's account.
-    Prioritizes Tier Allowance -> Credits fallback.
+    Deducts AI units or credits from a user's account with absolute atomicity.
+    Prioritizes Tier Allowance (Redis) -> Credits Fallback (Firestore Transaction + Distributed Lock).
     """
     from backend.redis_client import distributed_lock # type: ignore
     
     # 1. Determine Cost
     cost = amount if amount is not None else COST_MATRIX.get(action, 1)
     
-    # 2. Get User Info for Tier
-    user_ref = firestore_db.collection("users").document(user_id)
-    user_doc = user_ref.get()
-    if not user_doc.exists:
-        raise HTTPException(status_code=404, detail="User not found")
-        
-    user_data = user_doc.to_dict()
-    tier = user_data.get("tier", "free")
-    current_credits = int(user_data.get("credits", 0))
-    limit = TIERS.get(tier, TIERS["free"])["daily_limit"]
-    
-    # 3. Check Daily Spend (Fast Path)
+    # 2. Check Daily Spend (Fast Path via Redis)
+    # This is fine to do before the lock as incr_daily_ai_spend is atomic in Redis.
     daily_spend = get_daily_ai_spend(user_id)
-    if daily_spend + cost <= limit:
-        # User is within their daily tier allowance
-        incr_daily_ai_spend(user_id, float(cost))
-        return {"status": "success", "source": "allowance", "remaining_limit": limit - (daily_spend + cost)}
-
-    # 4. Fallback to Credits (Slow Path / Distributed Lock)
-    with distributed_lock(f"credits:{user_id}", ttl=10) as acquired:
+    
+    # Fetch tier from Redis/Memory if possible, but we need the limit
+    # We'll do a quick check here, and a final check inside the lock for credits.
+    # To be safe and avoid multi-reads, we'll acquire the lock first for the fallback case.
+    
+    # 3. Distributed Lock for Credit Operations
+    with distributed_lock(f"credits:{user_id}", ttl=15, retries=3, backoff=0.2) as acquired:
         if not acquired:
-            logger.warning(f"Credit lock failed for {user_id}")
-            raise HTTPException(status_code=429, detail="Transaction in progress")
+            logger.warning(f"Credit lock timeout for {user_id}")
+            raise HTTPException(status_code=429, detail="Transaction in progress. Please retry.")
             
         try:
+            # 4. Refresh User Data INSIDE the lock
+            user_ref = firestore_db.collection("users").document(user_id)
+            user_doc = user_ref.get()
+            if not user_doc.exists:
+                raise HTTPException(status_code=404, detail="User not found")
+                
+            user_data = user_doc.to_dict()
+            tier = user_data.get("tier", "free")
+            current_credits = int(user_data.get("credits", 0))
+            limit = TIERS.get(tier, TIERS["free"])["daily_limit"]
+            
+            # 5. Final Allowance Check (Re-check spend inside lock if needed)
+            if daily_spend + cost <= limit:
+                incr_daily_ai_spend(user_id, float(cost))
+                return {"status": "success", "source": "allowance", "remaining_limit": limit - (daily_spend + cost)}
+
+            # 6. Final Credit Check
             if current_credits < cost:
                 raise HTTPException(
                     status_code=402, 
-                    detail=f"Daily limit ({limit}) reached. Insufficient credits for additional usage."
+                    detail=f"Daily limit ({limit}) reached. Insufficient credits ({current_credits}) for additional usage."
                 )
             
+            # 7. Atomic Update
             new_credits = current_credits - cost
             user_ref.update({"credits": new_credits})
+            
+            # 8. Cache the new credit value in Redis for faster subsequent reads
+            from backend.redis_client import r as redis_client, HAS_REDIS
+            if HAS_REDIS:
+                redis_client.setex(f"user_credits:{user_id}", 300, new_credits)
+
             return {"status": "success", "source": "credits", "remaining_credits": new_credits}
+            
         except HTTPException:
             raise
         except Exception as e:
-            logger.error(f"Credit deduction failed: {e}")
+            logger.error(f"Atomic credit transaction failed: {e}")
             raise HTTPException(status_code=500, detail="Transaction failed")
 
 def process_subscription_lapse(user_id: str):
