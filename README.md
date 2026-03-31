@@ -12,7 +12,7 @@ LEVI is a production-hardened **AI Orchestration Platform** built for high-relia
 
 ## 🏗️ Architecture: The 8-Stage Pipeline
 
-The `LeviOrchestrator` (`engine.py`) is the central intelligence hub. Every request flows through these deterministic stages:
+The `LeviBrain` orchestrator (`brain.py`) is the central intelligence hub. Every request flows through these deterministic stages within a structured, class-based decision flow:
 
 ```mermaid
 graph TD
@@ -57,7 +57,7 @@ graph TD
     - 🟢 **LOCAL**: Instant responses for greetings/identity with complexity ≤ 3.
     - 🟡 **TOOL**: Agent dispatch (Search, Image, Code) using `llama-3.1-8b`.
     - 🔴 **API**: Complex reasoning using `llama-3.1-70b-versatile` (Pro/Creator tiers).
-6.  **Execute & Stream**: True token-by-token SSE streaming via the Groq API.
+6.  **Execute & Stream**: True token-by-token SSE streaming via the Groq API, with metadata delivered in the first chunk.
 7.  **Validate & Fallback**: Self-healing chain (`primary` → `chat_agent retry` → `local_engine` → `safe_default`).
 8.  **Memory Store**: Background persistence and automatic 30-day pruning of old facts.
 
@@ -96,10 +96,10 @@ Located in `backend/utils/network.py`, the circuit breaker monitors external ser
 ## 📂 Repository Mastery (File Map)
 
 ### Backend (`/backend`)
-- `services/orchestrator/`: The core brain (engine, planner, executor, memory).
-- `services/chat/`: SSE streaming routers and socket handlers.
-- `services/learning/`: User preference extraction and model fine-tuning logic.
-- `utils/network.py`: The hardened Circuit Breaker and network utilities.
+- `api/`: Centralized API routers for all services (hardened architecture).
+- `services/orchestrator/`: The core brain (`brain.py`), planner, and memory manager.
+- `utils/robustness.py`: Standardized retry (Tenacity) and timeout logic.
+- `utils/error_handler.py`: Global exception management and sanitized responses.
 - `celery_app.py`: Background task definitions for memory flushes and pruning.
 - `auth.py`: Firebase JWT validation and JTI blacklist management.
 

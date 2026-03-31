@@ -365,83 +365,43 @@ app.add_middleware(
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # ── Routers ─────────────────────────────────────────
-from backend.services.auth.router import router as auth_router # type: ignore
-from backend.services.chat.router import router as chat_router # type: ignore
-from backend.services.orchestrator.router import router as orchestrator_router # type: ignore
-from backend.services.orchestrator.privacy_router import router as privacy_router # type: ignore
-from backend.services.studio.router import router as studio_router # type: ignore
-from backend.services.gallery.router import router as gallery_router # type: ignore
-from backend.services.analytics.router import router as analytics_router # type: ignore
-from backend.payments import router as payments_router # type: ignore
-from backend.services.studio.ai_router import router as ai_router # type: ignore
-from backend.services.learning.router import router as learning_router # type: ignore
+# ── Routers (v5.0 Hardened Architecture) ─────────────────────────
+from backend.api.auth import router as auth_router
+from backend.api.chat import router as chat_router
+from backend.api.orchestrator import router as orchestrator_router
+from backend.api.privacy import router as privacy_router
+from backend.api.studio import router as studio_router
+from backend.api.gallery import router as gallery_router
+from backend.api.analytics import router as analytics_router
+from backend.api.payments import router as payments_router
+from backend.api.ai_studio import router as ai_studio_router
+from backend.api.learning import router as learning_router
 
 # Phase 2: Standardized Route Architecture
 # Note: Middleware strips /api/v1 and /api, so we register canonical paths.
+# Phase 2: Standardized Route Architecture
 app.include_router(chat_router, prefix="/chat", tags=["Chat"])
 app.include_router(studio_router, prefix="/studio", tags=["Studio"])
-app.include_router(ai_router, prefix="/studio/advanced", tags=["AI Studio"])
+app.include_router(ai_studio_router, prefix="/studio/advanced", tags=["AI Studio"])
 app.include_router(auth_router, prefix="/auth", tags=["Auth"])
 app.include_router(payments_router, prefix="/user/payments", tags=["Payments"])
 app.include_router(privacy_router, prefix="/user/privacy", tags=["Privacy"])
 app.include_router(analytics_router, prefix="/system/analytics", tags=["Analytics"])
 app.include_router(orchestrator_router, prefix="/system/orchestrator", tags=["Orchestrator"])
 app.include_router(gallery_router, prefix="/gallery", tags=["Gallery"])
-app.include_router(learning_router, prefix="", tags=["Learning"])  # /feedback, /learning/*, /model/*
+app.include_router(learning_router, prefix="/learning", tags=["Learning"])
 
-# ── Global Error Handling ───────────────────────────
+# ── Global Error Handling (Hardened) ────────────────────────
+from backend.utils.error_handler import levi_exception_handler, global_exception_handler
 from backend.utils.exceptions import LEVIException
 
-@app.exception_handler(LEVIException)
-async def levi_exception_handler(request: Request, exc: LEVIException):
-    rid = getattr(request.state, "request_id", "unknown")
-    uid = getattr(request.state, "user_id", log_user_id.get("anonymous"))
+app.add_exception_handler(LEVIException, levi_exception_handler)
+app.add_exception_handler(Exception, global_exception_handler)
 
-    # Capture to Sentry with structured tags for triage dashboards
-    if SENTRY_DSN:
-        with sentry_sdk.push_scope() as scope:
-            scope.set_tag("error_code", exc.error_code)
-            scope.set_tag("request_id", rid)
-            scope.set_user({"id": uid})
-            scope.set_extra("message", exc.message)
-            scope.set_extra("status_code", exc.status_code)
-            sentry_sdk.capture_exception(exc)
-
-    logger.warning(
-        "levi_exception",
-        extra={
-            "error_code": exc.error_code,
-            "message": exc.message,
-            "request_id": rid,
-            "user_id": uid,
-            "status_code": exc.status_code,
-        }
-    )
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={
-            "error": exc.message,
-            "error_code": exc.error_code,
-            "request_id": rid,
-            "timestamp": datetime.utcnow().isoformat()
-        }
-    )
-
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    rid = getattr(request.state, "request_id", "unknown")
-    if isinstance(exc, HTTPException):
-        return JSONResponse(status_code=exc.status_code, content={"error": exc.detail, "request_id": rid})
-    
-    logger.error(f"Unhandled Error [RID: {rid}]: {exc}", exc_info=True)
-    return JSONResponse(
-        status_code=500,
-        content={
-            "error": "An unexpected error occurred in the cosmic matrix.",
-            "error_code": "INTERNAL_SERVER_ERROR",
-            "request_id": rid
-        }
-    )
+# ── Health Check ────────────────────────────────────
+@app.get("/health")
+async def health_check():
+    return {"status": "ok", "version": "5.0-hardened", "timestamp": datetime.utcnow().isoformat()}
 
 
 
