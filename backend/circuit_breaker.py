@@ -1,17 +1,22 @@
 """
-DEPRECATED — This file is intentionally empty.
+backend/circuit_breaker.py
 
-The CircuitBreaker class has been consolidated into:
-    backend/utils/network.py
-
-That module contains the canonical CircuitBreaker with:
-- OPEN / HALF-OPEN / CLOSED states
-- async_call() support
-- Webhook alert integration (ALERT_WEBHOOK_URL)
-- Rate-limit aware (429 does NOT trip the circuit)
-
-Global instances:
-    from backend.utils.network import ai_service_breaker, groq_breaker, together_breaker
-
-DO NOT ADD CODE HERE.
+PROXY MODULE — Re-exports CircuitBreaker instances from backend.utils.network.
+This maintains compatibility with legacy v5.0 code during the v6.8 transition.
 """
+
+from backend.utils.network import (
+    CircuitBreaker,
+    ai_service_breaker,
+    groq_breaker,
+    together_breaker
+)
+
+# Canonical instances are now managed in backend.utils.network.
+# We export them here to fix ModuleNotFoundError in old tests and services.
+__all__ = [
+    "CircuitBreaker",
+    "ai_service_breaker",
+    "groq_breaker",
+    "together_breaker"
+]

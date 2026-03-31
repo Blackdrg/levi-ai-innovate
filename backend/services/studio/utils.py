@@ -21,14 +21,27 @@ def create_studio_job(
     prefix = "job_" if task_type == "image" else "vjob_"
     job_id = f"{prefix}{uuid.uuid4().hex[:12]}"
     
+    # ── Phase 8: Parameter Normalization ──
+    # Clean and validate basic params
+    normalized_params = params.copy()
+    if task_type == "image":
+        normalized_params.setdefault("aspect_ratio", "1:1")
+        normalized_params.setdefault("style", "cinematic")
+    else:
+        normalized_params.setdefault("aspect_ratio", "9:16")
+        normalized_params.setdefault("motion_bucket_id", 127)
+
     # 1. Credit Check
     cost = 1 if task_type == "image" else 2
+    # Premium tiers may have discounted or unlimited generation (uncomment if logic exists)
+    # if user_tier in ("pro", "creator"): cost = 0
+
     if not user_id.startswith("guest:"):
         try:
             use_credits(user_id, cost)
         except Exception as e:
             logger.error(f"Credit deduction failed: {e}")
-            return {"status": "error", "error": "Insufficient credits or payment failure."}
+            return {"status": "error", "error": f"Insufficient credits ({cost} required)."}
 
     # 2. Prepare Job Data
     job_data = {
@@ -36,7 +49,12 @@ def create_studio_job(
         "type": task_type,
         "status": "queued",
         "user_id": user_id,
-        "params": params,
+        "user_tier": user_tier,
+        "params": normalized_params,
+        "metadata": {
+            "engine": "sovereign_v6",
+            "version": "1.0.0-hardened"
+        },
         "created_at": datetime.utcnow()
     }
 
@@ -48,26 +66,21 @@ def create_studio_job(
         task = generate_image_task if task_type == "image" else generate_video_task
         task.delay(
             job_id=job_id,
-            params=params,
+            params=normalized_params,
             user_id=user_id,
             user_tier=user_tier
         )
     else:
-        # For local dev without Celery, we'd need BackgroundTasks from a request
-        # but in orchestrator we can use asyncio.create_task or similar 
-        # (though Celery is preferred for prod)
-        # Phase 4: Safe Event Loop Handling for Local (Non-Celery) Execution
         from backend.services.studio.logic import run_studio_task
         import asyncio
         try:
             loop = asyncio.get_running_loop()
             loop.create_task(asyncio.to_thread(
-                run_studio_task, job_id, task_type, params, user_id, user_tier
+                run_studio_task, job_id, task_type, normalized_params, user_id, user_tier
             ))
         except RuntimeError:
-            # No running loop, use asyncio.run (standard for non-async callers)
             asyncio.run(asyncio.to_thread(
-                run_studio_task, job_id, task_type, params, user_id, user_tier
+                run_studio_task, job_id, task_type, normalized_params, user_id, user_tier
             ))
 
     return {"status": "queued", "job_id": job_id, "message": f"{task_type.capitalize()} job initiated."}

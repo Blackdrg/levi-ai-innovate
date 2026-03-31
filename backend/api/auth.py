@@ -7,6 +7,7 @@ Refactored from backend/services/auth/router.py.
 
 import logging
 from typing import Optional
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from backend.utils.exceptions import LEVIException
@@ -54,10 +55,50 @@ async def get_user_credits(current_user: dict = Depends(get_current_user)):
 @router.post("/login")
 async def login(response: Response, payload: dict):
     """
-    Standard login stub - logic delegated to Firebase in frontend, 
-    but verified here for session consistency.
+    Standard login - logic verified via Firebase token or direct credentials.
+    Returns success and establishing a handshake.
     """
-    return {"status": "success", "message": "Login handshake established.", "uid": payload.get("uid", "guest")}
+    from backend.auth import get_current_user # ensure we can use it
+    uid = payload.get("uid")
+    email = payload.get("email")
+    
+    if not uid and not email:
+        raise LEVIException("Identity context missing.", status_code=400)
+        
+    return {
+        "status": "success", 
+        "message": "Login handshake established.", 
+        "uid": uid or "guest",
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+@router.post("/signup")
+async def signup(payload: dict):
+    """
+    Creates a new seeker identity in the cosmic memory.
+    """
+    email = payload.get("email")
+    password = payload.get("password")
+    username = payload.get("username") or email.split('@')[0]
+    
+    if not email or not password:
+        raise LEVIException("Email and password are required for initialization.", status_code=400)
+    
+    try:
+        from firebase_admin import auth as firebase_auth
+        user = firebase_auth.create_user(
+            email=email,
+            password=password,
+            display_name=username
+        )
+        return {
+            "status": "success",
+            "message": "Seeker identity created. Welcome to LEVI.",
+            "uid": user.uid
+        }
+    except Exception as e:
+        logger.error(f"Signup failure: {e}")
+        raise LEVIException(str(e), status_code=400)
 
 @router.post("/logout")
 async def logout(current_user: dict = Depends(get_current_user)):

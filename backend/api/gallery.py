@@ -46,7 +46,7 @@ async def get_daily_quote(response: Response, mood: str = "philosophical"):
 @router.get("/feed", response_model=List[dict])
 async def get_feed(request: Request, response: Response, limit: int = 20, offset: int = 0):
     """
-    Returns the global content feed.
+    Returns the global content feed with v6 Sovereignty Studio metadata.
     """
     response.headers["Cache-Control"] = "public, max-age=60, stale-while-revalidate=600"
     try:
@@ -57,17 +57,23 @@ async def get_feed(request: Request, response: Response, limit: int = 20, offset
         results = []
         for doc in docs:
             d = doc.to_dict()
+            item_type = d.get("type", "image")
+            
             results.append({
                 "id": doc.id,
+                "type": item_type,
                 "text": d.get("text"),
                 "author": d.get("author"),
                 "mood": d.get("mood"),
+                "aspect_ratio": d.get("aspect_ratio", "1:1"),
+                "style": d.get("style", "default"),
                 "image": d.get("image_url") or d.get("image_b64"),
+                "video": d.get("video_url") or d.get("video_b64"),
                 "likes": d.get("likes", 0),
                 "time": d.get("timestamp").isoformat() if d.get("timestamp") else None
             })
         
-        # ETag calculation for browser caching
+        # Phase 10: ETag with metadata sensitivity
         res_json = json.dumps(results, sort_keys=True)
         etag = f'W/"{hashlib.md5(res_json.encode()).hexdigest()}"'
         
@@ -76,13 +82,15 @@ async def get_feed(request: Request, response: Response, limit: int = 20, offset
             
         response.headers["ETag"] = etag
         return results
-    except Exception:
+    except Exception as e:
+        logger.error(f"Feed retrieval failure: {e}")
         return []
 
 @router.post("/like/{item_type}/{item_id}")
 async def like_item(item_type: str, item_id: str):
     """
-    Increments the like count for a specific item.
+    Increments the like count for a specific item (Quote or Feed Item).
+    Phase 10: Atomic Social Resonance.
     """
     try:
         collection = "quotes" if item_type == "quote" else "feed_items"
@@ -91,19 +99,19 @@ async def like_item(item_type: str, item_id: str):
 
         item_ref = firestore_db.collection(collection).document(item_id)
         if not item_ref.get().exists:
-            raise LEVIException("Item lost in the void.", status_code=404)
+            raise LEVIException("Item not found in this timeline.", status_code=404)
 
+        # Atomic increment (Firebase native)
         item_ref.update({"likes": google_firestore.Increment(1)})
         
         from backend.firestore_db import update_analytics
         update_analytics("likes_count")
 
         return {"status": "success", "message": "Resonance increased."}
-    except LEVIException:
-        raise
+    except LEVIException: raise
     except Exception as e:
-        logger.error(f"Like action failure: {e}")
-        raise LEVIException("Action failed.", status_code=500)
+        logger.error(f"Like failure: {e}")
+        raise LEVIException("Social sync failed.", status_code=500)
 
 @router.get("/me")
 @router.get("/my_gallery")
@@ -113,7 +121,7 @@ async def get_my_gallery(
     offset: int = 0
 ):
     """
-    Returns the current user's personal gallery items.
+    Returns the current user's personal sovereignty gallery.
     """
     uid = current_user.get("uid")
     try:
@@ -123,16 +131,23 @@ async def get_my_gallery(
             .order_by("timestamp", direction=google_firestore.Query.DESCENDING)
             .limit(limit).offset(offset))
         docs = query.get()
-        return [{
-            "id": doc.id,
-            "text": doc.to_dict().get("text"),
-            "author": doc.to_dict().get("author"),
-            "mood": doc.to_dict().get("mood"),
-            "image": doc.to_dict().get("image_url") or doc.to_dict().get("image_b64"),
-            "video": doc.to_dict().get("video_url"),
-            "likes": doc.to_dict().get("likes", 0),
-            "time": doc.to_dict().get("timestamp").isoformat() if doc.to_dict().get("timestamp") else None
-        } for doc in docs]
+        
+        results = []
+        for doc in docs:
+            d = doc.to_dict()
+            results.append({
+                "id": doc.id,
+                "type": d.get("type", "image"),
+                "text": d.get("text"),
+                "author": d.get("author"),
+                "mood": d.get("mood"),
+                "aspect_ratio": d.get("aspect_ratio", "1:1"),
+                "image": d.get("image_url") or d.get("image_b64"),
+                "video": d.get("video_url") or d.get("video_b64"),
+                "likes": d.get("likes", 0),
+                "time": d.get("timestamp").isoformat() if d.get("timestamp") else None
+            })
+        return results
     except Exception as e:
         logger.error(f"Gallery retrieval failure: {e}")
         return []

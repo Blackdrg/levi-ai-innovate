@@ -19,47 +19,53 @@ router = APIRouter(prefix="/admin/orchestrator", tags=["Monitoring"])
 @router.get("/stats")
 async def get_orchestrator_stats(is_admin: bool = Depends(verify_admin)):
     """
-    Returns real-time statistics on decision routing and complexity.
+    Returns real-time statistics on decision routing, agent health, and optimization efficacy.
     """
     if not HAS_REDIS:
         return {"status": "degraded", "message": "Redis offline"}
 
-    # 1. Route Distribution
+    # 1. Route & Cache Efficacy
     routes = ["cache", "local", "tool", "api"]
-    distribution = {}
-    for r in routes:
-        count = int(redis_client.get(f"stats:route:{r}") or 0)
-        distribution[r] = count
+    distribution = {r: int(redis_client.get(f"stats:route:{r}") or 0) for r in routes}
+    
+    # 2. Agent Health & Reliability (Phase 6 Hardening)
+    from backend.services.orchestrator.tool_registry import _TOOL_INSTANCES
+    from backend.redis_client import get_failure_count
+    
+    agent_health = {}
+    for name in _TOOL_INSTANCES.keys():
+        fail_count = get_failure_count(name)
+        status = "healthy"
+        if fail_count > 20: status = "degraded"
+        if fail_count > 50: status = "critical"
+        
+        agent_health[name] = {
+            "status": status,
+            "failures_7d": fail_count
+        }
 
-    # 2. Complexity Spreading
-    complexity = {}
-    for i in range(4):
-        count = int(redis_client.get(f"stats:complexity:{i}") or 0)
-        complexity[f"Level {i}"] = count
-
-    # 3. Cost & Latency (Averages)
-    avg_cost = float(redis_client.get("stats:avg_cost_weight") or 0.0)
-    avg_latency = float(redis_client.get("stats:avg_latency_ms") or 0.0)
-
-    # 4. Evolver Status
+    # 3. Decision Complexity & Performance
+    complexity = {f"Level {i}": int(redis_client.get(f"stats:complexity:{i}") or 0) for i in range(4)}
+    avg_cost = round(float(redis_client.get("stats:avg_cost_weight") or 0.0), 3)
+    
+    # 4. Evolution Status
     evolve_count = int(redis_client.get("system:evolution:interaction_count") or 0)
+    
+    from backend.learning import get_learning_stats
+    learning_stats = get_learning_stats()
 
     return {
-        "health": "ok",
-        "evolution_state": evolution_state.value,
-        "performance": {
-            "avg_confidence": round(avg_conf * 100, 1),
-            "avg_quality": round(avg_rating, 2),
-            "is_critical": evolution_state == EvolutionState.CRITICAL
-        },
-        "learning": learning_stats,
+        "status": "operational",
         "orchestration": {
-            "avg_cost_weight": round(float(redis_client.get("stats:avg_cost_weight") or 0.0), 3),
-            "route_distribution": {
-                "local": int(redis_client.get("stats:route:local") or 0),
-                "api": int(redis_client.get("stats:route:api") or 0),
-                "cache": int(redis_client.get("stats:route:cache") or 0)
-            }
+            "routes": distribution,
+            "complexity": complexity,
+            "avg_cost_weight": avg_cost,
+        },
+        "agents": agent_health,
+        "learning": learning_stats,
+        "evolution": {
+            "interaction_surplus": evolve_count,
+            "threshold": 25
         }
     }
 

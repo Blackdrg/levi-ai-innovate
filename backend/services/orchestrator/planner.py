@@ -127,7 +127,7 @@ async def detect_intent(user_input: str) -> IntentResult:
     system_prompt = (
         "You are the LEVI Adaptive Decision Engine. Classify this request:\n"
         "Output ONLY JSON: {\n"
-        "  'intent_type': 'greeting|factual|creative|technical|action|chat',\n"
+        "  'intent_type': 'greeting|factual|search|creative|technical|action|chat|hybrid|document',\n"
         "  'complexity_level': 0-3,\n"
         "  'estimated_cost_weight': 'low|medium|high',\n"
         "  'confidence_score': 0.0-1.0\n"
@@ -189,10 +189,15 @@ async def generate_plan(user_input: str, intent_data: IntentResult, context: Dic
     # ── Level 2: Moderate (LLM + Supporting engine) ────────────────────
     elif level == 2:
         memory_needed.append("session_mood")
-        if intent == "search":
+        if intent in ("search", "factual"):
              steps.append(PlanStep(description="Knowledge lookup", agent="search_agent", critical=True))
+        elif intent == "hybrid":
+             steps.append(PlanStep(description="Knowledge lookup", agent="search_agent", critical=True))
+             steps.append(PlanStep(description="Conversational expansion", agent="chat_agent", critical=True))
         elif intent == "logic":
              steps.append(PlanStep(description="Logic verification", agent="python_repl_agent", critical=True))
+        elif intent == "document":
+             steps.append(PlanStep(description="Internal document retrieval", agent="document_agent", critical=True))
         
         steps.append(PlanStep(
             description="Moderate reasoning synthesis",

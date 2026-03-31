@@ -356,23 +356,25 @@ def generate_quote_video(
     with_subtitles: bool = True,
     aspect_ratio: str = "9:16",
     num_scenes: int = 3,
-) -> BytesIO:
+) -> dict:
     """
     Full video composition pipeline.
-    Returns MP4 as BytesIO.
+    Returns dict with: 'data' (BytesIO), 'engine', 'success', 'warnings'.
 
     aspect_ratio: '9:16' (vertical/Reels) or '16:9' (landscape)
     """
     if not HAS_MOVIEPY:
-        raise ImportError("MoviePy is required. Install: pip install moviepy")
+        return {"data": None, "engine": "moviepy", "success": False, "error": "MoviePy not installed"}
     if not HAS_NUMPY:
-        raise ImportError("numpy is required for video generation")
+        return {"data": None, "engine": "moviepy", "success": False, "error": "numpy not installed"}
 
     # Size configuration
     if aspect_ratio == "16:9":
         size = (1920, 1080)
+    elif aspect_ratio == "1:1":
+        size = (1080, 1080)
     else:
-        size = (1080, 1920)  # 9:16 vertical
+        size = (1080, 1920)  # 9:16 default
 
     tmp_files = []
     scene_clips = []
@@ -382,102 +384,78 @@ def generate_quote_video(
         # ── Step 1: Generate narration script ──
         narration_text = quote
         if with_narration:
-            narration_text = generate_narration_script(quote, author, mood)
+            try:
+                narration_text = generate_narration_script(quote, author, mood)
+            except Exception as e:
+                warnings.append(f"Script gen failed: {e}")
 
         # ── Step 2: Split into scenes ──
         scene_texts = _split_into_scenes(narration_text, num_scenes)
-        scene_duration = max(4.0, min(8.0, 20.0 / num_scenes))
+        scene_duration = max(3.5, min(7.0, 18.0 / num_scenes))
 
         # ── Step 3: Build image prompt ──
         try:
-            try:
-                from backend.image_gen import build_prompt  # type: ignore
-            except ImportError:
-                from image_gen import build_prompt  # type: ignore
-            base_prompt = build_prompt(quote, mood, enhance=True)
+            from backend.image_gen import build_prompt
+            base_prompt, p_warns = build_prompt(quote, mood, enhance=True)
+            warnings.extend(p_warns)
         except Exception:
-            base_prompt = f"{mood} atmosphere, cinematic, high quality"
+            base_prompt = f"cinematic {mood} atmosphere, 8k, masterpiece"
 
         # ── Step 4: Generate scene clips ──
-        kb_directions = ["in", "out", "left", "right", "diagonal", "up"]
+        kb_directions = ["in", "out", "left", "right", "up"]
 
         for i, scene_text in enumerate(scene_texts):
-            logger.info(f"[Video] Scene {i+1}/{num_scenes}")
+            logger.info(f"[Video] Scene {i+1}/{num_scenes} | Aspect: {aspect_ratio}")
             try:
-                scene_prompt = f"{base_prompt}, {scene_text[:50]}"
+                scene_prompt = f"{base_prompt}, {scene_text[:60]}"
                 img_array = generate_scene_image(scene_prompt, mood, size)
 
                 clip = ImageClip(img_array).with_duration(scene_duration)
 
-                # Randomize Ken Burns direction per scene
+                # Ken Burns effect
                 direction = kb_directions[i % len(kb_directions)]
                 clip = apply_ken_burns(clip, scene_duration,
-                                       zoom_start=1.0, zoom_end=1.1,
+                                       zoom_start=1.0, zoom_end=1.08,
                                        direction=direction)
 
-                # Cross-fade in (not first clip)
                 if i > 0:
-                    clip = clip.crossfadein(0.8)  # type: ignore
+                    clip = clip.crossfadein(0.6)  # type: ignore
 
                 scene_clips.append(clip)
 
             except Exception as e:
                 logger.warning(f"[Video] Scene {i+1} failed: {e}")
-                # Blank fallback clip
-                blank = ColorClip(size, color=(10, 10, 20)).with_duration(scene_duration)
+                blank = ColorClip(size, color=(20, 20, 40)).with_duration(scene_duration)
                 scene_clips.append(blank)
 
         if not scene_clips:
-            raise RuntimeError("All scenes failed to generate")
+            raise RuntimeError("Scene generation stalemate.")
 
-        # ── Step 5: Concatenate scenes ──
+        # ── Step 5: Composite ──
         final_clip = concatenate_videoclips(scene_clips, method="compose")
-        total_duration = sum(scene_duration for _ in scene_clips)
+        total_duration = sum(c.duration for c in scene_clips)
 
-        # ── Step 6: Subtitle overlay ──
+        # ── Step 6: Subtitles ──
         if with_subtitles:
-            subtitle = create_subtitle_clip(quote, size, total_duration * 0.85, mood)
+            subtitle = create_subtitle_clip(quote, size, total_duration * 0.9, mood)
             if subtitle:
-                offset = total_duration * 0.1
-                subtitle = subtitle.with_start(offset)  # type: ignore
+                subtitle = subtitle.with_start(0.5)  # type: ignore
                 final_clip = CompositeVideoClip([final_clip, subtitle])
 
-        # ── Step 7: TTS Audio ──
-        audio_path = None
-        if with_narration and HAS_TTS:
-            audio_path = synthesize_speech(narration_text)
-            if audio_path:
-                tmp_files.append(audio_path)
-
-        if audio_path and os.path.exists(audio_path):
+        # ── Step 7: Audio ──
+        audio_path = synthesize_speech(narration_text) if with_narration else None
+        if audio_path:
+            tmp_files.append(audio_path)
             try:
                 audio = AudioFileClip(audio_path)
                 if audio.duration > total_duration:
                     audio = audio.subclipped(0, total_duration)  # type: ignore
                 final_clip = final_clip.with_audio(audio)  # type: ignore
             except Exception as e:
-                logger.warning(f"[Video] Audio attachment failed: {e}")
-
-        # Background music
-        if bg_music and os.path.exists(bg_music):
-            try:
-                music = AudioFileClip(bg_music)
-                if music.duration > total_duration:
-                    music = music.subclipped(0, total_duration)  # type: ignore
-                music = music.with_volume_scaled(0.12)  # type: ignore
-
-                if final_clip.audio:
-                    from moviepy import CompositeAudioClip  # type: ignore
-                    final_clip = final_clip.with_audio(
-                        CompositeAudioClip([final_clip.audio, music])
-                    )
-                else:
-                    final_clip = final_clip.with_audio(music)  # type: ignore
-            except Exception as e:
-                logger.warning(f"[Video] Background music failed: {e}")
+                warnings.append(f"Audio error: {e}")
 
         # ── Step 8: Export ──
-        fd, output_path = tempfile.mkstemp(suffix=".mp4", prefix="levi_video_")
+        fd, output_path = tempfile.mkstemp(suffix=".mp4", prefix="levi_vid_")
         os.close(fd)
         tmp_files.append(output_path)
 
@@ -486,7 +464,7 @@ def generate_quote_video(
             fps=24,
             codec="libx264",
             audio_codec="aac",
-            bitrate="2000k",
+            bitrate="2500k",
             threads=2,
             logger=None,
         )
@@ -494,8 +472,13 @@ def generate_quote_video(
         with open(output_path, "rb") as f:
             video_data = f.read()
 
-        logger.info(f"[Video] Generated: {len(video_data)} bytes")
-        return {"data": BytesIO(video_data), "engine": "moviepy_together", "success": True, "warnings": warnings}
+        return {
+            "data": BytesIO(video_data),
+            "engine": "moviepy_together",
+            "success": True,
+            "warnings": warnings,
+            "aspect_ratio": aspect_ratio
+        }
 
     except Exception as e:
         logger.error(f"[Video] Generation failed: {e}")

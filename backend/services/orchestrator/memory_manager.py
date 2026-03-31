@@ -111,10 +111,9 @@ class MemoryManager:
             return default_shape
 
         try:
-            from .memory_utils import search_relevant_facts, prune_old_facts
-
             # 1. Maintenance (Background)
-            asyncio.create_task(prune_old_facts(user_id))
+            # consolidated garbage collection triggered based on interaction count (Phase 2 Hardened)
+            from .memory_utils import search_relevant_facts, garbage_collect_index
 
             # 2. Vector Search (Immediate Buffer + Firestore)
             relevant_facts = await search_relevant_facts(user_id, query, limit=12)
@@ -143,7 +142,7 @@ class MemoryManager:
             
             # 5. Token-Aware Trimming (LEVI v6 Phase 12)
             # We prune facts based on importance if the total context is too large.
-            trimmed_facts = self._trim_facts_by_tokens(facts, max_tokens=1500)
+            trimmed_facts = MemoryManager._trim_facts_by_tokens(facts, max_tokens=1500)
             return trimmed_facts
         except Exception as e:
             logger.error("Error fetching long-term memory for %s: %s", user_id, e)
