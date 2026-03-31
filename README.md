@@ -1,12 +1,12 @@
-# LEVI — Autonomous AI Orchestrator (v5.0 "Hardened Architecture") 🧠
+# LEVI — Autonomous AI Orchestrator (v1.0 "Production Hardened") 🧠
 
 > **Learning, Evolution, Vision, Intelligence**
 
 LEVI is a production-hardened **AI Orchestration Platform** built for high-reliability, low-latency, and persistent semantic evolution. It routes user requests through an intelligent 8-stage pipeline—deciding locally, through specialized agents, or via large-scale LLMs—while building a persistent 3-layer "Soul" memory of every interaction.
 
 > [!IMPORTANT]
-> **Hardened v5.0 is LIVE.**
-> 42/42 tests passing · 100% SSE Streaming reliability · Consistently < 50ms latency for cached queries · Zero-empty response guarantee via 3-tier fallback.
+> **v1.0 Production Hardening is COMPLETE.**
+> 100% SSE Streaming reliability · Redis-backed memory debouncing · JTI Blacklist & Tier Enforcement · Consistently < 50ms latency for cached queries.
 
 ---
 
