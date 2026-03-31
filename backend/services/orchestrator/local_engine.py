@@ -1,150 +1,159 @@
 """
 backend/services/orchestrator/local_engine.py
 
-🟢 LOCAL ENGINE — Zero-cost, zero-API response handler.
+🟢 LOCAL ENGINE v2.0 — Real, Sovereignty-First Local LLM.
 
-Handles:
-  - Greetings (Hi, Hello, Hey, Good morning…)
-  - Simple FAQ / identity queries about LEVI
-  - Canned one-liners for trivial queries
-  - Basic math expressions (eval-free, pattern-based)
-
-Contract:
-  handle_local(user_input, context) -> str (always non-empty)
-
-This engine NEVER makes external API calls.
-It is the first-tier cost saver: if a query lands here,
-the Groq API is never touched.
+Powered by llama-cpp-python (GGUF).
+Provides zero-cost, zero-latency (post-load) responses for:
+  - Greetings & Identity
+  - Simple reasoning tasks (Complexity 1-2)
+  - Tool-use planning logic
 """
-import re
+
+import os
 import logging
-from typing import Dict, Any
+import asyncio
+from typing import Dict, Any, AsyncGenerator, Optional
+from llama_cpp import Llama  # type: ignore
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Static Response Tables
-# ---------------------------------------------------------------------------
+# --- Configuration ---
+MODEL_PATH = os.getenv("LOCAL_MODEL_PATH", "backend/data/models/llama-3-8b-instruct.Q4_K_M.gguf")
+N_CTX = 4096
+N_THREADS = int(os.getenv("LOCAL_LLM_THREADS", "4"))
 
-GREETING_RESPONSES = [
-    "Hello! I'm LEVI — your AI companion. What would you like to explore today?",
-    "Hey there! LEVI at your service. What's on your mind?",
-    "Greetings, traveler. LEVI is here and ready. What shall we discover?",
-    "Hi! I'm LEVI, an AI built to think, create, and converse. How can I help?",
-    "Hello! I sense curiosity in the air. What would you like to discuss?",
-]
-
-IDENTITY_RESPONSES = [
-    (
-        "I am LEVI — a philosophical AI designed to think deeply, create boldly, "
-        "and connect meaningfully. Ask me anything."
-    ),
-    (
-        "LEVI stands for Learning, Evolution, Vision, Intelligence. "
-        "I'm your AI companion — built to reason, create images, write code, "
-        "and hold meaningful conversations."
-    ),
-    (
-        "I'm LEVI, an AI orchestrated to understand your intent and route it to "
-        "the best engine — locally for speed, or to specialized models for depth."
-    ),
-]
-
-CAPABILITY_RESPONSES = [
-    (
-        "Here's what I can do:\n"
-        "• 💬 **Chat** — Conversations, philosophy, debates\n"
-        "• 🎨 **Image Generation** — Visualize any concept\n"
-        "• 💻 **Code** — Write, debug, architect software\n"
-        "• 🔍 **Search** — Research topics in depth\n"
-        "• 🧠 **Memory** — I remember our conversations\n\n"
-        "Just tell me what you need and I'll handle the rest."
-    ),
-]
-
-FALLBACK_RESPONSE = (
-    "I'm here and listening. Could you elaborate a little more on what you need? "
-    "I want to give you the most precise answer possible."
-)
-
-# ---------------------------------------------------------------------------
-# Pattern → Response Category Mapping
-# ---------------------------------------------------------------------------
-
-_GREETING_PATTERNS = re.compile(
-    r"^\s*(hi|hello|hey|howdy|sup|greetings|yo|hiya|what'?s up|"
-    r"good\s+(morning|afternoon|evening|night))\s*[!?.]*\s*$",
-    re.IGNORECASE,
-)
-
-_IDENTITY_PATTERNS = re.compile(
-    r"\b(who (are|is) (you|levi)|what (is|are) (you|levi)|"
-    r"tell me about (yourself|levi)|what'?s? your (name|purpose|function|goal))\b",
-    re.IGNORECASE,
-)
-
-_CAPABILITY_PATTERNS = re.compile(
-    r"\b(what can you do|help me|your (abilities|capabilities|features)|"
-    r"how (can|do) (i|you))\b",
-    re.IGNORECASE,
-)
-
-
-# ---------------------------------------------------------------------------
-# Deterministic Selector (no randomness for testability; rotates by hash)
-# ---------------------------------------------------------------------------
-
-def _pick(options: list, seed: str) -> str:
-    """Pick a response deterministically based on input hash."""
-    idx = hash(seed) % len(options)
-    return options[idx]
-
-
-# ---------------------------------------------------------------------------
-# Public Interface
-# ---------------------------------------------------------------------------
-
-def handle_local(user_input: str, context: Dict[str, Any] = {}) -> str:
+class LocalLLM:
     """
-    Handle a user message entirely locally with zero API calls.
-
-    Always returns a non-empty string.
-    Logs the matched category for observability.
+    Singleton for the local LlamaCPP engine to prevent redundant memory allocation.
     """
-    text = user_input.strip()
+    _instance: Optional[Llama] = None
+    _lock = asyncio.Lock()
 
-    # 1. Greeting
-    if _GREETING_PATTERNS.match(text):
-        response = _pick(GREETING_RESPONSES, text)
-        logger.info("LocalEngine: greeting matched → %s", response[:60])
-        return response
+    @classmethod
+    async def get_instance(cls) -> Optional[Llama]:
+        if cls._instance is not None:
+            return cls._instance
 
-    # 2. Identity / Who are you?
-    if _IDENTITY_PATTERNS.search(text):
-        response = _pick(IDENTITY_RESPONSES, text)
-        logger.info("LocalEngine: identity query matched")
-        return response
+        async with cls._lock:
+            if cls._instance is not None:
+                return cls._instance
 
-    # 3. Capability / What can you do?
-    if _CAPABILITY_PATTERNS.search(text):
-        response = _pick(CAPABILITY_RESPONSES, text)
-        logger.info("LocalEngine: capability query matched")
-        return response
+            if not os.path.exists(MODEL_PATH):
+                logger.warning(f"Local model not found at {MODEL_PATH}. Local reasoning unavailable.")
+                return None
 
-    # 4. Very short input (≤ 3 chars) — treat as ambiguous greeting
-    if len(text) <= 3:
-        response = GREETING_RESPONSES[0]
-        logger.info("LocalEngine: micro-input, defaulting to greeting")
-        return response
+            try:
+                # Lazy-loading the model into memory
+                logger.info(f"Loading local model: {MODEL_PATH} (Threads: {N_THREADS})")
+                cls._instance = Llama(
+                    model_path=MODEL_PATH,
+                    n_ctx=N_CTX,
+                    n_threads=N_THREADS,
+                    verbose=False,
+                    n_gpu_layers=-1 if os.getenv("USE_GPU", "true").lower() == "true" else 0
+                )
+                logger.info("Local LLM initialized successfully.")
+                return cls._instance
+            except Exception as e:
+                logger.error(f"Failed to initialize Local LLM: {e}")
+                return None
 
-    # 5. Safe fallback — still zero API cost
-    logger.info("LocalEngine: no specific match, using fallback response")
-    return FALLBACK_RESPONSE
+async def generate_local_response(
+    messages: list, 
+    max_tokens: int = 512, 
+    temperature: float = 0.7
+) -> AsyncGenerator[str, None]:
+    """
+    Streaming generator for local LLM responses.
+    """
+    llm = await LocalLLM.get_instance()
+    if not llm:
+        yield "I'm currently unable to process this locally. Please check my status."
+        return
 
+    try:
+        # Convert messages to prompt format (Llama 3 Instruct template)
+        # Note: In a production scenario, we'd use a more robust template engine.
+        prompt = ""
+        for msg in messages:
+            role = msg["role"]
+            content = msg["content"]
+            if role == "system":
+                prompt += f"<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n{content}<|eot_id|>"
+            elif role == "user":
+                prompt += f"<|start_header_id|>user<|end_header_id|>\n\n{content}<|eot_id|>"
+            elif role == "assistant":
+                prompt += f"<|start_header_id|>assistant<|end_header_id|>\n\n{content}<|eot_id|>"
+        
+        prompt += "<|start_header_id|>assistant<|end_header_id|>\n\n"
+
+        # Execute streaming generation
+        output = llm(
+            prompt,
+            max_tokens=max_tokens,
+            stop=["<|eot_id|>", "<|end_of_text|>"],
+            stream=True,
+            temperature=temperature
+        )
+
+        for chunk in output:
+            token = chunk["choices"][0]["text"]
+            yield token
+
+    except Exception as e:
+        logger.error(f"Local generation error: {e}")
+        yield f"Error during local synthesis: {str(e)}"
+
+async def handle_local(user_input: str, context: Dict[str, Any] = {}) -> str:
+    """
+    Legacy sync/async wrapper for deterministic local handling.
+    """
+    messages = [
+        {"role": "system", "content": "You are LEVI, a helpful AI assistant. Be concise and friendly."},
+        {"role": "user", "content": user_input}
+    ]
+    
+    response = ""
+    async for token in generate_local_response(messages):
+        response += token
+    
+    return response or "I'm here."
+
+async def handle_local_sync(messages: list, max_tokens: int = 250, temperature: float = 0.1) -> str:
+    """
+    Perform a single non-streaming local inference. 
+    Ideal for internal tasks like intent classification or summarization.
+    """
+    llm = await LocalLLM.get_instance()
+    if not llm: return ""
+
+    try:
+        prompt = ""
+        for msg in messages:
+            prompt += f"<|start_header_id|>{msg['role']}<|end_header_id|>\n\n{msg['content']}<|eot_id|>"
+        prompt += "<|start_header_id|>assistant<|end_header_id|>\n\n"
+
+        output = await asyncio.to_thread(
+            lambda: llm(
+                prompt,
+                max_tokens=max_tokens,
+                stop=["<|eot_id|>", "<|end_of_text|>"],
+                stream=False,
+                temperature=temperature
+            )
+        )
+        return output["choices"][0]["text"].strip()
+    except Exception as e:
+        logger.error(f"Local sync generation failed: {e}")
+        return ""
 
 def is_locally_handleable(intent: str, complexity: int) -> bool:
     """
     Predicate used by the Decision Engine to gate routing.
-    Returns True only for intents that are safe to answer without any API.
+    If the model exists, Level 1 and 2 tasks are redirected here.
     """
-    return intent in ("greeting", "simple_query") and complexity <= 3
+    if not os.path.exists(MODEL_PATH):
+        return False
+        
+    return complexity <= 2

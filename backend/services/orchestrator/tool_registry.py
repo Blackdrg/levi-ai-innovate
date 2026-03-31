@@ -14,6 +14,9 @@ from .agents.search_agent import SearchAgent
 from .agents.local_agent import LocalAgent
 from .agents.python_repl_agent import PythonREPLAgent
 from .agents.video_agent import VideoAgent
+from .agents.critic_agent import ValidatorAgent
+from .agents.diagnostic_agent import DiagnosticAgent
+from .agents.optimizer_agent import OptimizerAgent
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +29,9 @@ _TOOL_INSTANCES: Dict[str, BaseTool] = {
     "local_agent":  LocalAgent(),
     "python_repl_agent": PythonREPLAgent(),
     "video_agent": VideoAgent(),
+    "critic_agent": ValidatorAgent(),
+    "diagnostic_agent": DiagnosticAgent(),
+    "optimizer_agent": OptimizerAgent(),
 }
 
 def get_tool(name: str) -> Optional[BaseTool]:

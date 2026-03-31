@@ -1,13 +1,8 @@
-"""
-backend/services/orchestrator/brain.py
-
-Central Orchestrator v3.0 — The Unified Deterministic Pipeline.
-Enforces the flow: Intent Detect → Planning → Execution → Synthesis.
-"""
-
 import logging
 import uuid
 import asyncio
+import json
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional, AsyncGenerator
 
 from .planner import detect_intent, generate_plan
@@ -37,7 +32,7 @@ class LeviBrain:
         session_id: str, 
         streaming: bool = False, 
         request_id: Optional[str] = None,
-        status_callback: Optional[callable] = None,
+        status_callback: Optional[Any] = None,
         **kwargs
     ) -> Any:
         """
@@ -66,7 +61,7 @@ class LeviBrain:
              }
         
         # 1.1 Semantic Cache Check (LEVI v6 Phase 12)
-        from backend.redis_client import check_semantic_match, store_semantic_match
+        from backend.redis_client import check_semantic_match
         semantic_res = check_semantic_match(user_id, user_input, kwargs.get("mood", "philosophical"), threshold=0.92)
         if semantic_res:
              logger.info("[Brain] Semantic Cache Hit (Similarity > 0.92)")
@@ -77,35 +72,34 @@ class LeviBrain:
                  "request_id": request_id
              }
 
-        # 2. Context Builder & Memory Injection (Step 2 & 3)
+        # 2. Intent Classification (CRITICAL: Must happen before budgeting)
+        await _notify("Analyzing intent complexity...")
+        intent = await detect_intent(user_input)
+
+        # 3. Context Builder & Memory Injection
         await _notify("Hydrating atmospheric context...")
         context = await self.memory.get_combined_context(user_id, session_id, user_input)
         context.update(kwargs) # user_tier, mood, etc.
 
-        # 2.5 Brain-Controlled Context Injection (BCCI - Phase 17)
-        # 1. Allocate Token Budget
+        # 3.5 Brain-Controlled Context Injection (BCCI)
         from .context_utils import allocate_budget
         user_tier = kwargs.get("user_tier", "free")
         budget = allocate_budget(intent.intent_type, user_tier, intent.complexity_level)
         context["budget"] = budget
         
-        # 2. Dynamic Few-Shot (ICL) Selection
-        # Only inject if complexity >= 2 or confidence < 0.85
         from backend.learning import retrieve_resonant_patterns
         if intent.complexity_level >= 2 or intent.confidence_score < 0.85:
             patterns = await retrieve_resonant_patterns(user_input)
             context["few_shot_patterns"] = patterns
             if patterns:
-                 logger.info("[Brain] BCCI: %d successful patterns retrieved.", len(patterns))
+                 logger.info("[Brain] BCCI: %d patterns retrieved.", len(patterns))
         else:
             context["few_shot_patterns"] = []
-            logger.info("[Brain] BCCI: Zero-Pattern path selected for simple intent.")
         
-        # 3. Intent Classification (Step 4)
-        await _notify("Analyzing intent complexity...")
-        intent = await detect_intent(user_input)
+        # 4. 🔥 Decision Engine (Real Sovereign Logic)
+        from .local_engine import is_locally_handleable
+        can_handle_locally = is_locally_handleable(intent.intent_type, intent.complexity_level)
         
-        # 4. 🔥 Decision Engine (NEW - Step 5)
         decision = DecisionLog(
             request_id=request_id,
             user_id=user_id,
@@ -113,18 +107,23 @@ class LeviBrain:
             complexity_level=intent.complexity_level,
             confidence_score=intent.confidence_score,
             estimated_cost_weight=intent.estimated_cost_weight,
-            route=EngineRoute.LOCAL if intent.complexity_level <= 1 else EngineRoute.API
+            route=EngineRoute.LOCAL if can_handle_locally else EngineRoute.API
         )
-        logger.info("[DecisionEngine] Path Selected: Level %d (%s)", decision.complexity_level, decision.intent_type)
+        logger.info("[DecisionEngine] Path: %s (L%d)", decision.route.value, decision.complexity_level)
         
-        # 5. Engine Selector & Execution (Step 6)
-        # ── 🟢 Level 0: Trivial (Short-Circuit) ──
+        # 5. Engine Selector & Execution 
+        
+        # Scenario A: Streaming
+        if streaming:
+            return await self._stream_pipeline(user_input, intent, context, request_id)
+
+        # Scenario B: Level 0 (Direct Local)
         if decision.complexity_level == 0:
-            await _notify("Executing zero-engine fast path...")
+            await _notify("Executing fast path...")
             from .tool_registry import call_tool
             res = await call_tool("local_agent", {"input": user_input, "mood": context.get("mood")}, context)
             response = res.get("message", "Greetings.")
-            # Store in exact match cache for next time
+            from backend.redis_client import store_exact_match
             store_exact_match(user_id, user_input, context.get("mood", "philosophical"), response)
             return {
                 "response": response,
@@ -134,29 +133,21 @@ class LeviBrain:
                 "decision": decision.as_dict()
             }
 
-        # ── 🟡 Level 1: Simple (Single cheap engine) ──
-        if decision.complexity_level == 1 and not streaming:
-            await _notify("Routing to single-engine path...")
-            from .tool_registry import call_tool
-            res = await call_tool("local_agent", {"input": user_input}, context)
-            return {
-                "response": res.get("message"),
-                "intent": intent.intent_type,
-                "route": EngineRoute.LOCAL.value,
-                "request_id": request_id,
-                "decision": decision.as_dict()
-            }
+        # Scenario C: Level 1-2 (Sovereign Local Reasoning)
+        if decision.route == EngineRoute.LOCAL:
+            await _notify("Routing to local engine...")
+            from .local_engine import handle_local
+            response = await handle_local(user_input, context)
+        else:
+            # Scenario D: Level 3+ (Advanced API Orchestration)
+            await _notify("Planning orchestration flow...")
+            plan = await generate_plan(user_input, intent, context)
+            execution_results = await execute_plan(plan, context)
+            from .engine import synthesize_response
+            response = await synthesize_response(execution_results, context)
+            context["execution_history"] = execution_results
 
-        # ── 🔴 Streaming Path (Handled separately) ──
-        if streaming and decision.complexity_level <= 2:
-            return await self._stream_pipeline(user_input, intent, context, request_id)
-
-        # 3. Execution (Phase 2)
-        execution_results = await execute_plan(plan, context)
-        
-        # 4. Synthesis (Phase 3)
-        from .engine import synthesize_response
-        response = await synthesize_response(execution_results, context)
+        # 6. Optimization Pass (The Soul)
 
         # ── LEVI v6: Stage 5 — Optimization Pass (The Soul) ──────────────────
         # Optimization elevates the final response to ensure philosophical resonance.
@@ -240,16 +231,32 @@ class LeviBrain:
         messages.append({"role": "user", "content": user_input})
         
         # 3. Hybrid Model Selection (Cost-Optimized)
+        from .local_engine import is_locally_handleable, generate_local_response
+        
+        if is_locally_handleable(intent.intent_type, intent.complexity_level):
+            logger.info("Streaming via LOCAL engine")
+            # Wrap standard message format for local engine
+            local_messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_input}
+            ]
+            return {
+                "intent": intent.intent_type,
+                "route": EngineRoute.LOCAL.value,
+                "request_id": request_id,
+                "stream": generate_local_response(local_messages)
+            }
+
         user_tier = context.get("user_tier", "free")
         if user_tier in ("pro", "creator") or intent.complexity_level == 3:
             model = "llama-3.1-70b-versatile"
         else:
             model = "llama-3.1-8b-instant"
         
-        logger.info("Routing to %s (Tier %d)", model, 3 if "70b" in model else 2)
+        logger.info("Routing to API: %s (Tier %d)", model, 3 if "70b" in model else 2)
         
         return {
-            "intent": intent.intent,
+            "intent": intent.intent_type,
             "route": EngineRoute.API.value,
             "request_id": request_id,
             "stream": async_stream_llm_response(messages, model=model)
