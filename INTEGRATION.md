@@ -1,80 +1,66 @@
-# LEVI-AI: v5.0 Integration & API Reference 🚀
+# LEVI-AI: v6.8 "Sovereign" Integration & API Reference 🚀
 
-This document provides the definitive API reference and integration guide for the hardened LEVI-AI orchestrator.
+This document provides the definitive API reference for the hardened v6.8 LEVI-AI orchestrator.
 
 ---
 
-## 📡 1. Primary Chat & Streaming API
+## 📡 1. Unified Chat & Sovereign Streaming
 
-The orchestrator combines `sanitization`, `memory`, `intent`, and `decision` into a single endpoint.
+The orchestrator combines `intent detection`, `vector memory`, `BCCI context`, and `autonomous execution` into a single, high-performance SSE stream.
 
-### `POST /api/v1/chat/message`
-Primary message handler. Supports both synchronous and asynchronous (SSE) responses.
+### `POST /api/v1/chat`
+Primary message handler. Supports both synchronous (JSON) and asynchronous (SSE) responses.
 
 **Request Body (`application/json`):**
 ```json
 {
-    "message": "Write a python script for...",
+    "message": "Philosophize on the nature of digital memory...",
     "session_id": "sess-456",
     "mood": "philosophical",
-    "is_streaming": true
+    "stream": true
 }
 ```
 
 **Response (SSE Streaming):**
-Chunks are sent with `data: ` prefix:
+Chunks are sent with the `data: ` prefix. LEVI v6.8 introduces **Intelligence Pulses** before the response begins.
+
 ```text
-data: {"token": "Hello", "intent": "greeting", "route": "local", "job_id": null}
-data: {"token": " world", "intent": "greeting", "route": "local", "job_id": null}
-data: {"token": "!", "intent": "greeting", "route": "local", "job_id": null}
+# 1. Activity Pulse (Real-time thinking updates)
+data: {"type": "activity", "message": "Analyzing intent complexity..."}
+data: {"type": "activity", "message": "Hydrating sovereign context..."}
+
+# 2. Decision Metadata (Full orchestrator decision)
+data: {"metadata": {"intent": "chat", "route": "local", "request_id": "orch_abc123", "decision": {...}}}
+
+# 3. Content Chunks (LLM Tokens)
+data: {"choices": [{"delta": {"content": "Memory" context="..."}}]}
+data: {"choices": [{"delta": {"content": " is" context="..."}}]}
 data: [DONE]
 ```
 
 ---
 
-## 🧠 2. Learning & Profile API
+## 🧠 2. Sovereignty & Memory API
 
-The learning system (`backend/services/learning/router.py`) allows AI personalization based on user interactions.
-
-### `POST /api/v1/learning/feedback`
-Submit rating (1-5) for an AI response. Updates the user's preference model and memory graph.
+### `POST /api/v1/analytics/feedback`
+Submit rating (0.0 - 1.0) for an AI response. Triggers the **Autonomous Learning Loop**.
 
 **Request Body:**
 ```json
 {
-    "session_id": "sess-456",
-    "rating": 5,
-    "user_message": "...",
-    "bot_response": "..."
+    "message_id": "orch_abc123",
+    "score": 1.0
 }
 ```
 
-### `GET /api/v1/learning/profile` (Auth Required)
-Returns the current learned AI profile for the authenticated user.
-- **Includes**: `preferred_moods`, `system_prompt_preview`, `memory_graph_summary`.
+---
+
+## 🛡️ 3. Integration Best Practices
+
+1. **Intelligent Status Indicators**: Use the `type: activity` events to drive a "Thinking Pulse" in your UI (e.g., *“LEVI is recalling your history...”*).
+2. **Sovereign Badges**: Always render the `route` metadata (🔴/🟡/🟢) to communicate the level of intelligence/cost associated with the response.
+3. **Trace IDs**: Log the `request_id` for every interaction to enable deep-dive debugging via the **[DIAGNOSTICS_MASTER.md](DIAGNOSTICS_MASTER.md)**.
 
 ---
 
-## 📈 3. Decision Objects & Metadata
-
-Every interaction returns structured metadata to the frontend.
-
-### `DecisionLog` Structure
-| Field | Type | Purpose |
-|:---|:---|:---|
-| `intent` | `string` | Result of `planner.py` (e.g., `greeting`, `image`, `code`). |
-| `engine_route` | `string` | `local` (🟢), `tool` (🟡), or `api` (🔴). |
-| `confidence` | `float` | AI confidence score in the routing decision. |
-| `latency_ms` | `int` | Total processing time for the orchestrator. |
-
----
-
-## 🛡️ 4. Integration Best Practices
-
-1. **Handle SSE Appropriately**: Use `EventSource` (browser) or an SSE-aware HTTP client with `stream=True`.
-2. **Badge UI**: Display the `engine_route` metadata with the corresponding color-coded badge (🟢/🟡/🔴) to communicate AI cost/depth to the user.
-3. **Session Persistence**: Always provide a consistent `session_id` to enable mid-term memory (MTM) retrieval across interactions.
-
----
-
-**LEVI — Built for emergence. Integrated for depth.**
+**LEVI — Built for emergence. Integrated for depth. Sovereign by design.**

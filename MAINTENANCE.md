@@ -57,4 +57,39 @@ LEVI v6 uses the Piston API for secure execution.
 
 ---
 
+## 💾 5. Sovereign Vector Memory (FAISS)
+
+The v6.8 "Hybrid Model" uses persistent FAISS indices for sub-millisecond semantic recall.
+
+### Manual Index Rebuild
+If the vector index becomes corrupted or requires a dimensionality shift:
+```bash
+# Trigger a background rebuild via Celery
+celery -A backend.celery_app call backend.services.orchestrator.memory_tasks.run_global_maintenance
+```
+
+### Storage Paths
+- **User Index**: `backend/data/memory/user_faiss.bin`
+- **Global Wisdom**: `backend/data/memory/global_faiss.bin`
+- **Metadata**: `backend/data/memory/*_meta.json`
+
+---
+
+## 🧠 6. Local Engine Lifecycle (GGUF)
+
+LEVI prioritizes local reasoning via `llama-cpp-python`.
+
+### Swapping Models
+1.  Download a new `.gguf` model (e.g., Llama-3.1-8B-Instruct-Q4_K_M).
+2.  Update `LOCAL_MODEL_PATH` in `.env`.
+3.  Restart the backend worker.
+
+### Health Check (Sovereignty)
+Run the automated audit to verify routing logic:
+```bash
+python tests/verify_sovereignty.py
+```
+
+---
+
 **LEVI — Built for emergence. Hardened for scale. Sovereign by design.**
