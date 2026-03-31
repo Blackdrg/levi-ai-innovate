@@ -1,8 +1,8 @@
 # LEVI-AI Operations Runbook
 
-> **Version**: 2.0 — Post-Hardening Audit  
-> **Last Updated**: 2026-03-31  
-> **Architecture**: FastAPI Gateway + Celery Workers + Redis + Firestore + Nginx
+> **Version**: v6.8 — Sovereign Hardened Audit  
+> **Last Updated**: 2026-04-01  
+> **Architecture**: Hybrid Sovereign (FastAPI + Llama-CPP + FAISS + Redis + Firestore)
 
 ---
 
@@ -10,10 +10,10 @@
 
 1. [System Architecture](#system-architecture)
 2. [Local Development](#local-development)
-3. [Docker Compose (Production-like)](#docker-compose-production-like)
+3. [Sovereign Docker (Production)](#sovereign-docker-production)
 4. [CI/CD Pipeline](#cicd-pipeline)
 5. [Environment Variables Reference](#environment-variables-reference)
-6. [Health Checks & Monitoring](#health-checks--monitoring)
+6. [Sovereign Health & Monitoring](#sovereign-health--monitoring)
 7. [Common Operational Procedures](#common-operational-procedures)
 8. [Troubleshooting](#troubleshooting)
 
@@ -25,19 +25,19 @@
 User Browser
     │
     ▼
-[Nginx :80]          ← Static frontend + reverse proxy
+[Nginx :80]            ← Static frontend + Reverse Proxy (SSE Buffering OFF)
     │ /api/*
     ▼
-[FastAPI Gateway :8000]   ← Auth, rate-limiting, orchestration
+[FastAPI Gateway :8000] ← Auth, context-budgeting, Sovereign Routing
     │
-    ├── [Redis :6379]     ← Sessions, rate-limits, pub/sub, Celery broker
-    ├── [Firestore]       ← Primary database (users, facts, training)
-    ├── [Groq API]        ← Primary LLM (streaming enabled)
-    ├── [Together API]    ← Secondary LLM (Council of Models, Pro tier)
+    ├── [Llama-CPP]     ← PRIMARY: Local Reasoning (.gguf) 🚀
+    ├── [FAISS Index]   ← PRIMARY: Local Vector Memory 🧠
+    ├── [Redis :6379]   ← Concurrency Locks, SSE Pub/Sub, Memory Buffer
+    ├── [Firestore]     ← SECONDARY: Cold persistence, User Profiles
+    └── [Together API]  ← FALLBACK: High-fidelity reasoning
     │
     ▼
-[Celery Worker]      ← Async jobs: media gen, memory flush, exports
-[Celery Beat]        ← Scheduler: flush_all_memory_buffers every 30s
+[Celery Worker]        ← Async jobs: Pattern distillation, Index maintenance
 ```
 
 ---
@@ -45,9 +45,10 @@ User Browser
 ## Local Development
 
 ### Prerequisites
-- Python 3.11+
-- Redis (local or Docker)
-- Firebase project + service account JSON
+- Python 3.10+
+- Redis 6+
+- `.gguf` model weights (e.g., Llama-3-8B)
+- Firebase project credentials
 
 ### Setup
 
@@ -55,58 +56,36 @@ User Browser
 # 1. Clone and enter the project
 cd LEVI-AI
 
-# 2. Create virtualenv and install deps
-python -m venv .venv
-.venv\Scripts\activate          # Windows
-# source .venv/bin/activate     # macOS/Linux
-
+# 2. Install dependencies (including llama-cpp-python)
 pip install -r backend/requirements.txt
 
-# 3. Configure environment
-copy .env.example .env
-# Edit .env — fill in GROQ_API_KEY, FIREBASE_*, SECRET_KEY at minimum
+# 3. Download weights
+mkdir -p backend/models
+# Place your llama-3-8b.gguf in backend/models/
 
-# 4. Start Redis (if not using Docker)
-redis-server
+# 4. Configure environment
+copy .env.example .env
+# Set USE_SOVEREIGN_ROUTING=true
 
 # 5. Run the gateway
 cd backend
 uvicorn gateway:app --reload --port 8000
-
-# 6. (Optional) Run Celery worker in a separate terminal
-celery -A backend.celery_app worker --loglevel=info
 ```
-
-> ⚠️ **CRITICAL**: For real Celery async queuing (even locally), set `ENVIRONMENT=production` in your `.env`. Without it, `task_always_eager=True` is active and all tasks run synchronously inline — the Beat scheduler does nothing.
 
 ---
 
-## Docker Compose (Production-like)
+## Sovereign Docker (Production)
 
 ### Starting all services
 
 ```bash
-# Build and start everything
-docker compose up --build
-
-# Or in detached mode
+# Build with optimized Llama-CPP wheels
 docker compose up --build -d
 ```
 
 ### Services started
 | Service | Port | Description |
 |---------|------|-------------|
-| `redis` | 6379 | Message broker + cache |
-| `gateway` | 8000 | FastAPI REST API |
-| `worker` | — | Celery async worker |
-| `beat` | — | Celery Beat scheduler |
-| `nginx` | 80, 443 | Reverse proxy + static frontend |
-
-### Environment Variables for Docker
-Create a `.env` file (copy from `.env.example`) — Docker Compose automatically picks it up. At minimum:
-
-```env
-SECRET_KEY=<generate with: python -c "import secrets; print(secrets.token_hex(32))">
 GROQ_API_KEY=your-groq-key
 FIREBASE_PROJECT_ID=your-project-id
 FIREBASE_SERVICE_ACCOUNT_JSON={"type":"service_account",...}  # Raw JSON string
