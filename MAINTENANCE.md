@@ -11,9 +11,9 @@ The backend relies on the `celery` and `celery_beat` services to handle non-bloc
 ### Scheduled Tasks (Beat)
 | Task | Schedule | Purpose |
 |:---|:---|:---|
-| `flush_all_memory_buffers` | Every 30s | Flushes Redis memory STM to Firestore MTM. |
+| `flush_memory_buffers` | Every 30s | Flushes user facts from Redis to Firestore. |
+| `flush_conversation_buffer`| Every 5m | Batch persists conversation history. |
 | `prune_old_facts` | Daily (00:00) | Removes user facts older than 30 days. |
-| `export_training_data` | Weekly (Sun) | Generates JSONL for AI fine-tuning (Creator/Admin). |
 
 ### Monitoring Workers
 ```bash

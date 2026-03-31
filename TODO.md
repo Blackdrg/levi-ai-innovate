@@ -1,13 +1,12 @@
-# LEVI Project Roadmap & TODO (v5.0 Hardened) 🚀
+# LEVI Project Roadmap & TODO (v1.0) 🚀
 
-## 🟢 PHASE 5.0: HARDENING & RELIABILITY (COMPLETE)
-- [x] **True SSE Streaming**: Direct token piping from Groq API (no more simulation).
-- [x] **Response Caching**: 30-min TTL Redis cache for search/chat agents.
-- [x] **Circuit Breaker Consolidation**: Unified implementation with Discord webhook alerts.
-- [x] **Memory Pruning Fix**: Native Timestamp comparison for Firestore auto-cleanup.
-- [x] **Infrastructure Overhaul**: SSE-optimized Nginx config and Docker `beat` service.
-- [x] **Security Hardening**: Corrected JTI blacklist logic in `redis_client.py`.
-- [x] **Ops Runbook**: Centralized manual for production maintenance.
+## 🟢 PHASE 1.0: PRODUCTION HARDENING (100% COMPLETE)
+- [x] **Autonomous Reasoning**: 8-stage dynamic pipeline in `LeviBrain`.
+- [x] **Redis-Backed Debouncing**: Firestore cost optimization via buffered writes.
+- [x] **True SSE Streaming**: Direct token-by-token piping (Groq).
+- [x] **Soul Memory Lifecycle**: 30-day automated pruning cycle.
+- [x] **JTI & Tier Security**: Secure session revocation + feature gating.
+- [x] **Infrastructure Ingress**: Optimized Nginx + Redis v6.2+.
 
 ## 🟡 PHASE 6.0: ADVANCED COGNITION (IN PROGRESS)
 - [ ] **Multi-Agent Swarms**: Dynamic task delegation among specialized sub-agents.
