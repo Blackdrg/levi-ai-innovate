@@ -2,7 +2,7 @@ name: Deploy Backend to Cloud Run
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
     paths:
       - 'backend/**'
       - 'Dockerfile.prod'

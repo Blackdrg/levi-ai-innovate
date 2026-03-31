@@ -26,11 +26,10 @@ if %ERRORLEVEL% NEQ 0 (
     echo [WARNING] git commit was skipped or failed.
 )
 
-echo [4/4] Synchronizing with GitHub (Branch: master)...
-git push origin master
+echo [4/4] Synchronizing with GitHub (Branch: main)...
+git push origin main
 if %ERRORLEVEL% NEQ 0 (
-    echo [WARNING] master push failed. Trying main...
-    git push origin main
+    echo [WARNING] main push failed.
 )
 
 if %ERRORLEVEL% NEQ 0 goto :error

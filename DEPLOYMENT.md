@@ -148,7 +148,7 @@ timeout: 60s
 ## 📊 CI/CD Pipeline
 
 ```
-git push master
+git push main
     │
     ├─ deploy-backend.yml
     │     1. Build Docker image
