@@ -126,8 +126,8 @@ class TestStoreFacts:
         mock_db, mock_batch = mock_firestore
 
         with patch("backend.services.orchestrator.memory_utils.firestore_db", mock_db), \
-             patch("backend.redis_client.HAS_REDIS", True), \
-             patch("backend.redis_client.r", mock_redis), \
+             patch("backend.db.redis_client.HAS_REDIS", True), \
+             patch("backend.db.redis_client.r", mock_redis), \
              patch("backend.services.orchestrator.memory_utils.embed_text", return_value=[0.1] * 384), \
              patch("backend.services.orchestrator.memory_utils.asyncio.to_thread", new_callable=AsyncMock) as mock_thread:
 
@@ -152,8 +152,8 @@ class TestStoreFacts:
         mock_db, _ = mock_firestore
 
         with patch("backend.services.orchestrator.memory_utils.firestore_db", mock_db), \
-             patch("backend.redis_client.HAS_REDIS", True), \
-             patch("backend.redis_client.r", mock_redis), \
+             patch("backend.db.redis_client.HAS_REDIS", True), \
+             patch("backend.db.redis_client.r", mock_redis), \
              patch("backend.services.orchestrator.memory_utils.asyncio.to_thread", new_callable=AsyncMock) as mock_thread:
 
             mock_thread.return_value = [0.5] * 384
@@ -196,8 +196,8 @@ class TestStoreFacts:
         duplicate_fact = [{"fact": "User likes Python programming", "category": "preference"}]
 
         with patch("backend.services.orchestrator.memory_utils.firestore_db", mock_db), \
-             patch("backend.redis_client.HAS_REDIS", True), \
-             patch("backend.redis_client.r", mock_redis), \
+             patch("backend.db.redis_client.HAS_REDIS", True), \
+             patch("backend.db.redis_client.r", mock_redis), \
              patch("backend.services.orchestrator.memory_utils.asyncio.to_thread", new_callable=AsyncMock) as mock_thread:
 
             # Return same embedding = cosine similarity = 1.0 → should be deduplicated
@@ -219,7 +219,7 @@ class TestStoreFacts:
 
         with patch("backend.services.orchestrator.memory_utils.firestore_db", mock_db), \
              patch("backend.services.orchestrator.memory_utils.HAS_REDIS", False), \
-             patch("backend.redis_client.HAS_REDIS", False), \
+             patch("backend.db.redis_client.HAS_REDIS", False), \
              patch("backend.services.orchestrator.memory_utils.asyncio.to_thread", new_callable=AsyncMock) as mock_thread:
 
             mock_thread.return_value = [0.1] * 384

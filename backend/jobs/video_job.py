@@ -15,9 +15,9 @@ from typing import Any, Dict
 # Ensure we can import from parent directory
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from backend.video_gen import generate_quote_video
-from backend.firestore_db import db as firestore_db
-from backend.gcs_utils import upload_video_to_gcs
+from backend.services.video_gen import generate_quote_video
+from backend.db.firestore_db import db as firestore_db
+from backend.db.gcs_utils import upload_video_to_gcs
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)

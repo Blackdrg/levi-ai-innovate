@@ -5,7 +5,7 @@ import logging
 import numpy as np
 import faiss  # type: ignore
 from typing import List, Dict, Any, Optional
-from backend.embeddings import embed_text
+from backend.db.vector_store import embed_text
 
 logger = logging.getLogger(__name__)
 

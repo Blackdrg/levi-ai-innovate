@@ -6,9 +6,9 @@ import numpy as np # type: ignore
 import logging
 
 from backend.auth import get_current_user, get_current_user_optional # type: ignore
-from backend.firestore_db import db as firestore_db # type: ignore
-from backend.models import Query # type: ignore
-from backend.redis_client import get_cached_search, cache_search, HAS_REDIS # type: ignore
+from backend.db.firestore_db import db as firestore_db # type: ignore
+from backend.services.learning.models import Query # type: ignore
+from backend.db.redis_client import get_cached_search, cache_search, HAS_REDIS # type: ignore
 from google.cloud import firestore as google_firestore # type: ignore
 from backend.generation import fetch_open_source_quote, generate_quote # type: ignore
 
@@ -102,7 +102,7 @@ async def like_item(item_type: str, item_id: str, user_id: str = "anonymous"):
         # Atomic increment
         item_ref.update({"likes": google_firestore.Increment(1)})
         
-        from backend.firestore_db import update_analytics # type: ignore
+        from backend.db.firestore_db import update_analytics # type: ignore
         update_analytics("likes_count")
 
         return {"status": "success"}
@@ -157,7 +157,7 @@ async def search_quotes(request: Request, query: Query):
         results = [d.to_dict() for d in docs]
     else:
         try:
-            from backend.embeddings import embed_text, cosine_sim, HAS_MODEL # type: ignore
+            from backend.db.vector_store import embed_text, cosine_sim, HAS_MODEL # type: ignore
             if HAS_MODEL:
                 query_embedding = embed_text(query.text)
                 

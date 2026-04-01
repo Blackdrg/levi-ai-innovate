@@ -8,9 +8,9 @@ Provides real-time transparency into LEVI's adaptive routing.
 import logging
 from typing import Dict, Any, List
 from fastapi import APIRouter, Depends
-from backend.auth import verify_admin
-from backend.redis_client import r as redis_client, HAS_REDIS
-from backend.firestore_db import db as firestore_db
+from backend.services.auth.logic import verify_admin
+from backend.db.redis_client import r as redis_client, HAS_REDIS
+from backend.db.firestore_db import db as firestore_db
 import json
 
 logger = logging.getLogger(__name__)
@@ -29,8 +29,8 @@ async def get_orchestrator_stats(is_admin: bool = Depends(verify_admin)):
     distribution = {r: int(redis_client.get(f"stats:route:{r}") or 0) for r in routes}
     
     # 2. Agent Health & Reliability (Phase 6 Hardening)
-    from backend.services.orchestrator.tool_registry import _TOOL_INSTANCES
-    from backend.redis_client import get_failure_count
+    from backend.core.tool_registry import _TOOL_INSTANCES
+    from backend.db.redis_client import get_failure_count
     
     agent_health = {}
     for name in _TOOL_INSTANCES.keys():
@@ -51,7 +51,7 @@ async def get_orchestrator_stats(is_admin: bool = Depends(verify_admin)):
     # 4. Evolution Status
     evolve_count = int(redis_client.get("system:evolution:interaction_count") or 0)
     
-    from backend.learning import get_learning_stats
+    from backend.services.learning.logic import get_learning_stats
     learning_stats = get_learning_stats()
 
     return {

@@ -2,12 +2,12 @@
 import pytest
 import time
 from unittest.mock import patch, MagicMock, call
-from backend.redis_client import distributed_lock, HAS_REDIS
+from backend.db.redis_client import distributed_lock, HAS_REDIS
 
 def test_lock_acquisition():
     """Verify that a lock can be acquired and released."""
-    with patch("backend.redis_client.HAS_REDIS", True), \
-         patch("backend.redis_client.r") as mock_r:
+    with patch("backend.db.redis_client.HAS_REDIS", True), \
+         patch("backend.db.redis_client.r") as mock_r:
         mock_r.set.return_value = True
         
         lock_name = "test_lock_1"
@@ -20,8 +20,8 @@ def test_lock_acquisition():
 
 def test_lock_retry():
     """Verify that the lock handles retries correctly."""
-    with patch("backend.redis_client.HAS_REDIS", True), \
-         patch("backend.redis_client.r") as mock_r:
+    with patch("backend.db.redis_client.HAS_REDIS", True), \
+         patch("backend.db.redis_client.r") as mock_r:
         
         # Fail first 2 times, succeed on 3rd
         mock_r.set.side_effect = [False, False, True]
@@ -35,8 +35,8 @@ def test_lock_retry():
 
 def test_lock_release_safety():
     """Verify that only the owner can release a lock via Lua."""
-    with patch("backend.redis_client.HAS_REDIS", True), \
-         patch("backend.redis_client.r") as mock_r:
+    with patch("backend.db.redis_client.HAS_REDIS", True), \
+         patch("backend.db.redis_client.r") as mock_r:
         
         mock_r.set.return_value = True
         

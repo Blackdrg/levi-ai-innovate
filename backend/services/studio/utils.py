@@ -4,9 +4,9 @@ import os
 from datetime import datetime
 from typing import Dict, Any, Optional
 
-from backend.firestore_db import db as firestore_db
+from backend.db.firestore_db import db as firestore_db
 from backend.services.studio.tasks import generate_image_task, generate_video_task
-from backend.payments import use_credits
+from backend.services.payments.logic import use_credits
 
 logger = logging.getLogger(__name__)
 

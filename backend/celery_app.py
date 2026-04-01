@@ -1,4 +1,5 @@
 from celery import Celery # type: ignore
+from celery.schedules import crontab # type: ignore
 from celery.signals import setup_logging, task_prerun, task_postrun # type: ignore
 import logging
 import os
@@ -20,9 +21,11 @@ celery_app = Celery(
     backend=_BACKEND,
     include=[
         "backend.services.studio.tasks",
-        "backend.tasks",
-        "backend.services.orchestrator.memory_tasks",
-        "backend.services.orchestrator.learning_tasks",
+        "backend.services.notifications.tasks",
+        "backend.services.payments.tasks",
+        "backend.core.memory_tasks",
+        "backend.core.learning_tasks",
+        "backend.core.fine_tune_tasks",
     ]
 )
 
@@ -40,6 +43,9 @@ celery_app.conf.update(
     task_routes={
         "backend.services.studio.tasks.generate_video_task": {"queue": "heavy"},
         "backend.services.studio.tasks.generate_image_task": {"queue": "default"},
+        "backend.services.notifications.tasks.*": {"queue": "default"},
+        "backend.services.payments.tasks.*": {"queue": "default"},
+        "backend.core.*": {"queue": "default"},
         "*": {"queue": "default"},
     },
     
@@ -71,24 +77,28 @@ celery_app.conf.update(
 # IMPORTANT: Requires `celery -A backend.celery_app beat` running as a separate process.
 celery_app.conf.beat_schedule = {
     "flush-memory-buffers-every-30s": {
-        "task": "backend.services.orchestrator.memory_tasks.flush_all_memory_buffers",
+        "task": "backend.core.memory_tasks.flush_all_memory_buffers",
         "schedule": 30.0,
     },
     "studio-stuck-job-cleanup-every-hour": {
         "task": "backend.services.studio.tasks.cleanup_stuck_jobs",
-        "schedule": 3600.0,  # 1 hour
+        "schedule": 3600.0,
     },
-    "autonomous-prompt-evolution-daily": {
-        "task": "backend.services.orchestrator.learning_tasks.run_autonomous_evolution",
-        "schedule": 86400.0, # 24 hours
-    },
-    "analytics-snapshot-update-4h": {
-        "task": "backend.services.orchestrator.learning_tasks.update_analytics_snapshot",
-        "schedule": 14400.0, # 4 hours
-    },
-    "daily-faiss-garbage-collection": {
-        "task": "backend.services.orchestrator.memory_tasks.garbage_collect_memory",
+    "autonomous-evolution-daily": {
+        "task": "backend.core.learning_tasks.run_autonomous_evolution",
         "schedule": 86400.0,
+    },
+    "analytics-snapshot-4h": {
+        "task": "backend.core.learning_tasks.update_analytics_snapshot",
+        "schedule": 14400.0,
+    },
+    "daily-wisdom-dispatch": {
+        "task": "backend.services.notifications.tasks.dispatch_daily_emails",
+        "schedule": crontab(hour=8, minute=0),
+    },
+    "monthly-credit-reset": {
+        "task": "backend.services.payments.tasks.reset_monthly_credits",
+        "schedule": crontab(day_of_month=1, hour=0, minute=5),
     }
 }
 
@@ -134,6 +144,13 @@ def config_loggers(*args, **kwtags):
     logHandler.setFormatter(formatter)
     logger.addHandler(logHandler)
     logger.setLevel(logging.INFO)
+
+# --- Integrated System Schedules ---
+try:
+    from backend.services.learning.trainer import TRAINING_BEAT_SCHEDULE # type: ignore
+    celery_app.conf.beat_schedule.update(TRAINING_BEAT_SCHEDULE)
+except ImportError:
+    pass
 
 if __name__ == "__main__":
     celery_app.start()

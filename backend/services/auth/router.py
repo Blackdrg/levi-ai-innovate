@@ -36,7 +36,7 @@ async def login(response: Response, payload: dict):
 @router.post("/logout")
 async def logout(current_user: dict = Depends(get_current_user)):
     """Stub logout with Redis session revocation check."""
-    from backend.redis_client import HAS_REDIS
+    from backend.db.redis_client import HAS_REDIS
     if not HAS_REDIS:
         raise LEVIException("Redis is required for session revocation", status_code=503, error_code="REDIS_UNAVAILABLE")
     return {"status": "success", "message": "Logged out"}

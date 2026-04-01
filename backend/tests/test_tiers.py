@@ -1,6 +1,6 @@
 import pytest
 from backend.auth import TIERS, check_allowance
-from backend.redis_client import incr_daily_ai_spend, get_daily_ai_spend
+from backend.db.redis_client import incr_daily_ai_spend, get_daily_ai_spend
 
 @pytest.fixture
 def mock_redis(monkeypatch):
@@ -13,9 +13,9 @@ def mock_redis(monkeypatch):
     def mock_get(user_id):
         return _cache.get(f"spend:{user_id}", 0.0)
         
-    monkeypatch.setattr("backend.redis_client.incr_daily_ai_spend", mock_incr)
-    monkeypatch.setattr("backend.redis_client.get_daily_ai_spend", mock_get)
-    monkeypatch.setattr("backend.redis_client.get_user_credits", lambda uid: 0)
+    monkeypatch.setattr("backend.db.redis_client.incr_daily_ai_spend", mock_incr)
+    monkeypatch.setattr("backend.db.redis_client.get_daily_ai_spend", mock_get)
+    monkeypatch.setattr("backend.db.redis_client.get_user_credits", lambda uid: 0)
     return _cache
 
 def test_free_tier_allowance(mock_redis):
@@ -53,7 +53,7 @@ def test_credit_fallback(monkeypatch, mock_redis):
     incr_daily_ai_spend(user_id, 100.0)
     
     # Mock credits available
-    monkeypatch.setattr("backend.redis_client.get_user_credits", lambda uid: 10)
+    monkeypatch.setattr("backend.db.redis_client.get_user_credits", lambda uid: 10)
     
     # Should be True due to credit fallback
     assert check_allowance(user_id, tier, cost=5) is True

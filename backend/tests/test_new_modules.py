@@ -25,7 +25,7 @@ class TestSDEngineStyles:
     def test_new_styles_present(self):
         """New style presets should be registered in STYLE_PRESETS."""
         try:
-            from backend.sd_engine import STYLE_PRESETS, get_available_styles  # type: ignore
+            from backend.services.image_gen import STYLE_PRESETS, get_available_styles  # type: ignore
         except ImportError:
             from sd_engine import STYLE_PRESETS, get_available_styles  # type: ignore
 
@@ -35,7 +35,7 @@ class TestSDEngineStyles:
 
     def test_get_available_styles_includes_new(self):
         try:
-            from backend.sd_engine import get_available_styles  # type: ignore
+            from backend.services.image_gen import get_available_styles  # type: ignore
         except ImportError:
             from sd_engine import get_available_styles  # type: ignore
 
@@ -49,7 +49,7 @@ class TestSDEngineStyles:
     def test_generate_image_alias_exists(self):
         """generate_image() public alias should be importable."""
         try:
-            from backend.sd_engine import generate_image  # type: ignore
+            from backend.services.image_gen import generate_image  # type: ignore
         except ImportError:
             from sd_engine import generate_image  # type: ignore
         assert callable(generate_image)

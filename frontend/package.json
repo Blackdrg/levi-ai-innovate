@@ -1,24 +1,31 @@
 {
-  "name": "frontend",
-  "version": "3.0.0",
-  "description": "LEVI AI v3.0 Bulletproof - Universal Performance & Security Stack",
-  "main": "sw.js",
+  "name": "levi-ai-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
   "scripts": {
-    "dev": "npx tailwindcss -i ./css/styles.css -o ./css/output.css --watch",
-    "build": "npx tailwindcss -i ./css/styles.css -o ./css/output.css --minify",
-    "start": "npx serve .",
-    "lint": "npx eslint js/**/*.js"
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
+    "preview": "vite preview"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
+  "dependencies": {
+    "axios": "^1.6.2",
+    "clsx": "^2.0.0",
+    "framer-motion": "^10.16.5",
+    "lucide-react": "^0.292.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "tailwind-merge": "^2.0.0",
+    "zustand": "^4.4.6"
+  },
   "devDependencies": {
-    "@tailwindcss/container-queries": "^0.1.1",
-    "@tailwindcss/forms": "^0.5.11",
-    "autoprefixer": "^10.4.27",
-    "eslint": "^9.0.0",
-    "postcss": "^8.5.8",
-    "tailwindcss": "^3.4.17"
+    "@types/react": "^18.2.37",
+    "@types/react-dom": "^18.2.15",
+    "@vitejs/plugin-react": "^4.2.0",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.31",
+    "tailwindcss": "^3.3.5",
+    "vite": "^8.0.3"
   }
 }

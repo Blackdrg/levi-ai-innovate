@@ -14,10 +14,10 @@ import json
 import asyncio
 import hashlib
 
-from backend.models import ChatMessage, _INJECTION_PATTERNS
+from backend.services.learning.models import ChatMessage, _INJECTION_PATTERNS
 from backend.auth import get_current_user_optional
-from backend.redis_client import is_rate_limited, incr_daily_ai_spend, get_daily_ai_spend, HAS_REDIS
-from backend.firestore_db import update_analytics
+from backend.db.redis_client import is_rate_limited, incr_daily_ai_spend, get_daily_ai_spend, HAS_REDIS
+from backend.db.firestore_db import update_analytics
 from backend.services.orchestrator import run_orchestrator
 import os
 
@@ -39,7 +39,7 @@ def _get_cached_response(key: str) -> Optional[Dict]:
     if not HAS_REDIS:
         return None
     try:
-        from backend.redis_client import r as redis_client
+        from backend.db.redis_client import r as redis_client
         raw = redis_client.get(key)
         if raw:
             return json.loads(raw)
@@ -53,7 +53,7 @@ def _cache_response(key: str, result: Dict) -> None:
     if not HAS_REDIS:
         return
     try:
-        from backend.redis_client import r as redis_client
+        from backend.db.redis_client import r as redis_client
         redis_client.setex(key, _CACHE_TTL, json.dumps(result, default=str))
     except Exception:
         pass

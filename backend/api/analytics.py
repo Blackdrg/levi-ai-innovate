@@ -13,10 +13,10 @@ from typing import Optional, Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from backend.utils.exceptions import LEVIException
-from backend.auth import verify_admin
-from backend.firestore_db import db as firestore_db
+from backend.services.auth.logic import verify_admin
+from backend.db.firestore_db import db as firestore_db
 from backend.utils.network import groq_breaker, together_breaker, CircuitBreaker
-from backend.redis_client import r as redis_client, HAS_REDIS
+from backend.db.redis_client import r as redis_client, HAS_REDIS
 from backend.utils.robustness import standard_retry
 
 logger = logging.getLogger(__name__)
@@ -154,7 +154,7 @@ async def get_performance_metrics(is_admin: bool = Depends(verify_admin)):
 @router.post("/track_share")
 async def track_share():
     """ Tracks social sharing events. """
-    from backend.firestore_db import update_analytics
+    from backend.db.firestore_db import update_analytics
     update_analytics("share_count")
     return {"status": "success"}
 

@@ -15,10 +15,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse
 
 from backend.utils.exceptions import LEVIException
-from backend.models import ChatMessage, _INJECTION_PATTERNS
-from backend.auth import get_current_user_optional
-from backend.redis_client import is_rate_limited, get_daily_ai_spend, HAS_REDIS
-from backend.services.orchestrator import run_orchestrator
+from backend.core.orchestrator_types import ChatMessage, _INJECTION_PATTERNS
+from backend.services.auth.logic import get_current_user_optional
+from backend.db.redis_client import is_rate_limited, get_daily_ai_spend, HAS_REDIS
+from backend.core.brain import run_orchestrator
 from backend.utils.robustness import standard_retry, TimeoutHandler
 from backend.utils.sanitization import sanitize_input
 
@@ -78,8 +78,8 @@ async def _true_groq_stream(
     True Groq token-by-token streaming for API-route requests.
     Sends orchestrator metadata with the first chunk, then streams tokens live.
     """
-    from backend.generation import async_stream_llm_response, _build_dynamic_system_prompt, _get_random_persona
-    from backend.services.orchestrator.planner import detect_intent
+    from backend.engines.chat.generation import async_stream_llm_response, _build_dynamic_system_prompt, _get_random_persona
+    from backend.core.planner import detect_intent
 
     # Build messages for the streaming call (same persona/history logic)
     intent = await detect_intent(user_input)
@@ -135,7 +135,7 @@ async def get_chat_history(
     
     user_id = current_user.get("uid")
     try:
-        from backend.firestore_db import db as firestore
+        from backend.db.firestore_db import db as firestore
         docs = (
             firestore.collection("chat_history")
             .where("user_id", "==", user_id)
@@ -186,7 +186,7 @@ async def chat_endpoint(
     cache_key = _make_cache_key(str(user_id), msg.message, msg.mood or "philosophical")
     
     if HAS_REDIS and not str(user_id).startswith("guest:") and not is_streaming:
-        from backend.redis_client import r as redis
+        from backend.db.redis_client import r as redis
         cached = redis.get(cache_key)
         if cached:
             return json.loads(cached)

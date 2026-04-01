@@ -12,12 +12,12 @@ from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from backend.utils.exceptions import LEVIException
-from backend.auth import get_current_user, get_current_user_optional
-from backend.firestore_db import db as firestore_db
-from backend.models import Query
-from backend.redis_client import get_cached_search, cache_search, HAS_REDIS
+from backend.services.auth.logic import get_current_user, get_current_user_optional
+from backend.db.firestore_db import db as firestore_db
+from backend.core.orchestrator_types import Query
+from backend.db.redis_client import get_cached_search, cache_search, HAS_REDIS
 from google.cloud import firestore as google_firestore
-from backend.generation import fetch_open_source_quote, generate_quote
+from backend.engines.chat.generation import fetch_open_source_quote, generate_quote
 from backend.utils.robustness import standard_retry
 
 logger = logging.getLogger(__name__)
@@ -106,7 +106,7 @@ async def like_item(item_type: str, item_id: str):
         # Atomic increment (Firebase native)
         item_ref.update({"likes": google_firestore.Increment(1)})
         
-        from backend.firestore_db import update_analytics
+        from backend.db.firestore_db import update_analytics
         update_analytics("likes_count")
 
         return {"status": "success", "message": "Resonance increased."}
@@ -170,7 +170,7 @@ async def search_quotes(request: Request, query: Query):
     quotes_ref = firestore_db.collection("quotes")
     
     try:
-        from backend.embeddings import embed_text, cosine_sim, HAS_MODEL
+        from backend.db.vector_store import embed_text, cosine_sim, HAS_MODEL
         import numpy as np
         
         if HAS_MODEL and query.text:

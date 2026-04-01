@@ -14,10 +14,10 @@ from typing import Optional, Dict, Any
 
 from fastapi import APIRouter, HTTPException, Depends, Request
 from firebase_admin import firestore
-from backend.firestore_db import db as firestore_db
-from backend.auth import get_current_user_optional
-from backend.config import TIERS, COST_MATRIX
-from backend.redis_client import incr_daily_ai_spend, get_daily_ai_spend, distributed_lock, HAS_REDIS
+from backend.db.firestore_db import db as firestore_db
+from backend.services.auth.logic import get_current_user_optional
+from backend.config.system import TIERS, COST_MATRIX
+from backend.db.redis_client import incr_daily_ai_spend, get_daily_ai_spend, distributed_lock, HAS_REDIS
 from backend.utils.exceptions import LEVIException
 from backend.utils.robustness import standard_retry
 
@@ -130,6 +130,33 @@ async def verify_payment_endpoint(
         return {"status": "success", "message": "Transaction verified. Field upgraded."}
     else:
         raise HTTPException(status_code=400, detail="Invalid payment resonance.")
+
+@router.post("/webhook/razorpay")
+async def razorpay_webhook_endpoint(request: Request):
+    """Critical for async payment capture and tier upgrades."""
+    payload = await request.body()
+    signature = request.headers.get("X-Razorpay-Signature")
+    
+    if not RAZORPAY_KEY_SECRET or not signature:
+        return {"status": "ignored"}
+
+    expected = hmac.new(RAZORPAY_KEY_SECRET.encode(), payload, digestmod=hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, signature):
+        raise HTTPException(status_code=400, detail="Invalid webhook signature")
+
+    import json
+    data = json.loads(payload)
+    if data.get("event") == "payment.captured":
+        payment = data["payload"]["payment"]["entity"]
+        user_id = payment.get("notes", {}).get("user_id")
+        plan = payment.get("notes", {}).get("plan", "pro")
+        if user_id:
+            from backend.services.payments.logic import upgrade_user_tier
+            success = upgrade_user_tier(user_id, plan)
+            if success:
+                logger.info(f"Payment captured via webhook for user {user_id}")
+
+    return {"status": "success"}
 
 @router.get("/allowance")
 async def get_allowance_status(current_user: dict = Depends(get_current_user_optional)):

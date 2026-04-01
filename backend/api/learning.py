@@ -11,8 +11,8 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field, field_validator
 
 import asyncio
-from backend.auth import get_current_user, get_current_user_optional
-from backend.learning import (
+from backend.services.auth.logic import get_current_user, get_current_user_optional
+from backend.services.learning.logic import (
     collect_training_sample,
     UserPreferenceModel,
     AdaptivePromptManager,

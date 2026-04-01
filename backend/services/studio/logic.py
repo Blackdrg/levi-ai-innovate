@@ -4,11 +4,11 @@ from datetime import datetime
 from io import BytesIO
 from typing import Optional, Dict, Any
 
-from backend.firestore_db import db as firestore_db, add_document
-from backend.image_gen import generate_quote_image
-from backend.video_gen import generate_quote_video
-from backend.s3_utils import upload_image_to_s3, upload_video_to_s3
-from backend.redis_client import acquire_concurrency_slot, release_concurrency_slot
+from backend.db.firestore_db import db as firestore_db, add_document
+from backend.services.studio.image_logic import generate_quote_image
+from backend.services.studio.video_logic import generate_quote_video
+from backend.db.s3_utils import upload_image_to_s3, upload_video_to_s3
+from backend.db.redis_client import acquire_concurrency_slot, release_concurrency_slot
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ def run_studio_task(job_id: str, task_type: str, params: Dict[str, Any], user_id
             # If data is BytesIO (standard for engines)
             if isinstance(data, BytesIO):
                 img_bytes = data.getvalue()
-                from backend.s3_utils import upload_image_to_s3, upload_video_to_s3
+                from backend.db.s3_utils import upload_image_to_s3, upload_video_to_s3
                 try:
                     if task_type == "image":
                         final_url = upload_image_to_s3(img_bytes, user_id)

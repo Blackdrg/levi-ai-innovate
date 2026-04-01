@@ -6,12 +6,12 @@ from datetime import datetime
 import os
 import logging
 
-from backend.models import Query # type: ignore
+from backend.services.learning.models import Query # type: ignore
 from backend.auth import get_current_user_optional # type: ignore
-from backend.firestore_db import db as firestore_db, add_document # type: ignore
+from backend.db.firestore_db import db as firestore_db, add_document # type: ignore
 from backend.services.studio.tasks import generate_image_task, generate_video_task # type: ignore
 from backend.payments import use_credits # type: ignore
-from backend.redis_client import is_rate_limited # type: ignore
+from backend.db.redis_client import is_rate_limited # type: ignore
 
 logger = logging.getLogger(__name__)
 

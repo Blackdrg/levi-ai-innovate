@@ -20,7 +20,7 @@ def mock_env():
 def mock_firestore():
     """Mock the Firestore DB instance with realistic defaults."""
     from datetime import datetime
-    with patch("backend.firestore_db.db") as mock_db:
+    with patch("backend.db.firestore_db.db") as mock_db:
         # Configure a default document structure
         mock_doc = MagicMock()
         mock_doc.exists = True
@@ -44,7 +44,7 @@ def mock_firestore():
 @pytest.fixture
 def mock_redis():
     """Mock the Redis client instance."""
-    with patch("backend.redis_client.r") as mock_r:
+    with patch("backend.db.redis_client.r") as mock_r:
         mock_r.ping.return_value = True
         yield mock_r
 
@@ -74,8 +74,8 @@ def app_client(test_user):
     
     with patch("backend.main.HAS_REDIS", True), \
          patch("backend.auth.HAS_REDIS", True), \
-         patch("backend.redis_client.HAS_REDIS", True), \
-         patch("backend.redis_client.r", mock_r):
+         patch("backend.db.redis_client.HAS_REDIS", True), \
+         patch("backend.db.redis_client.r", mock_r):
         client = TestClient(app)
         yield client
         # Clear overrides after test
