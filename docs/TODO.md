@@ -1,28 +1,15 @@
-# LEVI Project Roadmap & TODO (v6.8.5) 🚀
+# 🗺️ The Path to AGI (TODO)
 
-## 🟢 PHASE 6.8: THE SOVEREIGN MONOLITH (100% COMPLETE) 🏺
-- [x] **Monolithic Transition**: Unified 8Gi RAM architecture on Cloud Run.
-- [x] **Sovereign Reasoning**: Local Llama-3-8B (GGUF) 100% Zero-Cost inference.
-- [x] **Memory Matrix**: Persistent FAISS vector indices via GCS FUSE mount.
-- [x] **Intelligence Pulse**: Real-time SSE Brain Activity & Routing metadata.
-- [x] **Autonomous Evolution**: Self-optimizing prompts based on 5-star resonance.
-- [x] **Collective Distillation**: Background trait synthesis and pattern extraction.
-- [x] **Absolute Privacy**: Atomic multi-tier memory wipe for data sovereignty.
-- [x] **Sovereignty Audit**: Comprehensive 15-phase production hardening suite.
+LEVI-AI is modular. Now that Sovereign OS v7 has established absolute routing boundaries, the next evolution spans directly into recursive loops and external world interactions.
 
-## 🟡 PHASE 7.0: THE SINGULARITY HORIZON (PLANNED) 🌌
-- [ ] **Multimodal Monolith**: Direct local image/video reasoning (LLaVA/VideoLLM).
-- [ ] **Distributed Wisdom**: P2P shared intelligence across sovereign instances.
-- [ ] **Edge Autonomy**: Self-hosting LEVI on extreme low-power hardware (Raspberry Pi 5).
-- [ ] **Neural Voice Synthesis**: Low-latency local voice cloning (Fish-Speech).
-- [ ] **Recursive Architecture**: Fully self-repairing codebase via Sovereign Agent.
+## 🟢 Phase 1: Swarm Intelligence Upgrades
+- [ ] **Multi-Agent Inter-communication:** `research_agent` currently executes independently of `critic_agent`. True synthetic swarms require internal debate nodes before returning to the `MetaPlanner`.
+- [ ] **Dynamic Tool Ingestion:** The current `tool_registry` is hardcoded. Next phase involves LEVI querying an OpenAPI structure and dynamically writing a Python wrapper to execute an unknown external API seamlessly.
 
----
+## 🟡 Phase 2: Memory Graph Expansion
+- [ ] **Long-Term Synthesizer Node:** The FAISS matrix buffers conversations perfectly, but lacks an overarching `Memory Node` that prunes semantic trees down to core identity weights (e.g. "User strongly values Stoicism") on a 30-day epoch.
+- [ ] **Neo4j Relationships:** Migrate from simple vector embeddings (FAISS) into a true Knowledge Graph capable of establishing relationship pointers between disconnected facts.
 
-**LEVI — Built for emergence. Planned for depth.**
-*Sovereign. Secure. Self-Learning.*
-
----
-
-**LEVI — Built for emergence. Planned for depth.**
-*Sovereign. Secure. Self-Learning.*
+## 🔴 Phase 3: Total Decentralization
+- [ ] **Unbound Training Array:** Automatically scraping 10,000 top GitHub/Arxiv philosophy papers weekly and pushing the raw text through `learning_tasks.py` into the Together AI LoRA arrays without human oversight.
+- [ ] **Tokenized Economics:** Decentralized compute instances allowing end-users to host LEVI-AI rendering nodes asynchronously in exchange for credits via blockchain interfaces.

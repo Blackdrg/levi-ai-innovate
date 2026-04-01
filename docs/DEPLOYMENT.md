@@ -1,67 +1,90 @@
-# Deployment Guide — LEVI-AI v6.8.5 "The Sovereign Monolith"
+# 🚢 LEVI-AI Global CI/CD Deployment Architecture
 
-Production-grade deployment for the **Sovereign AI Ecosystem** using a unified, hardened Monolith architecture on Google Cloud Platform.
-
----
-
-## 🏗️ Sovereign Monolith Architecture
-
-LEVI v6.8.5 is architecturally hardened for maximum efficiency, privacy, and sovereignty. It uses a **Monolith design** for simplified scaling and reduced latency, with on-demand user-specific memory loading.
-
-- **Frontend**: [React (Vite)](https://vitejs.dev/) hosted on **Vercel**
-- **Backend (Monolith)**: [FastAPI](https://fastapi.tiangolo.com/) hosted on [Cloud Run](https://cloud.google.com/run) (`levi-monolith`)
-- **API Gateway**: Integrated via Cloud Run (Auto-SSL + Global LB)
-- **Reasoning**: **Local Llama-3-8B (GGUF)** (Primary) / Groq & Together AI (High-fidelity fallbacks)
-- **Memory (Matrix)**: **User-Specific FAISS Indices** (Stored in GCS, loaded on-demand via FUSE)
-- **Database**: [Firestore](https://cloud.google.com/firestore) + [MongoDB Atlas](https://www.mongodb.com/atlas) (Persistence)
-- **Cache/SSE/RL**: [Cloud Memorystore for Redis](https://cloud.google.com/memorystore)
-- **Storage**: [Google Cloud Storage](https://cloud.google.com/storage) (Mounted via GCS FUSE at `/mnt/vector_db`)
+> [!IMPORTANT]
+> **Sovereign OS v7 Specification**
+> LEVI-AI is no longer a localized monolith. It is a strictly structured micro-service array. Deployment requires dual-process hosting (FastAPI synchronous nodes + Celery asynchronous workers) backed by external State and Blob instances.
 
 ---
 
-## 🚀 Deployment (CI/CD)
+## 🏗️ 1. Infrastructure Topology
 
-The repository uses a **Unified GitHub Action** for production-grade hardened deployments:
+To successfully deploy LEVI-AI, your cloud provider MUST support the following topology:
 
-### 1. **`deploy_production.yml`**
-- **Backend Pipeline**:
-    - Build: `Dockerfile` with optimized Python 3.11-slim.
-    - Push: Artifact Registry (`us-central1-docker.pkg.dev`).
-    - Deploy: Cloud Run with **GCS Volume Mounting** for persistent user vector stores.
-- **Frontend Pipeline**:
-    - Automatic deployment via **Vercel** on push to `main`.
-    - Workflow performs a sanity check build and **Sovereign System Audit** before promotion.
+```mermaid
+graph TD
+    LB[Cloud Load Balancer] --> HTTPS
+    HTTPS --> Web[Vercel / Netlify Frontend]
+    HTTPS --> API[GCP / AWS ECS API Cluster]
+    
+    API -->|Async Tasks & Locks| Redis[(Cloud Memorystore / ElastiCache)]
+    API -->|Firestore DB| GCP[(Google Cloud Firestore)]
+    
+    Redis --> Worker[Celery Render Cluster]
+    Worker --> API
+    Worker -->|Blob Outputs| Storage[(Google Cloud Storage / S3)]
+```
 
----
+## ⚙️ 2. Hardware Matrix Recommendations
 
-## ⚡ Cloud Run Sizing (Sovereign Optimized)
+LEVI-AI is modular. You scale the **API** independently from the **Worker Nodes**.
 
-### `levi-monolith` (Production Service)
-- **Memory**: **8Gi** (Required for Llama-3-8B GGUF (~5GB) + FAISS memory matrix + Concurrency)
-- **CPU**: 4 vCPU (Recommended for stable token-per-second throughput)
-- **Scaling**: 1-10 instances (Min-instances recommended for zero-cold-start sovereignty)
-- **Concurrency**: 80 (High throughput with non-blocking SSE)
-- **Volume**: GCS Bucket `levi-ai-vector-store` mounted at `/mnt/vector_db`
-
----
-
-## 📊 Security & Observability
-
-- **Rate Limiting**: Global Redis-backed rate limiting (20 req/min for free users).
-- **Concurrency Gate**: Enforced `MAX_LOCAL_CONCURRENCY=2` with automatic saturation fallback.
-- **Identity**: Firebase Auth with JTI blacklisting in Redis.
-- **Internal Auth**: Service-to-service calls protected via `INTERNAL_SERVICE_KEY` HMAC.
-- **Deep Health**: Sovereign Engine Probe at `/health/sovereign` with `X-Admin-Key`.
+| Node Type | Minimum Spec | Recommended Spec | Primary Role |
+|-----------|--------------|------------------|--------------|
+| **API Web Node** | 1 vCPU, 512MB RAM | 2 vCPU, 2GB RAM | Routing, Identity, Token Streaming. |
+| **Generative Worker** | 2 vCPU, 4GB RAM | 4 vCPU, 8GB RAM | Image processing, PyDub Audio, Ken-Burns Rendering. |
+| **FAISS Matrix Worker** | 2 vCPU, 2GB RAM | 4 vCPU, 4GB RAM | Keeps `paraphrase-MiniLM` in RAM for rapid vector inference. |
+| **Cache Broker** | 50MB RAM | 1GB RAM Redis | Handles distributed locks and pub/sub Celery routing. |
 
 ---
 
-## 🧪 Post-Deployment Verification
+## ☁️ 3. Deployment Provider Guides
 
-- ✅ **Sovereign Engine**: `GET /api/status/sovereign` returns `status: "Green"`.
-- ✅ **Memory Matrix**: `/mnt/vector_db` contains binary FAISS indices for active users.
-- ✅ **Intelligence Pulse**: `POST /api/chat` returns `text/event-stream` with activity metadata.
-- ✅ **Local Reasoning**: `scripts/verify_production.py --prod` returns 100% pass on all circuits.
+### Google Cloud Run (Recommended for API)
+LEVI-AI was built natively with GCP APIs (Firestore, GCS). 
+1. **Containerize:** Use the included `backend/Dockerfile.prod`.
+2. **Deploy via Cloud Build:** 
+   ```bash
+   gcloud run deploy levi-ai-api --source . --platform managed --allow-unauthenticated
+   ```
+3. **Secrets Management:** Instead of raw `.env` texts, bind GCP Secret Manager directly to your container.
+
+### Render / Digital Ocean App Platform
+> [!WARNING]
+> Render Free Tier drops connections after 15 minutes of inactivity. Due to the massive RAM usage of sentence-transformers, LEVI-AI detects `RENDER=true` in its environment variables and forces a deterministic Numpy hash fallback for the FAISS matrix.
+
+1. **Create Web Service (API)**: Set the start command to `uvicorn backend.api.main:app --host 0.0.0.0 --port 10000`.
+2. **Create Background Worker**: Set the start command to `celery -A backend.celery_app worker --loglevel=info`.
+
+### Vercel (Frontend Client)
+1. Fork the GitHub repository.
+2. Link Vercel exclusively to the `frontend/` Root Directory.
+3. Configure Environment Variables:
+   - `VITE_API_BASE_URL=https://api.your-levi-instance.app`
+4. Deploy the Vite React SPA.
 
 ---
 
-**LEVI v6.8.5 — Sovereign. Secure. Self-Learning.**
+## 🔐 4. Environmental Configuration Validation
+
+Before booting a Production Node, guarantee the following values are properly injected:
+
+```env
+# ── Identity ──
+FIREBASE_SERVICE_ACCOUNT_JSON=/etc/secrets/firebase.json
+
+# ── AI Acceleration ──
+GROQ_API_KEY=gsk_....
+TOGETHER_API_KEY=....
+
+# ── Infrastructure ──
+ENVIRONMENT=production
+REDIS_URL=redis://your-remote-host:6379/0
+
+# ── Monetization ──
+RAZORPAY_KEY_ID=rzp_live_...
+RAZORPAY_KEY_SECRET=...
+```
+
+> [!CAUTION]
+> **Do not deploy the Worker Instance without the FAISS path correctly mapped!** 
+> Set `VECTOR_DB_PATH=/tmp/faiss_data` on serverless instances, or mount a persistent volume if you want vector memory to sustain across pod restarts.

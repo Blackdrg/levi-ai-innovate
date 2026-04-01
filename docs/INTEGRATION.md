@@ -1,69 +1,34 @@
-# LEVI-AI: v6.8.5 "Sovereign Monolith" Integration & API Reference 🚀
+# 🔌 The Glassmorphic Integration Interface
 
-This document provides the definitive API reference for the hardened v6.8.5 LEVI-AI Sovereign Monolith.
+How the `React + Vite` Client talks to the `FastAPI + Celery` Backend Matrix.
 
 ---
 
-## 📡 1. Unified Chat & Sovereign Pulse
+## 📡 1. Deep Core SSE Brain Streaming
 
-The orchestrator combines `intent detection`, `vector memory matrix`, `Local Reasoning`, and `autonomous evolution` into a single, high-performance SSE stream with real-time intelligence pulses.
+The frontend does not Wait 10 seconds for a response logic string. It uses `useBrain.js` to parse tokens identically out of the `EventSource` connection.
 
-### `POST /api/chat`
-Primary message handler. Supports both synchronous (JSON) and asynchronous (SSE) responses.
+### How it works natively:
+The `fetch` request uses `Accept: text/event-stream`.
+Instead of JSON wrapping, the backend Uvicorn server yields chunks separated by `data: ` and `\n\n`. The `readStream` function decodes bytes, appending characters directly into the React ChatWindow state buffer.
 
-**Request Body (`application/json`):**
-```json
-{
-    "message": "Analyze the sovereign architecture of my mind.",
-    "session_id": "sess-v685",
-    "mood": "philosophical",
-    "stream": true
+```javascript
+// frontend/src/services/brainService.js
+while(true) {
+    const {done, value} = await reader.read();
+    if (done) break;
+    // ... parse out JSON components to trigger the UI intent changes.
 }
 ```
 
-**Response (SSE Streaming):**
-Chunks are sent with the `data: ` prefix. LEVI v6.8.5 delivers **Intelligence Pulses** before the core response to visualize the monolith's internal reasoning stages.
+## 🎥 2. Event Polling (Celery Background Renders)
+Since SSE is purely text, rendering a 21-megabyte `.mp4` file via MoviePy stops the main event loop entirely.
 
-```text
-# 1. Activity Pulse (Thinking heartbeat)
-data: {"event": "activity", "data": "Analyzing sovereign intent..."}
-data: {"event": "activity", "data": "Recalling private memory matrix..."}
+**The Polling Handshake:**
+1. UI fires `POST /api/studio/video`.
+2. Backend triggers Celery and immediately responds identically with `{status: "queued", job_id: "..."}`.
+3. UI mounts a `setInterval` or recursive trigger via `useStudioHook` checking `GET /api/studio/job/:job_id` every 3.5 seconds.
+4. When `status == "completed"`, it safely reads the generated signed URL from Google Cloud Storage and unmounts the polling socket.
 
-# 2. Decision Metadata (Full routing sync)
-data: {"event": "metadata", "data": {
-    "intent": "chat", 
-    "route": "LOCAL", 
-    "engine_metadata": {"provider": "Monolith", "model": "Llama-3-8B.gguf", "latency": 0.04},
-    "request_id": "req_monolith_f01"
-}}
-
-# 3. Content Chunks (LLM Tokens)
-data: {"event": "choice", "data": "The"}
-data: {"event": "choice", "data": " architecture"}
-
-# 4. Finalization
-data: [DONE]
-```
-
----
-
-## 🧠 2. Sovereignty & Memory Matrix
-
-### `GET /api/status/sovereign` (Admin)
-Deep diagnostic probe of sub-system health (LLM, FAISS, GCS FUSE).
-*   **Headers**: `X-Admin-Key: <ADMIN_KEY>`
-
-### `POST /api/privacy/clear-all`
-**Absolute Purge**. Triggers an atomic wipe of Firestore facts, Redis history, and local FAISS indices for the current user. Ensures absolute data sovereignty.
-
----
-
-## 🛡️ 3. Integration Best Practices
-
-1. **Intelligent Status Heartbeat**: Use the `event: activity` messages to drive the "Sovereign Radar" animation in your UI (e.g., *“LEVI is recalling your history...”*).
-2. **Sovereign Engine Badge**: Always render the `engine_metadata` to show the user they are being served by the **Local Monolith**.
-3. **Trace IDs**: Log the `request_id` for every interaction to enable deep-pulse auditing via the `Sovereign Engine Probe`.
-
----
-
-**LEVI v6.8.5 — Built for emergence. Integrated for depth. Sovereign by design.**
+## 🌌 3. The `Intent` UI Map
+The MetaPlanner dictates the visual display. If the LLM generates JSON with `"intent": "generate_image"`, the frontend immediately drops the `MessageBubble.jsx` component and spawns the `StudioCanvas.jsx` layout seamlessly below the chat string.

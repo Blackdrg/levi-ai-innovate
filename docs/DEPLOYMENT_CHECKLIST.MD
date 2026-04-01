@@ -1,35 +1,31 @@
-# LEVI-AI: v6.8.5 "Sovereign Monolith" Deployment Checklist ✅
+# 🛡️ LEVI-AI Production Security & Launch Checklist
 
-This checklist ensures a successful, zero-downtime deployment for the **LEVI-AI v6.8.5 Sovereign Monolith**.
-
----
-
-## 🏗️ 1. Infrastructure (GCP Monolith)
-- [x] **Compute**: Cloud Run `levi-monolith` configured with **8Gi RAM** and **4 vCPU**.
-- [x] **Storage**: GCS Bucket `levi-ai-vector-store` is created and accessible.
-- [x] **Mount Point**: Verify `/mnt/vector_db` is correctly mounted via **GCS FUSE**.
-- [x] **Concurrency**: `MAX_LOCAL_CONCURRENCY=2` is set in environment secrets.
-- [x] **Secrets**: All API keys (Groq, Together, Razorpay) are in **Secret Manager**.
-
-## 🧠 2. Cognitive Layer (Sovereign Mind)
-- [x] **Local Model**: `Llama-3-8B.gguf` is present in the image and `LocalLLM` reports `READY`.
-- [x] **Memory Matrix**: `user_faiss.bin` and `global_faiss.bin` paths are verified.
-- [x] **Intelligence Pulse**: SSE endpoints (/api/chat) verified for `activity` and `metadata` events.
-- [x] **Evolution**: `AdaptivePromptManager` is seeded with "Collective Wisdom" genesis patterns.
-
-## 🛡️ 3. Security & Resilience
-- [x] **Internal HMAC**: `INTERNAL_SERVICE_KEY` is synchronized for service-to-service calls.
-- [x] **Health Audit**: `/health/sovereign` returns `status: "Green"` with `X-Admin-Key`.
-- [x] **Retry Logic**: `@standard_retry` is applied to all critical Firestore/Payments circuits.
-- [x] **DoS Protection**: Rate limits and RAM saturation fallbacks are verified.
-
-## 🚀 4. Final Launch & Sync
-- [x] **Environment**: `ENVIRONMENT=production` and `USE_SOVEREIGN_ROUTING=true`.
-- [x] **Audit Suite**: `scripts/verify_production.py --prod` shows 100% pass rate.
-- [x] **Repo Sync**: `sync_sovereign.bat` has been executed to finalize the v6.8.5 manifest.
-- [x] **Documentation**: All `.md` files are synchronized with the Sovereign Monolith architecture.
+Before flipping traffic onto LEVI-AI v7, you MUST execute this rigid audit. The Sovereign OS architecture introduces asynchronous vulnerabilities if proper keys, mounts, and limits are omitted.
 
 ---
 
-**LEVI v6.8.5 — Sovereign. Efficient. Self-Scaling.**
-*Hardened for Absolute Data Sovereignty.*
+## 1. Domain & Networking Hardening
+- [ ] **Cors Shield:** `CORS_ORIGINS` in your `.env.production` is strictly locked to your frontend domains (e.g., `["https://levi.ai", "https://studio.levi.ai"]`). No `*` wildcards.
+- [ ] **HTTPS Enforced:** Load balancers terminate SSL before hitting Uvicorn. The Server relies strictly on `fastapi.middleware.cors`.
+- [ ] **Firebase Handshake:** Frontend Firebase Client configuration precisely matches the backend Firebase Admin Service JSON.
+- [ ] **GCS Buckets Signed:** Ensure your Google Cloud Storage buckets for Video/Image rendering are strictly **PRIVATE**. Your Python backend must dynamically generate `Signed URLs` to stream media to the client.
+
+## 2. Distributed Memory Matrix (FAISS & Redis)
+- [ ] **Persistence Volume Mounts:** If scaling to >1 API Server, FAISS memory matrix data *cannot* be local disk. `VECTOR_DB_PATH` must be mapped to a Network File System or GCS FUSE mount.
+- [ ] **Redis Rate Limiting Verified:** Test the `/api/studio/video` endpoint rapidly 5 times to ensure the `backend.db.redis_client.distributed_lock` correctly returns a 429 "Transaction in progress" rather than double-deducting credits.
+
+## 3. Financial Firewall
+- [ ] **Razorpay Webhooks Registered:** Ensure the Razorpay Dashboard webhook is pointing correctly to `https://api.domain.com/payments/webhook`.
+- [ ] **HMAC Signature Check:** Force a test payload to Razorpay and verify `RAZORPAY_KEY_SECRET` perfectly hashes matching the header `X-Razorpay-Signature`.
+
+## 4. Multi-Modal Generative Assets
+- [ ] **MoviePy Dependencies:** Does the container have `ImageMagick` binaries installed globally? MoviePy's TextClip relies heavily on external C-bindings.
+- [ ] **TTS Folders:** Execute a test generation to ensure the Coqui TTS runtime model successfully downloaded to `/tmp/tts_models` instead of crashing on a read/write permission deny.
+
+## 5. Environment Health
+> [!TIP]
+> **Use the Sovereign Probe**
+> Fire a test via `GET /admin/orchestrator/stats`. Ensure `redis`, `firestore`, and `groq_api` status reads back as `healthy`.
+
+- [ ] `.env` File scrubbed. No secrets are dynamically baked into frontend build times.
+- [ ] `ENVIRONMENT=production` set on FastAPI node to completely disable Celery inline tasks (`task_always_eager=False`).
