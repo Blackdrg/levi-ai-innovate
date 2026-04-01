@@ -101,7 +101,7 @@ async def test_local_engine_saturation_fallback():
 
 def test_router_agent_intent():
     """Verify intent classification routing logic for v6.8."""
-    from backend.agents import RouterAgent
+    from backend.core.agent_registry import RouterAgent
     agent = RouterAgent()
     
     with patch("backend.circuit_breaker.groq_breaker.call") as mock_call:
@@ -118,7 +118,7 @@ def test_router_agent_intent():
 # ── Phase 18: Resiliency & Intelligence Tests ──────────────────
 
 from backend.circuit_breaker import CircuitBreaker
-from backend.agents import RouterAgent
+from backend.core.agent_registry import RouterAgent
 
 def test_circuit_breaker_trips():
     """Verify that the circuit correctly opens after threshold failures."""

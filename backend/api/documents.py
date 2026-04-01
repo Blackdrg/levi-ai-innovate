@@ -4,7 +4,7 @@ import uuid
 import logging
 from typing import Optional, List
 from fastapi import APIRouter, Depends, Request, UploadFile, File, BackgroundTasks
-from backend.auth import get_current_user_optional
+from backend.services.auth.logic import get_current_user_optional
 from backend.services.documents.service import DocumentService
 from backend.utils.exceptions import LEVIException
 from backend.utils.sanitization import sanitize_filename

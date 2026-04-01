@@ -13,12 +13,12 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
 from backend.utils.exceptions import LEVIException
-from backend.models import Query
-from backend.auth import get_current_user_optional
-from backend.firestore_db import db as firestore_db
+from backend.core.orchestrator_types import Query
+from backend.services.auth.logic import get_current_user_optional
+from backend.db.firestore_db import db as firestore_db
 from backend.services.studio.tasks import generate_image_task, generate_video_task
-from backend.payments import use_credits
-from backend.redis_client import is_rate_limited
+from backend.services.payments.logic import use_credits
+from backend.db.redis_client import is_rate_limited
 from backend.utils.robustness import standard_retry, TimeoutHandler
 from backend.gcp_jobs import enqueue_video_task
 

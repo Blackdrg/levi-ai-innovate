@@ -133,13 +133,42 @@ async def test_sse_pulse_api(base_url: str):
         logger.error(f"SSE Pulse Test Failed: {e}")
         return False
 
+async def test_multi_agent_registry():
+    logger.info("Testing Multi-Agent Registry...")
+    from backend.services.orchestrator.agent_registry import AGENTS
+    required = ["research_agent", "document_agent", "task_agent", "memory_agent", "diagnostic_agent"]
+    missing = [a for a in required if a not in AGENTS]
+    if not missing:
+        logger.info("Multi-Agent Registry: OK")
+        return True
+    else:
+        logger.error(f"Missing Agents: {missing}")
+        return False
+
+async def test_encrypted_vault():
+    logger.info("Testing Sovereign Encryption Vault...")
+    from backend.utils.encryption import SovereignVault
+    try:
+        secret = "Sovereign Intelligence"
+        encrypted = SovereignVault.encrypt(secret)
+        decrypted = SovereignVault.decrypt(encrypted)
+        if encrypted != secret and decrypted == secret:
+            logger.info("SovereignVault Encryption: OK")
+            return True
+        else:
+            logger.error("Encryption/Decryption Mismatch")
+            return False
+    except Exception as e:
+        logger.error(f"Encryption Test Failed: {e}")
+        return False
+
 async def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--prod", action="store_true", help="Test remote production URL")
     args = parser.parse_args()
     
     base_url = "https://levi-monolith-u5v7-production.a.run.app" if args.prod else "http://localhost:8080"
-    logger.info(f"--- PRODUCTION HARDENING VERIFICATION (Base: {base_url}) ---")
+    logger.info(f"--- SOVEREIGN MIND v6.8.8 VERIFICATION (Base: {base_url}) ---")
     
     results = {
         "Redis": await test_redis(),
@@ -147,6 +176,8 @@ async def main():
         "LLM_API": await test_llm_api(),
         "Local_GGUF": await test_local_engine(),
         "FAISS_FUSE": await test_faiss_persistence(),
+        "Multi-Agent": await test_multi_agent_registry(),
+        "Encryption": await test_encrypted_vault(),
         "SSE_Pulse": await test_sse_pulse_api(base_url)
     }
     
@@ -158,7 +189,7 @@ async def main():
         if not ok: all_ok = False
             
     if all_ok:
-        logger.info("\n🚀 SYSTEM IS SOVEREIGN, SECURE, AND PRODUCTION READY.")
+        logger.info("\n🚀 LEVI-AI v6.8.8 IS SOVEREIGN, SECURE, AND PRODUCTION READY.")
         sys.exit(0)
     else:
         logger.error("\n💔 SYSTEM NOT READY. CRITICAL FAILURES DETECTED.")

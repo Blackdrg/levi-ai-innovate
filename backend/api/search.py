@@ -10,8 +10,8 @@ import os
 import uuid
 from typing import Optional
 from fastapi import APIRouter, Depends, Request, BackgroundTasks, UploadFile, File
-from backend.auth import get_current_user_optional
-from backend.services.orchestrator import run_orchestrator
+from backend.services.auth.logic import get_current_user_optional
+from backend.core.brain import run_orchestrator
 from backend.utils.sanitization import sanitize_input, sanitize_filename
 from pydantic import BaseModel, Field
 
@@ -69,7 +69,7 @@ async def search_endpoint(
 async def search_get_endpoint(query: str, session_id: str = ""):
     """Convenience GET endpoint for simple searches."""
     # This just redirects to the orchestrator logic
-    from backend.services.orchestrator import run_orchestrator
+    from backend.core.brain import run_orchestrator
     result = await run_orchestrator(
         user_input=query,
         session_id=session_id,

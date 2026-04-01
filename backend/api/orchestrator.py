@@ -13,9 +13,9 @@ from typing import Optional, Dict, Any
 from fastapi import APIRouter, Depends, BackgroundTasks, Request
 from fastapi.responses import StreamingResponse
 from backend.utils.exceptions import LEVIException
-from backend.models import ChatMessage
-from backend.auth import get_current_user_optional
-from backend.services.orchestrator import run_orchestrator
+from backend.services.learning.models import ChatMessage
+from backend.services.auth.logic import get_current_user_optional
+from backend.core.brain import run_orchestrator
 from backend.utils.robustness import standard_retry
 
 logger = logging.getLogger(__name__)

@@ -10,8 +10,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
-from backend.auth import get_current_user_optional
-from backend.services.orchestrator.planner import detect_intent
+from backend.services.auth.logic import get_current_user_optional
+from backend.core.planner import detect_intent
 from backend.utils.exceptions import LEVIException
 
 logger = logging.getLogger(__name__)

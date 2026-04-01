@@ -24,7 +24,7 @@ class TestMemoryGraph:
         }
 
     def test_extract_memory_insights_mock(self):
-        from backend.learning import _extract_memory_insights
+        from backend.services.learning.logic import _extract_memory_insights
 
         # Mock Groq response
         mock_response = MagicMock()
@@ -44,7 +44,7 @@ class TestMemoryGraph:
         assert "coffee" in res["entities"]["interests"]
 
     def test_update_memory_graph(self):
-        from backend.learning import update_memory_graph
+        from backend.services.learning.logic import update_memory_graph
         
         extract_mock_val = {
             "entities": {
@@ -68,7 +68,7 @@ class TestMemoryGraph:
             mock_firestore.collection().document().update.assert_called()
 
     def test_system_prompt_injection(self):
-        from backend.learning import UserPreferenceModel
+        from backend.services.learning.logic import UserPreferenceModel
 
         # Mock Firestore and Redis for get_profile
         with patch("backend.learning.firestore_db") as mock_firestore:

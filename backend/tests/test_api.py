@@ -35,13 +35,13 @@ def test_chat(mock_gen_resp, app_client, test_user, auth_headers):
     resp = app_client.post('/api/v1/chat', json={'session_id': '1', 'message': 'hi'}, headers=auth_headers)
     assert resp.status_code == 200
 
-@patch('backend.firestore_db.db')
+@patch('backend.db.firestore_db.db')
 def test_search_quotes(mock_db, app_client):
     """Test search."""
     resp = app_client.post('/api/v1/gallery/search_quotes', json={'text': 'test'})
     assert resp.status_code == 200
 
-@patch('backend.firestore_db.db')
+@patch('backend.db.firestore_db.db')
 def test_analytics(mock_db, app_client):
     """Test analytics."""
     resp = app_client.get('/api/v1/analytics')
@@ -49,7 +49,7 @@ def test_analytics(mock_db, app_client):
 
 @patch('backend.services.studio.router.use_credits')
 @patch('backend.image_gen.generate_quote_image')
-@patch('backend.firestore_db.db')
+@patch('backend.db.firestore_db.db')
 def test_generate_image_auth(mock_db, mock_gen, mock_credits, app_client, test_user, auth_headers):
     """Test generate_image with auth override."""
     # Mock generate_quote_image to return a dict with a BytesIO data object (simulating real engine)
@@ -65,7 +65,7 @@ def test_generate_image_auth(mock_db, mock_gen, mock_credits, app_client, test_u
     assert "task_id" in resp.json()
 
 @patch('backend.payments.verify_razorpay_signature')
-@patch('backend.firestore_db.db')
+@patch('backend.db.firestore_db.db')
 def test_verify_payment_patch(mock_db, mock_verify, app_client, test_user, auth_headers):
     """Test verify_payment with correct upgrade_user_tier patch path."""
     mock_verify.return_value = True

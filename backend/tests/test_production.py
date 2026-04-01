@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient  # type: ignore
 
 from backend.main import app # type: ignore
 
-@patch('backend.firestore_db.db')
+@patch('backend.db.firestore_db.db')
 @patch('backend.services.studio.router.use_credits')
 @patch('backend.image_gen.generate_quote_image')
 def test_generate_image_sync(mock_gen, mock_credits, mock_db, app_client, auth_headers):
@@ -30,7 +30,7 @@ def test_generate_image_sync(mock_gen, mock_credits, mock_db, app_client, auth_h
     assert resp.json()["status"] == "queued"
     assert "task_id" in resp.json()
 
-@patch('backend.firestore_db.db')
+@patch('backend.db.firestore_db.db')
 @patch('backend.services.studio.router.use_credits')
 @patch('backend.services.studio.router.generate_image_task.delay')
 def test_generate_image_async(mock_task, mock_credits, mock_db, app_client, auth_headers):
@@ -46,7 +46,7 @@ def test_generate_image_async(mock_task, mock_credits, mock_db, app_client, auth
     assert resp.json()["task_id"].startswith("job_")
     assert resp.json()["status"] == "queued"
 
-@patch('backend.firestore_db.db')
+@patch('backend.db.firestore_db.db')
 @patch('backend.payments.verify_razorpay_signature')
 @patch('backend.payments.upgrade_user_tier')
 def test_verify_payment(mock_upgrade, mock_verify, mock_db, app_client, auth_headers):

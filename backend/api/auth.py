@@ -11,7 +11,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from backend.utils.exceptions import LEVIException
-from backend.auth import get_current_user, get_current_user_optional
+from backend.services.auth.logic import get_current_user, get_current_user_optional
 from backend.utils.robustness import standard_retry
 
 logger = logging.getLogger(__name__)
@@ -58,7 +58,7 @@ async def login(response: Response, payload: dict):
     Standard login - logic verified via Firebase token or direct credentials.
     Returns success and establishing a handshake.
     """
-    from backend.auth import get_current_user # ensure we can use it
+    from backend.services.auth.logic import get_current_user # ensure we can use it
     uid = payload.get("uid")
     email = payload.get("email")
     
@@ -105,7 +105,7 @@ async def logout(current_user: dict = Depends(get_current_user)):
     """
     Revokes user sessions.
     """
-    from backend.redis_client import HAS_REDIS, r as redis
+    from backend.db.redis_client import HAS_REDIS, r as redis
     if not HAS_REDIS:
         raise LEVIException("Session revocation requires Redis.", status_code=503, error_code="REDIS_UNAVAILABLE")
     
@@ -120,3 +120,15 @@ async def verify_registration(token: str):
     if token == "expired-token":
         raise LEVIException("Token entropy lost.", status_code=400, error_code="TOKEN_EXPIRED")
     return {"status": "success", "message": "Identity verified."}
+@router.post("/track_share")
+async def track_share(current_user: dict = Depends(get_current_user)):
+    """Track viral shares and reward bonus credits."""
+    uid = current_user.get("uid")
+    user_ref = firestore_db.collection("users").document(uid)
+    user_ref.update({"share_count": firestore.Increment(1)})
+    
+    new_shares = current_user.get("share_count", 0) + 1
+    if new_shares % 5 == 0:
+        user_ref.update({"credits": firestore.Increment(50)})
+        return {"status": "rewarded", "bonus": 50}
+    return {"status": "success"}

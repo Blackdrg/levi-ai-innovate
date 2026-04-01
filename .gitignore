@@ -27,6 +27,8 @@ test_*.png
 
 # Env files
 .env
+configs/.env*
+*.bak
 
 # OS
 .DS_Store

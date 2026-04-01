@@ -56,7 +56,7 @@ def enqueue_video_task(job_data: Dict[str, Any]) -> Optional[str]:
     
     Here we create the record in Firestore first.
     """
-    from backend.firestore_db import db as firestore_db
+    from backend.db.firestore_db import db as firestore_db
     
     # 1. Create Job Doc in Firestore
     job_id = f"job_{os.urandom(4).hex()}"

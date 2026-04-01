@@ -101,11 +101,11 @@ async def test_orchestrator_returns_dict():
     mock_redis.set.return_value = True
 
     with (
-        patch("backend.redis_client.get_conversation",   return_value=[]),
-        patch("backend.redis_client.save_conversation",  return_value=None),
-        patch("backend.redis_client.HAS_REDIS",          True),
-        patch("backend.redis_client.r",                  mock_redis),
-        patch("backend.firestore_db.db",                 mock_db),
+        patch("backend.db.redis_client.get_conversation",   return_value=[]),
+        patch("backend.db.redis_client.save_conversation",  return_value=None),
+        patch("backend.db.redis_client.HAS_REDIS",          True),
+        patch("backend.db.redis_client.r",                  mock_redis),
+        patch("backend.db.firestore_db.db",                 mock_db),
         patch("backend.services.orchestrator.engine.check_allowance", return_value=True),
         patch("backend.payments.use_credits",            return_value=None),
         patch("backend.embeddings.embed_text",           return_value=[0.1] * 384),
@@ -142,11 +142,11 @@ async def test_orchestrator_greeting_uses_local_route():
     mock_redis.get.return_value = None
 
     with (
-        patch("backend.redis_client.get_conversation",   return_value=[]),
-        patch("backend.redis_client.save_conversation",  return_value=None),
-        patch("backend.redis_client.HAS_REDIS",          True),
-        patch("backend.redis_client.r",                  mock_redis),
-        patch("backend.firestore_db.db",                 mock_db),
+        patch("backend.db.redis_client.get_conversation",   return_value=[]),
+        patch("backend.db.redis_client.save_conversation",  return_value=None),
+        patch("backend.db.redis_client.HAS_REDIS",          True),
+        patch("backend.db.redis_client.r",                  mock_redis),
+        patch("backend.db.firestore_db.db",                 mock_db),
         patch("backend.services.orchestrator.engine.check_allowance", return_value=True),
         patch("backend.payments.use_credits",            return_value=None),
         patch("backend.embeddings.embed_text",           return_value=[0.1] * 384),

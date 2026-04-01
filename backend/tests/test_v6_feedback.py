@@ -16,8 +16,8 @@ async def test_reflex_ledger_logging():
     fail_res = ToolResult(success=False, message="API Down", error="ConnectionTimeout: Failed to connect", agent="image_agent")
     
     with patch("backend.services.orchestrator.executor.call_tool", new_callable=AsyncMock) as mock_call, \
-         patch("backend.redis_client.HAS_REDIS", True), \
-         patch("backend.redis_client.r") as mock_redis:
+         patch("backend.db.redis_client.HAS_REDIS", True), \
+         patch("backend.db.redis_client.r") as mock_redis:
         
         mock_call.return_value = fail_res
         
@@ -34,8 +34,8 @@ async def test_adaptive_planning_advisory():
     intent = IntentResult(intent="image", complexity=5)
     
     # Mock Redis returning high failure stats for image_agent
-    with patch("backend.redis_client.HAS_REDIS", True), \
-         patch("backend.redis_client.r") as mock_redis, \
+    with patch("backend.db.redis_client.HAS_REDIS", True), \
+         patch("backend.db.redis_client.r") as mock_redis, \
          patch("backend.services.orchestrator.meta_planner._async_call_llm_api", new_callable=AsyncMock) as mock_llm:
         
         # stats for image_agent: 10 calls, 5 failures (50%)
@@ -56,8 +56,8 @@ async def test_adaptive_planning_advisory():
 @pytest.mark.asyncio
 async def test_silent_distillation_trigger():
     """Verify memory distillation triggers after enough interactions."""
-    with patch("backend.redis_client.HAS_REDIS", True), \
-         patch("backend.redis_client.r") as mock_redis, \
+    with patch("backend.db.redis_client.HAS_REDIS", True), \
+         patch("backend.db.redis_client.r") as mock_redis, \
          patch("backend.services.orchestrator.memory_manager.MemoryManager.distill_core_memory", new_callable=AsyncMock) as mock_distill, \
          patch("backend.services.orchestrator.memory_manager.extract_facts", new_callable=AsyncMock) as mock_extract, \
          patch("backend.services.orchestrator.memory_manager.store_facts", new_callable=AsyncMock) as mock_store:

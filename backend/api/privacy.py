@@ -10,9 +10,9 @@ from typing import List, Dict, Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from backend.utils.exceptions import LEVIException
-from backend.auth import get_current_user
-from backend.firestore_db import db as firestore_db
-from backend.services.orchestrator.memory_utils import prune_old_facts
+from backend.services.auth.logic import get_current_user
+from backend.db.firestore_db import db as firestore_db
+from backend.core.memory_utils import prune_old_facts
 from backend.utils.robustness import standard_retry
 
 logger = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ async def get_my_facts(current_user: dict = Depends(get_current_user)):
     user_id = current_user.get("uid")
     try:
         # Maintenance: Prune facts older than 30 days
-        from backend.services.orchestrator.memory_utils import prune_old_facts
+        from backend.core.memory_utils import prune_old_facts
         await prune_old_facts(user_id)
         
         docs = firestore_db.collection("user_facts") \
@@ -110,7 +110,7 @@ async def clear_all_memory(current_user: dict = Depends(get_current_user)):
     """
     user_id = current_user.get("uid")
     try:
-        from backend.services.orchestrator.memory_manager import MemoryManager
+        from backend.core.memory_manager import MemoryManager
         cleared_count = await MemoryManager.clear_all_user_data(user_id)
         
         return {

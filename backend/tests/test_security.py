@@ -6,7 +6,7 @@ import hmac  # type: ignore
 import os
 from unittest.mock import patch, MagicMock
 from backend.main import app, _INJECTION_PATTERNS  # type: ignore
-# from backend.models import Users  # type: ignore
+# from backend.services.learning.models import Users  # type: ignore
 # from backend.auth import create_access_token, create_refresh_token  # type: ignore
 # from jose import jwt  # type: ignore (Unused and causing ModuleNotFoundError)
 
@@ -43,7 +43,7 @@ def test_admin_key_constant_time():
 
 def test_logout_redis_unavailable(app_client, monkeypatch):
     # Mock HAS_REDIS to False
-    import backend.redis_client as redis_client  # type: ignore
+    import backend.db.redis_client as redis_client  # type: ignore
     monkeypatch.setattr(redis_client, "HAS_REDIS", False)
     
     # Auth is mocked by app_client fixture

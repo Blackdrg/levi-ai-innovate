@@ -11,12 +11,12 @@ from typing import Optional, Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from backend.utils.exceptions import LEVIException
-from backend.models import ContentRequest
-from backend.auth import get_current_user
-from backend.content_engine import generate_content, get_available_types, get_available_tones
-from backend.sd_engine import get_available_styles
-from backend.redis_client import is_rate_limited, get_daily_ai_spend, incr_daily_ai_spend
-from backend.api.payments import use_credits
+from backend.core.orchestrator_types import ContentRequest
+from backend.services.auth.logic import get_current_user
+from backend.engines.studio.content_logic import generate_content, get_available_types, get_available_tones
+from backend.engines.studio.sd_logic import get_available_styles
+from backend.db.redis_client import is_rate_limited, get_daily_ai_spend, incr_daily_ai_spend
+from backend.services.payments.logic import use_credits
 from backend.utils.robustness import standard_retry
 
 logger = logging.getLogger(__name__)
@@ -62,7 +62,7 @@ async def gen_content(
             raise LEVIException("Insufficient cosmic energy.", status_code=402)
 
     # 3. Evolutionary Persona Context (v6.8)
-    from backend.learning import AdaptivePromptManager
+    from backend.services.learning.logic import AdaptivePromptManager
     persona_manager = AdaptivePromptManager(user_id)
     persona_context = await persona_manager.get_system_instructions()
     

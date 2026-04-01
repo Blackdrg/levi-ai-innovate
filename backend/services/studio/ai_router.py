@@ -3,11 +3,11 @@ import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request # type: ignore
 from backend.utils.exceptions import LEVIException
-from backend.models import ContentRequest # type: ignore
+from backend.services.learning.models import ContentRequest # type: ignore
 from backend.auth import get_current_user # type: ignore
 from backend.content_engine import generate_content, get_available_types, get_available_tones # type: ignore
-from backend.sd_engine import get_available_styles # type: ignore
-from backend.redis_client import is_rate_limited, get_daily_ai_spend, incr_daily_ai_spend # type: ignore
+from backend.services.image_gen import get_available_styles # type: ignore
+from backend.db.redis_client import is_rate_limited, get_daily_ai_spend, incr_daily_ai_spend # type: ignore
 from backend.payments import use_credits # type: ignore
 
 logger = logging.getLogger(__name__)
