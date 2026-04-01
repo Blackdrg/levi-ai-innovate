@@ -1,0 +1,87 @@
+/**
+ * hook: useStream
+ * SSE logic for real-time token-by-token updates.
+ */
+import { useChatStore } from "../store/useChatStore";
+
+export const useStream = () => {
+  const updateLastMessage = useChatStore((state) => state.updateLastMessage);
+  const setStreaming = useChatStore((state) => state.setStreaming);
+
+  const startStream = async (url, options = {}) => {
+    setStreaming(true);
+    
+    // We use fetch + ReadableStream for better header control than EventSource
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        ...options
+      });
+
+      if (!response.body) throw new Error("No response body");
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        
+        const lines = buffer.split("\n\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const dataStr = line.slice(6).trim();
+            if (dataStr === "[DONE]") {
+                setStreaming(false);
+                break;
+            }
+            
+            try {
+              const data = JSON.parse(dataStr);
+              
+              // ── LEVI v6.8: Multi-Part SSE Handler ──
+              if (data.event === "activity") {
+                // "Thinking...", "Searching...", etc.
+                useChatStore.getState().setActivityPulse(data.data);
+              } 
+              else if (data.event === "metadata") {
+                // Engine info: { route: "LOCAL" | "API" | "CACHE" }
+                updateLastMessage({ engine: data.data.route });
+              }
+              else if (data.event === "choice" || data.token) {
+                // Clear the thinking pulse once the first real token arrives
+                useChatStore.getState().setActivityPulse(null);
+                
+                const token = data.data || data.token;
+                updateLastMessage(prev => ({
+                    ...prev,
+                    content: (prev.content || "") + token
+                }));
+              } 
+              else if (data.event === "done" || dataStr === "[DONE]") {
+                useChatStore.getState().setActivityPulse(null);
+                setStreaming(false);
+              }
+            } catch (e) {
+              console.warn("[Stream Parse Error]", e);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error("[Stream Error]", err);
+      setStreaming(false);
+      throw err;
+    } finally {
+      setStreaming(false);
+    }
+  };
+
+  return { startStream };
+};

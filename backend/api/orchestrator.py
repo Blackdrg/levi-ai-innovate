@@ -65,7 +65,8 @@ async def orchestrator_endpoint(
             error_code="ORCHESTRATION_FAIL"
         )
 
-@router.post("/stream")
+@router.post("")
+
 async def orchestrator_stream_endpoint(
     request: Request,
     msg: ChatMessage,

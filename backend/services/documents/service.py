@@ -78,13 +78,19 @@ class DocumentService:
             return "[Error: DOCX support not installed]"
 
     @staticmethod
-    def _chunk_text(text: str, chunk_size: int = 1000, overlap: int = 200) -> List[str]:
+    def _chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
         """
-        Splits text into overlapping chunks for better retrieval.
+        Splits text into overlapping chunks for better retrieval (LEVI-AI Standard).
         """
         chunks = []
-        for i in range(0, len(text), chunk_size - overlap):
+        if not text: return []
+        
+        # Ensure we don't have an infinite loop if overlap >= chunk_size
+        step = max(1, chunk_size - overlap)
+        
+        for i in range(0, len(text), step):
             chunks.append(text[i:i + chunk_size])
+            
         return chunks
 
     @classmethod
@@ -100,6 +106,6 @@ class DocumentService:
         
         context_parts = []
         for r in results:
-            context_parts.append(f"From {r['filename']}: {r['chunk']}")
+            context_parts.append(f"From {r.get('filename', 'Unknown')}: {r.get('text', '')}")
             
         return "\n\n".join(context_parts)

@@ -58,10 +58,11 @@ async def _stream_response(orchestrator_data: Dict[str, Any], is_live: bool = Fa
         
         words = response_text.split(" ")
         for i, word in enumerate(words):
-            chunk = {
-                "choices": [{"delta": {"content": word + (" " if i < len(words) - 1 else "")}}],
-                "metadata": metadata if i == 0 else {},
-            }
+            content = word + (" " if i < len(words) - 1 else "")
+            chunk = {"event": "choice", "data": content}
+            if i == 0:
+                 # Metadata with first chunk
+                 yield f"data: {json.dumps({'event': 'metadata', 'data': metadata})}\n\n"
             yield f"data: {json.dumps(chunk)}\n\n"
             await asyncio.sleep(0.01)
         yield "data: [DONE]\n\n"
@@ -107,8 +108,7 @@ async def _true_groq_stream(
         "job_ids": orchestrator_data.get("job_ids", []),
         "streaming": True,
     }
-    first_chunk = {"choices": [{"delta": {"content": ""}}], "metadata": metadata}
-    yield f"data: {json.dumps(first_chunk)}\n\n"
+    yield f"data: {json.dumps({'event': 'metadata', 'data': metadata})}\n\n"
 
     # Stream tokens live from Groq
     async for token in async_stream_llm_response(
@@ -117,7 +117,7 @@ async def _true_groq_stream(
         temperature=persona.get("temperature", 0.85),
         max_tokens=600,
     ):
-        chunk = {"choices": [{"delta": {"content": token}}]}
+        chunk = {"event": "choice", "data": token}
         yield f"data: {json.dumps(chunk)}\n\n"
 
     yield "data: [DONE]\n\n"
@@ -198,7 +198,7 @@ async def chat_endpoint(
     event_queue = asyncio.Queue()
 
     async def _on_status(msg: str):
-        await event_queue.put({"type": "activity", "message": msg})
+        await event_queue.put({"event": "activity", "data": msg})
 
     # Run orchestrator in a task so we can stream queue events in parallel
     orch_task = asyncio.create_task(run_orchestrator(
@@ -233,9 +233,16 @@ async def chat_endpoint(
 
                 result = await orch_task
                 
-                # Standardized metadata chunk
-                metadata = {k: v for k, v in result.items() if k not in ("stream", "response")}
-                yield f"data: {json.dumps({'metadata': metadata})}\n\n"
+                # Standardized metadata chunk for UI synchronization
+                metadata = {
+                    "request_id": request_id,
+                    "intent": result.get("intent", "chat"),
+                    "route": result.get("route", "LOCAL"),
+                    "engine_metadata": result.get("engine_metadata"), # Sovereign Heartbeat Data
+                    "session_id": msg.session_id,
+                    "job_ids": result.get("job_ids", []),
+                }
+                yield f"data: {json.dumps({'event': 'metadata', 'data': metadata})}\n\n"
 
                 if "stream" in result:
                     # True LLM Streaming with disconnect check
@@ -243,7 +250,7 @@ async def chat_endpoint(
                         if await request.is_disconnected():
                             break
                         
-                        chunk = {"choices": [{"delta": {"content": token}}]}
+                        chunk = {"event": "choice", "data": token}
                         yield f"data: {json.dumps(chunk)}\n\n"
                 else:
                     # Simulated stream for static results (Local/Tool)
@@ -254,7 +261,7 @@ async def chat_endpoint(
                             break
                         
                         content = word + (" " if i < len(words) - 1 else "")
-                        chunk = {"choices": [{"delta": {"content": content}}]}
+                        chunk = {"event": "choice", "data": content}
                         yield f"data: {json.dumps(chunk)}\n\n"
                         await asyncio.sleep(0.02)
                 

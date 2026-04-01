@@ -122,11 +122,27 @@ async def get_performance_metrics(is_admin: bool = Depends(verify_admin)):
         instances = redis_client.hgetall("active_instances")
         instance_count = len(instances)
 
+        # 4. Sovereign Monolith Metrics (v6.8)
+        local_calls = int(redis_client.get("metrics:route:local") or 0)
+        api_calls = int(redis_client.get("metrics:route:api") or 0)
+        total_calls = local_calls + api_calls
+        sov_ratio = (local_calls / total_calls * 100) if total_calls > 0 else 0
+
+        # Memory Metrics
+        faiss_hits = int(redis_client.get("metrics:memory:faiss_hit") or 0)
+        memory_queries = int(redis_client.get("metrics:memory:total_queries") or 0)
+        hit_rate = (faiss_hits / memory_queries * 100) if memory_queries > 0 else 0
+
         return {
             "p95_latency_ms": round(float(p95), 2),
             "total_requests": total_requests,
             "error_rate_percent": round((error_count / total_requests * 100), 2) if total_requests > 0 else 0,
             "active_instances": instance_count,
+            "sovereign_ratio": f"{sov_ratio:.1f}%",
+            "memory_metrics": {
+                "faiss_hit_rate": f"{hit_rate:.1f}%",
+                "active_context_size": int(redis_client.get("metrics:memory:active_kb") or 0)
+            },
             "instance_details": {k.decode() if isinstance(k, bytes) else k: int(v) for k, v in instances.items()},
             "system_load": os.getloadavg() if hasattr(os, "getloadavg") else [0.0, 0.0, 0.0],
             "timestamp": datetime.utcnow().isoformat()

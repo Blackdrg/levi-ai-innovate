@@ -43,8 +43,16 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
-  // Simple cache-first for assets, network-first for API
-  if (event.request.url.includes('/api/') || event.request.url.includes('/chat')) {
+  // ── LEVI v6.8: SSE Stream Bypass ──
+  // Ensure that intelligence pulses and real-time streams never touch the cache.
+  if (event.request.headers.get('Accept') === 'text/event-stream' || 
+      event.request.url.includes('/api/chat') || 
+      event.request.url.includes('/api/stream')) {
+    return event.respondWith(fetch(event.request));
+  }
+
+  // Standard cache-first for assets, network-first for other API
+  if (event.request.url.includes('/api/')) {
     event.respondWith(
       fetch(event.request).catch(() => caches.match(event.request))
     );

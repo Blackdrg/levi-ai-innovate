@@ -9,7 +9,8 @@ successful patterns to suggest prompt optimizations.
 import logging
 import json
 from typing import Dict, Any
-from ..tool_base import BaseTool, ToolResult
+from ..tool_base import BaseTool
+from ..orchestrator_types import ToolResult
 
 logger = logging.getLogger(__name__)
 

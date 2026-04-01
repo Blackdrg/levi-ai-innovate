@@ -14,10 +14,17 @@ import os
 import logging
 import asyncio
 from typing import Dict, Any, AsyncGenerator, Optional
-from llama_cpp import Llama  # type: ignore
+try:
+    from llama_cpp import Llama  # type: ignore
+    HAS_LLAMA_CPP = True
+except ImportError:
+    Llama = None # type: ignore
+    HAS_LLAMA_CPP = False
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.warning("llama-cpp-python not installed. Local LLM degraded mode active.")
 
 logger = logging.getLogger(__name__)
-
 # --- Configuration ---
 MODEL_PATH = os.getenv("LOCAL_MODEL_PATH", "backend/data/models/llama-3-8b-instruct.Q4_K_M.gguf")
 N_CTX = 4096
@@ -29,6 +36,7 @@ class LocalLLM:
     """
     _instance: Optional[Llama] = None
     _lock = asyncio.Lock()
+    _concurrency_semaphore = None # Initialized lazily
 
     @classmethod
     async def get_instance(cls) -> Optional[Llama]:
@@ -53,7 +61,12 @@ class LocalLLM:
                     verbose=False,
                     n_gpu_layers=-1 if os.getenv("USE_GPU", "true").lower() == "true" else 0
                 )
-                logger.info("Local LLM initialized successfully.")
+                
+                # Max 2 concurrent local inferences on 8Gi RAM for stability
+                max_concurrency = int(os.getenv("MAX_LOCAL_CONCURRENCY", "2"))
+                cls._concurrency_semaphore = asyncio.Semaphore(max_concurrency)
+                
+                logger.info(f"Local LLM initialized (Concurrency Limit: {max_concurrency})")
                 return cls._instance
             except Exception as e:
                 logger.error(f"Failed to initialize Local LLM: {e}")
@@ -72,38 +85,45 @@ async def generate_local_response(
         yield "I'm currently unable to process this locally. Please check my status."
         return
 
-    try:
-        # Convert messages to prompt format (Llama 3 Instruct template)
-        # Note: In a production scenario, we'd use a more robust template engine.
-        prompt = ""
-        for msg in messages:
-            role = msg["role"]
-            content = msg["content"]
-            if role == "system":
-                prompt += f"<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n{content}<|eot_id|>"
-            elif role == "user":
-                prompt += f"<|start_header_id|>user<|end_header_id|>\n\n{content}<|eot_id|>"
-            elif role == "assistant":
-                prompt += f"<|start_header_id|>assistant<|end_header_id|>\n\n{content}<|eot_id|>"
-        
-        prompt += "<|start_header_id|>assistant<|end_header_id|>\n\n"
+    # Check for concurrency saturation
+    if LocalLLM._concurrency_semaphore.locked():
+        logger.warning("Local engine saturated. Triggering API Fallback...")
+        yield "__FALLBACK_TRIGGER__"
+        return
 
-        # Execute streaming generation
-        output = llm(
-            prompt,
-            max_tokens=max_tokens,
-            stop=["<|eot_id|>", "<|end_of_text|>"],
-            stream=True,
-            temperature=temperature
-        )
+    async with LocalLLM._concurrency_semaphore:
+        try:
+            # Convert messages to prompt format (Llama 3 Instruct template)
+            # Note: In a production scenario, we'd use a more robust template engine.
+            prompt = ""
+            for msg in messages:
+                role = msg["role"]
+                content = msg["content"]
+                if role == "system":
+                    prompt += f"<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n{content}<|eot_id|>"
+                elif role == "user":
+                    prompt += f"<|start_header_id|>user<|end_header_id|>\n\n{content}<|eot_id|>"
+                elif role == "assistant":
+                    prompt += f"<|start_header_id|>assistant<|end_header_id|>\n\n{content}<|eot_id|>"
+            
+            prompt += "<|start_header_id|>assistant<|end_header_id|>\n\n"
 
-        for chunk in output:
-            token = chunk["choices"][0]["text"]
-            yield token
+            # Execute streaming generation
+            output = llm(
+                prompt,
+                max_tokens=max_tokens,
+                stop=["<|eot_id|>", "<|end_of_text|>"],
+                stream=True,
+                temperature=temperature
+            )
 
-    except Exception as e:
-        logger.error(f"Local generation error: {e}")
-        yield f"Error during local synthesis: {str(e)}"
+            for chunk in output:
+                token = chunk["choices"][0]["text"]
+                yield token
+
+        except Exception as e:
+            logger.error(f"Local generation error: {e}")
+            yield f"Error during local synthesis: {str(e)}"
 
 async def handle_local(user_input: str, context: Dict[str, Any] = {}) -> str:
     """
@@ -153,7 +173,7 @@ def is_locally_handleable(intent: str, complexity: int) -> bool:
     Predicate used by the Decision Engine to gate routing.
     If the model exists, Level 1 and 2 tasks are redirected here.
     """
-    if not os.path.exists(MODEL_PATH):
+    if not HAS_LLAMA_CPP or not os.path.exists(MODEL_PATH):
         return False
         
     return complexity <= 2

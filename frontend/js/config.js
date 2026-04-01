@@ -9,14 +9,13 @@ const firebaseConfig = {
 
 const CONFIG = {
   getApiBase: () => {
-    const { hostname, origin, pathname } = window.location;
+    const { hostname } = window.location;
     // 1. Local Development
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return 'http://127.0.0.1:8000/api/v1';
+      return 'http://127.0.0.1:8000';
     }
-    // 2. Production (Detect if we are in a sub-path or root)
-    const isSubPath = pathname.length > 1 && pathname !== '/index.html';
-    return `${origin}/api/v1`;
+    // 2. Production (Sovereign Domain)
+    return 'https://api.levi-ai.com';
   },
   firebase: firebaseConfig,
   isConfigured: () => {

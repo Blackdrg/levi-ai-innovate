@@ -3,10 +3,10 @@ console.log("[LEVI] auth-manager.js executing...");
 
 document.addEventListener('DOMContentLoaded', () => {
     // Sync UI on load
-    const user = JSON.parse(localStorage.getItem('levi_user') || 'null');
+    const user = JSON.parse(localStorage.getItem('fb_user') || 'null');
     window.updateUIState(user);
     if (user && !window.levi_user_token) {
-        window.levi_user_token = localStorage.getItem('levi_token');
+        window.levi_user_token = localStorage.getItem('fb_token');
     }
 });
 
@@ -46,7 +46,7 @@ window.updateUIState = (user) => {
 window.syncUser = async () => {
     try {
         const data = await window.api.getMe();
-        localStorage.setItem('levi_user', JSON.stringify(data));
+        localStorage.setItem('fb_user', JSON.stringify(data));
         window.updateUIState(data);
         console.log("[LEVI] Profile synchronized.");
         return data;
@@ -75,7 +75,7 @@ window.handleLogin = async (email, password) => {
         });
 
         // 3. Persistence
-        localStorage.setItem('levi_token', token);
+        localStorage.setItem('fb_token', token);
         window.levi_user_token = token;
         
         await window.syncUser();
@@ -116,7 +116,7 @@ window.logout = () => {
 // ==========================================
 window.waitForToken = () => {
     return new Promise((resolve) => {
-        const token = localStorage.getItem('levi_token');
+        const token = localStorage.getItem('fb_token');
         if (token) resolve(token);
         else {
             // Fallback to Firebase observer if token not yet in storage
@@ -127,7 +127,7 @@ window.waitForToken = () => {
                 unsubscribe();
                 if (u) {
                     const t = await u.getIdToken(true);
-                    localStorage.setItem('levi_token', t);
+                    localStorage.setItem('fb_token', t);
                     resolve(t);
                 } else resolve("local-token");
             });

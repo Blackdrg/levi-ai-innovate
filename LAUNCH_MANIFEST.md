@@ -1,60 +1,43 @@
-# LAUNCH MANIFEST — LEVI-AI v6.8 "Sovereign"
+# 🚀 Launch Manifest: LEVI-AI v6.8.5 "Sovereign Monolith"
 
-## 📑 Project Overview
-- **Codename**: Sovereign
-- **Version**: v6.8.4-Hardened
-- **Architecture**: Hybrid-Sovereign Distributed Agentic Synthesis
-- **License**: Sovereign / Proprietary
-- **Launch Date**: 2026-04-01
+This document serves as the final authoritative source for the production environment and operational state of the LEVI-AI v6.8.5 Sovereign Monolith.
 
----
+## 📦 1. Infrastructure (Google Cloud Run)
+- **Service Name**: `levi-monolith`
+- **Region**: `us-central1`
+- **Memory**: `8Gi` (Mandatory for local Llama-3-8B GGUF + FAISS load)
+- **CPU**: `4 vCPU` (Recommended for stable reasoning throughput)
+- **Concurrency**: `80` (Optimized for asynchronous SSE streaming)
+- **Volume Mounts**: 
+  - `GCS FUSE` Bucket: `levi-ai-vector-store` mounted at `/mnt/vector_db`
 
-## 🛠️ Core Engine Specifications
+## 🔑 2. Mandatory Secrets (GCP Secret Manager)
+| Secret Name | Description |
+| :--- | :--- |
+| `SECRET_KEY` | JWT/Session encryption seed |
+| `ADMIN_KEY` | Access to `/health/sovereign` deep diagnostics |
+| `INTERNAL_SERVICE_KEY` | HMAC key for protected maintenance triggers |
+| `FIREBASE_PROJECT_ID` | Identity & Auth synchronization |
+| `REDIS_URL` | Session history, rate limiting, and pulse coordination |
+| `GROQ_API_KEY` | High-complexity API fallback |
+| `TOGETHER_API_KEY` | Collective Wisdom pattern distillation |
 
-| Module | Engine | Role |
-| :--- | :--- | :--- |
-| **Brain** | LeviBrain v6.8 | Multi-tier routing & tool-calling |
-| **Logic (Sovereign)** | Llama-3-8B (GGUF/llama.cpp) | 100% Local-first zero-cost reasoning |
-| **Logic (Cloud)** | Llama-3.1-70B/405B (Together) | High-complexity Level 3/4 orchestration |
-| **Visuals** | FLUX.1 [schnell] / SD-V6 | High-fidelity cinematic synthesis |
-| **Motion** | Stable Video Diffusion / MoviePy | Multi-scene Reel generation |
-| **Memory** | FAISS + Redis + Firestore | 3-layer semantic context matrix |
+## 🧠 3. Sovereign Mind State
+- **Primary Engine**: `Llama-3-8B-Instruct.gguf` (100% In-Process)
+- **Memory Matrix**: User-Scoped FAISS (Persistent via FUSE)
+- **Evolution Mode**: Autonomous (Mutation threshold: 5 star performance)
+- **Privacy Mode**: Absolute (FAISS/Redis/Firestore atomic wipe enabled)
 
----
-
-## 🏗️ Deployment Infrastructure
-
-### 🚢 Backend (FastAPI / Celery)
-- **Runtime**: Python 3.10+ (Dockerized)
-- **Queues**: 
-    - `default`: Chat, Image, Memory management.
-    - `heavy`: Pattern distillation, Global maintenance.
-- **Circuit Breakers**: Multi-tier thresholds (Local/Cloud).
-
-### 🎨 Frontend (Vite / Vercel)
-- **Rendering**: Static with Dynamic Hydration.
-- **SSE**: Unified Activity Stream (Intelligence Pulses).
-- **Assets**: Optimized with sub-resource integrity (SRI).
-
----
-
-## 🔑 Critical Production Variables
-
-- `ENVIRONMENT`: Must be set to `production`.
-- `USE_SOVEREIGN_ROUTING`: Set to `true` for local-first execution.
-- `LOCAL_MODEL_PATH`: Point to valid `.gguf` file.
-- `REDIS_URL`: Primary state & concurrency lock.
-- `FIREBASE_SERVICE_ACCOUNT_JSON`: Database and Auth gateway.
-- `AWS_S3_BUCKET` / `GCP_STORAGE_BUCKET`: Media persistence.
+## 🧪 4. Post-Launch Sovereignty Audit
+1. **Sovereign Engine Probe**:
+   - URL: `GET /health/sovereign`
+   - Headers: `X-Admin-Key: <ADMIN_KEY>`
+   - *Expect*: Comprehensive report on LLM readiness and FUSE mount integrity.
+2. **Persistence Circuit**:
+   - Test: Insert fact, restart service, verify fact recall.
+   - *Expect*: 100% semantic recall via GCS FUSE persistence.
+3. **Privacy Absolute**:
+   - Test: Trigger `clear-all`, verify `/mnt/vector_db/<user_id>` is empty.
 
 ---
-
-## 🛡️ Resilience Matrix
-- **PEOC Loop**: Observe -> Critique -> Improve loop for agentic self-correction.
-- **Hybrid Evolution**: RAG-driven in-context learning (ICL) via local FAISS.
-- **Soul Optimizer**: 20-interaction distillation cycle for personality growth.
-
----
-
-**LEVI v6.8 — The Sovereign Evolution.**
-*Sovereign Intelligence. Absolute Privacy.*
+*Generated: 2026-04-01 — LEVI-AI v6.8.5 Sovereign Monolith Ready.*

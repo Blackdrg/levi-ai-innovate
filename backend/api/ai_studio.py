@@ -61,21 +61,28 @@ async def gen_content(
         except Exception:
             raise LEVIException("Insufficient cosmic energy.", status_code=402)
 
-    # 3. Global Guard
+    # 3. Evolutionary Persona Context (v6.8)
+    from backend.learning import AdaptivePromptManager
+    persona_manager = AdaptivePromptManager(user_id)
+    persona_context = await persona_manager.get_system_instructions()
+    
+    # 4. Global Guard
     daily_limit = float(os.getenv("DAILY_AI_LIMIT", "500"))
     if get_daily_ai_spend() >= daily_limit:
         raise LEVIException("Planetary AI limit reached.", status_code=429)
     
     incr_daily_ai_spend(1.0)
 
-    # 4. Generation
+    # 5. Generation with Evolutionary Synthesis
     try:
-        result = generate_content(
+        result = await asyncio.to_thread(
+            generate_content,
             content_type=req.type,
             topic=req.topic,
             tone=req.tone,
             depth=req.depth,
-            language=req.language
+            language=req.language,
+            persona_context=persona_context # Pass distilled persona for higher fidelity
         )
         
         if "error" in result:

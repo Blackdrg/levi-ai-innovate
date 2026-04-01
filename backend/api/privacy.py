@@ -106,25 +106,18 @@ async def delete_fact(
 @router.delete("/facts/clear-all")
 async def clear_all_memory(current_user: dict = Depends(get_current_user)):
     """
-    Wipes all learned facts for the current user.
+    Wipes all learned facts and vector indices for the current user.
     """
     user_id = current_user.get("uid")
     try:
-        docs = firestore_db.collection("user_facts") \
-            .where("user_id", "==", user_id) \
-            .stream()
-            
-        count = 0
-        batch = firestore_db.batch()
-        for doc in docs:
-            batch.delete(doc.reference)
-            count += 1
-            if count % 400 == 0:
-                batch.commit()
-                batch = firestore_db.batch()
+        from backend.services.orchestrator.memory_manager import MemoryManager
+        cleared_count = await MemoryManager.clear_all_user_data(user_id)
         
-        batch.commit()
-        return {"status": "success", "cleared_count": count, "message": "Fresh start initiated."}
+        return {
+            "status": "success", 
+            "cleared_count": cleared_count, 
+            "message": "Sovereign memory purge complete. Zero semantic residue remains."
+        }
     except Exception as e:
         logger.error(f"Memory wipe failure: {e}")
-        raise LEVIException("Failed to wipe cosmic memory.", status_code=500)
+        raise LEVIException("Failed to wipe cosmic memory layers.", status_code=500)

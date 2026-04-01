@@ -44,6 +44,7 @@ async def get_daily_quote(response: Response, mood: str = "philosophical"):
         return {"text": "Silence is the sleep that nourishes wisdom.", "author": "Bacon", "mood": "zen"}
 
 @router.get("/feed", response_model=List[dict])
+@standard_retry(attempts=3)
 async def get_feed(request: Request, response: Response, limit: int = 20, offset: int = 0):
     """
     Returns the global content feed with v6 Sovereignty Studio metadata.
@@ -87,6 +88,7 @@ async def get_feed(request: Request, response: Response, limit: int = 20, offset
         return []
 
 @router.post("/like/{item_type}/{item_id}")
+@standard_retry(attempts=3)
 async def like_item(item_type: str, item_id: str):
     """
     Increments the like count for a specific item (Quote or Feed Item).
@@ -94,7 +96,7 @@ async def like_item(item_type: str, item_id: str):
     """
     try:
         collection = "quotes" if item_type == "quote" else "feed_items"
-        if item_type not in ("quote", "feed"):
+        if item_type not in ("quote", "feed_items", "feed"):
             raise LEVIException("Invalid item category.", status_code=400)
 
         item_ref = firestore_db.collection(collection).document(item_id)
@@ -115,6 +117,7 @@ async def like_item(item_type: str, item_id: str):
 
 @router.get("/me")
 @router.get("/my_gallery")
+@standard_retry(attempts=3)
 async def get_my_gallery(
     current_user: dict = Depends(get_current_user),
     limit: int = 20,

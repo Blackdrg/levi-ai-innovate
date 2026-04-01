@@ -260,18 +260,18 @@ def flush_conversation_buffer(self):
     name="backend.services.orchestrator.memory_tasks.garbage_collect_memory",
     bind=True,
 )
-def garbage_collect_memory(self):
+def garbage_collect_memory(self, user_id: str):
     """
-    Celery Beat task (Daily): Run the FAISS garbage collection process.
-    Prunes expired/low-importance facts from the vector index.
+    Celery task: Run the FAISS garbage collection process for a specific user.
+    Prunes expired/low-importance facts from the user's vector index.
     """
     import asyncio
     from .memory_utils import garbage_collect_index
     try:
-        asyncio.run(garbage_collect_index())
-        return {"status": "gc_complete"}
+        asyncio.run(garbage_collect_index(user_id))
+        return {"status": "gc_complete", "user_id": user_id}
     except Exception as e:
-        logger.error(f"Memory GC task failed: {e}")
+        logger.error(f"Memory GC task failed for user {user_id}: {e}")
         return {"status": "failed", "error": str(e)}
 @celery_app.task(
     name="backend.services.orchestrator.memory_tasks.distill_user_memories",
@@ -289,6 +289,24 @@ def distill_user_memories(self, user_id: str):
         return {"status": "distilled", "user_id": user_id}
     except Exception as e:
         logger.error(f"Distillation task failed for {user_id}: {e}")
+        return {"status": "failed", "error": str(e)}
+
+@celery_app.task(
+    name="backend.services.orchestrator.memory_tasks.run_prompt_evolution",
+    bind=True,
+)
+def run_prompt_evolution(self):
+    """
+    Celery task: Trigger the autonomous prompt evolution process.
+    Identifies weak system prompts and evolves them based on user success.
+    """
+    import asyncio
+    from backend.learning import AdaptivePromptManager
+    try:
+        asyncio.run(AdaptivePromptManager().evolve_variants())
+        return {"status": "evolution_complete"}
+    except Exception as e:
+        logger.error(f"Prompt evolution task failed: {e}")
         return {"status": "failed", "error": str(e)}
 
 @celery_app.task(
@@ -327,5 +345,9 @@ def run_global_maintenance(self):
     
     for uid in uids:
         distill_user_memories.delay(uid)
+        garbage_collect_memory.delay(uid)
+    
+    # ── Autonomous Evolution Trigger (v6 Phase 4) ──
+    run_prompt_evolution.delay()
     
     return {"scheduled": len(uids)}

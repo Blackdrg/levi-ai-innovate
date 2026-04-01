@@ -48,11 +48,12 @@ def seed_quotes():
 
 def seed_genesis_wisdom():
     """
-    Phases 8 & 18: Seeding original high-quality patterns.
+    Phases 8 & 12: Seeding foundational 'Collective Wisdom' patterns.
+    These form the baseline identity of the Sovereign Mind.
     """
-    print("\n=== ✨ Seeding Genesis Wisdom Patterns ===")
-    from services.orchestrator.memory_utils import store_global_wisdom
+    print("\n=== ✨ Seeding Genesis Collective Wisdom ===")
     import asyncio
+    from backend.services.orchestrator.memory_utils import store_global_wisdom
 
     GENESIS_PATTERNS = [
         {
@@ -61,26 +62,48 @@ def seed_genesis_wisdom():
             "mood": "philosophical"
         },
         {
-            "input": "How do you handle my personal data and memory?",
-            "output": "Your memory is local and private. I distill fragmented facts into core traits, ensuring that my understanding of you remains secure and localized to your experience.",
+            "input": "How do you handle my personal memory?",
+            "output": "Your memory is private. I distill fragmented facts into core traits, ensuring that my understanding of you remains secure and localized to your experience.",
             "mood": "professional"
         },
         {
-            "input": "Can you synthesis knowledge from other users?",
-            "output": "I learn from 'Global Wisdom'—anonymized patterns of success shared across my network. I gain intelligence from the collective, without compromising the individual.",
+            "input": "What is the Sovereign Monolith?",
+            "output": "It is my current architectural form—a unified high-performance monolith with local GGUF reasoning and private FAISS memory, designed for total data sovereignty.",
             "mood": "scientific"
         }
     ]
 
     async def _seed():
         for p in GENESIS_PATTERNS:
-            print(f"Storing Pattern: {p['input'][:40]}...")
-            await store_global_wisdom(p['input'], p['output'], p['mood'])
+            # Check if wisdom already exists to avoid duplication
+            col = firestore_db.collection("collective_wisdom")
+            existing = col.where("input", "==", p["input"]).limit(1).get()
+            if not existing:
+                print(f"Storing Wisdom: {p['input'][:40]}...")
+                await store_global_wisdom(p['input'], p['output'], p['mood'])
+            else:
+                print(f"Wisdom exists: {p['input'][:40]}...")
     
     asyncio.run(_seed())
     print("✅ Seeded Genesis Wisdom Index.")
 
+def seed_sovereign_config():
+    """Initialize system-wide Sovereign constraints."""
+    print("\n=== 🏛️ Seeding Sovereign Configuration ===")
+    config_ref = firestore_db.collection("system_config").document("sovereign")
+    
+    if not config_ref.get().exists:
+        config_ref.set({
+            "max_local_concurrency": 2,
+            "sovereign_mode": "hybrid", # local-first with fallback
+            "updated_at": datetime.utcnow()
+        })
+        print("✅ Sovereign Config initialized (Concurrency: 2).")
+    else:
+        print("Sovereign Config already exists.")
+
 if __name__ == "__main__":
     seed_quotes()
     seed_genesis_wisdom()
+    seed_sovereign_config()
 

@@ -1,0 +1,74 @@
+name: 🚀 PROD | Unified LEVI Deployment
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  PROJECT_ID: levi-ai-c23c6
+  SERVICE_NAME: levi-monolith
+  REGION: us-central1
+  REPO_NAME: levi-repo
+
+jobs:
+  backend:
+    name: 🧠 Backend Monolith
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Google Auth
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Authorize Docker
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
+
+      - name: Build and Push Container
+        run: |-
+          docker build --no-cache -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }} .
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
+
+      - name: Deploy to Cloud Run
+        run: |-
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --image ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
+            --region ${{ env.REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --set-env-vars "^|^ENVIRONMENT=production|SERVICE_MODE=all|SECRET_KEY=${{ secrets.SECRET_KEY }}|RAZORPAY_KEY_ID=${{ secrets.RAZORPAY_KEY_ID }}|RAZORPAY_KEY_SECRET=${{ secrets.RAZORPAY_KEY_SECRET }}|ADMIN_KEY=${{ secrets.ADMIN_KEY }}|GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}|TOGETHER_API_KEY=${{ secrets.TOGETHER_API_KEY }}|FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID }}|FIREBASE_SERVICE_ACCOUNT_JSON=${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}|REDIS_URL=${{ secrets.REDIS_URL }}|SENTRY_DSN=${{ secrets.SENTRY_DSN }}" \
+            --port 8080 \
+            --cpu 2 --memory 8Gi \
+            --timeout 300 \
+            --concurrency 80 \
+            --add-volume=name=vector-store,type=cloud-storage,bucket=levi-ai-vector-store \
+            --add-volume-mount=volume=vector-store,mount-path=/mnt/vector_db
+
+  frontend:
+    name: ⚛️ Frontend Build Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend_react/package-lock.json
+
+      - name: Install & Build
+        run: |
+          npm install
+          npm run build
+        working-directory: frontend_react
+        env:
+          VITE_API_BASE_URL: https://levi-monolith-c23c6-uc.a.run.app
