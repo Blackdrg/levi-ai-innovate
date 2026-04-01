@@ -176,8 +176,12 @@ def _build_dynamic_system_prompt(persona: Dict, user_memory: Any = None,
     Builds a hyper-relevant system prompt using persona, semantic memory,
     and resonant success patterns for few-shot learning (Phase 15).
     """
+    base = persona.get("prompt", "") if isinstance(persona, dict) else str(persona)
+    memory_layer = ""
+    pattern_layer = ""
+    
     # ── Few-Shot ICL Injection (with BCCI Compression) ──
-    from .context_utils import compress_pattern
+    from backend.services.orchestrator.context_utils import compress_pattern
     if few_shot_patterns:
         pattern_layer = "\n\n[SUCCESS PATTERNS]:\n"
         # Compress each pattern to save space (max 500 chars per example)

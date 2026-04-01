@@ -14,6 +14,7 @@ from typing import Optional, List, Dict, Any, Tuple
 from google.cloud import firestore as google_firestore
 import asyncio
 from backend.services.orchestrator.planner import call_lightweight_llm
+from backend.services.orchestrator.local_engine import handle_local_sync, is_locally_handleable
 
 logger = logging.getLogger(__name__)
 
@@ -202,9 +203,13 @@ class UserPreferenceModel:
 
         # 2. Fetch interactions (Async Thread)
         def _fetch_samples():
-            samples_ref = firestore_db.collection("training_data")
-            query = samples_ref.where("user_id", "==", self.user_id).order_by("created_at", direction=google_firestore.Query.DESCENDING).limit(40)
-            return [doc.to_dict() for doc in query.get() if doc.to_dict().get("rating") is not None]
+            try:
+                samples_ref = firestore_db.collection("training_data")
+                query = samples_ref.where("user_id", "==", self.user_id).order_by("created_at", direction=google_firestore.Query.DESCENDING).limit(40)
+                return [doc.to_dict() for doc in query.get() if doc.to_dict().get("rating") is not None]
+            except Exception as e:
+                logger.warning(f"[UserPreferenceModel] Failed to fetch learning samples (Index missing?): {e}")
+                return []
 
         samples = await asyncio.to_thread(_fetch_samples)
 
@@ -496,24 +501,34 @@ class AdaptivePromptManager:
                     "Output ONLY the new instruction string. LIMIT 30 words. NO PII."
                 )
                 
-                new_variant = await call_lightweight_llm(
-                    messages=[{"role": "system", "content": mutation_prompt}],
-                    model="llama-3.1-8b-instant"
-                )
+                # ── 🟢 Sovereign Mutation (v6 Phase 4) ────────────────────────
+                if is_locally_handleable("evolver", 2):
+                    logger.info("[Evolver] Local Mutation triggered for Variant %d", worst_idx)
+                    new_variant = await handle_local_sync(
+                        messages=[{"role": "system", "content": mutation_prompt}],
+                        temperature=0.3
+                    )
+                else:
+                    new_variant = await call_lightweight_llm(
+                        messages=[{"role": "system", "content": mutation_prompt}],
+                        model="llama-3.1-8b-instant"
+                    )
+                
                 new_variant = new_variant.strip().replace('"', '')
                 
                 if len(new_variant) > 10:
                     # 4. Finalize Mutation
                     await asyncio.to_thread(
-                        lambda: firestore_db.collection("prompt_performance").document(str(worst_idx)).update({
+                        lambda: firestore_db.collection("prompt_performance").document(str(worst_idx)).set({
+                            "variant_idx": worst_idx,
                             "original_prompt": self.PROMPT_VARIANTS[worst_idx],
                             "evolved_prompt": new_variant,
                             "avg_score": 3.0, # Reset for the new generation
                             "sample_count": 0,
                             "evolved_at": datetime.utcnow()
-                        })
+                        }, merge=True)
                     )
-                    logger.info(f"[Evolver] Critic-Driven Mutation Complete: Variant {worst_idx}")
+                    logger.info(f"[Evolver] Mutation Complete: Variant {worst_idx}")
                 
         except Exception as e:
             logger.error(f"Prompt evolution failed: {e}")

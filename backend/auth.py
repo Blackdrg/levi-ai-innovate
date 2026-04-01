@@ -140,3 +140,34 @@ async def verify_admin(request: Request):
     if not admin_key or not hmac.compare_digest(provided_key.encode(), admin_key.encode()):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Unauthorized admin access")
     return True
+
+async def verify_internal_service(request: Request):
+    """
+    Hardened Service-to-Service authentication for internal monolith triggers.
+    Enforces the use of INTERNAL_SERVICE_KEY for background tasks and distillation.
+    """
+    internal_key = os.getenv("INTERNAL_SERVICE_KEY") or os.getenv("ADMIN_KEY")
+    if not internal_key:
+        logger.critical("SECURITY ALERT: No Internal Service Key configured. Faling closed.")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Security Configuration Error")
+        
+    provided_key = request.headers.get("X-Internal-Service-Key", "")
+    if not hmac.compare_digest(provided_key.encode(), internal_key.encode()):
+        logger.warning(f"Unauthorized service-to-service attempt from {request.client.host if request.client else 'unknown'}")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Service Token")
+    return True
+
+async def verify_system_admin(request: Request):
+    """
+    Protects critical system probes and deep health checks.
+    Requires ADMIN_KEY and enforces a higher security tier.
+    """
+    admin_key = os.getenv("ADMIN_KEY")
+    if not admin_key:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Admin configuration missing")
+        
+    provided_key = request.headers.get("X-Admin-Key", "")
+    if not hmac.compare_digest(provided_key.encode(), admin_key.encode()):
+        logger.warning(f"Unauthorized system admin probe attempt from {request.client.host if request.client else 'unknown'}")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access to system probes denied")
+    return True

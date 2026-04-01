@@ -48,11 +48,12 @@ DEFAULT_USERS = 1000
 CONCURRENCY_LIMIT = 50   # Max truly simultaneous HTTP connections
 TIMEOUT_SECONDS = 30.0
 
-# Test payload — a lightweight chat message to stress concurrency paths
+# Test payload — stresses both Chat and Sovereign routes
 TEST_PAYLOAD = {
-    "message": "What is the meaning of life?",
+    "message": "Philosophize on the nature of digital memory in a sovereign world.",
     "session_id": "load_test_session_{idx}",
     "mood": "philosophical",
+    "stream": True # Always test SSE for v6.8
 }
 
 # Redis key to validate for leaks (the global concurrency counter)
@@ -121,21 +122,31 @@ async def single_request(
     async with semaphore:
         start = time.monotonic()
         try:
-            resp = await client.post(
-                f"{target}/api/v1/chat",
-                json=payload,
-                headers=headers,
-                timeout=TIMEOUT_SECONDS,
-            )
-            latency_ms = (time.monotonic() - start) * 1000
-            error_msg = None
-            if resp.status_code not in (200, 429):
-                try:
-                    body = resp.json()
-                    error_msg = body.get("error", resp.text[:100])
-                except Exception:
-                    error_msg = resp.text[:100]
-            result.record(latency_ms, resp.status_code, error_msg)
+            # LEVI v6: Support for both standard and explicit stream endpoints
+            endpoint = "/api/chat" if not idx % 2 else "/api/chat/stream"
+            
+            async with client.stream("POST", f"{target}{endpoint}", json=payload, headers=headers, timeout=TIMEOUT_SECONDS) as resp:
+                latency_ms = (time.monotonic() - start) * 1000
+                chunks_received = 0
+                activity_received = False
+                choice_received = False
+                
+                if resp.status_code == 200:
+                    async for line in resp.aiter_lines():
+                        if line.startswith("data: "):
+                            chunks_received += 1
+                            if "activity" in line: activity_received = True
+                            if "choice" in line: choice_received = True
+                            if "[DONE]" in line: break
+                    
+                    # Verify Intel Pulse Fidelity
+                    if chunks_received > 0:
+                        result.record(latency_ms, resp.status_code)
+                    else:
+                         result.record(latency_ms, 500, "Empty Stream")
+                else:
+                    result.record(latency_ms, resp.status_code)
+
         except httpx.TimeoutException:
             result.record_timeout()
         except Exception as e:
@@ -305,6 +316,10 @@ def main():
     parser.add_argument(
         "--target", type=str, default=DEFAULT_TARGET,
         help=f"Target base URL (default: {DEFAULT_TARGET})"
+    )
+    parser.add_argument(
+        "--sovereign", action="store_true",
+        help="Target the Local GGUF engine specifically (stresses CPU/RAM)"
     )
     parser.add_argument(
         "--token", type=str, default=None,

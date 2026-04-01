@@ -1,87 +1,65 @@
-# LEVI-AI v6.8 — The Sovereign Mind 🧠
+# LEVI-AI v6.8.5 — The Sovereign Monolith 🧠
 ## Sovereign Autonomous Intelligence & Context-Aware Efficiency
 
-[![Status](https://img.shields.io/badge/Status-v6.8--Sovereign-gold)](https://img.shields.io/badge/Status-v6.8--Sovereign-gold)
-[![Architecture](https://img.shields.io/badge/Architecture-Hybrid--Learning-red)](https://img.shields.io/badge/Architecture-Hybrid--Learning-red)
+[![Status](https://img.shields.io/badge/Status-v6.8.5--Sovereign-gold)](https://img.shields.io/badge/Status-v6.8.5--Sovereign-gold)
+[![Architecture](https://img.shields.io/badge/Architecture-Sovereign--Monolith-blue)](https://img.shields.io/badge/Architecture-Sovereign--Monolith-blue)
 [![Security](https://img.shields.io/badge/Security-Hardened-green)](https://img.shields.io/badge/Security-Hardened-green)
 
-LEVI v6.8 is a production-hardened **Sovereign AI Ecosystem**. Built upon a multi-agent orchestrator, it features a self-evolving brain with **8 active agents** (Search, Document RAG, Python REPL, etc.). It dynamically manages its own context via **BCCI** and ensures transactional integrity through **Distributed Credit Locking**.
+LEVI v6.8.5 is a production-hardened **Sovereign Monolith**. Built with a focus on data privacy and reasoning autonomy, it features a self-evolving brain with local **Llama-3-8B** (GGUF) reasoning and persistent **FAISS memory matrix** via GCS FUSE. It dynamically manages its own context and ensures absolute data sovereignty through cross-tier atomic wipes.
 
-# LEVI Project Roadmap (v6.8 Sovereign) 🚀
+# LEVI Project Roadmap (v6.8.5 Sovereign) 🚀
 
-## 🔴 PHASE 9: THE PRODUCTION SUMMIT (COMPLETED) 🏺
-- [x] **8-Agent Orchestrator**: Hardened Search, Document, and Video engines.
-- [x] **Sovereign RAG**: Local FAISS vector storage for private user knowledge.
-- [x] **Sovereign Reasoning**: Local Llama-CPP (GGUF) zero-cost inference.
-- [x] **Transactional Credits**: Atomic Lua-based Redis locks for financial safety.
-- [x] **Real-Time SSE**: Low-latency 'Intelligence Pulses' (Intent, Memory, Routing).
-- [x] **Autonomous Maintenance**: Scheduled 30-day data pruning and pattern distillation.
-- [x] **Global Wisdom**: Anonymized cross-user pattern sharing for collective growth.
-
-> [!IMPORTANT]
-> **v6.8 "Sovereign Mind" is now the stable production standard.** 
-> All intelligence flows through the `LeviBrain`. No direct external API fallback unless explicitly routed. Full SSE telemetry for all planning stages.
+## 🏛️ THE PRODUCTION HARDENING (COMPLETE) 🏺
+- [x] **Consolidated Monolith**: Unified architecture on Google Cloud Run with 8Gi RAM.
+- [x] **Sovereign Reasoning**: Local Llama-3-8B (GGUF) zero-cost inference.
+- [x] **Persistent Memory Matrix**: User-scoped FAISS indices with GCS FUSE persistence.
+- [x] **Autonomous Evolution**: AI persona mutation based on 5-star success patterns.
+- [x] **Intelligence Pulse (SSE)**: Real-time telemetry for intent, memory, and engine routing.
+- [x] **Sovereign Engine Probe**: Deep diagnostic audit of sub-system health (`/health/sovereign`).
+- [x] **Absolute Privacy**: Atomic memory wipe across Redis, Firestore, and FAISS.
 
 ---
 
 ## 🏗️ Architecture: The Evolutionary Loop
 
-The `LeviBrain` orchestrator now features a closed-loop feedback system that refines its own reasoning strategy in real-time:
+The `LeviBrain` orchestrator features a closed-loop feedback system that refines its own reasoning strategy in real-time.
 
 ```mermaid
 graph TD
     User((User)) -->|Standardized Context| GW[FastAPI Gateway]
 
-    subgraph Brain ["🧠 LeviBrain v6.8 Sovereign"]
-        GW --> Mem[1. Memory Retrieve: FAISS/Redis]
+    subgraph Brain ["🧠 LeviBrain v6.8.5 Monolith"]
+        GW --> Mem[1. Memory Matrix: FAISS/Redis]
         Mem -->|Cross-Service| Bridge[2. Studio Bridge]
         Bridge --> Int[3. Intent Detect]
         Int --> Meta[4. Meta-Planner]
         
-        subgraph Evolution ["🌀 The Sovereign Core (v6.8)"]
-            Ledger[(Reflex Ledger)] -.->|Performance Advisory| Meta
-            BCCI[BCCI: Context Budgeter] --> Meta
-            Meta --> Exec[5. Sovereign Executor: Piston/Local]
+        subgraph Evolution ["🌀 The Sovereign Core (v6.8.5)"]
+            Ledger[(Performance Ledger)] -.->|Success Advisory| Meta
+            Meta --> Exec[5. Sovereign Executor: Local/Fallback]
             Exec -->|Latency/Error Patterns| Ledger
-            Exec --> Val[6. Self-Critique: Critique-Agent]
+            Exec --> Val[6. Self-Critique: Sovereign Auditor]
         end
 
-        Val --> Synth[7. Synthesis]
-        Synth --> Opt[8. Soul Optimizer]
-        Opt --> Out[9. Final Response]
+        Val --> Out[9. Final Response]
         
-        Out --> Learn[10. Hybrid Evolution]
-        Learn -->|Crystallize Patterns| Memory
-        Learn -->|LEE State Gate| FineTune[(Together AI)]
-        Learn -->|Mutate Instructions| Prompts
+        Out --> Learn[10. Autonomous Evolution]
+        Learn -->|Distill Traits| Memory
+        Learn -->|Mutate Baseline| Prompts
     end
 
     subgraph Collective ["🌐 Global Intelligence"]
-        Learn -.->|Anonymized Patterns| Shared[(Collective Wisdom Index)]
+        Learn -.->|Anonymized Success| Shared[(Collective Wisdom Index)]
         Shared -.->|Success Injections| Prompts
     end
 ```
 
-### 1. The v6.8 Sovereignty Stages
-1.  **Context Standardizing**: Enforced session isolation and multi-user intelligence via `X-User-Context` headers.
-2.  **Sovereign Bridge**: Real-time recall of private user knowledge via local FAISS vector indices.
-3.  **Reflex Ledger**: Real-time tracking of tool success/failure, enabling the **Meta-Planner** to dynamically avoid unstable agents.
-4.  **Sovereign Execution**: Sandbox-hardened code execution with local Piston fallback for absolute data privacy.
-5.  **Pattern Distillation**: Background task that consolidates fragmented facts into high-level permanent personality traits via the **Soul Optimizer**.
-6.  **Instruction Mutation**: Autonomous refinement of system prompts based on 5-star resonance scores.
-
----
-
-## ⚡ Key Evolutionary Features
-
-### 🌀 Sovereign Memory Matrix (FAISS)
-Located in `backend/redis_client.py` and `MemoryManager`, this matrix uses local FAISS indices for sub-millisecond retrieval of user knowledge. Data stays on your infrastructure, never sent for training.
-
-### 🎭 Soul Optimization (v6.8)
-LEVI no longer just "remembers"; it *evolves*. Every 20 interactions, the `SoulOptimizer` identifies underlying themes in your history and synthesizes them into "Core Identity Traits" that guide all future philosophical alignment.
-
-### 🛡️ Secure Containerized Sandbox
-Code execution is delegated to a public Piston API instance, ensuring that dangerous Python/JS operations never touch the host OS. A restricted local `exec()` fallback is maintained for critical offline reliability.
+### 1. The v6.8.5 Sovereignty Stages
+1.  **Context Standardizing**: Enforced session isolation via `X-User-Context` headers.
+2.  **Sovereign Memory Matrix**: Real-time recall of private knowledge via local FAISS on GCS FUSE.
+3.  **Performance Ledger**: Error-resilient tracking of tool success for dynamic routing.
+4.  **Collective Distillation**: Background synthesis of fragmented facts into persona traits.
+5.  **Instruction Mutation**: Autonomous refinement of system prompts based on resonance scores.
 
 ---
 
@@ -89,38 +67,35 @@ Code execution is delegated to a public Piston API instance, ensuring that dange
 
 | Layer | Technology | Status |
 |:---|:---|:---|
-| **Language** | Python 3.10+, JavaScript (ES6+) | Modern |
-| **Logic** | Pydantic v2, Tenacity, CircuitBreaker | Hardened |
-| **Sandbox** | Piston Code Execution API | Secure |
-| **Evolution** | Redis (Ledger), Firestore (Memory), LLM-Critique | Sovereign |
+| **Core** | Python 3.11, FastAPI, React 18 | Production |
+| **Logic** | Pydantic v2, Tenacity, Llama-CPP | Hardened |
+| **Persistence** | Firestore, Redis, FAISS, GCS FUSE | Sovereign |
+| **Deployment** | Google Cloud Run (8Gi RAM), Vercel | Monolith |
 
 ---
 
 ## 🚀 Quick Start (Production Setup)
 
 ```bash
-# 1. Initialize v6 Sovereign
+# 1. Initialize v6.8.5 Sovereign Monolith
 git clone https://github.com/Blackdrg/levi-ai-innovate.git && cd levi-ai-innovate
-cp .env.example .env
 
-# 2. Modern Telemetry
-export ADMIN_KEY=your_secret_admin_key
-curl http://localhost/api/health/evolution
+# 2. Deploy Monolith
+# Execute the deploy_production.yml workflow to push the 8Gi monolith to Cloud Run.
 
-# 3. Monitor Growth
-# Access the Evolution Dashboard to see mutation rates and pattern strength.
+# 3. Verify Health
+# Access GET /health/sovereign with your X-Admin-Key to audit the reasoning core.
 ```
 
 ---
 
 ## 📖 Related Documentation
-- [**RUNBOOK.md**](RUNBOOK.md): Ops & v6 Troubleshooting.
-- [**MAINTENANCE.md**](MAINTENANCE.md): The Evolution Lifecycle.
-- [**INTEGRATION.md**](INTEGRATION.md): Sovereign IP Reference.
+- [**LAUNCH_MANIFEST.md**](LAUNCH_MANIFEST.md): Production Handoff & Secrets.
+- [**INTEGRATION.md**](INTEGRATION.md): Sovereign SSE Reference.
+- [**SECURITY.md**](SECURITY.md): Defense Strategy.
+- [**MAINTENANCE.md**](MAINTENANCE.md): Distillation & Life-cycles.
 
 ---
 
 **LEVI — The AI that evolves with you. Sovereign. Secure. Self-Learning.**  
-*Blackdrg/levi-ai-innovate · Apache 2.0*
-Hardened for scale. Built to never fail.**  
 *Blackdrg/levi-ai-innovate · Apache 2.0*

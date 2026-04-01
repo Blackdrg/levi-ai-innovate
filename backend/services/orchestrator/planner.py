@@ -15,8 +15,53 @@ from .orchestrator_types import IntentResult, ExecutionPlan, PlanStep
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Stage 1: Rule-Based Intent Detection
+# Stage 1: Scoring-Based Brain Orchestration Engine
 # ---------------------------------------------------------------------------
+
+class BrainScorer:
+    """
+    Sovereign Decision Logic: Routes queries based on keywords + pattern scoring.
+    """
+    KEYWORDS = {
+        "search": ["search", "latest", "news", "find", "google", "research", "current", "weather", "look up"],
+        "document": ["document", "pdf", "file", "according to", "pdf", "paper", "upload", "page", "context"],
+        "chat": ["hi", "hello", "how are you", "tell me", "talk", "chat", "speak"]
+    }
+
+    @staticmethod
+    def calculate_scores(user_input: str) -> Dict[str, float]:
+        text = user_input.lower()
+        scores = {"chat": 0.1, "search": 0.0, "document": 0.0}
+
+        # 1. Keyword Presence (No API)
+        for route, keywords in BrainScorer.KEYWORDS.items():
+            for kw in keywords:
+                if kw in text:
+                    scores[route] += 0.3
+        
+        # 2. Pattern Matching
+        if re.search(r"\b(pdf|docx|txt|file|paper)\b", text): scores["document"] += 0.4
+        if re.search(r"\b(current|latest|news|live|real-time)\b", text): scores["search"] += 0.4
+        if re.search(r"^\s*(hi|hello|hey|yo|howdy)\s*", text): scores["chat"] += 0.5
+
+        return scores
+
+def detect_orchestration_route(user_input: str) -> Dict[str, Any]:
+    """
+    Determines the target engine route (chat | search | document).
+    """
+    scores = BrainScorer.calculate_scores(user_input)
+    sorted_scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+    top_route, confidence = sorted_scores[0]
+    
+    # Cap confidence at 0.95 for internal logic
+    confidence = min(confidence, 0.95)
+    
+    return {
+        "route": top_route,
+        "reason": f"Keywords matched for {top_route}",
+        "confidence": confidence
+    }
 
 INTENT_RULES: List[Dict[str, Any]] = [
     {
@@ -83,6 +128,8 @@ INTENT_RULES: List[Dict[str, Any]] = [
 
 def check_rules(user_input: str) -> Optional[IntentResult]:
     text = user_input.lower().strip()
+    
+    # 1. First, check specific static rules
     for rule in INTENT_RULES:
         for pattern in rule["patterns"]:
             if re.search(pattern, text, re.IGNORECASE):
@@ -93,7 +140,16 @@ def check_rules(user_input: str) -> Optional[IntentResult]:
                     confidence_score=0.95,
                     parameters={"rule_matched": pattern},
                 )
-    return None
+    
+    # 2. If no rule matches, use scoring system
+    orch = detect_orchestration_route(user_input)
+    return IntentResult(
+        intent_type=orch["route"],
+        complexity_level=2 if orch["route"] in ("search", "document") else 1,
+        estimated_cost_weight="medium",
+        confidence_score=orch["confidence"],
+        parameters={"routing": orch}
+    )
 
 # ---------------------------------------------------------------------------
 # Stage 2: LLM Fallback (Intent Detection)
@@ -189,21 +245,20 @@ async def generate_plan(user_input: str, intent_data: IntentResult, context: Dic
     # ── Level 2: Moderate (LLM + Supporting engine) ────────────────────
     elif level == 2:
         memory_needed.append("session_mood")
-        if intent in ("search", "factual"):
+        if intent == "search":
              steps.append(PlanStep(description="Knowledge lookup", agent="search_agent", critical=True))
+             steps.append(PlanStep(description="Contextual synthesis", agent="chat_agent", critical=True))
+        elif intent == "document":
+             steps.append(PlanStep(description="Internal document retrieval", agent="document_agent", critical=True))
+             steps.append(PlanStep(description="Contextual Q&A synthesis", agent="chat_agent", critical=True))
+        elif intent == "logic":
+             steps.append(PlanStep(description="Logic verification", agent="python_repl_agent", critical=True))
+             steps.append(PlanStep(description="Conversational expansion", agent="chat_agent", critical=True))
         elif intent == "hybrid":
              steps.append(PlanStep(description="Knowledge lookup", agent="search_agent", critical=True))
              steps.append(PlanStep(description="Conversational expansion", agent="chat_agent", critical=True))
-        elif intent == "logic":
-             steps.append(PlanStep(description="Logic verification", agent="python_repl_agent", critical=True))
-        elif intent == "document":
-             steps.append(PlanStep(description="Internal document retrieval", agent="document_agent", critical=True))
-        
-        steps.append(PlanStep(
-            description="Moderate reasoning synthesis",
-            agent="chat_agent",
-            critical=True
-        ))
+        else:
+            steps.append(PlanStep(description="Moderate reasoning synthesis", agent="chat_agent", critical=True))
 
     # ── Level 3: Complex (Multi-engine pipeline) ───────────────────────
     elif level == 3:

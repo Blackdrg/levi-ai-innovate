@@ -1,0 +1,60 @@
+name: Deploy LEVI Document Service
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'backend/**'
+      - 'backend/Dockerfile.prod'
+      - '.github/workflows/deploy-doc.yml'
+
+env:
+  PROJECT_ID: levi-ai-c23c6
+  SERVICE_NAME: levi-doc-service
+  REGION: us-central1
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Google Auth
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Authorize Docker
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev
+
+      - name: Build and Push Container
+        run: |-
+          docker build --no-cache -t us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/levi-repo/levi-backend:${{ github.sha }} -f backend/Dockerfile.prod .
+          docker push us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/levi-repo/levi-backend:${{ github.sha }}
+
+      - name: Deploy Document Service to Cloud Run
+        env:
+          SECRET_KEY: '${{ secrets.SECRET_KEY }}'
+          INTERNAL_SERVICE_KEY: '${{ secrets.INTERNAL_SERVICE_KEY }}'
+          MONGODB_URI: '${{ secrets.MONGODB_URI }}'
+          REDIS_URL: '${{ secrets.REDIS_URL }}'
+          AWS_ACCESS_KEY_ID: '${{ secrets.AWS_ACCESS_KEY_ID }}'
+          AWS_SECRET_ACCESS_KEY: '${{ secrets.AWS_SECRET_ACCESS_KEY }}'
+          AWS_S3_BUCKET: '${{ secrets.AWS_S3_BUCKET }}'
+          FIREBASE_PROJECT_ID: '${{ secrets.FIREBASE_PROJECT_ID }}'
+        run: |-
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --image us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/levi-repo/levi-backend:${{ github.sha }} \
+            --region ${{ env.REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --set-env-vars "^|^ENVIRONMENT=production|SERVICE_MODE=doc|SECRET_KEY=$SECRET_KEY|INTERNAL_SERVICE_KEY=$INTERNAL_SERVICE_KEY|MONGODB_URI=$MONGODB_URI|REDIS_URL=$REDIS_URL|AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY|AWS_S3_BUCKET=$AWS_S3_BUCKET|FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID|VECTOR_DB_PATH=/mnt/vector_db" \
+            --add-volume=name=vector-db,type=cloud-storage,bucket=levi-ai-vector-store \
+            --add-volume-mount=volume=vector-db,mount-path=/mnt/vector_db \
+            --cpu=1 --memory=2Gi \
+            --port 8080

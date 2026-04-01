@@ -283,10 +283,8 @@ class MemoryManager:
         user_id: str, session_id: str, user_input: str, bot_response: str
     ) -> None:
         """
-        Persist current interaction to Redis (short-term) and trigger
-        a Firestore conversation log update (via to_thread).
-
-        Must be async so it can be scheduled via asyncio.create_task().
+        Persist current interaction to Redis (short-term) with a 20-message limit.
+        Only triggers long-term storage if info is deemed 'important'.
         """
         def _sync_store():
             try:
@@ -297,12 +295,23 @@ class MemoryManager:
                     "bot":       bot_response,
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 })
+                
+                # Enforce Short-Term Limit (10-20 messages)
+                if len(history) > 20:
+                    history = history[-20:]
+                
                 # Use buffered save to minimize Firestore costs
                 save_conversation_buffered(session_id, history, user_id=user_id)
             except Exception as e:
                 logger.error("store_memory sync error: %s", e)
 
         await asyncio.to_thread(_sync_store)
+        
+        # Trigger Extraction & Long-Term Persistence (Smart Logic)
+        # We only store if it's not a generic greeting
+        # Using simple heuristics for high performance
+        if len(user_input.split()) > 4:
+             asyncio.create_task(MemoryManager.process_new_interaction(user_id, user_input, bot_response))
 
     # ── LEVI v6: Evolutionary Distillation ──────────────────────────────────────
     @staticmethod
@@ -413,3 +422,43 @@ class MemoryManager:
 
         except Exception as e:
             logger.error("process_new_interaction failed for %s: %s", user_id, e)
+
+    @staticmethod
+    async def clear_all_user_data(user_id: str) -> int:
+        """
+        Hardened LEVI v6.8 Absolute Memory Wipe.
+        Clears: Firestore (facts), Redis (sessions), FAISS (vectors).
+        Returns the count of Firestore facts cleared.
+        """
+        try:
+            # 1. Wipe Firestore 'user_facts'
+            docs = firestore_db.collection("user_facts").where("user_id", "==", user_id).stream()
+            count = 0
+            batch = firestore_db.batch()
+            for doc in docs:
+                batch.delete(doc.reference)
+                count += 1
+                if count % 400 == 0:
+                    batch.commit()
+                    batch = firestore_db.batch()
+            batch.commit()
+
+            # 2. Wipe Redis session history
+            from backend.redis_client import r as redis_client, HAS_REDIS
+            if HAS_REDIS:
+                keys = redis_client.keys(f"chat:{user_id}:*")
+                if keys: redis_client.delete(*keys)
+                redis_client.delete(f"user:{user_id}:traits")
+                redis_client.delete(f"user:{user_id}:opts:distill_count")
+
+            # 3. Wipe local FAISS vector index
+            from .memory_utils import get_user_memory
+            user_memory = await get_user_memory(user_id)
+            await user_memory.clear()
+
+            logger.info(f"Sovereign Memory Wipe: Cleared {count} facts for {user_id}")
+            return count
+
+        except Exception as e:
+            logger.error(f"Failed to perform full memory wipe for {user_id}: {e}")
+            raise e

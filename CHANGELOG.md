@@ -1,3 +1,21 @@
+## [6.8.5] - 2026-04-01 "The Sovereign Monolith" 🏗️
+### Added
+- **Monolithic Transition**: Consolidated all backend services into a unified production-grade monolith for Google Cloud Run.
+- **Sovereign reasoning**: Integrated `Llama-3-8B` (GGUF) for 100% local-first, zero-cost reasoning within the 8Gi RAM perimeter.
+- **Persistent Memory Matrix**: Implemented GCS FUSE volume mounting (`/mnt/vector_db`) for user-isolated FAISS semantic memory.
+- **Intelligence Pulse (SSE)**: Synchronized real-time `activity` and `metadata` pulses for routing transparency.
+- **Autonomous Evolution**: Enabled `AdaptivePromptManager` for self-optimizing instructions based on 5-star performance.
+- **Absolute Privacy**: Implemented a full multi-layer memory purge (Firestore, Redis, FAISS) for 'Forget Me' requests.
+
+### Hardened
+- **Concurrency Gate**: Enforced `MAX_LOCAL_CONCURRENCY=2` and saturation fallback to prevent resource exhaustion.
+- **Security Defense**: Formally documented the 'Defense in Depth' strategy in `SECURITY.md` for monolithic isolation.
+- **Sovereign Engine Probe**: Built the `/health/sovereign` deep-diagnostic endpoint with `X-Admin-Key` protection.
+
+### Fixed
+- **Memory Residuals**: Resolved the issue where 'Clear Memory' left semantic fragments in the local FAISS index.
+- **Pulse Latency**: Optimized SSE delivery to ensure the 'Thinking' heartbeat starts within 50ms of request arrival.
+
 ## [6.8.4] - 2026-03-31 "The Sovereign Hardening" 💎
 ### Fixed
 - **Memory Leak**: Resolved long-running FAISS index fragmentation in Celery workers.

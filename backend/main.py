@@ -11,8 +11,9 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any, Union
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, HTTPException, Depends, status, BackgroundTasks  # type: ignore
-from fastapi.responses import JSONResponse, StreamingResponse  # type: ignore
+from fastapi import FastAPI, Request, Response, HTTPException, Depends, status, BackgroundTasks
+from fastapi.responses import JSONResponse, StreamingResponse
+
 from fastapi.middleware.cors import CORSMiddleware  # type: ignore
 from fastapi.middleware.gzip import GZipMiddleware  # type: ignore
 from starlette.middleware.base import BaseHTTPMiddleware  # type: ignore
@@ -35,7 +36,10 @@ from backend.utils.logging_context import log_request_id, log_user_id, log_sessi
 from backend.models import _INJECTION_PATTERNS
 from backend.firestore_db import db as firestore_db
 from backend.redis_client import HAS_REDIS, REDIS_URL, r as redis_client
-from backend.auth import get_current_user, get_current_user_optional, verify_admin
+from backend.api import chat, studio, documents, auth, payments, learning, gallery
+from backend.auth import get_current_user, get_current_user_optional, verify_admin, verify_internal_service, verify_system_admin
+from backend.config import ENVIRONMENT, SECRET_KEY, CORS_ORIGINS
+from scripts.sovereign_probe import SovereignProbe
 from google.cloud import firestore  # type: ignore
 
 # ── Phase 4 Hardened Environment & Logging ────────────────
@@ -178,6 +182,14 @@ app = FastAPI(
     docs_url=None if os.getenv("ENVIRONMENT") == "production" else "/docs"
 )
 
+# Phase 8: Prometheus Instrumentation
+if HAS_PROMETHEUS:
+    try:
+        Instrumentator().instrument(app).expose(app, endpoint="/metrics", tags=["System"])
+        logger.info("Prometheus instrumentation active at /metrics")
+    except Exception as e:
+        logger.warning(f"Prometheus instrumentation failed: {e}")
+
 
 # ── Middleware Stack ──────────────────────────────────────
 # CORS Configuration
@@ -273,25 +285,38 @@ from backend.api.analytics import router as analytics_router
 from backend.api.monitor_routes import router as monitor_router
 from backend.api.search import router as search_router
 from backend.api.documents import router as documents_router
+from backend.api.brain import router as brain_router
 
+# Service-Specific Route Loading
+SERVICE_MODE = os.getenv("SERVICE_MODE", "all").lower()
+
+# Common Routes (Auth + Health)
 app.include_router(auth_router, prefix="/auth", tags=["Auth"])
-app.include_router(chat_router, prefix="/chat", tags=["Chat"])
-app.include_router(search_router, prefix="/search", tags=["Search"])
-app.include_router(studio_router, prefix="/studio", tags=["Studio"])
-app.include_router(ai_studio_router, prefix="/studio/advanced", tags=["AI Studio"])
-app.include_router(gallery_router, prefix="/gallery", tags=["Gallery"])
-app.include_router(payments_router, prefix="/user/payments", tags=["Payments"])
-app.include_router(privacy_router, prefix="/user/privacy", tags=["Privacy"])
-app.include_router(learning_router, prefix="/learning", tags=["Learning"])
-app.include_router(orchestrator_router, prefix="/system/orchestrator", tags=["Orchestrator"])
-app.include_router(analytics_router, prefix="/system/analytics", tags=["Analytics"])
 app.include_router(monitor_router, prefix="/system/monitor", tags=["Monitoring"])
-app.include_router(documents_router, prefix="/upload", tags=["Documents"])
-
-# ── Contract Aliases (Phase 6 Production Alignment) ──
-app.include_router(privacy_router, prefix="/memory", tags=["Contract"])
 app.include_router(monitor_router, prefix="/status", tags=["Contract"])
-app.include_router(learning_router, prefix="/features", tags=["Contract"])
+
+if SERVICE_MODE in ["all", "brain"]:
+    app.include_router(brain_router, prefix="/brain", tags=["Brain"])
+    app.include_router(orchestrator_router, prefix="/system/orchestrator", tags=["Orchestrator"])
+    app.include_router(orchestrator_router, prefix="/stream", tags=["Contract"])
+
+if SERVICE_MODE in ["all", "chat"]:
+    app.include_router(chat_router, prefix="/chat", tags=["Chat"])
+    app.include_router(search_router, prefix="/search", tags=["Search"])
+    app.include_router(privacy_router, prefix="/user/privacy", tags=["Privacy"])
+    app.include_router(privacy_router, prefix="/memory", tags=["Contract"])
+
+if SERVICE_MODE in ["all", "doc", "document"]:
+    app.include_router(documents_router, prefix="/upload", tags=["Documents"])
+
+if SERVICE_MODE == "all":
+    app.include_router(studio_router, prefix="/studio", tags=["Studio"])
+    app.include_router(ai_studio_router, prefix="/studio/advanced", tags=["AI Studio"])
+    app.include_router(gallery_router, prefix="/gallery", tags=["Gallery"])
+    app.include_router(payments_router, prefix="/user/payments", tags=["Payments"])
+    app.include_router(learning_router, prefix="/learning", tags=["Learning"])
+    app.include_router(analytics_router, prefix="/system/analytics", tags=["Analytics"])
+    app.include_router(learning_router, prefix="/features", tags=["Contract"])
 
 
 # ── Global Error Handling ────────────────────────
@@ -444,6 +469,20 @@ async def evolution_health(response: Response, current_user: dict = Depends(veri
         "timestamp": datetime.utcnow().isoformat()
     }
 
+@app.get("/health/sovereign")
+async def health_sovereign(admin: bool = Depends(verify_system_admin)):
+    """
+    Sovereign Engine Probe (Deep Diagnostic).
+    Requires X-Admin-Key for access.
+    """
+    report = await SovereignProbe.run_full_diagnostic()
+    status_code = 200 if report["status"] == "healthy" else 207  # Multi-status for degraded
+    return Response(
+        content=json.dumps(report),
+        media_type="application/json",
+        status_code=status_code
+    )
+
 @app.get("/health")
 async def health():
     """
@@ -491,4 +530,5 @@ async def health():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=False)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
+

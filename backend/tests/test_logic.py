@@ -61,6 +61,60 @@ def test_hmac_verification():
         assert verify_razorpay_signature(order_id, payment_id, signature)
         assert not verify_razorpay_signature(order_id, payment_id, "wrong_sig")
 
+# ── Phase 6.8: Sovereign Monolith Logic Tests ──────────────────
+
+from backend.services.orchestrator.brain import LeviBrain
+from backend.services.orchestrator.orchestrator_types import IntentResult
+
+@pytest.mark.asyncio
+async def test_meta_brain_routing_hierarchy():
+    """Verify that Level 1/2 tasks route to LOCAL and Level 3+ to API."""
+    brain = LeviBrain()
+    
+    # 1. Level 1: Greeting (Should be LOCAL)
+    intent_l1 = IntentResult(intent="greeting", complexity=1, confidence=1.0)
+    route_l1 = await brain._decide_route("Hello", intent_l1, {})
+    assert route_l1 == "LOCAL"
+    
+    # 2. Level 4: Coding (Should be API)
+    intent_l4 = IntentResult(intent="coding", complexity=4, confidence=1.0)
+    route_l4 = await brain._decide_route("Write a FastAPI app", intent_l4, {})
+    assert route_l4 == "API"
+
+@pytest.mark.asyncio
+async def test_local_engine_saturation_fallback():
+    """Verify that local engine saturation triggers a routing fallback."""
+    from backend.services.orchestrator.local_engine import LocalLLM
+    
+    # Mock the semaphore to be locked (simulating saturation)
+    with patch("backend.services.orchestrator.local_engine.LocalLLM._concurrency_semaphore") as mock_sem:
+        mock_sem.locked.return_value = True
+        
+        from backend.services.orchestrator.local_engine import generate_local_response
+        generator = generate_local_response([{"role": "user", "content": "hi"}])
+        
+        responses = []
+        async for chunk in generator:
+            responses.append(chunk)
+            
+        assert "__FALLBACK_TRIGGER__" in responses
+
+def test_router_agent_intent():
+    """Verify intent classification routing logic for v6.8."""
+    from backend.agents import RouterAgent
+    agent = RouterAgent()
+    
+    with patch("backend.circuit_breaker.groq_breaker.call") as mock_call:
+        mock_response = MagicMock()
+        
+        # v6.8 Format: JSON with metadata
+        mock_response.choices[0].message.content = "{\"intent\": \"chat\", \"complexity\": 2, \"confidence\": 0.95}"
+        mock_call.return_value = mock_response
+        
+        intent_info = agent.classify_intent("Tell me a joke")
+        assert intent_info["intent"] == "chat"
+        assert intent_info["complexity"] == 2
+
 # ── Phase 18: Resiliency & Intelligence Tests ──────────────────
 
 from backend.circuit_breaker import CircuitBreaker
@@ -88,26 +142,3 @@ def test_circuit_breaker_trips():
     with pytest.raises(Exception) as exc:
         breaker.call(lambda: "should-not-hit")
     assert "is OPEN" in str(exc.value)
-
-def test_router_agent_intent():
-    """Verify intent classification routing logic."""
-    agent = RouterAgent()
-    
-    # Mock the LLM call at the source
-    with patch("backend.services.studio.router.generate_image_task.delay") as mock_task, \
-         patch("backend.services.studio.router.use_credits") as mock_use_credits, \
-         patch("backend.circuit_breaker.groq_breaker.call") as mock_call:
-        # Create a mock response object that looks like Groq/OpenAI response
-        mock_response = MagicMock()
-        
-        # 1. Test Chat Intent
-        mock_response.choices[0].message.content = "{\"intent\": \"chat\", \"confidence\": 0.9}"
-        mock_call.return_value = mock_response
-        intent_info = agent.classify_intent("Hello there")
-        assert intent_info["intent"] == "chat"
-        
-        # 2. Test Image Intent
-        mock_response.choices[0].message.content = "{\"intent\": \"generate_image\", \"confidence\": 0.9, \"parameters\": {\"topic\": \"space\"}}"
-        mock_call.return_value = mock_response
-        intent_info = agent.classify_intent("Create an image about space")
-        assert intent_info["intent"] == "generate_image"

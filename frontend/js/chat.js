@@ -10,6 +10,26 @@ let lastBotMessage = "";
 let sessionId = localStorage.getItem("levi_session_id") || `session_${Math.random().toString(36).substring(2, 11)}`;
 localStorage.setItem("levi_session_id", sessionId);
 
+// Brain Routing & Memory State
+let sessionMessages = [];
+let appMode = "chat";
+let uploadedDoc = null;
+
+// --- LocalStorage Caching ---
+function saveToCache() {
+    localStorage.setItem(`levi_history_${sessionId}`, JSON.stringify(sessionMessages));
+}
+function loadFromCache() {
+    try {
+        const cached = localStorage.getItem(`levi_history_${sessionId}`);
+        if (cached) {
+            const data = JSON.parse(cached);
+            if (Array.isArray(data) && data.length > 0) return data;
+        }
+    } catch(e) {}
+    return null;
+}
+
 // --- Initialization ---
 document.addEventListener('DOMContentLoaded', async () => {
     // 1. Auth Guard & Sync
@@ -36,6 +56,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 5. Setup UI
     const input = document.getElementById("chat-input");
     if (input) {
+        // Restore pending input
+        const pending = localStorage.getItem(`levi_pending_input_${sessionId}`);
+        if (pending) {
+            input.value = pending;
+            autoResize(input);
+        }
+        input.addEventListener('input', (e) => {
+            localStorage.setItem(`levi_pending_input_${sessionId}`, e.target.value);
+        });
+        
         input.focus();
         // Restore mood active state
         const activeBtn = Array.from(document.querySelectorAll('.mood-chip')).find(b => b.textContent.toLowerCase() === currentMood);
@@ -44,19 +74,40 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function loadChatHistory() {
+    // 1. Instantly load from cache
+    const cached = loadFromCache();
+    if (cached) {
+        const messagesDiv = document.getElementById("messages");
+        if (messagesDiv) {
+            messagesDiv.innerHTML = "";
+            sessionMessages = [];
+            cached.forEach(msg => {
+                appendMessage(msg.role, msg.content, null, false);
+                sessionMessages.push(msg);
+            });
+            messageCount = cached.length;
+        }
+    }
+
     try {
         const res = await window.api.apiFetch("/chat/history?limit=20");
         const history = res.history || [];
         
-        const messagesDiv = document.getElementById("messages");
-        if (!messagesDiv) return;
-        messagesDiv.innerHTML = ""; // Clear loader/old state
-        
-        history.forEach(msg => {
-            appendMessage(msg.role, msg.content, null, false);
-        });
-        
-        messageCount = history.length;
+        // 2. Reconcile with backend if needed
+        if (history.length > 0 && (!cached || history.length !== cached.length)) {
+            const messagesDiv = document.getElementById("messages");
+            if (!messagesDiv) return;
+            messagesDiv.innerHTML = ""; // Clear loader/old state
+            sessionMessages = []; // Reset memory
+            
+            history.forEach(msg => {
+                appendMessage(msg.role, msg.content, null, false);
+                sessionMessages.push({ role: msg.role, content: msg.content });
+            });
+            
+            messageCount = history.length;
+            saveToCache();
+        }
     } catch (e) {
         console.warn("[LEVI] Could not load history", e);
     }
@@ -112,6 +163,9 @@ function clearChat() {
     if (confirm("Are you sure you want to clear this cosmic resonance?")) {
         const messagesDiv = document.getElementById("messages");
         if (messagesDiv) messagesDiv.innerHTML = "";
+        sessionMessages = [];
+        saveToCache();
+        localStorage.removeItem(`levi_pending_input_${sessionId}`);
         displayWelcomeMessage();
         messageCount = 0;
         // In production, we might call a backend endpoint to clear history, 
@@ -189,18 +243,34 @@ async function sendMessage() {
     let botFullText = "";
     let metadataCaptured = null;
 
+    sessionMessages.push({ role: "user", content: text });
+    saveToCache();
+    localStorage.removeItem(`levi_pending_input_${sessionId}`);
+
     try {
         await window.api.chatStream(
             text, 
             sessionId, 
             (chunk) => {
                 botFullText += chunk;
-                textSpan.innerHTML = typeof marked !== 'undefined' ? marked.parse(botFullText) : botFullText;
-                messagesDiv.scrollTo({ top: messagesDiv.scrollHeight, behavior: 'auto' });
+                // Performance optimization: only parse full text to DOM periodically or wait till end? 
+                // For smooth streaming UI, parsing markdown every chunk is fine for small msgs, 
+                // but can be optimized with requestAnimationFrame.
+                window.requestAnimationFrame(() => {
+                    const parsed = typeof marked !== 'undefined' ? marked.parse(botFullText) : botFullText;
+                    textSpan.innerHTML = parsed + '<span class="streaming-cursor"></span>';
+                    messagesDiv.scrollTo({ top: messagesDiv.scrollHeight, behavior: 'auto' });
+                });
             },
             (meta) => {
                 metadataCaptured = meta;
                 
+                // Brain Routing Mode Switch (Auto)
+                if (meta.route && meta.route !== appMode) {
+                    const mappedMode = meta.route.toLowerCase() === 'agent' ? 'search' : meta.route.toLowerCase();
+                    switchMode(mappedMode);
+                }
+
                 // Real-time Intelligence Status rendering
                 if (meta.status_update) {
                     let statusDiv = botDiv.querySelector('.levi-status-indicator');
@@ -212,11 +282,13 @@ async function sendMessage() {
                     statusDiv.innerText = `● ${meta.status_update}`;
                 }
             },
-            currentMood
+            currentMood,
+            sessionMessages
         );
 
         messageCount++;
         lastBotMessage = botFullText;
+        textSpan.innerHTML = typeof marked !== 'undefined' ? marked.parse(botFullText) : botFullText; // Strip cursor
 
         // Post-Stream: Add controls & engine badges
         const controls = document.createElement("div");
@@ -232,11 +304,30 @@ async function sendMessage() {
         `;
         botDiv.appendChild(controls);
 
+        // Search Mode UI: Render Sources if backend provided them
+        if ((appMode === 'search' || (metadataCaptured && metadataCaptured.route === 'search')) && metadataCaptured && metadataCaptured.sources) {
+            const sourcesDiv = document.createElement("div");
+            sourcesDiv.className = "mt-3 pt-3 border-t border-white/5 flex flex-wrap gap-2";
+            metadataCaptured.sources.forEach(src => {
+                const link = document.createElement("a");
+                link.href = src.link || "#";
+                link.target = "_blank";
+                link.className = "text-[10px] bg-white/5 hover:bg-white/10 px-2 py-1 rounded border border-white/10 text-primary transition-colors flex items-center gap-1";
+                link.innerHTML = `<span class="material-symbols-outlined" style="font-size:10px">link</span>${src.title || 'Source'}`;
+                sourcesDiv.appendChild(link);
+            });
+            botDiv.appendChild(sourcesDiv);
+        }
+
+        // Add to memory
+        sessionMessages.push({ role: "assistant", content: botFullText });
+        saveToCache();
+
         // Auto-Save fact if high confidence (Logic handled by backend, but we could trigger it here if needed)
 
     } catch (err) {
         console.error("Chat error:", err);
-        textSpan.innerText = "The connection to the cosmic brain was interrupted. Please try again.";
+        textSpan.innerHTML = "The connection to the cosmic brain was interrupted. Please try again.";
         botDiv.classList.add("border-red-500/30", "bg-red-500/5");
     } finally {
         if(sendIcon) sendIcon.classList.remove("hidden");
@@ -312,7 +403,87 @@ function startVoice() {
     try { recognition.start(); } catch(e) { recognition.stop(); }
 }
 
+// --- Brain Routing & Modes ---
+function switchMode(newMode) {
+    const modes = {
+        'chat': { icon: 'chat', label: 'Chat Mode', color: 'text-zinc-400', placeholder: 'Ask about life, stoicism, the cosmos…' },
+        'search': { icon: 'travel_explore', label: 'Search Mode', color: 'text-blue-400', placeholder: 'Ask anything to search the web…' },
+        'document': { icon: 'description', label: 'Document Mode', color: 'text-emerald-400', placeholder: 'Ask questions about your document…' }
+    };
+    
+    appMode = modes[newMode] ? newMode : "chat";
+    const config = modes[appMode];
+    
+    const badge = document.getElementById('mode-badge');
+    if (badge) {
+        badge.innerHTML = `<span class="material-symbols-outlined" style="font-size:12px">${config.icon}</span>${config.label}`;
+        badge.className = `text-[10px] bg-white/5 border border-white/10 px-2 py-0.5 rounded-full uppercase tracking-widest flex items-center gap-1 transition-colors relative z-10 ${config.color}`;
+    }
+    
+    const input = document.getElementById('chat-input');
+    if (input) {
+        input.placeholder = config.placeholder;
+    }
+}
+
+// --- Document Upload ---
+async function handleFileUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    try {
+        const sendIcon = document.getElementById("send-icon");
+        const spinner = document.getElementById("send-loading");
+        if(sendIcon) sendIcon.classList.add("hidden");
+        if(spinner) spinner.classList.remove("hidden");
+
+        uiShowToast("Uploading document...", "info");
+        const res = await window.api.upload(file);
+        uiShowToast("Document ready for analysis.", "success");
+        
+        uploadedDoc = { file: file, name: file.name, id: res.document_id || 'doc' };
+        
+        const preview = document.getElementById('doc-preview');
+        const docName = document.getElementById('doc-name');
+        if (preview && docName) {
+            docName.innerText = file.name;
+            preview.classList.remove('hidden');
+            preview.classList.add('flex');
+        }
+        
+        switchMode("document");
+        
+    } catch(e) {
+        console.error("Upload failed", e);
+        uiShowToast("Document upload failed.", "error");
+    } finally {
+        const sendIcon = document.getElementById("send-icon");
+        const spinner = document.getElementById("send-loading");
+        if(sendIcon) sendIcon.classList.remove("hidden");
+        if(spinner) spinner.classList.add("hidden");
+        event.target.value = ''; // reset file input
+    }
+}
+
+function clearDocument() {
+    uploadedDoc = null;
+    const preview = document.getElementById('doc-preview');
+    if (preview) {
+        preview.classList.add('hidden');
+        preview.classList.remove('flex');
+    }
+    switchMode("chat");
+}
+
+function uiShowToast(msg, type) {
+    if (window.ui && window.ui.showToast) window.ui.showToast(msg, type);
+    else console.log(`[${type}] ${msg}`);
+}
+
 // Expose functions to window
+window.switchMode = switchMode;
+window.handleFileUpload = handleFileUpload;
+window.clearDocument = clearDocument;
 window.setMood = setMood;
 window.handleKey = handleKey;
 window.autoResize = autoResize;

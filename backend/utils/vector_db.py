@@ -17,23 +17,56 @@ class VectorDB:
     _instances: Dict[str, 'VectorDB'] = {}
     _lock = asyncio.Lock()
 
-    def __init__(self, collection_name: str, dimension: int = 384):
+    def __init__(self, collection_name: str, dimension: int = 384, user_id: Optional[str] = None):
         self.collection_name = collection_name
+        self.user_id = user_id
         self.dimension = dimension
-        self.index_path = f"backend/data/vector_db/{collection_name}_faiss.bin"
-        self.meta_path = f"backend/data/vector_db/{collection_name}_meta.json"
+        
+        # Production: Mount point for GCS FUSE
+        self.base_path = os.getenv("VECTOR_DB_PATH", "backend/data/vector_db")
+        
+        # Scope by User ID if provided
+        if user_id:
+            self.storage_dir = os.path.join(self.base_path, "users", user_id)
+        else:
+            self.storage_dir = os.path.join(self.base_path, "global")
+            
+        self.index_path = os.path.join(self.storage_dir, f"{collection_name}_faiss.bin")
+        self.meta_path = os.path.join(self.storage_dir, f"{collection_name}_meta.json")
         self.index = None
         self.metadata: List[Dict[str, Any]] = []
-        os.makedirs(os.path.dirname(self.index_path), exist_ok=True)
+        os.makedirs(self.storage_dir, exist_ok=True)
 
     @classmethod
     async def get_collection(cls, name: str, dimension: int = 384) -> 'VectorDB':
+        """Get or create a global collection."""
         async with cls._lock:
             if name not in cls._instances:
                 instance = cls(name, dimension)
                 await instance._load()
                 cls._instances[name] = instance
             return cls._instances[name]
+
+    @classmethod
+    async def get_user_collection(cls, user_id: str, name: str = "memory", dimension: int = 384) -> 'VectorDB':
+        """Get or create a user-specific collection."""
+        instance_key = f"user_{user_id}_{name}"
+        async with cls._lock:
+            if instance_key not in cls._instances:
+                instance = cls(name, dimension, user_id=user_id)
+                await instance._load()
+                cls._instances[instance_key] = instance
+                
+                # Cleanup logic: If we have too many indices in RAM, clear old ones
+                if len(cls._instances) > 50:
+                    # Simple cleanup: remove the first few (oldest) entries
+                    # In a real system, we'd use LRU or time-based expiry.
+                    keys_to_remove = list(cls._instances.keys())[:10]
+                    for k in keys_to_remove:
+                        if k != instance_key:
+                            del cls._instances[k]
+                            
+            return cls._instances[instance_key]
 
     async def _load(self):
         if os.path.exists(self.index_path) and os.path.exists(self.meta_path):
@@ -46,9 +79,10 @@ class VectorDB:
                 logger.error(f"Failed to load collection {self.collection_name}: {e}")
         
         if self.index is None:
+            # Use IndexFlatIP for Inner Product (Cosine Similarity on normalized vectors)
             self.index = faiss.IndexFlatIP(self.dimension)
             self.metadata = []
-            logger.info(f"Initialized new collection '{self.collection_name}'.")
+            logger.info(f"Initialized new collection '{self.collection_name}' (FlatIP).")
 
     async def add(self, texts: List[str], metadatas: List[Dict[str, Any]]):
         if not texts: return
@@ -70,9 +104,20 @@ class VectorDB:
             self._save()
 
     def _save(self):
-        faiss.write_index(self.index, self.index_path)
-        with open(self.meta_path, "w") as f:
-            json.dump(self.metadata, f, default=str)
+        try:
+            # Atomic save to prevent corruption on GCS FUSE/Persistent Storage
+            temp_index = f"{self.index_path}.tmp"
+            temp_meta = f"{self.meta_path}.tmp"
+            
+            faiss.write_index(self.index, temp_index)
+            with open(temp_meta, "w") as f:
+                json.dump(self.metadata, f, default=str)
+                
+            os.replace(temp_index, self.index_path)
+            os.replace(temp_meta, self.meta_path)
+            logger.info(f"Persisted collection '{self.collection_name}' to storage.")
+        except Exception as e:
+            logger.error(f"Persistence error for {self.collection_name}: {e}")
 
     async def search(self, query: str, limit: int = 5, min_score: float = 0.4) -> List[Dict[str, Any]]:
         query_emb = await asyncio.to_thread(embed_text, query)

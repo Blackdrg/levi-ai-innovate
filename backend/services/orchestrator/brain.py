@@ -228,16 +228,29 @@ class LeviBrain:
         request_id: str
     ) -> Dict[str, Any]:
         """Handles the token-by-token streaming version of the pipeline."""
-        logger.info("Entering Stream Pipeline")
+        logger.info(f"Entering Stream Pipeline: Route={intent.intent_type}")
         
-        # 3. Hybrid Model Selection (Cost-Optimized)
+        # 1. Routing Context Injection
+        additional_context = ""
+        
+        if intent.intent_type == "search":
+             from .tool_registry import call_tool
+             search_res = await call_tool("search_agent", {"query": user_input}, context)
+             if search_res.success:
+                  additional_context = f"\n\nSearch Results:\n{search_res.message}"
+        
+        elif intent.intent_type == "document":
+             from backend.services.documents.service import DocumentService
+             doc_context = await DocumentService.query_documents(context.get("user_id", ""), user_input)
+             if doc_context:
+                  additional_context = f"\n\nDocument Context:\n{doc_context}"
+
+        # 2. Hybrid Model Selection
         from .local_engine import is_locally_handleable, generate_local_response
-        
         can_handle_locally = is_locally_handleable(intent.intent_type, intent.complexity_level)
         
-        if can_handle_locally:
+        if can_handle_locally and not additional_context:
             logger.info("Streaming via LOCAL engine")
-            # Build local-friendly messages
             local_messages = [
                 {"role": "system", "content": "You are LEVI, a helpful AI assistant. Be concise and profound."},
                 {"role": "user", "content": user_input}
@@ -249,33 +262,30 @@ class LeviBrain:
                 "stream": generate_local_response(local_messages)
             }
 
-        # API Path
+        # 3. API Path
         user_tier = context.get("user_tier", "free")
-        if user_tier in ("pro", "creator") or intent.complexity_level == 3:
-            model = "llama-3.1-70b-versatile"
-        else:
-            model = "llama-3.1-8b-instant"
+        model = "llama-3.1-70b-versatile" if (user_tier in ("pro", "creator") or intent.complexity_level >= 3) else "llama-3.1-8b-instant"
         
-        # ... (rest of system prompt building remains same)
         mood = context.get("mood", "philosophical")
         base_variant = await self.prompts.get_best_variant(mood)
         
-        depth = len(context.get("history", []))
         system_prompt = _build_dynamic_system_prompt(
             base_variant, 
             user_memory=context.get("long_term"), 
-            conversation_depth=depth,
-            preferences=context.get("preferences"),
+            conversation_depth=len(context.get("history", [])),
             few_shot_patterns=context.get("few_shot_patterns")
         )
         
+        if additional_context:
+             system_prompt += f"\n\nPRIORITY CONTEXT: {additional_context}\nAnswer based ONLY on the provided context if specified."
+
         messages = [{"role": "system", "content": system_prompt}]
-        for turn in context.get("history", [])[-3:]:
+        for turn in context.get("history", [])[-5:]: # Include more history for streaming
              messages.append({"role": "user", "content": turn.get("user", "")})
              messages.append({"role": "assistant", "content": turn.get("bot", "")})
         messages.append({"role": "user", "content": user_input})
 
-        logger.info("Routing to API: %s (Tier %s)", model, user_tier)
+        logger.info("Streaming to API: %s (%s)", model, intent.intent_type)
         
         return {
             "intent": intent.intent_type,

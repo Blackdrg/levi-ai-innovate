@@ -32,14 +32,22 @@
         }
     };
 
+    const generateUUID = () => {
+        return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+            (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+        );
+    };
+
     async function apiFetch(endpoint, options = {}) {
         ui.showLoader();
         const url = endpoint.startsWith('http') ? endpoint : `${API_BASE}${endpoint}`;
         
-        const token = localStorage.getItem('levi_token') || window.levi_user_token;
+        const token = localStorage.getItem('fb_token') || localStorage.getItem('levi_token');
         const headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
+            "X-Trace-ID": generateUUID(),
+            "X-Request-ID": generateUUID(),
             ...options.headers
         };
 
@@ -133,7 +141,7 @@
         },
 
         // --- Streaming ---
-        chatStream: async (message, sessionId, onChunk, onMetadata, mood = "philosophical") => {
+        chatStream: async (message, sessionId, onChunk, onMetadata, mood = "philosophical", history = []) => {
             const url = `${API_BASE}/chat/stream`;
             const token = localStorage.getItem('levi_token') || window.levi_user_token;
             
@@ -144,7 +152,7 @@
                     'Accept': 'text/event-stream',
                     'Authorization': token ? `Bearer ${token}` : ''
                 },
-                body: JSON.stringify({ message, session_id: sessionId, mood, stream: true })
+                body: JSON.stringify({ message, session_id: sessionId, mood, stream: true, history })
             });
 
             if (!response.ok) throw new Error(`Stream failed: ${response.status}`);

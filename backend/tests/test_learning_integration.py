@@ -27,14 +27,12 @@ async def test_user_preference_injection():
 
 @pytest.mark.asyncio
 async def test_learning_hook_trigger():
-    """Verify that reasoning_engine triggers the learning background task."""
-    # This is a bit harder to test without mocks, but we can verify 
-    # that the call doesn't crash and returns the correct structure.
+    """Verify that reasoning_engine triggers the autonomous evolution check."""
     brain = LeviBrain()
     user_input = "My name is John and I love Stoic philosophy."
     
     from backend.services.orchestrator.orchestrator_types import IntentResult
-    intent = IntentResult(intent="chat", complexity=3, confidence=1.0)
+    intent = IntentResult(intent="chat", complexity=1, confidence=1.0)
     context = {
         "user_id": "john_123",
         "session_id": "sess_001",
@@ -42,10 +40,34 @@ async def test_learning_hook_trigger():
         "preferences": {"preferred_moods": ["stoic"], "response_style": "concise"}
     }
     
-    # This will trigger a background task (asyncio.create_task)
+    # LEVEL 1 Task: Should trigger Local Reasoning (Complexity 1 < 3)
     result = await brain.reasoning_engine(user_input, intent, context, "req_test_001")
     
     assert "response" in result
     assert result["intent"] == "chat"
-    # The response should ideally be generated but since we are in a test env, 
-    # it depends on whether GROQ_API_KEY is set.
+    assert result["route"] == "LOCAL" # Verified: Hardened Meta-Brain routing
+
+@pytest.mark.asyncio
+async def test_adaptive_prompt_evolution():
+    """Verify that AdaptivePromptManager can evolve based on 5-star feedback."""
+    apm = AdaptivePromptManager("user_123")
+    # Mocking successful feedback
+    await apm.log_performance("p_stoic_v1", 5.0)
+    
+    # Check if variant score increased
+    from backend.redis_client import r as redis
+    score = redis.zscore(f"user:user_123:prompt_scores", "p_stoic_v1")
+    assert float(score) > 0.0
+
+@pytest.mark.asyncio
+async def test_distilled_persona_injection():
+    """Verify that distilled traits are correctly injected into system instructions."""
+    user_id = "test_persona_user"
+    from backend.services.orchestrator.memory_utils import store_facts
+    await store_facts(user_id, [{"fact": "User is a minimalist", "category": "trait", "importance": 0.95}])
+    
+    apm = AdaptivePromptManager(user_id)
+    instructions = await apm.get_system_instructions()
+    
+    assert "minimalist" in instructions.lower()
+    assert "LEVI" in instructions

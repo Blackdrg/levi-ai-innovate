@@ -12,6 +12,7 @@ import uuid
 from typing import Dict, Any, Optional, List
 
 from .brain import LeviBrain
+from .orchestrator_types import ToolResult
 
 logger = logging.getLogger(__name__)
 

@@ -253,6 +253,21 @@
       animation: spin .75s linear infinite
     }
 
+    @keyframes blink {
+      0%, 100% { opacity: 1 }
+      50% { opacity: 0 }
+    }
+
+    .streaming-cursor {
+      display: inline-block;
+      width: 6px;
+      height: 1.2em;
+      background-color: #f2ca50;
+      vertical-align: text-bottom;
+      margin-left: 2px;
+      animation: blink 1s step-end infinite
+    }
+
     #toast {
       position: fixed;
       bottom: 5rem;
@@ -441,7 +456,10 @@
     <!-- Chat header bar -->
     <div class="px-6 lg:px-10 py-4 border-b border-white/5 flex items-center justify-between flex-shrink-0">
       <div>
-        <h1 class="font-headline text-xl italic font-light text-on-surface">AI Philosopher</h1>
+        <div class="flex items-center gap-3">
+          <h1 class="font-headline text-xl italic font-light text-on-surface">AI Philosopher</h1>
+          <span id="mode-badge" class="text-[10px] bg-white/5 border border-white/10 px-2 py-0.5 rounded-full uppercase tracking-widest text-zinc-400 flex items-center gap-1 transition-colors"><span class="material-symbols-outlined" style="font-size:12px">chat</span>Chat Mode</span>
+        </div>
         <p class="text-[10px] text-zinc-500 uppercase tracking-widest mt-0.5">Groq Llama 3 · Context-Aware</p>
       </div>
       <div class="flex items-center gap-3">
@@ -474,16 +492,34 @@
           class="mood-chip active text-[10px] font-semibold uppercase tracking-widest">Philosophical</button>
       </div>
 
+      <!-- Document preview area -->
+      <div id="doc-preview" class="hidden mb-2 items-center gap-2">
+        <div class="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-3 py-1.5 rounded-lg text-xs">
+            <span class="material-symbols-outlined icon-sm">description</span>
+            <span id="doc-name" class="font-medium truncate max-w-[200px]">document.pdf</span>
+            <span class="text-[10px] uppercase tracking-widest ml-1 opacity-80">Ready</span>
+            <button onclick="clearDocument()" class="ml-2 hover:text-white transition-colors" title="Remove Document"><span class="material-symbols-outlined" style="font-size:14px">close</span></button>
+        </div>
+      </div>
+
       <!-- Input row -->
       <div class="flex gap-3 items-end">
         <div class="flex-1 relative">
+          <input type="file" id="file-upload" class="hidden" onchange="handleFileUpload(event)" accept=".pdf,.txt,.md,.doc,.docx" />
           <textarea id="chat-input" rows="1" placeholder="Ask about life, stoicism, the cosmos…"
-            class="chat-input w-full text-sm" onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
-          <button id="voice-btn" onclick="startVoice()"
-            class="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center text-zinc-500 hover:text-primary transition-colors"
-            title="Voice input">
-            <span class="material-symbols-outlined icon-sm">mic</span>
-          </button>
+            class="chat-input w-full text-sm !pr-[88px]" onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+          <div class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+            <button id="upload-btn" onclick="document.getElementById('file-upload').click()"
+              class="w-8 h-8 rounded-full flex items-center justify-center text-zinc-500 hover:text-primary transition-colors"
+              title="Upload Document">
+              <span class="material-symbols-outlined icon-sm">attach_file</span>
+            </button>
+            <button id="voice-btn" onclick="startVoice()"
+              class="w-8 h-8 rounded-full flex items-center justify-center text-zinc-500 hover:text-primary transition-colors"
+              title="Voice input">
+              <span class="material-symbols-outlined icon-sm">mic</span>
+            </button>
+          </div>
         </div>
         <button id="send-btn" onclick="sendMessage()"
           class="btn-gold w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 shadow-[0_0_20px_rgba(242,202,80,.2)]"

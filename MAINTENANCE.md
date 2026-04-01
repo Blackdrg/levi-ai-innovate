@@ -1,84 +1,84 @@
-# LEVI-AI: v6.8 "Sovereign" Maintenance & Lifecycle Guide 🛠️
+# LEVI-AI: v6.8.5 "Sovereign Monolith" Maintenance & Lifecycle Guide 🛠️
 
-This guide outlines the routine operational tasks for the self-evolving LEVI-AI v6.8 Sovereign platform.
-
----
-
-## ⚙️ 1. The Sovereign Lifecycle (Celery)
-
-The v6.8 engine manages intensive background tasks across two specialized queues.
-
-| Task | Queue | Schedule | Purpose |
-|:---|:---|:---|:---|
-| `run_autonomous_evolution` | `default` | Daily (24h) | Mutates weak system prompts based on 5-star patterns. |
-| `update_analytics_snapshot` | `default` | Every 4h | Flushes system health metrics to the dashboard cache. |
-| `run_global_maintenance` | `heavy` | Daily | Consolidates FAISS indices and prunes orphaned memory vectors. |
-| `flush_all_memory_buffers` | `default` | Every 30s | Syncs real-time interaction memory from Redis to Firestore. |
-| `prune_expired_data` | `default` | Daily | Auto-cleans temp uploads and stale session data. |
+This guide outlines the routine operational tasks for the self-evolving LEVI-AI v6.8.5 Sovereign Monolith.
 
 ---
 
-## 💾 2. The Memory Matrix (Redis & FAISS)
+## ⚙️ 1. The Monolithic Lifecycle (Background Tasks)
 
-The 3-layer memory matrix is the core of LEVI's consciousness.
+The v6.8.5 engine manages intensive background tasks using its internal `MonolithScheduler` and protected maintenance routes.
 
-### Viewing Memory Health
+| Task | Trigger | Purpose |
+|:---|:---|:---|
+| `distill_core_memory` | Daily (02:00) | Distills fragmented facts into high-fidelity 'Persona Traits' for the User Matrix. |
+| `autonomous_prompt_mutation` | Performance-Based | Mutates weak system instructions based on 5-star resonance scores. |
+| `faiss_garbage_collection` | Weekly | Prunes orphaned vector clusters from the GCS FUSE mount to maintain sub-ms retrieval. |
+| `heartbeat_synchronization` | Every 5 min | Checks the health of the 8Gi RAM perimeter and the Llama-3-8B local model. |
+
+---
+
+## 💾 2. The Memory Matrix (FAISS & GCS FUSE)
+
+The Sovereign Memory Matrix is stored at `/mnt/vector_db` via GCS FUSE.
+
+### Monitoring Memory Health
 ```bash
-# Check the status of the local FAISS indices
-ls -lh backend/data/memory/*.bin
+# Verify GCS FUSE mount point integrity
+ls -lh /mnt/vector_db/users/
 
-# Verify model weight integrity
-sha256sum backend/models/*.gguf
+# Check specific user index size
+du -sh /mnt/vector_db/users/<user_id>/index.faiss
 ```
 
-### Manual Index Maintenance
-If retrieval scores are drifting or latency is increasing:
+### Manual Matrix Optimization
+If retrieval latency exceeds 50ms:
 ```bash
-# Trigger a background maintenance cycle
-celery -A backend.celery_app call backend.services.orchestrator.memory_tasks.run_global_maintenance
+# Manually trigger a maintenance cycle (Requires INTERNAL_SERVICE_KEY)
+curl -X POST -H "X-Internal-Service-Key: <key>" https://levi-monolith/api/admin/memory/gc
 ```
 
 ---
 
-## 🛡️ 3. Prompt Mutation & Rollback
+## 🛡️ 3. Prompt Evolution & Rollback
 
-v6.8 uses an autonomous mutator to refine reasoning.
+v6.8.5 uses the `AdaptivePromptManager` to refine its own reasoning core.
 
-### Emergency Rollback
+### Emergency Evolution Rollback
 1.  Access Firestore: **`prompt_performance`** collection.
-2.  Locate the failed variant (recent `evolved_at` timestamp).
-3.  Revert the `active_prompt` to the `original_prompt` value.
-4.  Restart the `levi-api` service to clear the prompt cache.
+2.  Locate the variant with the lowest consistency score.
+3.  Set its `status` to `decommissioned`.
+4.  The system will automatically fallback to the `universal_baseline` in the next interaction.
 
 ---
 
-## 🧪 4. Sovereign Health Diagnostics 👁️
+## 🧪 4. Absolute Privacy & Memory Wipes 👁️
 
-LEVI v6.8 provides a deep diagnostic probe.
+LEVI-AI v6.8.5 enforces **Absolute Data Sovereignty**.
 
-### Running the Sovereignty Audit
-Verify all 8-stage decision boundaries and local inference:
+### Executing a Full Purge
+When a user requests to be forgotten:
+1.  The system performs an atomic delete across:
+    - **Firestore**: User facts and persona traits.
+    - **Redis**: Full conversation history and session context.
+    - **GCS FUSE**: The binary FAISS index file at `/mnt/vector_db/users/<user_id>/`.
+2.  Verification: `ls /mnt/vector_db/users/<user_id>/` should return 404.
+
+---
+
+## 🛠️ 5. Diagnostic Command Center
+
 ```bash
-python tests/verify_sovereignty.py
+# Run the v6.8.5 production verification suite
+python scripts/verify_production.py --prod
+
+# Check the Sovereign Engine heart rate
+curl -H "X-Admin-Key: <key>" https://levi-monolith/health/sovereign
+
+# Monitor the real-time Intelligence Pulse
+tail -f logs/orchestrator_pulse.log
 ```
 
-### Real-Time Activity Monitoring
-Subscribe to the Intelligence Pulse stream:
-```bash
-# Using curl (SSE)
-curl -N http://localhost/api/stream | grep "type: activity"
-```
-
 ---
 
-## 💾 5. Local Engine (Sovereignty)
-
-LEVI prioritizes non-cloud reasoning via local Llama-3-8B-Instruct.
-
-- **Check Local Health**: The `/health` API will report `sovereign_v6: hardened` if the local route is active.
-- **Model Upgrades**: When swapping `.gguf` files, ensure they are placed in the `models/` directory and `LOCAL_MODEL_PATH` is updated in `.env`.
-
----
-
-**LEVI v6.8 — Sovereign. Efficient. Self-Scaling.**
-*Infinite Learning Loop Hardened.*
+**LEVI v6.8.5 — Sovereign. Efficient. Self-Scaling.**
+*Collective Wisdom Distillation Hardened.*
