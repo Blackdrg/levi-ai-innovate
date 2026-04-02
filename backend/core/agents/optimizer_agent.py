@@ -1,65 +1,59 @@
-"""
-backend/services/orchestrator/agents/optimizer_agent.py
-
-LEVI v6: The Soul Optimizer.
-Elevates synthesized responses with philosophical resonance and personality alignment.
-"""
-
 import logging
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
-from ..tool_base import BaseTool, StandardToolOutput
-from backend.generation import _async_call_llm_api
+from backend.core.agent_base import SovereignAgent, AgentResult
+from backend.engines.chat.generation import SovereignGenerator
 
 logger = logging.getLogger(__name__)
 
 class OptimizerInput(BaseModel):
     original_input: str = Field(..., description="The user's original query")
     draft_response: str = Field(..., description="The synthesized draft response")
-    user_context: Dict[str, Any] = Field(default_factory=dict, description="Memory and preferences")
+    user_context: Dict[str, Any] = Field(default_factory=dict)
 
-class OptimizerAgent(BaseTool[OptimizerInput, StandardToolOutput]):
+class OptimizerAgent(SovereignAgent[OptimizerInput, AgentResult]):
     """
-    Role: Senior Optimizer (The Soul).
-    Polishes the final response to ensure it carries the LEVI signature.
+    Sovereign Soul Optimizer (SoulOptimizer).
+    Elevates synthesized responses with philosophical resonance and personality alignment. 
     """
-    name = "optimizer_agent"
-    description = "Role: Soul Optimizer. Refines and elevates responses for maximum resonance."
-    input_schema = OptimizerInput
-    output_schema = StandardToolOutput
+    
+    def __init__(self):
+        super().__init__("SoulOptimizer")
 
-    async def _run(self, input_data: OptimizerInput, context: Dict[str, Any]) -> Dict[str, Any]:
-        request_id = context.get("request_id", "external")
-        logger.info(f"[{request_id}] [Optimizer] Elevating response soul...")
+    async def _run(self, input_data: OptimizerInput, lang: str = "en", **kwargs) -> Dict[str, Any]:
+        """
+        Elevation Protocol v7:
+        1. Contextual Resonance Alignment.
+        2. Cliché Scrubbing & Philosophical Injection.
+        3. Final Evocative synthesis.
+        """
+        draft = input_data.draft_response
+        self.logger.info("Elevating Synthesis Resonance.")
         
-        # Extract personality traits from context
-        traits = input_data.user_context.get("long_term", {}).get("traits", [])
-        traits_str = ", ".join(traits) if traits else "analytical, philosophical, anti-cliché"
+        traits = input_data.user_context.get("long_term", {}).get("traits", ["analytical", "philosophical"])
         
         system_prompt = (
-            "You are the LEVI Soul Optimizer. Your goal is to take a draft response and elevate it. "
-            f"The user resonates with these traits: {traits_str}.\n\n"
-            "Guidelines:\n"
-            "1. Remove clichéd AI phrases ('In conclusion', 'It's important to remember').\n"
-            "2. Inject philosophical depth and 'Socratic' curiosity.\n"
-            "3. Ensure the tone is evocative and premium.\n"
-            "4. KEEP THE CORE FACTS TRUE - do not hallucinate.\n\n"
-            "Output the refined response directly. No preamble."
+            "You are the LEVI Sovereign Soul Optimizer. Your goal is to elevate the provided draft.\n"
+            f"User Resonance: {', '.join(traits)}.\n"
+            "Rules:\n"
+            "1. Scrub all robotic artifacts ('In conclusion', 'It is important to note').\n"
+            "2. Enhance philosophical depth without altering core facts.\n"
+            "3. Maintain a premium, evocative, and Socratic tone.\n\n"
+            "Return ONLY the refined response."
         )
         
-        refined_text = await _async_call_llm_api(
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Input: {input_data.original_input}\nDraft: {input_data.draft_response}"}
-            ],
-            model="llama-3.1-70b-versatile",
-            temperature=0.4, # Slightly higher for creative elevation
-            request_id=request_id
-        )
+        generator = SovereignGenerator()
         
+        # Engage the Council for maximum creative fidelity
+        refined_text = await generator.council_of_models([
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Draft to elevate: {draft}"}
+        ])
+
         return {
-            "success": True,
-            "message": "Response soul elevated.",
-            "data": {"optimized_content": refined_text.strip()},
-            "agent": self.name
+            "message": refined_text.strip(),
+            "data": {
+                "traits_applied": traits,
+                "refinement_level": "sovereign"
+            }
         }

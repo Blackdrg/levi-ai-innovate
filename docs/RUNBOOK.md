@@ -6,8 +6,8 @@ Because LEVI-AI v7 is a multi-process, distributed pipeline, a failure usually i
 **Symptoms:** FastAPI is returning `500` continuously, or Server-Sent Events (SSE) immediately disconnect.
 **Resolution Steps:**
 1. Check the Llama.cpp fallback path or Groq API rate-limits. If `GROQ_API_KEY` hit request limits, the MetaPlanner will stall.
-2. Examine the `backend/logs/` or `server_log.txt`.
-3. Hard reset the API container cluster without touching the Database or Celery Workers.
+2. Examine the `server_log.txt` in the root or `backend/logs/`.
+3. Hard reset the API container cluster (`backend/api/main.py`) without touching the Database or Celery Workers.
 
 ## Level 2: Async Queue Rendering Deadlock (Studio)
 **Symptoms:** Users click `Generate Video` and the job hangs in a `pending` state indefinitely.

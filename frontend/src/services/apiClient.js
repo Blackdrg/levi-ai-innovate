@@ -41,25 +41,77 @@ apiClient.interceptors.request.use((config) => {
 });
 
 /**
- * Hardened SSE Streamer
- * Handles connection recovery and event mapping.
+ * Hardened POST SSE Streamer
+ * Uses fetch + ReadableStream to support POST bodies for SSE.
  */
-export const apiStream = (path, onMessage, onError) => {
-  const url = `${BASE_URL}${path}`;
-  const eventSource = new EventSource(url);
+export const apiPostStream = async (path, body, { onToken, onEvent, onError }) => {
+  const token = localStorage.getItem("fb_token");
+  
+  try {
+    const response = await fetch(`${BASE_URL}${path}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": token ? `Bearer ${token}` : "",
+        "X-Trace-ID": crypto.randomUUID(),
+      },
+      body: JSON.stringify(body),
+    });
 
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop(); // Keep partial line in buffer
+
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          const jsonStr = line.replace("data: ", "").trim();
+          if (!jsonStr) continue;
+          try {
+            const data = JSON.parse(jsonStr);
+            if (data.token && onToken) onToken(data.token);
+            if (data.event && onEvent) onEvent(data.event, data);
+          } catch (e) {
+            console.warn("JSON parse error in stream", e);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Stream Error:", err);
+    if (onError) onError(err);
+  }
+};
+
+/**
+ * Standard GET SSE Streamer
+ * Uses Native EventSource for simpler GET streams (Neural Status, Stats).
+ */
+export const apiStream = (path, onMessage) => {
+  const eventSource = new EventSource(`${BASE_URL}${path}`);
+  
   eventSource.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
       onMessage(data);
-    } catch (err) {
-      console.warn("[Stream Parse Error]", err);
+    } catch (e) {
+      console.warn("SSE parse error", e);
     }
   };
 
   eventSource.onerror = (err) => {
-    console.error("[Stream Connection Error]", err);
-    if (onError) onError(err);
+    console.error("SSE connection failed", err);
     eventSource.close();
   };
 

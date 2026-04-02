@@ -1,7 +1,8 @@
 import { motion } from "framer-motion";
-import { Zap, Database, Brain, Settings, MessageSquare, Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { Zap, Database, Brain, Settings, MessageSquare, Plus, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import { cn } from "../utils/styles";
 import { useState } from "react";
+
 
 export const Sidebar = ({ activeView, onViewChange }) => {
   const [collapsed, setCollapsed] = useState(false);

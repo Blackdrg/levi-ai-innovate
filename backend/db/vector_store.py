@@ -1,10 +1,18 @@
 # backend/db/vector_store.py
+"""
+LEVI-AI Vector Store Bridge (v7 Sovereign).
+Unified entry point for semantic embeddings, FAISS storage, and secure vaulting.
+"""
 import os
 import json
 import logging
 import hashlib
 import threading
 import numpy as np  # type: ignore
+
+# Re-exporting these for the core Brain engines
+from backend.utils.vector_db import VectorDB
+from backend.utils.encryption import SovereignVault
 
 logger = logging.getLogger(__name__)
 
@@ -54,25 +62,8 @@ def embed_text(text: str) -> list:
     rng = np.random.default_rng(seed)
     return rng.uniform(-1, 1, 384).tolist()
 
-def cosine_sim(a: np.ndarray, b: np.ndarray) -> float:
-    na, nb = np.linalg.norm(a), np.linalg.norm(b)
-    if na == 0 or nb == 0:
-        return 0.0
-    return float(np.dot(a, b) / (na * nb))
-
-# Phase 12 FAISS integration (Placeholder for future expansion)
+# Legacy Class for backward compatibility (Optional)
 class VectorIndex:
-    """Manages local vector search using FAISS (if available) or numpy."""
-    def __init__(self, dimension: int = 384):
-        self.dimension = dimension
-        self.index = None
-        self._init_index()
-
-    def _init_index(self):
-        try:
-            import faiss # type: ignore
-            self.index = faiss.IndexFlatL2(self.dimension)
-            logger.info("FAISS index initialized.")
-        except ImportError:
-            logger.info("FAISS not found. Falling back to linear numpy search.")
-            self.index = None
+    def __init__(self, *args, **kwargs):
+        logger.warning("VectorIndex is legacy. Use VectorDB for v7 missions.")
+        self.db = VectorDB("legacy")

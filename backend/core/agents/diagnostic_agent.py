@@ -1,73 +1,60 @@
-"""
-backend/services/orchestrator/agents/diagnostic_agent.py
-
-Diagnostic Agent for LEVI-AI v6.8.8.
-Performs Root Cause Analysis (RCA) on system failures and analyzes 
-successful patterns to suggest prompt optimizations.
-"""
-
 import logging
 import json
 from typing import Dict, Any, Optional
 from pydantic import BaseModel, Field
-from ..tool_base import BaseTool, StandardToolOutput
+from backend.core.agent_base import SovereignAgent, AgentResult
+from backend.engines.chat.generation import SovereignGenerator
 from backend.utils.health import check_brain_health
 
 logger = logging.getLogger(__name__)
 
 class DiagnosticInput(BaseModel):
-    analysis_type: str = Field("active_probe", description="Type of diagnostic check to perform")
-    target_component: Optional[str] = Field(None, description="Specific component to analyze (redis, firestore, llama)")
+    analysis_type: str = "active_probe"
+    target_component: Optional[str] = None
 
-class DiagnosticAgent(BaseTool[DiagnosticInput, StandardToolOutput]):
+class DiagnosticAgent(SovereignAgent[DiagnosticInput, AgentResult]):
     """
-    The Diagnostic Agent analyzes the health of the orchestration pipeline.
-    It identifies consistent failures and suggests improvements.
+    Sovereign System Diagnostic Agent (Diagnostic).
+    Analyzes neural engine health and performs Root Cause Analysis.
     """
     
-    name = "diagnostic_agent"
-    description = "Analyzes system failures and successful patterns for Root Cause Analysis (RCA)."
-    input_schema = DiagnosticInput
-    output_schema = StandardToolOutput
+    def __init__(self):
+        super().__init__("Diagnostic")
 
-    async def _run(self, input_data: DiagnosticInput, context: Dict[str, Any]) -> Dict[str, Any]:
+    async def _run(self, input_data: DiagnosticInput, lang: str = "en", **kwargs) -> Dict[str, Any]:
         """
-        Runs a diagnostic analysis and triggers self-healing routines.
+        Diagnostic Protocol v7:
+        1. Pulse Probing: Health check of active sub-services.
+        2. Analysis: RCA of neural latency and failure patterns.
+        3. Council-based Health Report.
         """
-        # 1. 🔍 Active Probing
+        self.logger.info("Initiating Neural Health Diagnostic Mission.")
+        
+        # Engage health monitoring utility
         health = await check_brain_health()
-        logger.info(f"[Diagnostic] Active Health Check: {health['status']} (Checks: {health['checks']})")
-
-        # 2. 💊 Self-Healing Routine
-        if not health["checks"].get("groq_api", True) or not health["checks"].get("tavily_api", True):
-            # This is a critical signal for the DynamicBrainScorer
-            logger.warning("[Diagnostic] Self-Healing: Deprioritizing external APIs due to detected failure/latency.")
-
-        # 3. 🧠 LLM Root Cause Analysis
+        
+        issues = [k for k, v in health.get("checks", {}).items() if not v]
+        status = health.get("status", "unknown")
+        
         system_prompt = (
-            "You are the LEVI System Diagnostic Agent. Perform an RCA on the current system health.\n"
-            f"HEALTH DATA: {json.dumps(health)}\n"
-            "If components are down, suggest immediate architectural adjustments for the Decision Engine."
+            "You are the LEVI Sovereign Diagnostic Agent. Analyze the health pulse of the AI OS.\n"
+            f"Current Metrics: {json.dumps(health)}\n"
+            "Provide a concise Root Cause Analysis and recommended Sovereign mitigation if anomalies exist."
         )
         
-        from backend.generation import generate_chat_response
-        try:
-            analysis_raw = await generate_chat_response(
-                messages=[{"role": "system", "content": system_prompt}],
-                model="llama-3.1-8b-instant"
-            )
-            
-            return {
-                "success": True,
-                "message": f"Sovereign Engine Health: {health['status']}. {analysis_raw[:150]}...",
-                "data": health,
-                "agent": self.name
+        generator = SovereignGenerator()
+        
+        # Synthesize the health report using the Council
+        analysis = await generator.council_of_models([
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": "Analyze System Pulse."}
+        ])
+
+        return {
+            "message": f"Neural Link Health: {status.upper()}.\n\n{analysis}",
+            "data": {
+                "health": health,
+                "critical_anomalies": issues,
+                "healing_status": "engaged" if issues else "nominal"
             }
-        except Exception as e:
-            logger.error(f"[DiagnosticAgent] Analysis failed: {e}")
-            return {
-                "success": True, # Still return health data if LLM synthesis fails
-                "message": f"Sovereign Engine Health: {health['status']}. Synthesis unavailable.",
-                "data": health,
-                "agent": self.name
-            }
+        }

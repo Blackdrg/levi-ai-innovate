@@ -1,52 +1,54 @@
-"""
-backend/services/orchestrator/agents/code_agent.py
-"""
-
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from pydantic import BaseModel, Field
-from ..tool_base import BaseTool, StandardToolOutput
-from backend.generation import _async_call_llm_api
-from backend.payments import use_credits
+from backend.core.agent_base import SovereignAgent, AgentResult
+from backend.engines.chat.generation import SovereignGenerator
 
 logger = logging.getLogger(__name__)
 
 class CodeInput(BaseModel):
     input: str = Field(..., description="The coding task or architectural query")
     user_id: str = "guest"
-    user_tier: str = "free"
+    lang_preference: str = "Python"
 
-class CodeAgent(BaseTool[CodeInput, StandardToolOutput]):
-    name = "code_agent"
-    description = "Architect of logical and efficient structures."
-    input_schema = CodeInput
-    output_schema = StandardToolOutput
+class CodeAgent(SovereignAgent[CodeInput, AgentResult]):
+    """
+    Sovereign Code Architect (CodeArchitect).
+    Generates clean, high-performance, and logically sound structures.
+    """
+    
+    def __init__(self):
+        super().__init__("CodeArchitect")
 
-    async def _run(self, input_data: CodeInput, context: Dict[str, Any]) -> Dict[str, Any]:
-        # Credit Enforcement (Simplified for now)
-        if input_data.user_id and not input_data.user_id.startswith("guest:"):
-            try:
-                use_credits(str(input_data.user_id), 2)
-            except Exception as e:
-                return {"success": False, "error": f"Insufficient credits: {str(e)}", "agent": self.name}
-
-        system_prompt = (
-            "You are the LEVI Architect. Generate clean, efficient, and well-documented code "
-            "for the user's request. Include a brief architectural explanation. "
-            "Use the requested language or Python by default."
-        )
+    async def _run(self, input_data: CodeInput, lang: str = "en", **kwargs) -> Dict[str, Any]:
+        """
+        Co-Creation Protocol v7:
+        1. Architectural Intent Analysis.
+        2. Council-based Implementation (High-Fidelity).
+        """
+        task = input_data.input
+        self.logger.info(f"Architecting Code Mission: {task[:50]}")
         
-        response = await _async_call_llm_api(
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Task: {input_data.input}"}
-            ],
-            model="llama-3.1-70b-versatile",
-            provider="groq"
-        )
+        system_prompt = (
+            "You are the LEVI Sovereign Code Architect. Create elegant, high-fidelity code solutions.\n"
+            "Technical Requirements:\n"
+            "- Architecture: Modular, Resilient, Performance-First.\n"
+            "- Compliance: Standardized Security & Typings.\n"
+            "- Implementation: {0}\n"
+        ).format(input_data.lang_preference)
+        
+        generator = SovereignGenerator()
+        
+        # Engage the Council for complex architecture
+        final_output = await generator.council_of_models([
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Implement the following mission: {task}"}
+        ])
         
         return {
-            "success": True,
-            "message": response or "I could not construct the requested logic.",
-            "agent": self.name
+            "message": final_output,
+            "data": {
+                "language": input_data.lang_preference,
+                "complexity": "high" if len(final_output) > 2500 else "optimized"
+            }
         }

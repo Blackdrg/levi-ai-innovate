@@ -26,7 +26,7 @@ function loadFromCache() {
             const data = JSON.parse(cached);
             if (Array.isArray(data) && data.length > 0) return data;
         }
-    } catch(e) {}
+    } catch (e) { }
     return null;
 }
 
@@ -36,13 +36,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
         const user = await window.api.getMe();
         console.log("[LEVI] Session Active:", user.username);
-        
+
         // 2. Load Real History
         await loadChatHistory();
-        
+
         // 3. Load Memory/Facts
         await loadMemory();
-        
+
         // 4. Initial Greeting if empty
         const messagesDiv = document.getElementById('messages');
         if (messagesDiv && messagesDiv.children.length === 0) {
@@ -65,7 +65,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         input.addEventListener('input', (e) => {
             localStorage.setItem(`levi_pending_input_${sessionId}`, e.target.value);
         });
-        
+
         input.focus();
         // Restore mood active state
         const activeBtn = Array.from(document.querySelectorAll('.mood-chip')).find(b => b.textContent.toLowerCase() === currentMood);
@@ -92,19 +92,19 @@ async function loadChatHistory() {
     try {
         const res = await window.api.apiFetch("/chat/history?limit=20");
         const history = res.history || [];
-        
+
         // 2. Reconcile with backend if needed
         if (history.length > 0 && (!cached || history.length !== cached.length)) {
             const messagesDiv = document.getElementById("messages");
             if (!messagesDiv) return;
             messagesDiv.innerHTML = ""; // Clear loader/old state
             sessionMessages = []; // Reset memory
-            
+
             history.forEach(msg => {
                 appendMessage(msg.role, msg.content, null, false);
                 sessionMessages.push({ role: msg.role, content: msg.content });
             });
-            
+
             messageCount = history.length;
             saveToCache();
         }
@@ -138,7 +138,7 @@ function setMood(element, mood) {
     element.classList.add('active');
     currentMood = mood;
     localStorage.setItem('levi_chat_mood', mood);
-    
+
     const sessionInfo = document.getElementById("session-info");
     if (sessionInfo) {
         const user = JSON.parse(localStorage.getItem('levi_user') || '{}');
@@ -176,10 +176,10 @@ function clearChat() {
 function appendMessage(role, text, id = null, animate = true) {
     const messagesDiv = document.getElementById("messages");
     if (!messagesDiv) return;
-    
+
     const div = document.createElement("div");
     div.className = `message-wrap flex ${role === 'user' ? 'justify-end' : 'justify-start'} ${animate ? 'animate-in' : ''}`;
-    
+
     let renderedText = text;
     if (typeof marked !== 'undefined') {
         renderedText = marked.parse(text);
@@ -191,9 +191,9 @@ function appendMessage(role, text, id = null, animate = true) {
     } else {
         innerDiv.className = "msg-bot p-4 text-sm text-on-surface-variant flex flex-col gap-2 shadow-sm";
     }
-    
+
     innerDiv.innerHTML = renderedText;
-    
+
     // Add Metadata/Controls for Bot messages
     if (role === 'bot' || role === 'assistant') {
         const msgId = id || `msg_${Date.now()}`;
@@ -223,23 +223,23 @@ async function sendMessage() {
 
     const sendIcon = document.getElementById("send-icon");
     const spinner = document.getElementById("send-loading");
-    if(sendIcon) sendIcon.classList.add("hidden");
-    if(spinner) spinner.classList.remove("hidden");
+    if (sendIcon) sendIcon.classList.add("hidden");
+    if (spinner) spinner.classList.remove("hidden");
 
     // Prepare Bot Message Placeholder (Dynamic Streaming)
     const messagesDiv = document.getElementById("messages");
     const botWrap = document.createElement("div");
     botWrap.className = "message-wrap flex justify-start animate-in";
-    
+
     const botDiv = document.createElement("div");
     botDiv.className = "msg-bot p-4 text-sm text-on-surface-variant flex flex-col gap-2 shadow-sm";
-    
+
     const textSpan = document.createElement("div");
     textSpan.className = "leading-relaxed whitespace-pre-wrap";
     botDiv.appendChild(textSpan);
     botWrap.appendChild(botDiv);
     messagesDiv.appendChild(botWrap);
-    
+
     let botFullText = "";
     let metadataCaptured = null;
 
@@ -249,8 +249,8 @@ async function sendMessage() {
 
     try {
         await window.api.chatStream(
-            text, 
-            sessionId, 
+            text,
+            sessionId,
             (chunk) => {
                 botFullText += chunk;
                 // Performance optimization: only parse full text to DOM periodically or wait till end? 
@@ -264,7 +264,7 @@ async function sendMessage() {
             },
             (meta) => {
                 metadataCaptured = meta;
-                
+
                 // Brain Routing Mode Switch (Auto)
                 if (meta.route && meta.route !== appMode) {
                     const mappedMode = meta.route.toLowerCase() === 'agent' ? 'search' : meta.route.toLowerCase();
@@ -293,10 +293,10 @@ async function sendMessage() {
         // Post-Stream: Add controls & engine badges
         const controls = document.createElement("div");
         controls.className = "flex items-center gap-3 mt-2 pt-2 border-t border-white/5 w-full";
-        
+
         const msgId = metadataCaptured?.request_id || `msg_${Date.now()}`;
         const routeBadge = _buildRouteBadge(metadataCaptured);
-        
+
         controls.innerHTML = `
             <button onclick="submitFeedback('${msgId}', 1, this)" class="text-zinc-500 hover:text-emerald-400 transition-colors"><span class="material-symbols-outlined icon-sm">thumb_up</span></button>
             <button onclick="submitFeedback('${msgId}', 0, this)" class="text-zinc-500 hover:text-red-400 transition-colors"><span class="material-symbols-outlined icon-sm">thumb_down</span></button>
@@ -330,9 +330,9 @@ async function sendMessage() {
         textSpan.innerHTML = "The connection to the cosmic brain was interrupted. Please try again.";
         botDiv.classList.add("border-red-500/30", "bg-red-500/5");
     } finally {
-        if(sendIcon) sendIcon.classList.remove("hidden");
-        if(spinner) spinner.classList.add("hidden");
-        
+        if (sendIcon) sendIcon.classList.remove("hidden");
+        if (spinner) spinner.classList.add("hidden");
+
         // Sync user credits
         if (window.syncUser) window.syncUser();
     }
@@ -341,11 +341,11 @@ async function sendMessage() {
 async function submitFeedback(msgId, score, btn) {
     const parent = btn.parentElement;
     parent.innerHTML = `<span class="text-[9px] text-emerald-400/80 uppercase tracking-widest flex items-center gap-1"><span class="material-symbols-outlined icon-sm">check_circle</span> Learned</span>`;
-    
+
     try {
         await window.api.apiFetch("/learning/feedback", {
             method: "POST",
-            body: { 
+            body: {
                 session_id: sessionId,
                 rating: score ? 5 : 1, // mapping 1/0 to 5/1 stars
                 user_message: "...", // ideally we'd store these
@@ -364,8 +364,8 @@ function _buildRouteBadge(meta) {
     const configs = {
         cache: { emoji: '⚡', label: 'Cached', color: 'text-emerald-400/80' },
         local: { emoji: '🟢', label: 'Local', color: 'text-emerald-400/60' },
-        tool:  { emoji: '🟡', label: 'Agent', color: 'text-amber-400/60' },
-        api:   { emoji: '🔴', label: 'Brain', color: 'text-rose-400/60' },
+        tool: { emoji: '🟡', label: 'Agent', color: 'text-amber-400/60' },
+        api: { emoji: '🔴', label: 'Brain', color: 'text-rose-400/60' },
     };
     const cfg = configs[route] || { emoji: '⚪', label: route, color: 'text-zinc-500' };
     return `<span class="text-[9px] ${cfg.color} font-mono tracking-widest uppercase select-none cursor-default">${cfg.emoji} ${cfg.label}</span>`;
@@ -389,7 +389,7 @@ function startVoice() {
     const btn = document.getElementById("voice-btn");
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
-    
+
     if (!recognition) {
         recognition = new SpeechRecognition();
         recognition.onstart = () => btn.classList.add("text-primary", "animate-pulse");
@@ -399,8 +399,8 @@ function startVoice() {
         };
         recognition.onend = () => btn.classList.remove("text-primary", "animate-pulse");
     }
-    
-    try { recognition.start(); } catch(e) { recognition.stop(); }
+
+    try { recognition.start(); } catch (e) { recognition.stop(); }
 }
 
 // --- Brain Routing & Modes ---
@@ -410,16 +410,16 @@ function switchMode(newMode) {
         'search': { icon: 'travel_explore', label: 'Search Mode', color: 'text-blue-400', placeholder: 'Ask anything to search the web…' },
         'document': { icon: 'description', label: 'Document Mode', color: 'text-emerald-400', placeholder: 'Ask questions about your document…' }
     };
-    
+
     appMode = modes[newMode] ? newMode : "chat";
     const config = modes[appMode];
-    
+
     const badge = document.getElementById('mode-badge');
     if (badge) {
         badge.innerHTML = `<span class="material-symbols-outlined" style="font-size:12px">${config.icon}</span>${config.label}`;
         badge.className = `text-[10px] bg-white/5 border border-white/10 px-2 py-0.5 rounded-full uppercase tracking-widest flex items-center gap-1 transition-colors relative z-10 ${config.color}`;
     }
-    
+
     const input = document.getElementById('chat-input');
     if (input) {
         input.placeholder = config.placeholder;
@@ -434,15 +434,15 @@ async function handleFileUpload(event) {
     try {
         const sendIcon = document.getElementById("send-icon");
         const spinner = document.getElementById("send-loading");
-        if(sendIcon) sendIcon.classList.add("hidden");
-        if(spinner) spinner.classList.remove("hidden");
+        if (sendIcon) sendIcon.classList.add("hidden");
+        if (spinner) spinner.classList.remove("hidden");
 
         uiShowToast("Uploading document...", "info");
         const res = await window.api.upload(file);
         uiShowToast("Document ready for analysis.", "success");
-        
+
         uploadedDoc = { file: file, name: file.name, id: res.document_id || 'doc' };
-        
+
         const preview = document.getElementById('doc-preview');
         const docName = document.getElementById('doc-name');
         if (preview && docName) {
@@ -450,17 +450,17 @@ async function handleFileUpload(event) {
             preview.classList.remove('hidden');
             preview.classList.add('flex');
         }
-        
+
         switchMode("document");
-        
-    } catch(e) {
+
+    } catch (e) {
         console.error("Upload failed", e);
         uiShowToast("Document upload failed.", "error");
     } finally {
         const sendIcon = document.getElementById("send-icon");
         const spinner = document.getElementById("send-loading");
-        if(sendIcon) sendIcon.classList.remove("hidden");
-        if(spinner) spinner.classList.add("hidden");
+        if (sendIcon) sendIcon.classList.remove("hidden");
+        if (spinner) spinner.classList.add("hidden");
         event.target.value = ''; // reset file input
     }
 }

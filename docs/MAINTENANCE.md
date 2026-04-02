@@ -4,7 +4,7 @@ Sovereign OS caches vast arrays of temporal data to supply low-latency reads. Le
 
 ### 1. The FAISS Flush Protocol
 If dynamic routing is writing excessive conversational branches to the vector stores, those `_faiss.bin` and `_meta.json` files expand infinitely.
-- **Action:** Execute the `.venv` and run `scripts/verify_memory_brain.py --flush`. This systematically trims the oldest dense vectors and garbage-collects numpy memory.
+- **Action:** Execute the `.venv` and run `scripts/verify_learning_brain.py --flush`. This systematically trims the oldest dense vectors and garbage-collects numpy memory.
 
 ### 2. Studio Binary Trash Collection
 MoviePy drops extensive temporary audio files (`levi_tts_*.wav`) and video (`levi_vid_*.mp4`) into the OS `/tmp/` directory if a job crashes before normal `.finally()` garbage collection executes.

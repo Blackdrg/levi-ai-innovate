@@ -30,7 +30,7 @@ LEVI-AI is modular. You scale the **API** independently from the **Worker Nodes*
 
 | Node Type | Minimum Spec | Recommended Spec | Primary Role |
 |-----------|--------------|------------------|--------------|
-| **API Web Node** | 1 vCPU, 512MB RAM | 2 vCPU, 2GB RAM | Routing, Identity, Token Streaming. |
+| **API Web Node** | 1 vCPU, 512MB RAM | 2 vCPU, 8GB RAM | Routing, Identity, Token Streaming. (8Gi recommended for Monolith) |
 | **Generative Worker** | 2 vCPU, 4GB RAM | 4 vCPU, 8GB RAM | Image processing, PyDub Audio, Ken-Burns Rendering. |
 | **FAISS Matrix Worker** | 2 vCPU, 2GB RAM | 4 vCPU, 4GB RAM | Keeps `paraphrase-MiniLM` in RAM for rapid vector inference. |
 | **Cache Broker** | 50MB RAM | 1GB RAM Redis | Handles distributed locks and pub/sub Celery routing. |
@@ -53,7 +53,7 @@ LEVI-AI was built natively with GCP APIs (Firestore, GCS).
 > Render Free Tier drops connections after 15 minutes of inactivity. Due to the massive RAM usage of sentence-transformers, LEVI-AI detects `RENDER=true` in its environment variables and forces a deterministic Numpy hash fallback for the FAISS matrix.
 
 1. **Create Web Service (API)**: Set the start command to `uvicorn backend.api.main:app --host 0.0.0.0 --port 10000`.
-2. **Create Background Worker**: Set the start command to `celery -A backend.celery_app worker --loglevel=info`.
+2. **Create Background Worker**: Set the start command to `celery -A backend.celery_app worker --loglevel=info --pool=solo`.
 
 ### Vercel (Frontend Client)
 1. Fork the GitHub repository.

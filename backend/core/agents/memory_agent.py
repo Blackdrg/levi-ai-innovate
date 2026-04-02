@@ -1,95 +1,74 @@
-"""
-backend/services/orchestrator/agents/memory_agent.py
-
-Memory Agent for LEVI-AI v6.8.8.
-Handles long-term and short-term memory retrieval and summarization.
-"""
-
 import logging
 from typing import Dict, Any, List, Optional
 from pydantic import BaseModel, Field
-from ..tool_base import BaseTool, StandardToolOutput
-from backend.services.orchestrator.memory_manager import MemoryManager
-from backend.generation import generate_chat_response
+from backend.core.agent_base import SovereignAgent, AgentResult
+from backend.engines.memory.vault import MemoryVault
+from backend.engines.chat.generation import SovereignGenerator
 
 logger = logging.getLogger(__name__)
 
 class MemoryInput(BaseModel):
-    input: str = Field(..., description="The user's question about their past or preferences")
-    user_id: str = Field(..., description="User ID for retrieving private memory")
-    session_id: Optional[str] = Field("default", description="Current session ID")
+    input: str = Field(..., description="The query about past interactions or user traits")
+    user_id: str = "guest"
+    session_id: str = "default"
 
-class MemoryAgent(BaseTool[MemoryInput, StandardToolOutput]):
+class MemoryAgent(SovereignAgent[MemoryInput, AgentResult]):
     """
-    The Memory Agent retrieves and analyzes historical user data and traits.
+    Sovereign Memory Agent (MemoryAgent).
+    Coordinates between short-term context and long-term user resonance.
     """
     
-    name = "memory_agent"
-    description = "Handles long-term and short-term memory retrieval and summarization."
-    input_schema = MemoryInput
-    output_schema = StandardToolOutput
+    def __init__(self):
+        super().__init__("MemoryAgent")
 
-    async def _run(self, input_data: MemoryInput, context: Dict[str, Any]) -> Dict[str, Any]:
+    async def _run(self, input_data: MemoryInput, lang: str = "en", **kwargs) -> Dict[str, Any]:
         """
-        Executes memory retrieval and summarizes findings.
+        Recall Protocol v7:
+        1. Contextual Retrieval (FAISS Vault).
+        2. Trait Synthesis & History Compression.
+        3. Council-based Memory-Aware Synthesis (High-Fidelity).
         """
         user_id = input_data.user_id
-        session_id = input_data.session_id
         query = input_data.input
-        
-        try:
-            # 1. 📂 Fetch combined memory context
-            memory_ctx = await MemoryManager.get_combined_context(
-                user_id=user_id,
-                session_id=session_id,
-                query=query
-            )
-            
-            # 2. 🧠 Extract facts and history for the prompt
-            long_term = memory_ctx.get("long_term", {})
-            traits = long_term.get("traits", [])
-            preferences = long_term.get("preferences", [])
-            history = memory_ctx.get("history", [])
-            
-            summary_data = {
-                "traits": traits,
-                "preferences": preferences,
-                "recent_history": history[-5:] if history else []
-            }
-            
-            # 3. ⚡ LLM Synthesis of Memory
-            system_prompt = (
-                "You are the LEVI Memory Agent. Your job is to answer questions about the user's "
-                "personality, past interactions, and stated preferences based on the provided data.\n"
-                "Be empathetic, consistent, and helpful. If no info is found, say you remember "
-                "the user but don't have that specific detail yet."
-            )
-            
-            prompt = f"Memory Context:\n{summary_data}\n\nUser Question: {query}"
-            
-            response = await generate_chat_response(
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt}
-                ],
-                model="llama-3.1-8b-instant",
-                temperature=0.3
-            )
-            
-            return {
-                "success": True,
-                "message": response,
-                "data": {
-                    "memory_points": len(traits) + len(preferences),
-                    "context_depth": len(history)
-                },
-                "agent": self.name
-            }
+        self.logger.info(f"Recalling Memory Mission for {user_id}: '{query[:40]}'")
 
-        except Exception as e:
-            logger.error(f"[MemoryAgent] failure: {e}")
-            return {
-                "success": False,
-                "error": f"Memory system encountered a barrier: {str(e)}",
-                "agent": self.name
+        # 1. Engage Memory Vault (FAISS/Firestore Bridge)
+        from backend.engines.memory.vault import MemoryVault
+        memory_data = await MemoryVault.get_combined_context(user_id, query)
+        
+        traits = memory_data.get("long_term", {}).get("traits", [])
+        preferences = memory_data.get("long_term", {}).get("preferences", [])
+        semantic_hits = memory_data.get("semantic_results", [])
+
+        # 2. Build Synthesis Context (Crystallized Wisdom)
+        summary_context = (
+            f"User Archetype Traits: {', '.join(traits) if traits else 'Unknown'}\n"
+            f"Observed Preferences: {', '.join(preferences) if preferences else 'Unknown'}\n"
+            f"Crystallized Fragments: {len(semantic_hits)} relevant patterns detected."
+        )
+
+        # 3. Final Memory-Aware Synthesis
+        system_prompt = (
+            "You are the LEVI Memory Agent. Your role is to provide continuity and resonance.\n"
+            "Use the crystallized context to address the user mission with historical depth.\n"
+            "Technical Requirements:\n"
+            "- Integrity: If no specific memory exists, do not fabricate.\n"
+            "- Depth: Speak to the user's observed traits and preferences.\n"
+        )
+        
+        generator = SovereignGenerator()
+        
+        # Engage the Council for maximum contextual resonance
+        final_response = await generator.council_of_models([
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Memory Context: {summary_context}\n\nMission: {query}"}
+        ])
+
+        return {
+            "message": final_response,
+            "data": {
+                "traits_detected": len(traits),
+                "semantic_resonance": len(semantic_hits),
+                "user_id": user_id
             }
+        }
