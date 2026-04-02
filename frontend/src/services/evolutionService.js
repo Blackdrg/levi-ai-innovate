@@ -3,7 +3,7 @@ import { apiClient } from "./apiClient";
 export const evolutionService = {
   getStatus: async () => {
     try {
-      const response = await apiClient.get("/learning/status");
+      const response = await apiClient.get("/v1/learning/metrics");
       return response.data;
     } catch (err) {
       console.error("Failed to sync neural status", err);
@@ -13,7 +13,7 @@ export const evolutionService = {
 
   getStats: async () => {
     try {
-      const response = await apiClient.get("/learning/stats");
+      const response = await apiClient.get("/v1/learning/metrics");
       return response.data;
     } catch (err) {
       console.error("Failed to sync evolution stats", err);

@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 
 from backend.db.firestore_db import db as firestore_db
-from backend.db.redis_client import r as redis_client, HAS_REDIS
+from backend.db.redis import r as redis_client, HAS_REDIS
 from backend.engines.studio.sd_logic import generate_image_logic
 from backend.utils.logger import get_logger
 

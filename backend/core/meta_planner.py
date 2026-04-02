@@ -32,7 +32,7 @@ async def decompose_goal(user_input: str, intent: IntentResult, context: Dict[st
     LEVI v6: Goal Decomposition & Optimization.
     Incorporates real-time Tool Ledger feedback to adapt strategies.
     """
-    from backend.db.redis_client import HAS_REDIS, r as redis_client
+    from backend.db.redis import HAS_REDIS, r as redis_client
     import hashlib
     import json
 

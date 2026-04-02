@@ -11,6 +11,7 @@ import { MemoryVault } from "./features/memory/MemoryVault";
 import { EvolutionDashboard } from "./features/evolution/EvolutionDashboard";
 import { AIStudio } from "./features/studio/AIStudio";
 import { searchService } from "./services/searchService";
+import { ExecutionGraph } from "./features/execution/ExecutionGraph";
 
 
 import { Layout } from "./components/Layout";
@@ -25,6 +26,8 @@ function App() {
   const mode = useChatStore((state) => state.mode);
   const addMessage = useChatStore((state) => state.addMessage);
   const isStreaming = useChatStore((state) => state.isStreaming);
+  const executionGraph = useChatStore((state) => state.executionGraph);
+  const executionResults = useChatStore((state) => state.executionResults);
   
   const [searchResults, setSearchResults] = useState(null);
   const [activeView, setActiveView] = useState("chat");
@@ -104,6 +107,15 @@ function App() {
               {searchResults && (
                 <div className="px-6 pt-4">
                   <SearchResults results={searchResults} query={""} />
+                </div>
+              )}
+
+              {executionGraph && (
+                <div className="px-6 pt-4">
+                   <div className="mb-2 flex items-center justify-between">
+                     <span className="text-[10px] uppercase tracking-widest text-white/30 font-bold">Cognitive Mission Graph</span>
+                   </div>
+                  <ExecutionGraph graph={executionGraph} results={executionResults} />
                 </div>
               )}
 

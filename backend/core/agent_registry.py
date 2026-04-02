@@ -3,20 +3,20 @@ from typing import Dict, Any, Type, Optional
 from pydantic import BaseModel
 
 from backend.core.agent_base import SovereignAgent, AgentResult
-from backend.core.agents.chat_agent import ChatAgent, ChatInput
-from backend.core.agents.code_agent import CodeAgent, CodeInput
-from backend.core.agents.critic_agent import CriticAgent, CriticInput
-from backend.core.agents.diagnostic_agent import DiagnosticAgent, DiagnosticInput
-from backend.core.agents.document_agent import DocumentAgent, DocumentInput
-from backend.core.agents.image_agent import ImageAgent, ImageInput
-from backend.core.agents.video_agent import VideoAgent, VideoInput
-from backend.core.agents.local_agent import LocalAgent, LocalInput
-from backend.core.agents.memory_agent import MemoryAgent, MemoryInput
-from backend.core.agents.optimizer_agent import OptimizerAgent, OptimizerInput
-from backend.core.agents.python_repl_agent import PythonReplAgent, PythonInput
-from backend.core.agents.research_agent import ResearchAgent, ResearchInput
-from backend.core.agents.search_agent import SearchAgent, SearchInput
-from backend.core.agents.task_agent import TaskAgent, TaskInput
+from backend.agents.chat_agent import ChatAgent, ChatInput
+from backend.agents.code_agent import CodeAgent, CodeInput
+from backend.agents.critic_agent import CriticAgent, CriticInput
+from backend.agents.diagnostic_agent import DiagnosticAgent, DiagnosticInput
+from backend.agents.document_agent import DocumentAgent, DocumentInput
+from backend.agents.image_agent import ImageAgent, ImageInput
+from backend.agents.video_agent import VideoAgent, VideoInput
+from backend.agents.local_agent import LocalAgent, LocalInput
+from backend.agents.memory_agent import MemoryAgent, MemoryInput
+from backend.agents.optimizer_agent import OptimizerAgent, OptimizerInput
+from backend.agents.python_repl_agent import PythonReplAgent, PythonInput
+from backend.agents.research_agent import ResearchAgent, ResearchInput
+from backend.agents.search_agent import SearchAgent, SearchInput
+from backend.agents.task_agent import TaskAgent, TaskInput
 
 logger = logging.getLogger(__name__)
 

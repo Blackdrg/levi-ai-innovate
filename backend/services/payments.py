@@ -6,8 +6,8 @@ import hmac
 import hashlib
 import logging
 from fastapi import APIRouter, HTTPException, Depends, Request  # type: ignore
-from backend.db.firestore_db import db as firestore_db  # type: ignore
-from backend.db.redis_client import _get, _set, HAS_REDIS  # type: ignore
+from backend.db.firebase import db as firestore_db
+from backend.db.redis import _get, _set, HAS_REDIS
 from backend.auth import get_current_user_optional  # type: ignore
 
 logger = logging.getLogger(__name__)
@@ -120,14 +120,14 @@ def verify_payment_signature(order_id: str, payment_id: str, signature: str) -> 
     return verify_razorpay_signature(order_id, payment_id, signature)
 
 from backend.config import TIERS, COST_MATRIX
-from backend.db.redis_client import incr_daily_ai_spend, get_daily_ai_spend # type: ignore
+from backend.db.redis import incr_daily_ai_spend, get_daily_ai_spend # type: ignore
 
 def use_credits(user_id: str, action: str = "chat", amount: Optional[int] = None):
     """
     Deducts AI units or credits from a user's account with absolute atomicity.
     Prioritizes Tier Allowance (Redis) -> Credits Fallback (Firestore Transaction + Distributed Lock).
     """
-    from backend.db.redis_client import distributed_lock # type: ignore
+    from backend.db.redis import distributed_lock # type: ignore
     
     # 1. Determine Cost
     cost = amount if amount is not None else COST_MATRIX.get(action, 1)
@@ -175,7 +175,7 @@ def use_credits(user_id: str, action: str = "chat", amount: Optional[int] = None
             user_ref.update({"credits": new_credits})
             
             # 8. Cache the new credit value in Redis for faster subsequent reads
-            from backend.db.redis_client import r as redis_client, HAS_REDIS
+            from backend.db.redis import r as redis_client, HAS_REDIS
             if HAS_REDIS:
                 redis_client.setex(f"user_credits:{user_id}", 300, new_credits)
 

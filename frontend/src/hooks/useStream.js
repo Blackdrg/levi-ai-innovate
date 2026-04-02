@@ -54,6 +54,12 @@ export const useStream = () => {
                 // Engine info: { route: "LOCAL" | "API" | "CACHE" }
                 updateLastMessage({ engine: data.data.route });
               }
+              else if (data.event === "graph") {
+                useChatStore.getState().setExecutionGraph(data.data);
+              }
+              else if (data.event === "results") {
+                useChatStore.getState().setExecutionResults(data.data);
+              }
               else if (data.event === "choice" || data.token) {
                 // Clear the thinking pulse once the first real token arrives
                 useChatStore.getState().setActivityPulse(null);

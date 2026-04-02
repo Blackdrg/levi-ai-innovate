@@ -1,0 +1,90 @@
+import asyncio
+import logging
+import json
+from typing import Dict, Any, List, Optional
+from datetime import datetime, timezone
+
+from .fidelity import FidelityCritic
+from .metrics import CognitiveMetrics
+from backend.db.firestore_db import db as firestore_db
+
+logger = logging.getLogger(__name__)
+
+class AutomatedEvaluator:
+    """
+    Sovereign Automated Evaluator v8.
+    Performs batch evaluation and real-time mission scoring.
+    """
+
+    @staticmethod
+    async def evaluate_transaction(
+        user_id: str,
+        session_id: str,
+        user_input: str,
+        response: str,
+        goals: List[str],
+        tool_results: List[Dict[str, Any]],
+        latency_ms: float
+    ) -> Dict[str, Any]:
+        """
+        Full 360-degree cognitive audit of a LEVI-AI transaction.
+        """
+        logger.info(f"[Evaluator] Auditing transaction for {user_id}")
+
+        # 1. Fidelity Evaluation (LLM-based Critic)
+        critic = FidelityCritic()
+        fidelity = await critic.evaluate_mission(user_input, response, goals, tool_results)
+
+        # 2. Heuristic Metrics (Factual grounding, length, etc.)
+        metrics = CognitiveMetrics.calculate(response, tool_results)
+
+        # 3. Final Sovereign Score
+        # (Fidelity * 0.6) + (Grounding * 0.3) + (Speed * 0.1)
+        speed_score = max(0, (10000 - latency_ms) / 10000) # Faster is better
+        total_score = (
+            fidelity.get("fidelity_score", 0.0) * 0.6 +
+            metrics.get("grounding_score", 0.0) * 0.3 +
+            speed_score * 0.1
+        )
+
+        evaluation_report = {
+            "user_id": user_id,
+            "session_id": session_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "input": user_input[:500],
+            "fidelity": fidelity,
+            "metrics": metrics,
+            "total_score": round(total_score, 3),
+            "latency_ms": latency_ms
+        }
+
+        # 4. Persistence (Self-Evolution Loop)
+        if user_id and not str(user_id).startswith("guest:"):
+            try:
+                eval_ref = firestore_db.collection("evaluations").document()
+                await asyncio.to_thread(lambda: eval_ref.set(evaluation_report))
+            except Exception as e:
+                logger.error(f"Evaluation persistence failed: {e}")
+
+        return evaluation_report
+
+    @staticmethod
+    async def run_batch_eval(dataset: List[Dict[str, Any]]):
+        """Runs evaluation over a predefined test dataset."""
+        logger.info(f"[Evaluator] Starting batch evaluation of {len(dataset)} items.")
+        results = []
+        for item in dataset:
+             res = await AutomatedEvaluator.evaluate_transaction(
+                 user_id="system_eval",
+                 session_id="batch_001",
+                 user_input=item["input"],
+                 response=item["output"],
+                 goals=item.get("goals", []),
+                 tool_results=item.get("tool_results", []),
+                 latency_ms=item.get("latency", 1000)
+             )
+             results.append(res)
+        
+        avg_score = sum(r["total_score"] for r in results) / len(results) if results else 0
+        logger.info(f"[Evaluator] Batch complete. Average Sovereign Score: {avg_score:.3f}")
+        return results

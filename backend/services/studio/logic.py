@@ -8,7 +8,7 @@ from backend.db.firestore_db import db as firestore_db, add_document
 from backend.services.studio.image_logic import generate_quote_image
 from backend.services.studio.video_logic import generate_quote_video
 from backend.db.s3_utils import upload_image_to_s3, upload_video_to_s3
-from backend.db.redis_client import acquire_concurrency_slot, release_concurrency_slot
+from backend.db.redis import acquire_concurrency_slot, release_concurrency_slot
 
 logger = logging.getLogger(__name__)
 

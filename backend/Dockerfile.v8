@@ -1,0 +1,34 @@
+# LeviBrain v8: Unified Service Container
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+COPY backend/requirements.prod.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.prod.txt
+
+# Copy shared logic and backend code
+COPY shared/ /app/shared/
+COPY backend/ /app/backend/
+
+# Default port
+EXPOSE 8000
+
+# Metadata
+LABEL maintainer="LEVI-AI Core"
+LABEL version="8.0.0"
+# Default command: Run the Unified Sovereign API
+CMD ["uvicorn", "backend.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

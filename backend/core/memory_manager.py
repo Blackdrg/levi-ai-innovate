@@ -1,345 +1,278 @@
 """
-backend/services/orchestrator/memory_manager.py
+backend/core/memory_manager.py
 
-3-Layer Memory System for LEVI AI Brain.
+Sovereign Memory Engine v8: 4-Tier Cognitive Memory System.
 
-Layer 1 — Short-term  (Redis)     : Current session messages, instant access
-Layer 2 — Mid-term    (Firestore) : Recent interaction history across sessions
-Layer 3 — Long-term   (Firestore) : Extracted semantic facts, vector-searched
+Tier 1 — Working   (Redis)     : Instant session focus (20 message window)
+Tier 2 — Episodic  (Firestore) : Recent session summaries and event clusters
+Tier 3 — Semantic  (FAISS/DB)  : Extracted facts and knowledge, vector-searched
+Tier 4 — Identity  (Permanent) : Core user personality, values, and traits
 
-All Firestore blocking calls are wrapped in asyncio.to_thread() to prevent
-blocking the event loop.
+Includes:
+- Memory Decay (Importance vs Time) via MemoryResonance
+- Token-Aware Trimming for context window safety
+- Autonomous Evolutionary Distillation (Fact to Trait conversion)
+- Real-time Kafka event emission for cognitive telemetry
 """
+
 import logging
 import asyncio
+import json
+import uuid
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
-from backend.services.learning.logic import UserPreferenceModel
 
-from backend.db.redis_client import get_conversation, save_conversation
+from backend.db.redis import r as redis_client, HAS_REDIS
 from backend.db.firestore_db import db as firestore_db
+from backend.services.learning.logic import UserPreferenceModel
+from backend.utils.kafka import SovereignKafka
+
+# Internal v8 Cognitive Modules
+from backend.memory.cache import MemoryCache
+from backend.memory.vector_store import SovereignVectorStore
+from backend.memory.resonance import MemoryResonance
 
 logger = logging.getLogger(__name__)
 
-# Timeout (seconds) for mid-term Firestore queries to prevent event-loop stalls
+# Configurable constants for v8 tuning
 _MIDTERM_TIMEOUT = 3.0
-
+_MAX_CONTEXT_TOKENS = 2000
 
 class MemoryManager:
-    """Manages 3 layers of contextual memory for LEVI AI interactions."""
+    """
+    Sovereign AI Memory Orchestrator v8.
+    Manages the lifecycle of cognitive context across 4 distinct tiers.
+    """
 
-    # ── Layer 1: Short-term (Redis) ─────────────────────────────────────────
+    # ── Tier 1/2: Short-term & Episodic Retrieval ───────────────────────────
 
-    @staticmethod
-    def _fetch_short_term(session_id: str) -> List[Dict[str, Any]]:
-        """Sync helper — runs inside asyncio.to_thread."""
-        return get_conversation(session_id)
+    async def get_short_term(self, session_id: str) -> List[Dict[str, Any]]:
+        """Instant session focus from Redis pulse buffer."""
+        return await asyncio.to_thread(MemoryCache.get_session_history, session_id)
 
-    @staticmethod
-    async def get_short_term_memory(session_id: str) -> List[Dict[str, Any]]:
-        """Async wrapper: instant session awareness from Redis."""
-        return await asyncio.to_thread(MemoryManager._fetch_short_term, session_id)
-
-    # ── Layer 2: Mid-term (Firestore) ───────────────────────────────────────
-
-    @staticmethod
-    def _fetch_mid_term(user_id: str, limit: int) -> List[Dict[str, Any]]:
-        """Sync Firestore query with Redis caching — runs inside asyncio.to_thread."""
-        if not user_id:
-            return []
+    async def get_mid_term(self, user_id: str, limit: int = 5) -> List[Dict[str, Any]]:
+        """Recent interaction history pulse from Firestore with Redis caching."""
+        if not user_id: return []
         
-        from backend.db.redis_client import get_cached_json, cache_json
         cache_key = f"mid_term:{user_id}:{limit}"
-        
-        # 1. Try Redis cache
-        cached = get_cached_json(cache_key)
-        if cached is not None:
-            return cached
+        cached = MemoryCache.get_cached_context(cache_key)
+        if cached: return cached
 
-        # 2. Fallback to Firestore
         try:
-            docs = (
-                firestore_db.collection("conversations")
-                .where("user_id", "==", user_id)
-                .order_by("updated_at", direction="DESCENDING")
-                .limit(limit)
-                .get() # Changed from .stream() to .get() for better error handling in sync thread
-            )
-            data = [doc.to_dict() for doc in docs]
-            
-            # 3. Cache in Redis (TTL = 10 mins)
-            if data:
-                cache_json(cache_key, data, ttl=600)
+            def _fetch():
+                docs = (
+                    firestore_db.collection("conversations")
+                    .where("user_id", "==", user_id)
+                    .order_by("updated_at", direction="DESCENDING")
+                    .limit(limit)
+                    .get()
+                )
+                return [doc.to_dict() for doc in docs]
+
+            data = await asyncio.wait_for(asyncio.to_thread(_fetch), timeout=_MIDTERM_TIMEOUT)
+            MemoryCache.set_cached_context(cache_key, data, ttl=600)
             return data
         except Exception as e:
-            logger.error("Error fetching mid-term memory for %s: %s", user_id, e)
+            logger.error(f"[MemoryV8] Mid-term retrieval failed: {e}")
             return []
 
-    @staticmethod
-    async def get_mid_term_memory(
-        user_id: str, limit: int = 5
-    ) -> List[Dict[str, Any]]:
-        """Async: recent interaction history (pulse) from Firestore, with timeout guard."""
+    # ── Tier 3/4: Semantic & Identity Retrieval ──────────────────────────────
+
+    async def get_long_term(self, user_id: str, query: str = "") -> Dict[str, Any]:
+        """Categorized semantic facts from vector store with resonant decay logic."""
+        if not user_id: return {}
+        
         try:
-            return await asyncio.wait_for(
-                asyncio.to_thread(MemoryManager._fetch_mid_term, user_id, limit),
-                timeout=_MIDTERM_TIMEOUT,
-            )
-        except asyncio.TimeoutError:
-            logger.warning("Mid-term memory query timed out for user %s", user_id)
-            return []
-        except Exception as e:
-            logger.error("Mid-term memory retrieval failed: %s", e)
-            return []
-
-    # ── Layer 3: Long-term (Firestore + Vectors) ────────────────────────────
-
-    @staticmethod
-    async def get_long_term_memory(
-        user_id: str, query: str = ""
-    ) -> Dict[str, Any]:
-        """Retrieve categorized semantic facts from Firestore via vector search."""
-        default_shape: Dict[str, Any] = {
-            "preferences": [],
-            "traits": [],
-            "history": [],
-            "other": [],
-            "profile": {},
-            "relevant_facts": [],
-        }
-        if not user_id:
-            return default_shape
-
-        try:
-            # 1. Maintenance (Background)
-            # consolidated garbage collection triggered based on interaction count (Phase 2 Hardened)
-            from .memory_utils import search_relevant_facts, garbage_collect_index
-
-            # 2. Vector Search (Immediate Buffer + Firestore)
-            relevant_facts = await search_relevant_facts(user_id, query, limit=12)
+            # 1. Semantic Vector Search
+            relevant_facts = await SovereignVectorStore.search_facts(user_id, query, limit=15)
             
-            # 3. Categorization & Quality Filter (Phase 3 Hardened)
-            # We only pull facts with high scores to ensure accuracy and relevance.
-            facts = {
-                "preferences": [f["fact"] for f in relevant_facts if f["category"] == "preference" and f["score"] > 0.70],
-                "traits":      [f["fact"] for f in relevant_facts if f["category"] == "trait" and f["score"] > 0.70],
-                "history":     [f["fact"] for f in relevant_facts if f["category"] == "history" and f["score"] > 0.75],
-                "other":       [f["fact"] for f in relevant_facts if f["category"] == "factual" and f["score"] > 0.75],
-                "profile":     {},
-                "relevant_facts": relevant_facts,
+            # 2. Resonance Decay Application
+            decayed = MemoryResonance.apply_decay(relevant_facts)
+            
+            # 3. Cognitive Categorization
+            return {
+                "preferences": [f["fact"] for f in decayed if f["category"] == "preference" and f.get("survival_score", 0) > 0.5],
+                "traits":      [f["fact"] for f in decayed if f["category"] == "trait"],
+                "history":     [f["fact"] for f in decayed if f["category"] == "history" and f.get("survival_score", 0) > 0.6],
+                "other":       [f["fact"] for f in decayed if f["category"] == "factual" and f.get("survival_score", 0) > 0.6],
+                "raw":         decayed
             }
-            
-            # 4. Fetch High-Quality Learned Quotes (Phase 3)
-            try:
-                learned_docs = await asyncio.to_thread(
-                    lambda: firestore_db.collection("quotes").where("topic", "==", "__learned__").limit(5).get()
-                )
-                facts["learned_knowledge"] = [d.to_dict().get("text") for d in learned_docs]
-            except Exception:
-                facts["learned_knowledge"] = []
-
-            logger.info("[%s] LTM Retrieval: %d facts found.", user_id, len(relevant_facts))
-            
-            # 5. Token-Aware Trimming (LEVI v6 Phase 12)
-            # We prune facts based on importance if the total context is too large.
-            trimmed_facts = MemoryManager._trim_facts_by_tokens(facts, max_tokens=1500)
-            return trimmed_facts
         except Exception as e:
-            logger.error("Error fetching long-term memory for %s: %s", user_id, e)
-            return default_shape
+            logger.error(f"[MemoryV8] Long-term retrieval failed: {e}")
+            return {}
 
-    @staticmethod
-    def _trim_facts_by_tokens(facts: Dict[str, Any], max_tokens: int = 1500) -> Dict[str, Any]:
+    # ── Orchestration: Combined Context ─────────────────────────────────────
+
+    async def get_combined_context(self, user_id: str, session_id: str, query: str = "") -> Dict[str, Any]:
         """
-        Intelligently prunes facts to fit within the token limit.
-        Prioritizes: 
-        1. Traits (High importance)
-        2. Preferences
-        3. History 
-        4. Other
+        Parallel retrieval and merging of all memory tiers.
+        Includes drift detection and token-aware pruning.
         """
-        total_chars = 0
-        categories = ["traits", "preferences", "history", "other"]
-        pruned_facts = {cat: [] for cat in categories}
-        pruned_facts["profile"] = facts.get("profile", {})
-        pruned_facts["learned_knowledge"] = facts.get("learned_knowledge", [])
+        start_time = asyncio.get_event_loop().time()
         
-        # Approximate tokens: 4 chars = 1 token
-        char_limit = max_tokens * 4
+        # 1. Parallel Neural Retrieval
+        tasks = [
+            self.get_short_term(session_id),
+            self.get_mid_term(user_id, limit=3),
+            self.get_long_term(user_id, query),
+            self._get_creation_context(user_id)
+        ]
         
-        for cat in categories:
-            for fact in facts.get(cat, []):
-                fact_len = len(str(fact))
-                if total_chars + fact_len < char_limit:
-                    pruned_facts[cat].append(fact)
-                    total_chars += fact_len
-                else:
-                    break # Stop when we hit the limit
-                    
-        return pruned_facts
+        short_term, mid_term, long_term, creation_context = await asyncio.gather(*tasks)
 
-    # ── Combined Context ─────────────────────────────────────────────────────
-
-    @staticmethod
-    async def get_combined_context(
-        user_id: str, session_id: str, query: str = ""
-    ) -> Dict[str, Any]:
-        """
-        Parallel retrieval from all 3 memory layers, merged into a single
-        context dict for the orchestrator pipeline.
-        """
-        short_term_task = MemoryManager.get_short_term_memory(session_id)
-        mid_term_task   = MemoryManager.get_mid_term_memory(user_id, limit=3)
-        long_term_task  = MemoryManager.get_long_term_memory(user_id, query)
-
-        # ── Phase 3: Cross-Service Bridge ────────────────────────────────────
-        creation_task = MemoryManager.get_creation_context(user_id)
-        
-        short_term, mid_term, long_term, creation_context = await asyncio.gather(
-            short_term_task, mid_term_task, long_term_task, creation_task
-        )
-
-        # ── Phase 2: Learner Integration ─────────────────────────────────────
+        # 2. Preference Sync
         pref_model = UserPreferenceModel(user_id)
         preferences = await pref_model.get_profile()
-
-        # Derive interaction 'pulse' from most recent mood tag
         moods = [m.get("mood", "philosophical") for m in mid_term if m.get("mood")]
         pulse = moods[0] if moods else preferences.get("preferred_moods", ["philosophical"])[0]
 
-        # ── Phase 3: Drift Detection ─────────────────────────────────────────
-        # Check if the user is pivoting topics rapidly (context drift)
+        # 3. Context Drift & Quality Analysis
         context_drift = False
         if len(short_term) > 1:
             recent_inputs = [m.get("user", "") for m in short_term[-3:]]
-            # Simple heuristic: if input is very short and history is long, 
-            # it might be a follow-up or a drift.
             if len(query.split()) < 3 and len(recent_inputs) > 0:
                 context_drift = True
 
-        return {
+        facts = {
             "history":           short_term,
             "long_term":         long_term,
             "mid_term":          mid_term,
             "creation_context":  creation_context,
             "interaction_pulse": pulse,
             "preferences":       preferences,
+            "traits":            long_term.get("traits", []),
             "user_id":           user_id,
             "session_id":        session_id,
-            "context_drift":     context_drift
+            "context_drift":     context_drift,
+            "latency":           int((asyncio.get_event_loop().time() - start_time) * 1000)
         }
 
-    @staticmethod
-    async def get_creation_context(user_id: str) -> List[Dict[str, Any]]:
-        """
-        LEVI v6 Phase 3: Fetch recent Studio creations and Gallery activity
-        with Redis caching.
-        """
-        if not user_id or str(user_id).startswith("guest:"):
-            return []
-            
-        from backend.db.redis_client import get_cached_json, cache_json
-        cache_key = f"creation_ctx:{user_id}"
+        # 4. Token-Aware Pruning for Production Safety
+        pruned_context = self._trim_facts_by_tokens(facts, max_tokens=_MAX_CONTEXT_TOKENS)
         
-        # 1. Try Redis cache
-        cached = get_cached_json(cache_key)
-        if cached is not None:
-            return cached
+        # 5. Telemetry Pulse
+        asyncio.create_task(SovereignKafka.emit_event("memory_events", {
+            "event": "CONTEXT_GENERATED",
+            "user_id": user_id,
+            "latency_ms": facts["latency"]
+        }))
+
+        return pruned_context
+
+    def _trim_facts_by_tokens(self, facts: Dict[str, Any], max_tokens: int) -> Dict[str, Any]:
+        """Intelligently prunes history and semantic tiers to fit LLM window."""
+        total_chars = 0
+        char_limit = max_tokens * 4
+        
+        # Priority mapping (Identity -> Semantic -> Episodic -> Working)
+        priority_tiers = ["traits", "preferences", "long_term", "mid_term", "history"]
+        pruned = {k: facts.get(k, []) for k in facts.keys() if k not in priority_tiers}
+        for k in priority_tiers: pruned[k] = []
+
+        for tier in priority_tiers:
+            items = facts.get(tier, [])
+            if tier == "long_term" and isinstance(items, dict):
+                items = items.get("raw", [])
+            
+            for item in items:
+                text = str(item.get("fact", "")) if isinstance(item, dict) else str(item)
+                if total_chars + len(text) < char_limit:
+                    pruned[tier].append(item)
+                    total_chars += len(text)
+                else: break
+        return pruned
+
+    # ── Persistence & Evolutionary Storage ───────────────────────────────────
+
+    async def store(self, user_id: str, session_id: str, user_input: str, response: str, perception: Dict[str, Any], results: List[Any]):
+        """Standard interaction persistence entry point."""
+        logger.info(f"[MemoryV8] Storing mission results for {session_id}")
+        
+        # 1. Tier 1 Update (Working Pulse)
+        await self._store_working_memory(user_id, session_id, user_input, response)
+        
+        # 2. Tier 3/4 Extraction (Semantic & Evolution)
+        if user_id and not str(user_id).startswith("guest:"):
+            if len(user_input.split()) > 4 or len(results) > 1:
+                asyncio.create_task(self._process_fact_extraction(user_id, user_input, response))
+
+    async def _store_working_memory(self, user_id: str, session_id: str, user_input: str, bot_response: str):
+        """Updates the Redis session buffer."""
+        history = await self.get_short_term(session_id)
+        history.append({
+            "user": user_input,
+            "bot": bot_response,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        if len(history) > 20: history = history[-20:]
+        await asyncio.to_thread(MemoryCache.save_session_history, session_id, history, user_id=user_id)
+
+    async def _process_fact_extraction(self, user_id: str, user_input: str, bot_response: str):
+        """Analyzes interaction for atomic facts and triggers trait distillation."""
+        from backend.core.memory_utils import extract_facts 
+        from backend.core.planner import call_lightweight_llm
 
         try:
-            # 2. Fetch last 3 successful Studio creations
-            jobs = await asyncio.to_thread(
-                lambda: firestore_db.collection("jobs")
-                .where("user_id", "==", user_id)
-                .where("status", "==", "completed")
-                .order_by("completed_at", direction="DESCENDING")
-                .limit(3).get()
+            # 1. Extraction via Cognitive Task
+            new_facts = await extract_facts(user_input, bot_response)
+            if not new_facts: return
+
+            # 2. Importance Scoring Pulse
+            scoring_prompt = (
+                "Grade these user facts (0.0 to 1.0) on permanent significance.\n"
+                f"Facts: {json.dumps([f['fact'] for f in new_facts])}\n"
+                "JSON format: {\"scores\": [...]}"
             )
+            raw_scores = await call_lightweight_llm([{"role": "system", "content": scoring_prompt}])
+            scores = json.loads(raw_scores.strip()).get("scores", [0.5] * len(new_facts))
+
+            # 3. Synchronous Vector Storage
+            for i, fact in enumerate(new_facts):
+                importance = scores[i] if i < len(scores) else 0.5
+                await SovereignVectorStore.store_fact(user_id, fact["fact"], category=fact["category"], importance=importance)
+
+            # 4. Trigger Autonomous Evolution (Fact -> Trait)
+            await self._trigger_evolution(user_id)
             
-            creations = []
-            for doc in jobs:
-                data = doc.to_dict()
-                creations.append({
-                    "service": "studio",
-                    "type":    data.get("type", "image"),
-                    "prompt":  data.get("prompt", ""),
-                    "result":  data.get("result_url", ""),
-                    "timestamp": data.get("completed_at")
-                })
+            # 5. Kafka Telemetry
+            asyncio.create_task(SovereignKafka.emit_event("memory_events", {
+                "event": "FACTS_EXTRACTED",
+                "user_id": user_id,
+                "count": len(new_facts)
+            }))
             
-            # 3. Cache in Redis (TTL = 15 mins)
-            if creations:
-                cache_json(cache_key, creations, ttl=900)
-                
-            return creations
         except Exception as e:
-            logger.warning(f"Creation context retrieval failed for {user_id}: {e}")
-            return []
+            logger.error(f"[MemoryV8] Fact extraction anomaly: {e}")
 
-    # ── Memory Storage (async — safe to call from asyncio.create_task) ───────
-
-    @staticmethod
-    async def store_memory(
-        user_id: str, session_id: str, user_input: str, bot_response: str
-    ) -> None:
-        """
-        Persist current interaction to Redis (short-term) with a 20-message limit.
-        Only triggers long-term storage if info is deemed 'important'.
-        """
-        def _sync_store():
-            try:
-                from backend.db.redis_client import get_conversation, save_conversation_buffered
-                history = get_conversation(session_id)
-                history.append({
-                    "user":      user_input,
-                    "bot":       bot_response,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                })
-                
-                # Enforce Short-Term Limit (10-20 messages)
-                if len(history) > 20:
-                    history = history[-20:]
-                
-                # Use buffered save to minimize Firestore costs
-                save_conversation_buffered(session_id, history, user_id=user_id)
-            except Exception as e:
-                logger.error("store_memory sync error: %s", e)
-
-        await asyncio.to_thread(_sync_store)
+    async def _trigger_evolution(self, user_id: str):
+        """Manages interaction thresholds for trait distillation."""
+        if not HAS_REDIS: return
         
-        # Trigger Extraction & Long-Term Persistence (Smart Logic)
-        # We only store if it's not a generic greeting
-        # Using simple heuristics for high performance
-        if len(user_input.split()) > 4:
-             asyncio.create_task(MemoryManager.process_new_interaction(user_id, user_input, bot_response))
+        distill_key = f"user:{user_id}:opts:distill_count"
+        try:
+            count = redis_client.incr(distill_key)
+            if count >= 20: 
+                logger.info(f"[MemoryV8] Triggering evolutionary trait distillation for {user_id}")
+                asyncio.create_task(self.distill_core_memory(user_id))
+                redis_client.set(distill_key, 0)
+        except Exception: pass
 
-    # ── LEVI v6: Evolutionary Distillation ──────────────────────────────────────
-    @staticmethod
-    async def distill_core_memory(user_id: str) -> None:
-        """
-        Background task: Identifying clusters of fragmented facts and 
-        distilling them into unified core traits (Silent v6 Evolution).
-        """
-        from .memory_utils import search_relevant_facts, store_facts
-        from .planner import call_lightweight_llm
-        import json
+    async def distill_core_memory(self, user_id: str) -> None:
+        """Consolidates fragmented Tier 3 points into high-level Tier 4 traits."""
+        from backend.core.memory_utils import store_facts
+        from backend.core.planner import call_lightweight_llm
 
         try:
-            # 1. Fetch recent/diverse facts to identify patterns
-            facts = await search_relevant_facts(user_id, query="user personality and values", limit=25)
-            if len(facts) < 10:
-                return # Not enough material for high-fidelity distillation
+            # 1. Gather semantic fragments
+            facts_data = await SovereignVectorStore.search_facts(user_id, query="personality and values", limit=25)
+            if len(facts_data) < 10: return
 
-            # Filter for facts that haven't been distilled yet or are low-importance updates
-            fact_strings = "\n".join([f"- {f['fact']} (Importance: {f.get('importance', 0.5)})" for f in facts])
-            
-            # 2. LLM Synthesis of Core Persona
+            # 2. Strategic Distillation Pass
+            fact_strings = "\n".join([f"- {f.get('fact')} (Importance: {f.get('importance', 0.5)})" for f in facts_data])
             prompt = (
-                "You are the LEVI Core Distiller. Analyze these fragmented user facts and distill them into "
-                "3-5 deep, high-level core identity traits or permanent preferences.\n"
-                "Focus on 'Who they are' vs 'What they said'.\n\n"
-                f"Facts:\n{fact_strings}\n\n"
-                "Output ONLY JSON: {\"distilled_traits\": [{\"fact\": \"...\", \"importance\": 0.95}]}"
+                "You are the LEVI Core Distiller. Distill these fragmented facts into 3-5 deep core traits.\n"
+                f"Material:\n{fact_strings}\n\n"
+                "JSON format: {\"distilled_traits\": [{\"fact\": \"...\", \"importance\": 0.95}]}"
             )
 
             raw_json = await call_lightweight_llm([{"role": "system", "content": prompt}])
@@ -349,116 +282,74 @@ class MemoryManager:
             new_traits = data.get("distilled_traits", [])
             
             if new_traits:
-                # 3. Store distilled traits as high-priority 'trait' category
-                for trait in new_traits:
-                    trait["category"] = "trait"
-                
+                for trait in new_traits: trait["category"] = "trait"
                 await store_facts(user_id, new_traits)
-                logger.info(f"[MemoryManager] Evolutionary Distillation: Consolidated {len(facts)} points into {len(new_traits)} core traits for {user_id}")
+                logger.info(f"[MemoryV8] Evolution Complete: Consolidated {len(facts_data)} facts into {len(new_traits)} traits.")
 
         except Exception as e:
-            logger.error(f"Memory distillation failed for {user_id}: {e}")
+            logger.error(f"[MemoryV8] Distillation failure: {e}")
 
-    # ── Fact Extraction (background) ─────────────────────────────────────────
+    # ── Utilities ────────────────────────────────────────────────────────────
 
-    @staticmethod
-    async def process_new_interaction(
-        user_id: str, user_input: str, bot_response: str
-    ) -> None:
-        """
-        Background task: extract atomic facts from the interaction,
-        grade them by importance, and buffer them for storage.
-        """
-        from .memory_utils import extract_facts, store_facts
-        from .planner import call_lightweight_llm
-        import json
+    async def _get_creation_context(self, user_id: str) -> List[Dict[str, Any]]:
+        """Fetch recent Studio/Gallery activity with cache synchronization."""
+        if not user_id or str(user_id).startswith("guest:"): return []
+        
+        cache_key = f"creation_ctx:{user_id}"
+        cached = MemoryCache.get_cached_context(cache_key)
+        if cached: return cached
 
         try:
-            # 1. Extraction (Atomic)
-            new_facts = await extract_facts(user_input, bot_response)
-            if not new_facts:
-                return
-
-            # 2. Importance Scoring (v6)
-            # We grade facts to distinguish 'Core Traits' from 'Fragmented Data'.
-            fact_list = [f["fact"] for f in new_facts]
-            scoring_prompt = (
-                "You are the LEVI Memory Grader. Grade these facts on a scale of 0.0 to 1.0 based on "
-                "how much they reveal about the user's permanent identity, core preferences, or deep history.\n"
-                "- 0.1: Casual/Temporary (e.g. 'user is hungry')\n"
-                "- 0.9: Core/Permanent (e.g. 'user values stoic philosophy')\n\n"
-                f"Facts:\n{json.dumps(fact_list)}\n"
-                "Output ONLY JSON: {\"scores\": [0.2, 0.9, ...]}"
-            )
-            
-            try:
-                raw_json = await call_lightweight_llm([{"role": "system", "content": scoring_prompt}])
-                if "```json" in raw_json: raw_json = raw_json.split("```json")[1].split("```")[0]
-                scores = json.loads(raw_json.strip()).get("scores", [0.5] * len(new_facts))
+            def _fetch():
+                jobs = firestore_db.collection("jobs") \
+                    .where("user_id", "==", user_id) \
+                    .where("status", "==", "completed") \
+                    .order_by("completed_at", direction="DESCENDING") \
+                    .limit(3).get()
                 
-                # Apply scores to facts
-                for i, fact in enumerate(new_facts):
-                    fact["importance"] = scores[i] if i < len(scores) else 0.5
-            except Exception as e:
-                logger.warning(f"Importance scoring failed, using default (0.5): {e}")
-                for fact in new_facts: fact["importance"] = 0.5
+                return [{
+                    "service": "studio", "type": d.get("type"), "prompt": d.get("prompt"), "url": d.get("result_url")
+                } for doc in jobs if (d := doc.to_dict())]
 
-            # 3. Storage
-            await store_facts(user_id, new_facts)
-            
-            # 4. LEVI v6: Trigger Evolution (Silent Trait Distillation)
-            from backend.db.redis_client import HAS_REDIS
-            if HAS_REDIS:
-                from backend.db.redis_client import r as redis_client
-                distill_key = f"user:{user_id}:opts:distill_count"
-                count = redis_client.incr(distill_key)
-                
-                if count >= 20: # Every 20 interactions, evolve the persona
-                    logger.info(f"[MemoryManager] Triggering silent distillation for {user_id}...")
-                    asyncio.create_task(MemoryManager.distill_core_memory(user_id))
-                    redis_client.set(distill_key, 0)
+            creations = await asyncio.to_thread(_fetch)
+            MemoryCache.set_cached_context(cache_key, creations, ttl=900)
+            return creations
+        except Exception: return []
 
-            logger.info(f"[MemoryManager] Processed {len(new_facts)} new facts for {user_id}")
-
-        except Exception as e:
-            logger.error("process_new_interaction failed for %s: %s", user_id, e)
-
-    @staticmethod
-    async def clear_all_user_data(user_id: str) -> int:
-        """
-        Hardened LEVI v6.8 Absolute Memory Wipe.
-        Clears: Firestore (facts), Redis (sessions), FAISS (vectors).
-        Returns the count of Firestore facts cleared.
-        """
-        try:
-            # 1. Wipe Firestore 'user_facts'
-            docs = firestore_db.collection("user_facts").where("user_id", "==", user_id).stream()
-            count = 0
+    async def clear_all_user_data(self, user_id: str) -> int:
+        """Hardened absolute memory wipe for privacy/compliance."""
+        logger.warning(f"SOVEREIGN WIPE: Purging all cognitive data for {user_id}")
+        
+        # 1. Vector Purge (Tier 3/4)
+        await SovereignVectorStore.clear_user_memory(user_id)
+        
+        # 2. Firestore Fact Purge (Tier 2/3)
+        def _purge_firestore():
             batch = firestore_db.batch()
+            docs = firestore_db.collection("user_facts").where("user_id", "==", user_id).limit(500).get()
+            count = 0
             for doc in docs:
                 batch.delete(doc.reference)
                 count += 1
-                if count % 400 == 0:
-                    batch.commit()
-                    batch = firestore_db.batch()
-            batch.commit()
-
-            # 2. Wipe Redis session history
-            from backend.db.redis_client import r as redis_client, HAS_REDIS
-            if HAS_REDIS:
-                keys = redis_client.keys(f"chat:{user_id}:*")
-                if keys: redis_client.delete(*keys)
-                redis_client.delete(f"user:{user_id}:traits")
-                redis_client.delete(f"user:{user_id}:opts:distill_count")
-
-            # 3. Wipe local FAISS vector index
-            from .memory_utils import get_user_memory
-            user_memory = await get_user_memory(user_id)
-            await user_memory.clear()
-
-            logger.info(f"Sovereign Memory Wipe: Cleared {count} facts for {user_id}")
+            if count > 0: batch.commit()
             return count
 
-        except Exception as e:
-            logger.error(f"Failed to perform full memory wipe for {user_id}: {e}")
-            raise e
+        cleared_count = await asyncio.to_thread(_purge_firestore)
+
+        # 3. Redis Cache Purge (Tier 1)
+        if HAS_REDIS:
+            try:
+                keys = redis_client.keys(f"*:{user_id}*")
+                if keys: redis_client.delete(*keys)
+                redis_client.delete(f"chat:{user_id}:history")
+            except Exception as e:
+                logger.error(f"Redis purge failed: {e}")
+
+        # 4. Mission Telemetry
+        asyncio.create_task(SovereignKafka.emit_event("system_events", {
+            "event": "MEMORY_WIPE_COMPLETE",
+            "user_id": user_id,
+            "facts_cleared": cleared_count
+        }))
+
+        return cleared_count

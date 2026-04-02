@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 def _get_redis():
     """Get the sync Redis client. Returns (client, has_redis) tuple."""
     try:
-        from backend.db.redis_client import HAS_REDIS, r
+        from backend.db.redis import HAS_REDIS, r
         return r, HAS_REDIS
     except Exception:
         return None, False
@@ -34,7 +34,7 @@ def _get_redis():
 
 def _get_firestore():
     """Get the Firestore client."""
-    from backend.db.firestore_db import db
+    from backend.db.firebase import db
     return db
 
 
@@ -282,7 +282,7 @@ def distill_user_memories(self, user_id: str):
     Celery task: Run the v6 Evolutionary Distillation (Dreaming) for a user.
     Condenses fragmented facts into core traits.
     """
-    from .memory_manager import MemoryManager
+    from backend.memory.manager import MemoryManager
     import asyncio
     try:
         asyncio.run(MemoryManager.distill_core_memory(user_id))

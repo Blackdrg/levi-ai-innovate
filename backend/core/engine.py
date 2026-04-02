@@ -165,3 +165,85 @@ async def synthesize_response(
         logger.error(f"Synthesis failed: {e}")
         # Fallback: simple merge of outputs
         return "\n\n".join([r.message for r in valid_results if r.message])
+async def synthesize_streaming_response(
+    results: List[ToolResult],
+    context: Dict[str, Any],
+) -> AsyncGenerator[Dict[str, Any], None]:
+    """
+    Streaming version of the ResponseComposer.
+    Yields tokens and metadata events for high-fidelity real-time synthesis.
+    """
+    if not results:
+        yield {"token": "The void remains silent. Perhaps another path is needed."}
+        return
+
+    # 1. Filter and Score Results
+    valid_results = [r for r in results if r.success]
+    if not valid_results:
+        yield {"token": "I encountered a barrier: " + (results[0].error if results else "Unknown error")}
+        return
+
+    # 2. Extract Data & Metadata for Prompt
+    agent_outputs = []
+    job_ids = []
+    for r in valid_results:
+        if r.data.get("job_id"):
+            job_ids.append(f"{r.data.get('type', 'creation')}: {r.data.get('job_id')}")
+        output = r.message or "Task processed."
+        agent_outputs.append(f"Agent [{r.agent}]: {output}")
+
+    # 3. Handle Direct Return (Optimization)
+    if len(valid_results) == 1 and valid_results[0].agent == "chat_agent":
+        # Stream the single agent output if possible, or just yield it if it's already full
+        yield {"token": valid_results[0].message}
+        return
+
+    # 4. LLM Synthesis (Response Composition)
+    from backend.engines.chat.generation import async_stream_llm_response
+    from backend.services.learning.logic import UserPreferenceModel
+
+    user_id = context.get("user_id", "guest")
+    pref_model = UserPreferenceModel(user_id)
+    preferences = await pref_model.get_profile()
+    
+    style_hint = preferences.get("response_style", "philosophical and concise")
+    ltm = context.get("long_term", {})
+    
+    fact_parts = []
+    if ltm:
+        for cat in ["preferences", "traits", "history"]:
+            vals = ltm.get(cat, [])
+            if vals: fact_parts.append(f"{cat.capitalize()}: {', '.join(str(v) for v in vals[:3])}")
+
+    job_context = f"\nAction Result: I have initiated these: {', '.join(job_ids)}" if job_ids else ""
+    
+    synth_prompt = (
+        f"You are LEVI, a {context.get('mood', 'philosophical')} AI voice. "
+        f"Integrate these specialized agent findings into a cohesive, personalized vision.\n"
+        f"User Resonance Style: {style_hint}.\n"
+        f"Contextual Roots: {', '.join(fact_parts)}\n\n"
+        f"Input: {context.get('input', '')}\n\n"
+        f"Findings:\n{chr(10).join(agent_outputs)}\n"
+        f"{job_context}\n\n"
+        "Constraint: Do NOT mention agent names or that you are 'synthesizing'. Speak as one unified mind."
+    )
+
+    # Tiered Model Selection
+    user_tier = context.get("user_tier", "free")
+    complexity = context.get("complexity_level", 2)
+    model = "llama-3.1-70b-versatile" if (user_tier in ("pro", "creator") or complexity == 3) else "llama-3.1-8b-instant"
+
+    try:
+        async for token in async_stream_llm_response(
+            messages=[{"role": "system", "content": synth_prompt}],
+            model=model,
+        ):
+            yield {"token": token}
+            
+        # Ensure job IDs are preserved at the end if not mentioned
+        if job_ids:
+            yield {"event": "metadata", "data": {"job_ids": job_ids}}
+            
+    except Exception as e:
+        logger.error(f"Streaming synthesis failed: {e}")
+        yield {"token": "\n\n".join([r.message for r in valid_results if r.message])}
