@@ -1,2 +1,78 @@
-# LEGACY MONOLITH FILE - COMMISSIONED TO SOVEREIGN OS v7 MODULAR ARCHITECTURE.
-# This file is intentionally blanked out to prevent accidental import dependencies.
+"""
+Sovereign Real-time Broadcast Engine v7.
+Powered by Redis PubSub and Server-Sent Events (SSE).
+Broadcasting neural evolution telemetry and asynchronous task updates.
+"""
+
+import json
+import logging
+import asyncio
+from typing import AsyncGenerator, Dict, Any, Optional
+from backend.redis_client import SovereignCache
+
+logger = logging.getLogger(__name__)
+
+# --- Configuration ---
+BROADCAST_CHANNEL = "sovereign:telemetry"
+
+class SovereignBroadcaster:
+    """
+    Real-time Telemetry Dispatcher.
+    Coordinates between multi-threaded workers and the frontend dashboard.
+    Hardened for backpressure and high-concurrency event streams.
+    """
+    
+    @staticmethod
+    def publish(event_type: str, data: Dict[str, Any], user_id: str = "global"):
+        """Publishes a neural event to the Sovereign Pulse."""
+        client = SovereignCache.get_client()
+        channel = f"{BROADCAST_CHANNEL}:{user_id}"
+        
+        message = {
+            "type": event_type,
+            "data": data,
+            "timestamp": asyncio.get_event_loop().time()
+        }
+        
+        try:
+            client.publish(channel, json.dumps(message))
+            logger.debug(f"[Pulse] Broadcast event published on {channel}")
+        except Exception as e:
+            logger.error(f"[Pulse] Broadcast failure: {e}")
+
+    @staticmethod
+    async def subscribe(user_id: str = "global") -> AsyncGenerator[str, None]:
+        """Subscribes a client to the Sovereign Pulse stream."""
+        client = SovereignCache.get_client()
+        pubsub = client.pubsub()
+        channel = f"{BROADCAST_CHANNEL}:{user_id}"
+        
+        await asyncio.to_thread(lambda: pubsub.subscribe(channel))
+        logger.info(f"[Pulse] New subscriber connected to {channel}")
+        
+        try:
+            # Yield initial connection event
+            yield f"event: pulse_connected\ndata: {json.dumps({'status': 'listening'})}\n\n"
+            
+            while True:
+                # We use a non-blocking check for messages in a thread
+                message = await asyncio.to_thread(lambda: pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0))
+                
+                if message and message['type'] == 'message':
+                    data = message['data']
+                    yield f"event: pulse_update\ndata: {data}\n\n"
+                
+                # Keep-alive heartbeat
+                yield ": heartbeat\n\n"
+                await asyncio.sleep(0.5)
+                
+        except asyncio.CancelledError:
+            logger.info(f"[Pulse] Subscriber disconnected from {channel}")
+            await asyncio.to_thread(lambda: pubsub.unsubscribe(channel))
+        except Exception as e:
+            logger.error(f"[Pulse] Subscription failure: {e}")
+            yield f"event: error\ndata: {str(e)}\n\n"
+
+# Global Accessor
+def broadcast_event(event_type: str, data: Dict[str, Any], user_id: str = "global"):
+    SovereignBroadcaster.publish(event_type, data, user_id)

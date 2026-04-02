@@ -7,7 +7,7 @@ cd /d "%~dp0"
 
 :: Start Backend in a new window
 echo Starting LEVI Backend (Port 8000)...
-start cmd /k "title LEVI Backend && set PYTHONPATH=%%PYTHONPATH%%;%cd%;%cd%\backend && python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000"
+start cmd /k "title LEVI Backend && set PYTHONPATH=%%PYTHONPATH%%;%cd%;%cd%\backend && python -m uvicorn backend.api.main:app --host 127.0.0.1 --port 8000"
 
 :: Start Frontend in a new window
 echo Starting LEVI Frontend (Port 8080)...

@@ -1,114 +1,107 @@
 """
-backend/services/orchestrator/local_engine.py
-
-🟢 LOCAL ENGINE v2.0 — Real, Sovereignty-First Local LLM.
-
+Sovereign Local Intelligence Core v7.
 Powered by llama-cpp-python (GGUF).
-Provides zero-cost, zero-latency (post-load) responses for:
-  - Greetings & Identity
-  - Simple reasoning tasks (Complexity 1-2)
-  - Tool-use planning logic
+Zero-cost, privacy-first inference for high-fidelity local execution.
 """
 
 import os
 import logging
 import asyncio
-from typing import Dict, Any, AsyncGenerator, Optional
+from typing import Dict, Any, AsyncGenerator, Optional, List
+from backend.engines.utils.security import SovereignSecurity
+
 try:
-    from llama_cpp import Llama  # type: ignore
+    from llama_cpp import Llama 
     HAS_LLAMA_CPP = True
 except ImportError:
-    Llama = None # type: ignore
+    Llama = None 
     HAS_LLAMA_CPP = False
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.warning("llama-cpp-python not installed. Local LLM degraded mode active.")
 
 logger = logging.getLogger(__name__)
+
 # --- Configuration ---
-MODEL_PATH = os.getenv("LOCAL_MODEL_PATH", "backend/data/models/llama-3-8b-instruct.Q4_K_M.gguf")
+DEFAULT_MODEL = os.getenv("LOCAL_MODEL_PATH", "backend/data/models/llama-3-8b-instruct.Q4_K_M.gguf")
+SMALL_MODEL = os.getenv("SMALL_MODEL_PATH", "backend/data/models/phi-3-mini.Q4_K_M.gguf")
 N_CTX = 4096
-N_THREADS = int(os.getenv("LOCAL_LLM_THREADS", "4"))
+N_THREADS = int(os.getenv("LOCAL_LLM_THREADS", os.cpu_count() or 4))
 
 class LocalLLM:
     """
-    Singleton for the local LlamaCPP engine to prevent redundant memory allocation.
+    Sovereign Singleton for Local LLM Management.
+    Supports dynamic loading of 'Small' vs 'Large' models based on task requirement.
     """
-    _instance: Optional[Llama] = None
+    _instances: Dict[str, Llama] = {}
     _lock = asyncio.Lock()
-    _concurrency_semaphore = None # Initialized lazily
+    _semaphore: Optional[asyncio.Semaphore] = None
 
     @classmethod
-    async def get_instance(cls) -> Optional[Llama]:
-        if cls._instance is not None:
-            return cls._instance
+    async def get_instance(cls, model_type: str = "default") -> Optional[Llama]:
+        """Retrieves or initializes a specific local model instance."""
+        model_path = DEFAULT_MODEL if model_type == "default" else SMALL_MODEL
+        
+        if model_path in cls._instances:
+            return cls._instances[model_path]
 
         async with cls._lock:
-            if cls._instance is not None:
-                return cls._instance
+            if model_path in cls._instances:
+                return cls._instances[model_path]
 
-            if not os.path.exists(MODEL_PATH):
-                logger.warning(f"Local model not found at {MODEL_PATH}. Local reasoning unavailable.")
+            if not os.path.exists(model_path):
+                logger.warning(f"Local model not found: {model_path}")
                 return None
 
             try:
-                # Lazy-loading the model into memory
-                logger.info(f"Loading local model: {MODEL_PATH} (Threads: {N_THREADS})")
-                cls._instance = Llama(
-                    model_path=MODEL_PATH,
+                logger.info(f"Loading local model [{model_type}]: {model_path}")
+                cls._instances[model_path] = Llama(
+                    model_path=model_path,
                     n_ctx=N_CTX,
                     n_threads=N_THREADS,
                     verbose=False,
-                    n_gpu_layers=-1 if os.getenv("USE_GPU", "true").lower() == "true" else 0
+                    n_gpu_layers=-1 # Auto-detect GPU
                 )
                 
-                # Max 2 concurrent local inferences on 8Gi RAM for stability
-                max_concurrency = int(os.getenv("MAX_LOCAL_CONCURRENCY", "2"))
-                cls._concurrency_semaphore = asyncio.Semaphore(max_concurrency)
+                if cls._semaphore is None:
+                    max_concurrency = int(os.getenv("MAX_LOCAL_CONCURRENCY", "2"))
+                    cls._semaphore = asyncio.Semaphore(max_concurrency)
                 
-                logger.info(f"Local LLM initialized (Concurrency Limit: {max_concurrency})")
-                return cls._instance
+                return cls._instances[model_path]
             except Exception as e:
-                logger.error(f"Failed to initialize Local LLM: {e}")
+                logger.error(f"Local LLM initialization failed: {e}")
                 return None
 
-async def generate_local_response(
-    messages: list, 
+async def generate_local_stream(
+    messages: List[Dict], 
+    model_type: str = "default",
     max_tokens: int = 512, 
     temperature: float = 0.7
 ) -> AsyncGenerator[str, None]:
     """
-    Streaming generator for local LLM responses.
+    Hardened streaming generator for local LLM responses.
+    Includes memory-aware concurrency gating.
     """
-    llm = await LocalLLM.get_instance()
+    llm = await LocalLLM.get_instance(model_type)
     if not llm:
-        yield "I'm currently unable to process this locally. Please check my status."
+        yield "Local intelligence offline. Verify GGUF paths."
         return
 
-    # Check for concurrency saturation
-    if LocalLLM._concurrency_semaphore.locked():
-        logger.warning("Local engine saturated. Triggering API Fallback...")
+    # Concurrency Guard
+    if LocalLLM._semaphore.locked():
+        logger.warning("Local engine saturated. Yielding fallback trigger.")
         yield "__FALLBACK_TRIGGER__"
         return
 
-    async with LocalLLM._concurrency_semaphore:
+    async with LocalLLM._semaphore:
         try:
-            # Convert messages to prompt format (Llama 3 Instruct template)
-            # Note: In a production scenario, we'd use a more robust template engine.
+            # Construct Llama-3 style prompt (Hardened)
             prompt = ""
             for msg in messages:
                 role = msg["role"]
-                content = msg["content"]
-                if role == "system":
-                    prompt += f"<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n{content}<|eot_id|>"
-                elif role == "user":
-                    prompt += f"<|start_header_id|>user<|end_header_id|>\n\n{content}<|eot_id|>"
-                elif role == "assistant":
-                    prompt += f"<|start_header_id|>assistant<|end_header_id|>\n\n{content}<|eot_id|>"
-            
+                # PII Masking on input
+                content = SovereignSecurity.mask_pii(msg["content"])
+                prompt += f"<|start_header_id|>{role}<|end_header_id|>\n\n{content}<|eot_id|>"
             prompt += "<|start_header_id|>assistant<|end_header_id|>\n\n"
 
-            # Execute streaming generation
+            # Run blocking inference in a thread room
             output = llm(
                 prompt,
                 max_tokens=max_tokens,
@@ -119,61 +112,25 @@ async def generate_local_response(
 
             for chunk in output:
                 token = chunk["choices"][0]["text"]
-                yield token
+                # Mask PII in real-time streaming output
+                yield SovereignSecurity.mask_pii(token)
 
         except Exception as e:
-            logger.error(f"Local generation error: {e}")
-            yield f"Error during local synthesis: {str(e)}"
+            logger.error(f"Local streaming error: {e}")
+            yield f"System interruption: {str(e)}"
 
-async def handle_local(user_input: str, context: Dict[str, Any] = {}) -> str:
-    """
-    Legacy sync/async wrapper for deterministic local handling.
-    """
+async def handle_local_task(query: str, complexity: int = 1) -> str:
+    """Non-streaming entry point for structural tasks (intent/routing)."""
+    model_type = "small" if complexity <= 1 else "default"
+    
     messages = [
-        {"role": "system", "content": "You are LEVI, a helpful AI assistant. Be concise and friendly."},
-        {"role": "user", "content": user_input}
+        {"role": "system", "content": "You are LEVI-AI Sovereign Local. Be precise."},
+        {"role": "user", "content": query}
     ]
     
     response = ""
-    async for token in generate_local_response(messages):
+    async for token in generate_local_stream(messages, model_type=model_type):
+        if token == "__FALLBACK_TRIGGER__": return "FALLBACK"
         response += token
     
-    return response or "I'm here."
-
-async def handle_local_sync(messages: list, max_tokens: int = 250, temperature: float = 0.1) -> str:
-    """
-    Perform a single non-streaming local inference. 
-    Ideal for internal tasks like intent classification or summarization.
-    """
-    llm = await LocalLLM.get_instance()
-    if not llm: return ""
-
-    try:
-        prompt = ""
-        for msg in messages:
-            prompt += f"<|start_header_id|>{msg['role']}<|end_header_id|>\n\n{msg['content']}<|eot_id|>"
-        prompt += "<|start_header_id|>assistant<|end_header_id|>\n\n"
-
-        output = await asyncio.to_thread(
-            lambda: llm(
-                prompt,
-                max_tokens=max_tokens,
-                stop=["<|eot_id|>", "<|end_of_text|>"],
-                stream=False,
-                temperature=temperature
-            )
-        )
-        return output["choices"][0]["text"].strip()
-    except Exception as e:
-        logger.error(f"Local sync generation failed: {e}")
-        return ""
-
-def is_locally_handleable(intent: str, complexity: int) -> bool:
-    """
-    Predicate used by the Decision Engine to gate routing.
-    If the model exists, Level 1 and 2 tasks are redirected here.
-    """
-    if not HAS_LLAMA_CPP or not os.path.exists(MODEL_PATH):
-        return False
-        
-    return complexity <= 2
+    return response.strip()

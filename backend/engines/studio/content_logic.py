@@ -1,154 +1,64 @@
-# backend/engines/studio/content_logic.py
 import os
 import logging
-import random
 from typing import Optional, List, Dict, Any
+from backend.engines.base import EngineBase, EngineResult
+from backend.engines.utils.i18n import SovereignI18n
+from backend.engines.utils.security import SovereignSecurity
 
 logger = logging.getLogger(__name__)
 
-# ─────────────────────────────────────────────
-# CONTENT TYPE TEMPLATES — Rich & Detailed
-# ─────────────────────────────────────────────
-
 CONTENT_TEMPLATES = {
-    "quote": {
-        "max_tokens": 150,
-        "system": (
-            "You are LEVI, a master of condensed wisdom. Generate ONE original, powerful quote about '{topic}'. "
-            "Tone: {tone}. Rules: No clichés. Format: [Quote] — LEVI-AI"
-        ),
-        "user": "Create a {tone} philosophical quote about: {topic}",
-    },
-    "essay": {
-        "max_tokens": 1800,
-        "system": (
-            "You are LEVI, an essayist in the tradition of Montaigne and George Orwell. Write a {tone} essay about '{topic}'. "
-            "Format: # [Title]\n\n## Opening\n\n## The Argument\n\n## What This Means\n\n## Closing"
-        ),
-        "user": "Write a {tone} essay arguing something specific about: {topic}",
-    },
-    "story": {
-        "max_tokens": 1800,
-        "system": (
-            "You are LEVI, a master storyteller. Write a {tone} short story about '{topic}'. "
-            "Format: # [Title]\n\n[Story]"
-        ),
-        "user": "Write a {tone} short story exploring: {topic}",
-    },
-    "script": {
-        "max_tokens": 1800,
-        "system": (
-            "You are LEVI, a screenwriter. Write a compelling {tone} short film script about '{topic}'."
-        ),
-        "user": "Write a {tone} short film script about: {topic}",
-    },
-    "philosophy": {
-        "max_tokens": 1400,
-        "system": (
-            "You are LEVI, a rigorous philosopher. Write a {tone} philosophical exploration of '{topic}'."
-        ),
-        "user": "Philosophically explore: {topic}",
-    },
-    "caption": {
-        "max_tokens": 300,
-        "system": (
-            "You are LEVI, a social media strategist. Write 3 {tone} Instagram captions about '{topic}'."
-        ),
-        "user": "Create {tone} Instagram captions about: {topic}",
-    },
-    "thread": {
-        "max_tokens": 1000,
-        "system": (
-            "You are LEVI, a viral thread architect. Write a {tone} Twitter/X thread about '{topic}'."
-        ),
-        "user": "Write a {tone} thread about: {topic}",
-    },
-    "blog": {
-        "max_tokens": 2200,
-        "system": (
-            "You are LEVI, an SEO-aware content strategist. Write a {tone} blog post about '{topic}'."
-        ),
-        "user": "Write a {tone} blog post optimized for: {topic}",
-    },
-    "poem": {
-        "max_tokens": 600,
-        "system": (
-            "You are LEVI, a poet. Write an original {tone} poem about '{topic}'."
-        ),
-        "user": "Write a {tone} poem about: {topic}",
-    },
-    "newsletter": {
-        "max_tokens": 1400,
-        "system": (
-            "You are LEVI, a newsletter writer. Write a {tone} newsletter about '{topic}'."
-        ),
-        "user": "Write a {tone} newsletter edition about: {topic}",
-    },
-    "readme": {
-        "max_tokens": 1800,
-        "system": (
-            "You are LEVI, a technical writer. Write a professional README for a project about '{topic}'."
-        ),
-        "user": "Write a README for: {topic}",
-    },
+    "quote": {"max_tokens": 150, "sys": "LEVI-AI Wisdom Master. Topic: {topic}. Tone: {tone}."},
+    "essay": {"max_tokens": 1800, "sys": "Sovereign Essayist. Deep exploration of {topic}."},
+    "story": {"max_tokens": 1800, "sys": "Sovereign Storyteller. Narrative arc for {topic}."},
+    "philosophy": {"max_tokens": 1400, "sys": "Sovereign Philosopher. Structural analysis of {topic}."},
+    "code": {"max_tokens": 2000, "sys": "Sovereign Architect. High-fidelity implementation for {topic}."}
 }
 
-TONES = [
-    "inspiring", "philosophical", "poetic", "witty", "dramatic",
-    "calm", "energetic", "dark", "humorous", "professional",
-    "conversational", "academic", "stoic", "mystical", "intimate",
-    "urgent", "playful", "contemplative", "bold", "gentle",
-]
-
-def generate_content_logic(
-    content_type: str,
-    topic: str,
-    tone: str = "inspiring",
-    depth: str = "high",
-    language: str = "English",
-) -> Dict[str, Any]:
-    from backend.engines.chat.generation import _async_call_llm_api
-    from backend.utils.network import groq_breaker
+class StudioContentEngine(EngineBase):
+    """
+    Sovereign Content Studio.
+    Handles long-form creative generation, essays, and structured media scripts.
+    Global ready with multi-language synthesis.
+    """
     
-    if content_type not in CONTENT_TEMPLATES:
-        return {"error": f"Unknown type '{content_type}'"}
+    def __init__(self):
+        super().__init__("StudioContent")
 
-    template = CONTENT_TEMPLATES[content_type]
-    tone = tone if tone in TONES else "inspiring"
-
-    depth_mult = {"low": 0.5, "medium": 0.75, "high": 1.0}
-    max_tokens = int(template["max_tokens"] * depth_mult.get(depth, 1.0))
-
-    system_prompt = template["system"].format(topic=topic, tone=tone)
-    user_prompt = template["user"].format(topic=topic, tone=tone)
-
-    if language.lower() not in ("english", "en"):
-        system_prompt += f" Write the entire output in {language}."
-
-    # Using the circuit breaker for content generation
-    try:
-        import asyncio
-        # We wrap the sync-looking call in a way that works with our async infrastructure
-        # Note: If _generate_via_groq was async, we'd await it.
-        # Here we'll use the existing _async_call_llm_api from generation.py
+    async def _run(self, content_type: str, topic: str, tone: str = "philosophical", lang: str = "en", **kwargs) -> Dict[str, Any]:
+        """
+        Executes a creative generation mission.
+        """
+        self.logger.info(f"Studio Mission: {content_type} on '{topic}' [{tone}]")
         
-        # messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
-        # content = await _async_call_llm_api(messages, max_tokens=max_tokens)
+        template = CONTENT_TEMPLATES.get(content_type, CONTENT_TEMPLATES["essay"])
+        max_tokens = template["max_tokens"]
         
-        # For now, let's keep it simple and use a direct call if necessary, 
-        # but the best way is to reuse the orchestrator's generation logic.
+        # 1. PII Guard
+        safe_topic = SovereignSecurity.mask_pii(topic)
         
-        # Placeholder for actual generation call (similar to sd_logic)
-        content = f"[Content Generation Result for {topic}]" 
+        # 2. Build Enriched Prompt
+        system_prompt = template["sys"].format(topic=safe_topic, tone=tone)
+        if lang != "en":
+            system_prompt += f" Output must be entirely in {lang}."
+            
+        # 3. Engage Council of Models for High-Fidelity Studio Output
+        from backend.engines.chat.generation import SovereignGenerator
+        generator = SovereignGenerator()
+        
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Create a high-fidelity {content_type} about {safe_topic}."}
+        ]
+        
+        # We use the council for professional studio results
+        content = await generator.council_of_models(messages)
         
         return {
-            "content": content,
             "type": content_type,
-            "topic": topic,
+            "topic": safe_topic,
             "tone": tone,
-            "word_count": len(content.split()),
-            "language": language
+            "lang": lang,
+            "content": content,
+            "word_count": len(content.split())
         }
-    except Exception as e:
-        logger.error(f"Content generation failed: {e}")
-        return {"error": str(e)}

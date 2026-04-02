@@ -5,9 +5,10 @@ import json
 from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional, AsyncGenerator
 
-from .planner import detect_intent, generate_plan
+from .planner import detect_intent, generate_plan, detect_sensitivity
 from .executor import execute_plan
 from .memory_manager import MemoryManager
+from .local_engine import generate_local_stream
 from .orchestrator_types import IntentResult, EngineRoute, OrchestratorResponse, ToolResult, DecisionLog
 from backend.utils.robustness import standard_retry, TimeoutHandler
 from backend.engines.chat.generation import async_stream_llm_response, _build_dynamic_system_prompt
@@ -255,12 +256,16 @@ class LeviBrain:
                 {"role": "system", "content": "You are LEVI, a helpful AI assistant. Be concise and profound."},
                 {"role": "user", "content": user_input}
             ]
-            return {
-                "intent": intent.intent_type,
-                "route": EngineRoute.LOCAL.value,
-                "request_id": request_id,
-                "stream": generate_local_response(local_messages)
-            }
+            
+            # v7 Standardized SSE Flow for Local
+            async def _local_gen():
+                yield {"event": "metadata", "data": {"intent": intent.intent_type, "route": "local", "request_id": request_id}}
+                yield {"event": "activity", "data": "Activating Sovereign Local intelligence..."}
+                async for token in generate_local_stream(local_messages):
+                    yield {"token": token}
+                yield {"event": "activity", "data": "Local Mission Complete."}
+
+            return _local_gen()
 
         # 3. API Path
         user_tier = context.get("user_tier", "free")
@@ -272,6 +277,7 @@ class LeviBrain:
         system_prompt = _build_dynamic_system_prompt(
             base_variant, 
             user_memory=context.get("long_term"), 
+            lang=context.get("lang", "en"),
             conversation_depth=len(context.get("history", [])),
             few_shot_patterns=context.get("few_shot_patterns")
         )
@@ -287,12 +293,30 @@ class LeviBrain:
 
         logger.info("Streaming to API: %s (%s)", model, intent.intent_type)
         
-        return {
-            "intent": intent.intent_type,
-            "route": EngineRoute.API.value,
-            "request_id": request_id,
-            "stream": async_stream_llm_response(messages, model=model)
-        }
+        async def _api_gen():
+            # 1. Yield Initial Mission Meta
+            yield {"event": "metadata", "data": {
+                "intent": intent.intent_type, 
+                "route": "api", 
+                "request_id": request_id,
+                "model": model
+            }}
+            yield {"event": "activity", "data": "Synthesizing Sovereign Intelligence..."}
+            
+            # 2. Stream Tokens
+            async for token in async_stream_llm_response(
+                messages=messages, 
+                model=model, 
+                lang=context.get("lang", "en"),
+                user_memory=context.get("long_term"),
+                persona=base_variant
+            ):
+                yield {"token": token}
+            
+            # 3. Final Pulse
+            yield {"event": "activity", "data": "Mission Accomplished."}
+
+        return _api_gen()
 
     def _trigger_background_tasks(self, user_input: str, response: str, context: Dict[str, Any]):
         """Schedules non-blocking memory and learning updates."""

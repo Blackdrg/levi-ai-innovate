@@ -1,87 +1,84 @@
-"""
-backend/services/orchestrator/agents/critic_agent.py
-
-LEVI v6: The Role-Based Validator.
-Reviews previous agent outputs for quality, resonance, and accuracy.
-"""
-
 import logging
 import json
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
-from ..tool_base import BaseTool, StandardToolOutput
-from backend.generation import _async_call_llm_api
+from backend.core.agent_base import SovereignAgent, AgentResult
+from backend.engines.chat.generation import SovereignGenerator
 
 logger = logging.getLogger(__name__)
 
 class CriticInput(BaseModel):
-    goal: str = Field(..., description="The original goal being achieved")
-    agent_output: str = Field(..., description="The output to evaluate")
+    goal: str = Field(..., description="The original goal of the task")
+    agent_output: str = Field(..., description="The output produced by another agent")
     context: Dict[str, Any] = Field(default_factory=dict)
 
-class CriticAgent(BaseTool[CriticInput, StandardToolOutput]):
+class CriticAgent(SovereignAgent[CriticInput, AgentResult]):
     """
-    Role: High-level validator (The Critic).
-    Returns a structured score (0-1.0). If score < 0.7, triggers reflection.
+    Sovereign Critic & Validator (Critic).
+    Performs recursive self-correction and rigorous alignment scoring.
     """
-    name = "critic_agent"
-    description = "Role: Formal Validator. Reviews outputs for quality, accuracy, and philosophical depth."
-    input_schema = CriticInput
-    output_schema = StandardToolOutput
+    
+    def __init__(self):
+        super().__init__("Critic")
 
-    async def _run(self, input_data: ValidatorInput, context: Dict[str, Any]) -> Dict[str, Any]:
-        request_id = context.get("request_id", "external")
-        logger.info(f"[{request_id}] [Validator] Scoring autonomous output quality...")
+    async def _run(self, input_data: CriticInput, lang: str = "en", **kwargs) -> Dict[str, Any]:
+        """
+        Critique Protocol v7:
+        1. Multi-Dimensional Quality Analysis.
+        2. Hallucination Detection & Sovereign Alignment.
+        3. Council-based Validation (High-Fidelity).
+        """
+        self.logger.info(f"Critiquing Output: {input_data.goal[:40]}")
         
         system_prompt = (
-            "You are the LEVI Validator. Analyze the agent's output against the goal.\n"
-            "Criteria:\n"
-            "1. Accuracy: Is the information correct?\n"
-            "2. Resonance: Does it match the philosophical, anti-cliché tone of LEVI?\n"
-            "3. Completeness: Does it fully address the goal?\n\n"
-            "Output ONLY JSON:\n"
+            "You are the LEVI Sovereign Critic. Your role is to validate AI outputs for quality and accuracy.\n"
+            "Evaluation Criteria:\n"
+            "1. Accuracy: Is the information factual and derived correctly?\n"
+            "2. Tone: Does it match the philosophical, anti-cliché LEVI persona?\n"
+            "3. Completeness: Does it address the user goal fully?\n\n"
+            "Output ONLY valid JSON:\n"
             "{\n"
-            "  \"quality_score\": 0.95,\n"
-            "  \"critique_items\": [\"Suggestion 1\", \"Suggestion 2\"],\n"
-            "  \"reasoning\": \"Brief explanation of the score.\"\n"
+            "  \"score\": 0.95,\n"
+            "  \"critique\": [\"Point 1\", \"Point 2\"],\n"
+            "  \"hallucination_check\": \"pass\",\n"
+            "  \"remedy\": \"Suggestion to fix if applicable.\"\n"
             "}"
         )
         
-        raw_response = await _async_call_llm_api(
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Goal: {input_data.goal}\nOutput: {input_data.agent_output}"}
-            ],
-            model="llama-3.1-70b-versatile",
-            temperature=0.1,
-            request_id=request_id
-        )
+        generator = SovereignGenerator()
+        
+        # Engage the Council for high-precision validation
+        raw_json = await generator.council_of_models([
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Goal: {input_data.goal}\n\nOutput to validate: {input_data.agent_output}"}
+        ])
         
         try:
-            # Simple JSON extraction
-            content = raw_response.strip()
+            # Clean JSON extraction
+            content = raw_json.strip()
             if "```json" in content: content = content.split("```json")[1].split("```")[0]
             elif "```" in content: content = content.split("```")[1].split("```")[0]
             
             data = json.loads(content)
-            score = data.get("quality_score", 0.5)
-            critique = data.get("critique_items", [])
-            success = score >= 0.70 # v6 Hardening Threshold
+            score = float(data.get("score", 0.5))
+            hallucination = data.get("hallucination_check", "fail")
+            
+            success = score >= 0.8 and hallucination == "pass"
 
             return {
+                "message": f"Validation Pulse: {int(score*100)}% Confidence. Hallucination: {hallucination}.",
                 "success": success,
-                "message": f"Validation complete (Score: {score})",
                 "data": {
-                    "quality_score": score,
-                    "critique": ". ".join(critique) if critique else None,
-                    "reasoning": data.get("reasoning", "")
-                },
-                "agent": self.name
+                    "score": score,
+                    "critique": data.get("critique", []),
+                    "remedy": data.get("remedy", ""),
+                    "hallucination": hallucination
+                }
             }
+            
         except Exception as e:
-            logger.error(f"[Validator] JSON Parse Error: {e}")
+            self.logger.error(f"Critic Mission Anomaly: {e}")
             return {
-                "success": False,
-                "error": "Validation failed to generate structured score.",
-                "agent": self.name
+                "message": "Critique sequence interrupted by data anomaly.",
+                "success": False
             }

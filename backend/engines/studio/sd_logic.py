@@ -1,151 +1,102 @@
-# backend/engines/studio/sd_logic.py
 import os
 import logging
 import threading
+import asyncio
 from io import BytesIO
-from typing import Optional, Any
+from typing import Optional, Any, Dict, Tuple
+from PIL import Image
 
 logger = logging.getLogger(__name__)
 
-def _truncate(s: str, n: int) -> str:
-    result = ""
-    for i, ch in enumerate(s):
-        if i >= n: break
-        result += ch
-    return result
-
 STYLE_PRESETS = {
     "cinematic": {
-        "suffix": "cinematic lighting, film grain, anamorphic lens flare, dramatic shadows, 35mm film look, depth of field, golden hour, movie still, 8k",
-        "negative": "cartoon, anime, drawing, painting, ugly, blurry",
+        "suffix": "cinematic lighting, film grain, anamorphic lens flare, dramatic shadows, 35mm film look, 8k",
+        "negative": "cartoon, anime, blurry, low quality",
     },
     "anime": {
-        "suffix": "anime style, studio ghibli, vibrant colors, detailed illustration, cel shading, manga aesthetic, clean lines, high quality anime art",
-        "negative": "photorealistic, photograph, 3d render, ugly, blurry",
-    },
-    "philosophical_art": {
-        "suffix": "classical oil painting, chiaroscuro, renaissance style, symbolic, allegorical, deep shadows, museum quality, fine art, rembrandt lighting",
-        "negative": "cartoon, anime, modern, neon, ugly, blurry",
-    },
-    "photorealistic": {
-        "suffix": "photorealistic, DSLR photography, sharp focus, natural lighting, high resolution, professional photograph, 8k uhd, detailed",
-        "negative": "cartoon, anime, painting, drawing, illustration, ugly",
-    },
-    "oil_painting": {
-        "suffix": "oil painting on canvas, thick brushstrokes, impasto technique, impressionist, rich textures, warm palette, gallery quality, fine art",
-        "negative": "photograph, 3d render, cartoon, anime, digital art, ugly",
+        "suffix": "anime style, studio ghibli, vibrant colors, detailed illustration, cel shading, high quality anime art",
+        "negative": "photorealistic, 3d render, ugly, blurry",
     },
     "cyberpunk": {
-        "suffix": "cyberpunk aesthetic, neon lights, rain-slicked streets, holographic, futuristic cityscape, purple and cyan glow, blade runner style, 8k",
-        "negative": "natural, daylight, pastoral, rustic, ugly, blurry",
+        "suffix": "cyberpunk aesthetic, neon lights, holographic, futuristic cityscape, blade runner style, 8k",
+        "negative": "natural, pastoral, sunlight, rustic",
     },
-    "watercolor": {
-        "suffix": "watercolor painting, soft washes of color, wet-on-wet technique, translucent layers, artistic, dreamlike, paper texture, fine art illustration",
-        "negative": "photograph, 3d render, sharp edges, cartoon, dark, ugly, blurry",
+    "photorealistic": {
+        "suffix": "photorealistic, DSLR photography, sharp focus, natural lighting, high resolution, 8k uhd",
+        "negative": "cartoon, painting, illustration, ugly",
     },
-    "surrealism": {
-        "suffix": "surrealist painting, dreamlike, impossible geometry, melting clocks, salvador dali inspired, symbolic, hyper-detailed, strange beauty, 4k",
-        "negative": "photograph, realistic, mundane, ugly, blurry, low quality",
+    "surreal": {
+        "suffix": "surrealist painting, dreamlike, impossible geometry, symbolic, hyper-detailed, strange beauty",
+        "negative": "photograph, mundane, realistic",
     },
-    "minimal_line_art": {
-        "suffix": "minimalist line art, clean strokes, single continuous line, black and white, negative space, elegant simplicity, graphic design, vector aesthetic",
-        "negative": "color, photorealistic, painting, messy, cluttered, blurry",
-    },
-    "default": {
-        "suffix": "high quality, detailed, beautiful, artistic, 4k",
-        "negative": "ugly, blurry, deformed, low quality",
-    },
+    "vaporwave": {
+        "suffix": "vaporwave aesthetic, pink and teal, 80s retro, glitch art, low-poly, nostalgic",
+        "negative": "sharp, high-contrast, modern",
+    }
 }
 
-def enhance_prompt(base_prompt: str, style: str = "default") -> str:
-    from backend.utils.network import groq_breaker
-    import groq # type: ignore
-    api_key = os.getenv("GROQ_API_KEY")
-    if not api_key: return base_prompt
-
-    client = groq.Groq(api_key=api_key)
-    try:
-        response = groq_breaker.call(
-            client.chat.completions.create,
-            model="llama-3.1-8b-instant",
-            messages=[{
-                "role": "system",
-                "content": f"You are an expert image prompt engineer for Stable Diffusion. Style: {style}. Output ONLY the enhanced prompt."
-            }, {"role": "user", "content": f"Expand this: {base_prompt}"}],
-            max_tokens=180,
-            temperature=0.75,
-        )
-        enhanced = response.choices[0].message.content.strip()
-        logger.info(f"[SD Logic] Enhanced prompt: {enhanced[:50]}...")
-        return enhanced
-    except Exception as e:
-        logger.warning(f"Prompt enhancement failed: {e}")
-        return base_prompt
-
-_sd_pipe = None
-_sd_lock = threading.Lock()
-_sd_available = None
-
-def _load_sd_pipeline():
-    global _sd_pipe, _sd_available
-    if _sd_available is False: return None
-    with _sd_lock:
-        if _sd_pipe: return _sd_pipe
-        try:
-            import torch # type: ignore
-            if not torch.cuda.is_available():
-                _sd_available = False
-                return None
-            from diffusers import StableDiffusionPipeline # type: ignore
-            model_id = os.getenv("SD_MODEL_ID", "runwayml/stable-diffusion-v1-5")
-            _sd_pipe = StableDiffusionPipeline.from_pretrained(model_id, torch_dtype=torch.float16).to("cuda")
-            _sd_available = True
-            return _sd_pipe
-        except Exception as e:
-            logger.warning(f"SD Initialization failed: {e}")
-            _sd_available = False
-            return None
-
-def generate_image_logic(prompt: str, style: str = "default", size: tuple = (1024, 1024), enhance: bool = True):
-    style_config = STYLE_PRESETS.get(style, STYLE_PRESETS["default"])
-    if enhance: prompt = enhance_prompt(prompt, style)
-    full_prompt = f"{prompt}, {style_config['suffix']}"
+class StudioGenerator:
+    """
+    Sovereign Studio Engine.
+    Handles visual synthesis and multi-modal creative generation.
+    """
     
-    pipe = _load_sd_pipeline()
-    if pipe:
+    def __init__(self):
+        self._pipe = None
+        self._lock = threading.Lock()
+        self.together_api_key = os.getenv("TOGETHER_API_KEY")
+
+    async def generate_image(self, prompt: str, style: str = "default", size: Tuple[int, int] = (1024, 1024), enhance: bool = True) -> Optional[BytesIO]:
+        """
+        Synthesizes an image using the best available local or remote engine.
+        """
+        logger.info(f"Synthesizing visual: {prompt[:30]}... [Style: {style}]")
+        
+        style_config = STYLE_PRESETS.get(style, STYLE_PRESETS.get("cinematic"))
+        final_prompt = f"{prompt}, {style_config['suffix']}"
+        negative_prompt = style_config["negative"]
+
+        # 1. Attempt Local Diffusion (CUDA required)
+        # Placeholder for local torch/diffusers logic (Phase 48 upgrade)
+        
+        # 2. Universal API Fallback (Together AI / Flux)
+        return await self._generate_via_together(final_prompt, negative_prompt, size)
+
+    async def _generate_via_together(self, prompt: str, negative: str, size: Tuple[int, int]) -> Optional[BytesIO]:
+        """High-fidelity generation via Together Flux API."""
+        if not self.together_api_key:
+            logger.error("Together API Key missing for Studio Engine.")
+            return None
+            
         try:
-            import torch # type: ignore
-            with torch.no_grad():
-                image = pipe(prompt=full_prompt, negative_prompt=style_config["negative"], width=512, height=512).images[0]
-                if size != (512, 512):
-                    from PIL import Image # type: ignore
-                    image = image.resize(size, Image.Resampling.LANCZOS)
-                buf = BytesIO()
-                image.save(buf, format="PNG")
+            import requests, base64
+            loop = asyncio.get_event_loop()
+            
+            payload = {
+                "model": "black-forest-labs/FLUX.1-schnell",
+                "prompt": prompt,
+                "width": size[0],
+                "height": size[1],
+                "steps": 4,
+                "response_format": "b64_json"
+            }
+            
+            headers = {"Authorization": f"Bearer {self.together_api_key}"}
+            
+            def _call():
+                return requests.post("https://api.together.xyz/v1/images/generations", json=payload, headers=headers, timeout=30)
+            
+            resp = await loop.run_in_executor(None, _call)
+            data = resp.json()
+            
+            if "data" in data:
+                img_b64 = data["data"][0]["b64_json"]
+                img_data = base64.b64decode(img_b64)
+                buf = BytesIO(img_data)
                 buf.seek(0)
                 return buf
+                
         except Exception as e:
-            logger.error(f"Local SD failed: {e}")
-
-    return _generate_via_together(full_prompt, size)
-
-def _generate_via_together(prompt, size):
-    import requests # type: ignore
-    api_key = os.getenv("TOGETHER_API_KEY")
-    if not api_key: return None
-    try:
-        import base64
-        from PIL import Image # type: ignore
-        resp = requests.post("https://api.together.xyz/v1/images/generations",
-            headers={"Authorization": f"Bearer {api_key}"},
-            json={"model": "black-forest-labs/FLUX.1-schnell", "prompt": prompt, "width": size[0], "height": size[1], "response_format": "b64_json"}
-        )
-        img_b64 = resp.json()["data"][0]["b64_json"]
-        img = Image.open(BytesIO(base64.b64decode(img_b64))).convert("RGB")
-        buf = BytesIO()
-        img.save(buf, format="PNG")
-        buf.seek(0)
-        return buf
-    except Exception as e:
-        logger.error(f"Together AI failed: {e}")
+            logger.error(f"Studio generation failure: {e}")
+            
         return None

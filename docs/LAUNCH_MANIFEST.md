@@ -7,17 +7,17 @@ The definitive list of integrated, confirmed, and operational engines in LEVI-AI
 ## 🧠 Brain & Memory Array
 | Subsystem | Status | Description |
 |-----------|--------|-------------|
-| **FAISS Semantic Matrix** | ONLINE | `backend.db.vector_store` efficiently maps textual history into 384-dimensional numerical spaces, creating a Sovereign local graph. |
-| **Critic Swarm Mutation** | ONLINE | `backend.services.learning.logic` evaluates recent outputs against a 5-star heuristic; mutates system prompts dynamically. |
-| **Meta-Planner** | ONLINE | `backend.core.meta_planner` determines the lowest cost execution path (e.g., direct Groq inference vs Multi-Agent task planning). |
-| **Server-Sent Events (SSE)** | ONLINE | True zero-latency streaming architecture mapping `groq`-derived LLM tokens directly to the glassmorphic UI buffer. |
+| **FAISS Semantic Matrix** | ONLINE | `backend.db.vector_store` and `backend.engines.memory` efficiently map textual history into 384-dimensional numerical spaces. |
+| **Critic Swarm Mutation** | ONLINE | `backend/api/learning.py` and `backend/services/learning` evaluate recent outputs against a 5-star heuristic. |
+| **Meta-Planner** | ONLINE | `backend.core.planner` determines the lowest cost execution path (e.g., direct Groq inference vs Multi-Agent task planning). |
+| **Server-Sent Events (SSE)** | ONLINE | True zero-latency streaming architecture via `SovereignBroadcaster` mapping `groq` tokens to the UI buffer. |
 
 ---
 
 ## 🎨 Studio & Generative Elements
 | Subsystem | Status | Description |
 |-----------|--------|-------------|
-| **Ken Burns Synthesizer** | ONLINE | `backend.services.video_gen` programmatic image manipulation scaling and panning arrays via `moviepy`. |
+| **Ken Burns Synthesizer** | ONLINE | `backend.engines.studio` and `backend/services/` programmatic image manipulation scaling and panning arrays via `moviepy`. |
 | **Together AI Stable Connect** | ONLINE | Bridged to fast-path LoRA and Stable Diffusion XL pipelines for philosophical scene generation. |
 | **Coqui Text-To-Speech** | ONLINE | Asynchronously renders `.wav` overlays of cinematic AI narrations. |
 | **Celery Queue Isolation** | ONLINE | Prevents any visual rendering load from damaging the core REST API's event loop via Redis backpressure routing. |

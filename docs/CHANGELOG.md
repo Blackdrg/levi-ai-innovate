@@ -2,6 +2,12 @@
 
 The repository has effectively undergone a total tectonic shift. What follows is the exact breakdown of the architectural lobotomy that permanently installed the Domain-Driven structure.
 
+## [7.2.0] The Sovereign Monolith Unification
+- **Standardized Heartbeat Pulse**: Migrated all telemetry to the unified `pulse_update` SSE event structure.
+- **8Gi Monolith Profiling**: Optimized memory footprints for single-node deployments with FAISS + Llama-3-8B.
+- **Sovereign Shield Hardening**: Implemented real-time PII masking via `SovereignSecurity` in the token stream.
+- **DDD Layer Consolidation**: Completed the migration of all core logic into `backend/api` and `backend/core`.
+
 ## [7.0.0] The Sovereign Awakening
 
 ### 🧨 The Monolithic Purge

@@ -77,16 +77,33 @@ h1, h2, h3, .font-heading {
   background: #444;
 }
 
-/* Gradients */
+/* Gradients: Vibrant & Premium */
 .bg-gradient-sovereign {
-  background: linear-gradient(135deg, #9d50bb 0%, #6e48aa 100%);
+  background: linear-gradient(135deg, #9d50bb 0%, #6e48aa 50%, #00d2ff 100%);
+  background-size: 200% 200%;
+  animation: gradient-shift 15s ease infinite;
+}
+
+@keyframes gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }
 
 .text-gradient {
-  background: linear-gradient(135deg, #fff 0%, #9d50bb 100%);
+  background: linear-gradient(135deg, #fff 30%, #9d50bb 70%, #00d2ff 100%);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
+  background-size: 200% auto;
+  animation: text-shine 5s linear infinite;
 }
+
+
+@keyframes text-shine {
+  to { background-position: 200% center; }
+}
+
 
 /* Typing Indicator Animation */
 .typing-dot {

@@ -16,8 +16,8 @@ from typing import Optional, List, Dict, Any, Tuple
 from backend.db.firestore_db import db as firestore_db
 from backend.db.redis_client import HAS_REDIS, r as redis_client, get_cached_json, cache_json
 from backend.utils.encryption import SovereignVault
-from backend.services.orchestrator.planner import call_lightweight_llm
-from backend.services.orchestrator.local_engine import handle_local_sync, is_locally_handleable
+from backend.core.planner import call_lightweight_llm, detect_sensitivity
+from backend.core.local_engine import handle_local_sync, is_locally_handleable
 
 logger = logging.getLogger(__name__)
 
@@ -420,9 +420,9 @@ def get_learning_stats():
 async def collect_global_pattern(user_message: str, bot_response: str, rating: int):
     """Crystallizes perfect interactions into the Collective Mind (FAISS)."""
     if rating < 5: return
-    from backend.services.orchestrator.planner import detect_sensitivity
+    # from backend.core.planner import detect_sensitivity -- already imported at top
     if detect_sensitivity(user_message) or detect_sensitivity(bot_response): return
     
-    from backend.services.orchestrator.memory_utils import store_global_wisdom
+    from backend.core.memory_utils import store_global_wisdom
     await store_global_wisdom(user_message, bot_response, "philosophical")
     logger.info("[Hive] Perfect pattern crystallized.")
