@@ -4,7 +4,7 @@ from typing import List, Dict, Any, Optional
 import logging
 
 from backend.auth import get_current_user
-from backend.db.firestore_db import db as firestore_db
+from backend.db.firebase import db as firestore_db
 from .memory_utils import prune_old_facts
 
 logger = logging.getLogger(__name__)

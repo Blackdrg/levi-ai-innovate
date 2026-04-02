@@ -9,7 +9,7 @@ export const documentService = {
     const formData = new FormData();
     formData.append("file", file);
     
-    const response = await apiClient.post("/upload/upload", formData, {
+    const response = await apiClient.post("/v1/upload/upload", formData, {
       headers: { "Content-Type": "multipart/form-data" },
       onUploadProgress: (progressEvent) => {
         if (onProgress && progressEvent.total) {
@@ -23,7 +23,7 @@ export const documentService = {
   
   // Placeholder for future multi-doc management
   getDocuments: async () => {
-    const response = await apiClient.get("/upload/my-docs");
+    const response = await apiClient.get("/v1/upload/my-docs");
     return response.data;
   }
 };

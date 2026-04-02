@@ -13,8 +13,8 @@ import asyncio
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any, Tuple
 
-from backend.db.firestore_db import db as firestore_db
-from backend.db.redis_client import HAS_REDIS, r as redis_client, get_cached_json, cache_json
+from backend.db.firebase import db as firestore_db
+from backend.db.redis import HAS_REDIS, r as redis_client, get_cached_json, cache_json
 from backend.utils.encryption import SovereignVault
 from backend.core.planner import call_lightweight_llm, detect_sensitivity
 from backend.core.local_engine import handle_local_sync, is_locally_handleable

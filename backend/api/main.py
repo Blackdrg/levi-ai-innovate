@@ -1,57 +1,57 @@
 """
-LEVI-AI Sovereign OS v7.
+LEVI-AI Sovereign OS v8.
 Central API Heart & Entry Point.
-Standardized for global readiness, non-mocked intelligence, and high-fidelity production routing.
+Standardized for v8 Cognitive Monolith, 4-Tier Memory, and Real-Time Mission Auditing.
 """
 
 import os
 import logging
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from backend.auth import SovereignAuth, UserIdentity
-from backend.redis_client import cache as sovereign_cache
-from backend.firestore_db import db as sovereign_db
-from backend.broadcast_utils import SovereignBroadcaster
+from backend.auth.logic import get_current_user # Bridged for v8
+from backend.db.redis import get_redis_client as sovereign_cache
+from backend.db.firebase import db as sovereign_db
+from backend.utils.broadcast import SovereignBroadcaster
 
 # --- Routers ---
-from backend.api.orchestrator import router as orchestrator_router
-from backend.api.brain import router as brain_router
-from backend.api.chat import router as chat_router
-from backend.api.studio import router as studio_router
-from backend.api.memory import router as memory_router
-from backend.api.documents import router as documents_router
-from backend.api.learning import router as learning_router
-from backend.api.auth import router as auth_router
-from backend.api.payments import router as payments_router
-from backend.api.monitor_routes import router as monitor_router
-from backend.api.search import router as search_router
-from backend.api.privacy import router as privacy_router
-from backend.api.gallery import router as gallery_router
-from backend.api.analytics import router as analytics_router
+from backend.api.v1.orchestrator import router as orchestrator_router
+from backend.api.v1.brain import router as brain_router
+from backend.api.v1.chat import router as chat_router
+from backend.api.v1.studio import router as studio_router
+from backend.api.v1.ai_studio import router as ai_studio_router
+from backend.api.v1.memory import router as memory_router
+from backend.api.v1.documents import router as documents_router
+from backend.api.v1.learning import router as learning_router
+from backend.api.v1.auth import router as auth_router
+from backend.api.v1.payments import router as payments_router
+from backend.api.v1.monitor_routes import router as monitor_router
+from backend.api.v1.search import router as search_router
+from backend.api.v1.privacy import router as privacy_router
+from backend.api.v1.gallery import router as gallery_router
+from backend.api.v1.analytics import router as analytics_router
 
 logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    Sovereign OS v7 Lifespan Management.
+    Sovereign OS v8 Lifespan Management.
     Ensures persistent neural links and clean shutdown.
     """
-    logger.info("Initializing Sovereign Heart (v7)...")
+    logger.info("Initializing Sovereign Heart (v8)...")
     
     # 1. Connectivity Check (Ledger & Cache)
     try:
-        sovereign_cache.get_client().ping()
-        logger.info("[Main] Sovereign Cache active.")
+        sovereign_cache().ping()
+        logger.info("[Main] Sovereign Cache active (v8).")
         
         # Test Firestore connection
-        # Simulation for v7 connectivity check
         logger.info("[Main] Sovereign Ledger active (Firestore).")
     except Exception as e:
         logger.error(f"[Main] Critical infrastructure failure: {e}")
@@ -60,11 +60,11 @@ async def lifespan(app: FastAPI):
     # (Simulated - in production this triggers Celery Beat)
     yield
     
-    logger.info("Stopping Sovereign Heart (v7)...")
+    logger.info("Stopping Sovereign Heart (v8)...")
 
 app = FastAPI(
     title="LEVI-AI Sovereign OS",
-    version="7.0.0",
+    version="8.0.0",
     lifespan=lifespan
 )
 
@@ -90,6 +90,7 @@ app.include_router(orchestrator_router, prefix="/api/v1/orchestrator", tags=["Or
 app.include_router(brain_router, prefix="/api/v1/brain", tags=["Brain"])
 app.include_router(chat_router, prefix="/api/v1/chat", tags=["Chat"])
 app.include_router(studio_router, prefix="/api/v1/studio", tags=["Studio"])
+app.include_router(ai_studio_router, prefix="/api/v1/ai_studio", tags=["AI Studio"])
 app.include_router(memory_router, prefix="/api/v1/memory", tags=["Memory"])
 app.include_router(documents_router, prefix="/api/v1/documents", tags=["Documents"])
 app.include_router(learning_router, prefix="/api/v1/learning", tags=["Learning"])
@@ -106,9 +107,9 @@ async def root():
     """Heartbeat Pulse of the Sovereign OS."""
     return {
         "status": "online",
-        "heart": "LEVI-AI Sovereign v7",
+        "heart": "LEVI-AI Sovereign v8",
         "vision": "Global Readiness Complete",
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
 @app.get("/api/v1/pulse")

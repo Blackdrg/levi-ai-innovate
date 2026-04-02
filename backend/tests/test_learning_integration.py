@@ -1,6 +1,6 @@
 import pytest
 from backend.services.orchestrator.brain import LeviBrain
-from backend.services.orchestrator.memory_manager import MemoryManager
+from backend.core.memory_manager import MemoryManager
 from backend.services.learning.logic import UserPreferenceModel, AdaptivePromptManager
 
 @pytest.mark.asyncio

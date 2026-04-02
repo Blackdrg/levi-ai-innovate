@@ -10,8 +10,8 @@ from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from firebase_admin import auth as firebase_auth
 
-from backend.db.firestore_db import db as firestore_db
-from backend.db.redis_client import r as redis_client, HAS_REDIS, is_jti_blacklisted
+from backend.db.firebase import db as firestore_db
+from backend.db.redis import r as redis_client, HAS_REDIS, is_jti_blacklisted
 from backend.utils.logger import get_logger
 
 logger = get_logger("auth")
@@ -22,7 +22,7 @@ from backend.config.system import TIERS
 security = HTTPBearer()
 
 def check_allowance(user_id: str, tier: str, cost: int = 1) -> bool:
-    from backend.db.redis_client import get_daily_ai_spend, get_user_credits
+    from backend.db.redis import get_daily_ai_spend, get_user_credits
     limit = TIERS.get(tier, TIERS["free"])["daily_limit"]
     spend = get_daily_ai_spend(user_id)
     if spend + cost > limit:

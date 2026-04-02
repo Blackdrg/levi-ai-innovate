@@ -6,8 +6,8 @@ import logging
 from typing import Optional, Dict, Any
 from fastapi import HTTPException
 
-from backend.db.firestore_db import db as firestore_db
-from backend.db.redis_client import (
+from backend.db.firebase import db as firestore_db
+from backend.db.redis import (
     incr_daily_ai_spend, 
     get_daily_ai_spend, 
     distributed_lock, 

@@ -8,7 +8,7 @@ import logging
 from backend.auth import get_current_user, get_current_user_optional # type: ignore
 from backend.db.firestore_db import db as firestore_db # type: ignore
 from backend.services.learning.models import Query # type: ignore
-from backend.db.redis_client import get_cached_search, cache_search, HAS_REDIS # type: ignore
+from backend.db.redis import get_cached_search, cache_search, HAS_REDIS # type: ignore
 from google.cloud import firestore as google_firestore # type: ignore
 from backend.generation import fetch_open_source_quote, generate_quote # type: ignore
 

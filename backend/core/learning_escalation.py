@@ -11,7 +11,7 @@ import asyncio
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 
-from backend.db.redis_client import r as redis_client, HAS_REDIS
+from backend.db.redis import r as redis_client, HAS_REDIS
 from backend.services.learning.logic import get_learning_stats
 
 logger = logging.getLogger(__name__)

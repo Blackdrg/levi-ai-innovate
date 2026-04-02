@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, patch, MagicMock
 from backend.services.orchestrator.executor import _execute_step_with_resilience
 from backend.services.orchestrator.orchestrator_types import PlanStep, ToolResult
 from backend.services.orchestrator.meta_planner import decompose_goal
-from backend.services.orchestrator.memory_manager import MemoryManager
+from backend.core.memory_manager import MemoryManager
 
 @pytest.mark.asyncio
 async def test_reflex_ledger_logging():
@@ -58,9 +58,9 @@ async def test_silent_distillation_trigger():
     """Verify memory distillation triggers after enough interactions."""
     with patch("backend.db.redis_client.HAS_REDIS", True), \
          patch("backend.db.redis_client.r") as mock_redis, \
-         patch("backend.services.orchestrator.memory_manager.MemoryManager.distill_core_memory", new_callable=AsyncMock) as mock_distill, \
-         patch("backend.services.orchestrator.memory_manager.extract_facts", new_callable=AsyncMock) as mock_extract, \
-         patch("backend.services.orchestrator.memory_manager.store_facts", new_callable=AsyncMock) as mock_store:
+         patch("backend.core.memory_manager.MemoryManager.distill_core_memory", new_callable=AsyncMock) as mock_distill, \
+         patch("backend.core.memory_manager.MemoryManager._process_fact_extraction", new_callable=AsyncMock) as mock_extract, \
+         patch("backend.core.memory_manager.SovereignVectorStore.store_fact", new_callable=AsyncMock) as mock_store:
         
         mock_extract.return_value = [{"fact": "Test", "category": "preference"}]
         # Mock counter hitting 20

@@ -6,7 +6,7 @@ import { apiClient } from "./apiClient";
 
 export const searchService = {
   search: async (query, sessionId = "") => {
-    const response = await apiClient.post("/search", {
+    const response = await apiClient.post("/v1/search", {
       query,
       session_id: sessionId
     });

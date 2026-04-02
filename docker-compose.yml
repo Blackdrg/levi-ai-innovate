@@ -1,71 +1,106 @@
 version: '3.8'
 
 services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: levi-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-levi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-levi_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-levidb}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - levi-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U levi -d levidb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   redis:
     image: redis:7-alpine
+    container_name: levi-redis
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
     networks:
       - levi-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  backend:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - levi-net
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - levi-net
+
+  levi-api:
     build:
       context: .
-      dockerfile: backend/Dockerfile.prod
+      dockerfile: backend/Dockerfile.v8
+    container_name: levi-api
+    command: uvicorn backend.api.main:app --host 0.0.0.0 --port 8000
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     environment:
+      - DATABASE_URL=postgresql://levi:levi_pass@postgres:5432/levidb
       - REDIS_URL=redis://redis:6379/0
+      - KAFKA_URL=kafka:29092
       - ENVIRONMENT=production
-      - SERVICE_MODE=all
-      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
-      - SECRET_KEY=${SECRET_KEY}
     depends_on:
-      - redis
-    volumes:
-      - ./backend/data:/app/data
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_started
     networks:
       - levi-net
 
-  celery_worker:
+  levi-worker:
     build:
       context: .
       dockerfile: backend/Dockerfile.worker
-    command: celery -A backend.celery_app worker --loglevel=info --queues=default,heavy
+    container_name: levi-worker
+    command: celery -A backend.celery_app worker --loglevel=info
+    env_file:
+      - .env
     environment:
+      - DATABASE_URL=postgresql://levi:levi_pass@postgres:5432/levidb
       - REDIS_URL=redis://redis:6379/0
-      - ENVIRONMENT=production
-      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
+      - KAFKA_URL=kafka:29092
     depends_on:
-      - redis
-    volumes:
-      - ./backend/data:/app/data
-    networks:
-      - levi-net
-
-  celery_beat:
-    build:
-      context: .
-      dockerfile: backend/Dockerfile.worker
-    command: celery -A backend.celery_app beat --loglevel=info
-    environment:
-      - REDIS_URL=redis://redis:6379/0
-      - ENVIRONMENT=production
-    depends_on:
-      - redis
-    networks:
-      - levi-net
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    ports:
-      - "3000:80"
-    depends_on:
-      - backend
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - levi-net
 
@@ -74,5 +109,6 @@ networks:
     driver: bridge
 
 volumes:
+  postgres_data:
   redis_data:
   backend_data:

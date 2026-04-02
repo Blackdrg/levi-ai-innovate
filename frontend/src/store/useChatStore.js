@@ -16,6 +16,8 @@ export const useChatStore = create((set) => ({
   engineMetadata: null, // { name: "Llama-3-8B", provider: "Local", latency: "45ms" }
   memoryCount: 0,
   sovereignStatus: "Idle",
+  executionGraph: null, // DAG from planner
+  executionResults: [], // ToolResults from executor
 
   setMode: (mode) => set({ mode }),
   setDeepResearch: (isDeep) => set({ isDeepResearch: isDeep }),
@@ -27,6 +29,8 @@ export const useChatStore = create((set) => ({
     sovereignStatus: metadata?.provider === "Local" ? "Sovereign" : "Hybrid"
   }),
   setMemoryCount: (count) => set({ memoryCount: count }),
+  setExecutionGraph: (graph) => set({ executionGraph: graph }),
+  setExecutionResults: (results) => set({ executionResults: results }),
 
   addMessage: (msg) =>
     set((state) => ({ 
