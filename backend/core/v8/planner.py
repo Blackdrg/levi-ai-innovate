@@ -114,7 +114,22 @@ class DAGPlanner:
                  inputs={"input": user_input}
              ))
 
-        # 3. Universal v8 Reflection Pass
+        # 3. v8.5: Consensus Node Injection (Debate Wave)
+        if complexity >= 3 and len(graph.nodes) > 1:
+            reasoner_ids = [n.id for n in graph.nodes if n.id != "t_local"]
+            graph.add_node(TaskNode(
+                id="t_consensus",
+                agent="consensus_agent",
+                description="Swarm reconciliation and conflict resolution",
+                inputs={
+                    "input": user_input,
+                    "agent_outputs": "{{all_results}}"
+                },
+                dependencies=reasoner_ids,
+                critical=True
+            ))
+
+        # 4. Universal v8 Reflection Pass
         if complexity >= 2:
             last_node_id = graph.nodes[-1].id
             graph.add_node(TaskNode(

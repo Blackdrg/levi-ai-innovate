@@ -105,7 +105,8 @@ class GraphExecutor:
                 template = value.replace("{{", "").replace("}}", "")
                 
                 if template == "all_results":
-                    resolved[key] = "\n\n".join([f"Task [{tid}]: {res.message}" for tid, res in previous_results.items()])
+                    # Optimized for v8.5 Swarm Consensus: Returns a mapping for the ConsensusAgent
+                    resolved[key] = {tid: res.message for tid, res in previous_results.items() if res.success}
                     continue
                 
                 parts = template.split(".")
