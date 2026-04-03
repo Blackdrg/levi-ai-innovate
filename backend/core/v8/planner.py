@@ -51,7 +51,17 @@ class DAGPlanner:
             ))
             return graph
 
-        # 2. Sequential / Parallel Reasoning Layer
+        # 2. Wave 0: Relational Discovery (Knowledge Graph Exploration)
+        user_id = perception.get("user_id", "default_user")
+        if complexity >= 4:
+            graph.add_node(TaskNode(
+                id="t_relation",
+                agent="relation_agent",
+                description=f"Explore Knowledge Graph for: {user_input}",
+                inputs={"objective": user_input, "user_id": user_id, "depth": 2}
+            ))
+
+        # 3. Sequential / Parallel Reasoning Layer
         if intent_type == "search":
              # Wave 1: Discovery
              graph.add_node(TaskNode(

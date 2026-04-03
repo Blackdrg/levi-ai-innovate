@@ -13,6 +13,7 @@ from typing import Dict, Any, List, Optional
 from .cache import MemoryCache
 from .vector_store import SovereignVectorStore
 from .resonance import MemoryResonance
+from .graph_engine import GraphEngine
 from backend.db.firestore_db import db as firestore_db
 from backend.services.learning.logic import UserPreferenceModel
 
@@ -22,10 +23,8 @@ logger = logging.getLogger(__name__)
 _MIDTERM_TIMEOUT = 3.0
 
 class MemoryManager:
-    """
-    LeviBrain v8 Memory Orchestrator.
-    Manages Tier 1 (Working), Tier 2 (Episodic), Tier 3 (Semantic), and Tier 4 (Identity).
-    """
+    def __init__(self):
+        self.graph = GraphEngine()
 
     async def get_combined_context(self, user_id: str, session_id: str, query: str = "") -> Dict[str, Any]:
         """
@@ -35,9 +34,10 @@ class MemoryManager:
         mid_term_task   = self.get_mid_term(user_id, limit=3)
         long_term_task  = self.get_long_term(user_id, query)
         creation_task   = self.get_creation_context(user_id)
+        graph_task      = self.graph.get_connected_resonance(user_id, query)
         
-        short_term, mid_term, long_term, creation_context = await asyncio.gather(
-            short_term_task, mid_term_task, long_term_task, creation_task
+        short_term, mid_term, long_term, creation_context, graph_resonance = await asyncio.gather(
+            short_term_task, mid_term_task, long_term_task, creation_task, graph_task
         )
 
         # Build preferences pulse
@@ -58,6 +58,7 @@ class MemoryManager:
             "long_term":         long_term,
             "mid_term":          mid_term,
             "creation_context":  creation_context,
+            "graph_resonance":   graph_resonance,
             "interaction_pulse": pulse,
             "preferences":       preferences,
             "user_id":           user_id,
@@ -160,28 +161,40 @@ class MemoryManager:
         await asyncio.to_thread(MemoryCache.save_session_history, session_id, history, user_id=user_id)
 
     async def process_extraction(self, user_id: str, user_input: str, bot_response: str):
-        from backend.core.memory_utils import extract_facts 
+        from backend.core.memory_utils import extract_memory_graph 
         from backend.core.planner import call_lightweight_llm
 
         try:
-            new_facts = await extract_facts(user_input, bot_response)
-            if not new_facts: return
+            extraction = await extract_memory_graph(user_input, bot_response)
+            new_facts = extraction.get("facts", [])
+            triplets = extraction.get("triplets", [])
+            
+            if not new_facts and not triplets: return
 
-            scoring_prompt = (
-                "Grade these user facts (0.0 to 1.0) on permanent identity significance.\n"
-                f"Facts: {json.dumps([f['fact'] for f in new_facts])}\n"
-                "Output JSON: {\"scores\": [...]}"
-            )
-            raw_scores = await call_lightweight_llm([{"role": "system", "content": scoring_prompt}])
-            scores = json.loads(raw_scores.strip()).get("scores", [0.5] * len(new_facts))
+            # 1. Store Relational Triplets (Neo4j)
+            if triplets:
+                for t in triplets:
+                    asyncio.create_task(self.graph.upsert_triplet(
+                        user_id, t["subject"], t["relation"], t["object"]
+                    ))
 
-            for i, fact in enumerate(new_facts):
-                importance = scores[i] if i < len(scores) else 0.5
-                await SovereignVectorStore.store_fact(user_id, fact["fact"], category=fact["category"], importance=importance)
+            # 2. Store Atomic Facts (FAISS/Mongo)
+            if new_facts:
+                scoring_prompt = (
+                    "Grade these user facts (0.0 to 1.0) on permanent identity significance.\n"
+                    f"Facts: {json.dumps([f['fact'] for f in new_facts])}\n"
+                    "Output JSON: {\"scores\": [...]}"
+                )
+                raw_scores = await call_lightweight_llm([{"role": "system", "content": scoring_prompt}])
+                scores = json.loads(raw_scores.strip()).get("scores", [0.5] * len(new_facts))
 
-            # Trigger Evolutionary Distillation (v8 Silent Evolution)
+                for i, fact in enumerate(new_facts):
+                    importance = scores[i] if i < len(scores) else 0.5
+                    await SovereignVectorStore.store_fact(user_id, fact["fact"], category=fact["category"], importance=importance)
+
+            # 3. Trigger Evolutionary Distillation
             await self._trigger_distillation(user_id)
-            logger.info(f"[MemoryManager] Extracted {len(new_facts)} facts for {user_id}")
+            logger.info(f"[MemoryManager] Relational Extraction Complete for {user_id}")
         except Exception as e:
             logger.error(f"Memory extraction anomaly: {e}")
 
