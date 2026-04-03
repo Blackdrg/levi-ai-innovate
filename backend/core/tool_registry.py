@@ -23,6 +23,7 @@ from backend.agents.document_agent import DocumentAgent
 from backend.agents.research_agent import ResearchAgent
 from backend.agents.task_agent import TaskAgent
 from backend.agents.memory_agent import MemoryAgent
+from backend.core.v8.agents.consensus import ConsensusAgentV8
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,7 @@ _TOOL_INSTANCES: Dict[str, Any] = {
     "research_agent": ResearchAgent(),
     "task_agent": TaskAgent(),
     "memory_agent": MemoryAgent(),
+    "consensus_agent": ConsensusAgentV8(),
 }
 
 def get_tool(name: str) -> Optional[Any]:
