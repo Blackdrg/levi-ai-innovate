@@ -37,9 +37,14 @@ class MemoryAgent(SovereignAgent[MemoryInput, AgentResult]):
         query = input_data.input
         self.logger.info(f"Recalling Memory Mission for {user_id}: '{query[:40]}'")
 
-        # 1. Engage Memory Vault
-        from backend.engines.memory.vault import MemoryVault
-        memory_data = await MemoryVault.get_combined_context(user_id, query)
+        # 1. Engage Memory Vault (v8 Bridge)
+        from backend.memory.manager import MemoryManager
+        memory_manager = MemoryManager()
+        history = await memory_manager.get_context(user_id)
+        
+        # We also fetch the full v8 context for depth
+        memory_data = await memory_manager.get_combined_context(user_id, input_data.session_id, query)
+
         
         traits = memory_data.get("long_term", {}).get("traits", [])
         preferences = memory_data.get("long_term", {}).get("preferences", [])
@@ -49,7 +54,7 @@ class MemoryAgent(SovereignAgent[MemoryInput, AgentResult]):
         summary_context = (
             f"User Archetype Traits: {', '.join(traits) if traits else 'Unknown'}\n"
             f"Observed Preferences: {', '.join(preferences) if preferences else 'Unknown'}\n"
-            f"Crystallized Fragments: {len(semantic_hits)} relevant patterns detected."
+            f"Recent Dialogue: {len(history)} mission fragments analyzed."
         )
 
         # 3. Final Memory-Aware Synthesis

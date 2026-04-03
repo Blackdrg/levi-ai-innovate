@@ -7,6 +7,9 @@ from datetime import datetime, timezone
 from .fidelity import FidelityCritic
 from .metrics import CognitiveMetrics
 from backend.db.firestore_db import db as firestore_db
+from backend.db.postgres import PostgresDB
+from sqlalchemy import text
+
 
 logger = logging.getLogger(__name__)
 
@@ -60,11 +63,38 @@ class AutomatedEvaluator:
 
         # 4. Persistence (Self-Evolution Loop)
         if user_id and not str(user_id).startswith("guest:"):
+            # 4a. Legacy Firestore persistence
             try:
                 eval_ref = firestore_db.collection("evaluations").document()
                 await asyncio.to_thread(lambda: eval_ref.set(evaluation_report))
             except Exception as e:
-                logger.error(f"Evaluation persistence failed: {e}")
+                logger.error(f"Firestore evaluation persistence failed: {e}")
+
+            # 4b. v8 Relational Persistence (Postgres)
+            try:
+                engine = PostgresDB.get_engine()
+                if engine:
+                    async with PostgresDB._session_factory() as session:
+                        # Insert into mission_audits
+                        query = text("""
+                            INSERT INTO mission_audits 
+                            (mission_id, fidelity_score, alignment_score, grounding_score, resonance_score, issues, fix_strategy)
+                            VALUES (:m_id, :fid, :aln, :grd, :res, :iss, :fix)
+                        """)
+                        await session.execute(query, {
+                            "m_id": session_id if len(str(session_id)) == 36 else None, # Simplified UUID match
+                            "fid": fidelity.get("fidelity_score", 0.0),
+                            "aln": fidelity.get("alignment", 0.0),
+                            "grd": metrics.get("grounding_score", 0.0),
+                            "res": metrics.get("resonance", 0.0),
+                            "iss": json.dumps(fidelity.get("issues", [])),
+                            "fix": fidelity.get("fix", "")
+                        })
+                        await session.commit()
+                        logger.info(f"[Evaluator] Relational audit saved for mission: {session_id}")
+            except Exception as e:
+                logger.error(f"Postgres evaluation persistence failed: {e}")
+
 
         return evaluation_report
 

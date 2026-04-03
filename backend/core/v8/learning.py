@@ -1,78 +1,141 @@
 import logging
 import asyncio
 import json
-from datetime import datetime, timezone
-from typing import Dict, Any, List
-from ...kafka_client import LeviKafkaClient
+import uuid
+from datetime import datetime, timezone, timedelta
+from typing import Dict, Any, List, Optional
+from backend.api.v8.telemetry import broadcast_mission_event
+from backend.memory.cache import MemoryCache
+from backend.memory.vector_store import SovereignVectorStore
 
 logger = logging.getLogger(__name__)
 
+class FragilityTracker:
+    """
+    Sovereign v8.7: Dynamic Fragility Tracking.
+    Monitors engine performance and calculates self-optimization weights.
+    """
+    
+    @staticmethod
+    def get_fragility(user_id: str, domain: str) -> float:
+        """
+        Returns a fragility score (0.0 to 1.0) for a specific cognitive domain.
+        Higher fragility = more rigorous self-reflection.
+        """
+        cache_key = f"fragility:{user_id}:{domain}"
+        data = MemoryCache.get_cached_context(cache_key) or {"failures": 0, "last_failure": None, "success_streak": 0}
+        
+        # Moderate Decay: Relax after 3-5 successes or 30 minutes
+        if data.get("last_failure"):
+            last_fail = datetime.fromisoformat(data["last_failure"])
+            if (datetime.now(timezone.utc) - last_fail) > timedelta(minutes=30):
+                return 0.0
+        
+        failures = data.get("failures", 0)
+        streak = data.get("success_streak", 0)
+        
+        # Moderate decay factor: relax fragility as success streak grows
+        if streak >= 3:
+            return 0.0
+            
+        return min(1.0, failures * 0.4)
+
+    @staticmethod
+    def record_outcome(user_id: str, domain: str, success: bool):
+        """Updates the fragility index for a domain based on mission outcome."""
+        cache_key = f"fragility:{user_id}:{domain}"
+        data = MemoryCache.get_cached_context(cache_key) or {"failures": 0, "last_failure": None, "success_streak": 0}
+        
+        if success:
+            data["success_streak"] = data.get("success_streak", 0) + 1
+            if data["success_streak"] >= 3:
+                data["failures"] = 0 # Reset on moderate streak
+        else:
+            data["failures"] = data.get("failures", 0) + 1
+            data["last_failure"] = datetime.now(timezone.utc).isoformat()
+            data["success_streak"] = 0
+            
+        MemoryCache.set_cached_context(cache_key, data, ttl=3600)
+
+class CrystallizationEngine:
+    """
+    Sovereign v8.7: Knowledge Crystallization.
+    Transforms high-fidelity reasoning patterns into reusable prototypes.
+    """
+    
+    @staticmethod
+    async def crystallize_prototype(user_id: str, mission_data: Dict[str, Any]):
+        """Distills a successful mission into a Reasoning Prototype."""
+        # Only crystallize exceptionally successful missions (Fidelity > 0.95)
+        fidelity = mission_data.get("fidelity_score", 0.0)
+        if fidelity < 0.95: return
+        
+        proto_id = f"proto_{uuid.uuid4().hex[:6]}"
+        logger.info(f"[Crystallization] Distilling reasoning prototype: {proto_id}")
+        
+        prototype = {
+            "id": proto_id,
+            "intent": mission_data.get("intent", "general"),
+            "style": mission_data.get("style", "analytical"),
+            "pattern": mission_data.get("methodology", "N/A"),
+            "input_context": mission_data.get("input_signature", ""),
+            "crystallized_at": datetime.now(timezone.utc).isoformat(),
+            "fidelity": fidelity
+        }
+        
+        # Store in Identity Tier (Category: prototype)
+        fact_text = f"Reasoning Prototype [{prototype['intent']}]: {prototype['pattern'][:200]}"
+        await SovereignVectorStore.store_fact(
+            user_id, 
+            fact_text, 
+            category="prototype", 
+            importance=0.9
+        )
+        broadcast_mission_event(user_id, "intelligence_crystallized", prototype)
+
 class LearningLoopV8:
     """
-    LeviBrain v8: Autonomous Learning Loop
-    Feedback pipeline and Failure clustering via Kafka events.
+    LeviBrain v8.7: Evolutionary Intelligence Loop.
+    Autonomous strategic adjustment based on environmental outcomes.
     """
 
     @classmethod
-    @classmethod
-    async def process_feedback(cls, event: Dict[str, Any]):
+    async def process_mission_outcome(cls, user_id: str, outcome: Dict[str, Any]):
         """
-        LeviBrain v8: High-Fidelity Feedback Processor.
-        Vectorizes successful missions into shared traits.
+        The central heart of the evolutionary loop.
+        Updates fragility and triggers crystallization.
         """
-        rating = event.get("rating", 0)
-        fidelity = event.get("fidelity", 0.0)
+        intent = outcome.get("intent", "general")
+        success = outcome.get("total_score", 0.0) >= 0.8
         
-        if rating >= 4 or fidelity >= 0.9:
-            logger.info("[V8 Learning] High-fidelity mission detected. Distilling trait...")
-            await cls.distill_trait(event)
-        elif rating <= 2 or fidelity < 0.7:
-            logger.warning("[V8 Learning] Mission divergence. Archiving failure graph for clustering.")
-            await LeviKafkaClient.send_event("mission.failures", {
-                **event,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "node_failures": [n for n in event.get("nodes", []) if not n.success]
+        # 1. Update Domain Fragility (Self-Optimization Weighting)
+        FragilityTracker.record_outcome(user_id, intent, success)
+        
+        # 2. Trigger Crystallization (Skill Acquisition)
+        if success and outcome.get("total_score", 0.0) >= 0.95:
+            await CrystallizationEngine.crystallize_prototype(user_id, outcome)
+            
+        # 3. Archive Failures for Cluster Analysis
+        if not success:
+            logger.warning(f"[V8 Evolution] Fragile pattern detected in domain: {intent}")
+            broadcast_mission_event(user_id, "evolution_fragility", {
+                "domain": intent,
+                "reason": outcome.get("issues", "Logic Divergence"),
+                "timestamp": datetime.now(timezone.utc).isoformat()
             })
 
     @classmethod
-    async def distill_trait(cls, event: Dict[str, Any]):
-        """
-        Extracts successful reasoning patterns and commits them to the Semantic Vault.
-        This enables 'Autonomous Skill Acquisition'.
-        """
-        trait_id = f"trait_{uuid.uuid4().hex[:8]}"
-        summary = event.get("summary", "N/A")
-        
-        trait_data = {
-            "id": trait_id,
-            "pattern": event.get("methodology", "N/A"),
-            "context": event.get("input", ""),
-            "success_metrics": event.get("metrics", {}),
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }
-        
-        logger.info("[V8 Learning] Trait distiled: %s", trait_id)
-        # In production, this would be a vector storage call
-        await LeviKafkaClient.send_event("intelligence.traits", trait_data)
-
-    @classmethod
     async def apply_importance_decay(cls, memory_vault: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        v8 Heuristic: Purges low-resonance/obsolete memories.
-        Maintains a 'Lean Cognitive State'.
-        """
+        """Maintains cognitive efficiency via resonance-based decay."""
         now = datetime.now(timezone.utc)
         survivors = []
-        
         for mem in memory_vault:
-            # Resonance = Importance / Age
-            age_days = (now - datetime.fromisoformat(mem["timestamp"])).days
+            ts = mem.get("timestamp") or mem.get("crystallized_at")
+            if not ts: 
+                survivors.append(mem)
+                continue
+            age_days = (now - datetime.fromisoformat(ts)).days
             importance = mem.get("importance", 5)
             resonance = importance / (1 + age_days * 0.1)
-            
-            if resonance > 0.5:
-                survivors.append(mem)
-            else:
-                logger.debug("[V8 Learning] Memory decayed: %s", mem.get("id"))
-                
+            if resonance > 0.5: survivors.append(mem)
         return survivors

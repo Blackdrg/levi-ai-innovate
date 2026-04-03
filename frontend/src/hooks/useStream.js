@@ -60,6 +60,19 @@ export const useStream = () => {
               else if (data.event === "results") {
                 useChatStore.getState().setExecutionResults(data.data);
               }
+              else if (data.event === "WAVE_STARTED") {
+                // v8 Sub-Mission Graph Wave Started
+                useChatStore.getState().setActivityPulse(`Wave Started: ${data.data.nodes.join(", ")}`);
+              }
+              else if (data.event === "NODE_COMPLETED") {
+                // v8 Single Agent Success pulse
+                console.log(`[V8] Agent ${data.data.agent} finished ${data.data.node_id}`);
+              }
+              else if (data.event === "MEMORY_DREAMING") {
+                // v8 Distiller pulse
+                useChatStore.getState().setActivityPulse(`Dreaming Phase: ${data.data.message}`);
+              }
+
               else if (data.event === "audit") {
                 // v8 High-Fidelity Audit: { score, issues, etc }
                 useChatStore.getState().setMissionFidelity(data.data.score);

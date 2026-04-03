@@ -21,9 +21,9 @@ TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY")
 TOGETHER_FINETUNE = "https://api.together.xyz/v1/fine-tuning/jobs"
 TOGETHER_FILES = "https://api.together.xyz/v1/files"
 BASE_MODEL = "meta-llama/Llama-3-8b-chat-hf"
-MIN_SAMPLES_TO_TRAIN = 150
-MAX_TRAINING_EPOCHS = 2
-QUALITY_THRESHOLD = 0.62  # Minimum eval score to activate model
+MIN_SAMPLES_TO_TRAIN = 50
+MAX_TRAINING_EPOCHS = 3  # Increased for Phase 6 depth
+QUALITY_THRESHOLD = 0.75  # More rigorous alignment for Phase 6
 
 EVAL_PROMPTS = [
     "What is the nature of consciousness?",
@@ -203,3 +203,38 @@ def generate_with_active_model(prompt: str, system_prompt: str, max_tokens: int 
             return resp.json()["choices"][0]["message"]["content"].strip()
         except: pass
     return None
+
+def poll_and_activate(job_id: str, training_samples: int = 0) -> bool:
+    """
+    Autonomous logic for Phase 6: Unbound Training Array.
+    Polls Together AI for job completion, evaluates result, and activates if successful.
+    """
+    logger.info(f"[Trainer] Autonomous poll initiated for job: {job_id}")
+    status_data = check_finetuning_job(job_id)
+    
+    if status_data["status"] == "completed":
+        model_id = status_data["model_id"]
+        logger.info(f"[Trainer] Job {job_id} completed. Model: {model_id}")
+        
+        # 1. Record version
+        record_model_version(job_id, model_id, training_samples)
+        
+        # 2. Evaluate resonance
+        eval_score = evaluate_model(model_id)
+        firestore_db.collection("model_versions").document(model_id).update({"eval_score": eval_score})
+        
+        # 3. Autonomous Gating
+        if eval_score >= QUALITY_THRESHOLD:
+            logger.info(f"[Trainer] Model {model_id} PASSED Sovereign Audit ({eval_score:.2f}). Activating.")
+            activate_model_version(model_id)
+            return True
+        else:
+            logger.warning(f"[Trainer] Model {model_id} FAILED Sovereign Audit ({eval_score:.2f} < {QUALITY_THRESHOLD}). Gated.")
+            return False
+            
+    elif status_data["status"] in ["failed", "error"]:
+        logger.error(f"[Trainer] Job {job_id} failed: {status_data.get('error') or status_data.get('message')}")
+        return False
+        
+    logger.info(f"[Trainer] Job {job_id} still in progress (Status: {status_data['status']}).")
+    return False

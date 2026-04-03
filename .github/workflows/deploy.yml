@@ -1,129 +1,56 @@
-name: LEVI-AI Sovereign Deployment
+name: LEVI-AI Production Deployment
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ main ]
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-
-      - name: Install Backend Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r backend/requirements.txt
-          pip install pytest
-
-      - name: Run Backend Tests
-        run: |
-          pytest backend/tests/
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+      postgres:
+        image: postgres:15-alpine
         env:
-          ENVIRONMENT: testing
-          REDIS_URL: redis://localhost:6379/0
+          POSTGRES_USER: levi
+          POSTGRES_PASSWORD: levi
+          POSTGRES_DB: levi_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-
-      - name: Install Frontend Dependencies
-        run: |
-          cd frontend
-          npm install
-
-      - name: Build Frontend
-        run: |
-          cd frontend
-          npm run build
-
-  docker-build-push:
-    needs: build-and-test
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push'
-    strategy:
-      matrix:
-        service: [gateway, brain, execution, memory, agent]
     steps:
-      - uses: actions/checkout@v3
+    - uses: actions/checkout@v3
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
 
-      - name: Login to Container Registry
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r backend/requirements.txt
+        pip install pytest pytest-asyncio
 
-      - name: Build and Push Microservice
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          file: backend/Dockerfile.v8
-          push: true
-          tags: ghcr.io/${{ github.repository }}/${{ matrix.service }}-service:latest
+    - name: Run Tests
+      env:
+        REDIS_URL: redis://localhost:6379/0
+        DATABASE_URL: postgresql://levi:levi@localhost:5432/levi_db
+        TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+      run: |
+        pytest backend/tests
 
-  build-push-frontend:
-    needs: build-and-test
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push'
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-
-      - name: Login to Container Registry
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and Push Frontend
-        uses: docker/build-push-action@v4
-        with:
-          context: ./frontend
-          file: frontend/Dockerfile
-          push: true
-          tags: ghcr.io/${{ github.repository }}/frontend:latest
-
-  deploy:
-    needs: [docker-build-push, build-push-frontend]
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push'
-    strategy:
-      matrix:
-        service: [gateway, brain, execution, memory, agent, frontend]
-    steps:
-      - name: Deploy to Render
-        env:
-          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
-          RENDER_GATEWAY_ID: ${{ secrets.RENDER_GATEWAY_SERVICE_ID }}
-          RENDER_BRAIN_ID: ${{ secrets.RENDER_BRAIN_SERVICE_ID }}
-          RENDER_EXECUTION_ID: ${{ secrets.RENDER_EXECUTION_SERVICE_ID }}
-          RENDER_MEMORY_ID: ${{ secrets.RENDER_MEMORY_SERVICE_ID }}
-          RENDER_AGENT_ID: ${{ secrets.RENDER_AGENT_SERVICE_ID }}
-          RENDER_FRONTEND_ID: ${{ secrets.RENDER_FRONTEND_SERVICE_ID }}
-        run: |
-          echo "Triggering deployment for ${{ matrix.service }} to Render..."
-          case "${{ matrix.service }}" in
-            gateway) RENDER_SERVICE_ID=$RENDER_GATEWAY_ID ;;
-            brain) RENDER_SERVICE_ID=$RENDER_BRAIN_ID ;;
-            execution) RENDER_SERVICE_ID=$RENDER_EXECUTION_ID ;;
-            memory) RENDER_SERVICE_ID=$RENDER_MEMORY_ID ;;
-            agent) RENDER_SERVICE_ID=$RENDER_AGENT_ID ;;
-            frontend) RENDER_SERVICE_ID=$RENDER_FRONTEND_ID ;;
-          esac
-          
-          curl -X POST "https://api.render.com/deploy/srv-${RENDER_SERVICE_ID}?key=${RENDER_API_KEY}"
+    - name: Build Docker Image
+      run: |
+        docker build -t levi-ai:latest -f backend/Dockerfile.v8 .

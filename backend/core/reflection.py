@@ -7,11 +7,11 @@ Based on LeviBrain v8 Critic v2.
 import logging
 import asyncio
 from typing import Dict, Any, List, Optional
-from .tool_registry import call_tool
-from .orchestrator_types import ToolResult
+from .agent_registry import AgentRegistry
+from .orchestrator_types import ToolResult, AgentResult
 from .goal_engine import Goal
-from backend.evaluation.fidelity import FidelityCritic
-from backend.evaluation.evaluator import AutomatedEvaluator
+from backend.pipelines.learning import learning_system
+
 
 class ReflectionEngine:
     """
@@ -20,28 +20,34 @@ class ReflectionEngine:
     """
 
     async def evaluate(self, response: str, goal: Goal, perception: Dict[str, Any], results: List[ToolResult]) -> Dict[str, Any]:
-        """Runs a high-fidelity fidelity audit using the v8 Critic."""
+        """Runs a high-fidelity mission audit using the v8 CriticAgent (Multi-Agent Debate)."""
         user_input = perception.get("input", "")
         
-        # 1. Fidelity Audit (LLM + Heuristics)
-        # Bridge ToolResult results for the critic
-        tool_data = [{"tool": r.tool, "data": r.data} for r in results]
+        # 1. Dispatch to v8 Critic Agent
+        critic_context = {
+            "goal": goal.objective,
+            "success_criteria": goal.success_criteria,
+            "response": response,
+            "user_input": user_input,
+            "tool_results": [r.dict() for r in results]
+        }
         
-        evaluation = await FidelityCritic.evaluate_mission(
-            user_query=user_input,
-            response=response,
-            goals=[goal.objective] + goal.success_criteria,
-            tool_results=tool_data
-        )
+        audit_res = await AgentRegistry.dispatch("critic", critic_context)
         
-        # 2. Enrich for v8 Reflection Loop
-        fidelity = evaluation.get("fidelity_score", 0.0)
+        score = fidelity
+        issues = audit_res.data.get("issues", ["High-fidelity audit failed."])
         
+        # 3. LEVI Learning Bridge: Log failures for prompt optimization
+        if score < 0.6:
+            import asyncio
+            asyncio.create_task(learning_system.log_failure(user_input, response, score, issues))
+
         return {
-            "score": fidelity,
-            "issues": [evaluation.get("critique", "No specific issues identified.")],
-            "is_satisfactory": fidelity >= 0.85, # Production-grade threshold
-            "raw_eval": evaluation
+            "score": score,
+            "issues": issues,
+            "is_satisfactory": audit_res.get("success", False) and score >= 0.8,
+            "raw_eval": audit_res.data,
+            "fix": audit_res.data.get("fix", "No fix identified.")
         }
 
     async def self_correct(self, response: str, evaluation: Dict[str, Any], goal: Goal, perception: Dict[str, Any]) -> str:

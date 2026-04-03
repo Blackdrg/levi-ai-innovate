@@ -99,6 +99,15 @@ celery_app.conf.beat_schedule = {
     "monthly-credit-reset": {
         "task": "backend.services.payments.tasks.reset_monthly_credits",
         "schedule": crontab(day_of_month=1, hour=0, minute=5),
+    },
+    # ── Phase 6: Unbound Training Array ──────────────────────
+    "unbound-training-cycle-weekly": {
+        "task": "backend.core.learning_tasks.unbound_training_cycle",
+        "schedule": crontab(hour=0, minute=0, day_of_week=0), # Weekly on Sunday
+    },
+    "poll-training-status-4h": {
+        "task": "backend.core.learning_tasks.poll_training_status",
+        "schedule": 14400.0, # Every 4 hours
     }
 }
 

@@ -1,31 +1,38 @@
-# 🛡️ LEVI-AI Production Security & Launch Checklist
+# ✅ LEVI-AI Sovereign Deployment Checklist (v8.11.1)
 
-Before flipping traffic onto LEVI-AI v7, you MUST execute this rigid audit. The Sovereign OS architecture introduces asynchronous vulnerabilities if proper keys, mounts, and limits are omitted.
+Ensure all 10 checkpoints are verified before graduating the v8.11.1 Monolith to production.
 
 ---
 
-## 1. Domain & Networking Hardening
-- [ ] **Cors Shield:** `CORS_ORIGINS` in your `.env.production` is strictly locked to your frontend domains (e.g., `["https://levi.ai", "https://studio.levi.ai"]`). No `*` wildcards.
-- [ ] **HTTPS Enforced:** Load balancers terminate SSL before hitting Uvicorn. The Server relies strictly on `fastapi.middleware.cors`.
-- [ ] **Firebase Handshake:** Frontend Firebase Client configuration precisely matches the backend Firebase Admin Service JSON.
-- [ ] **GCS Buckets Signed:** Ensure your Google Cloud Storage buckets for Video/Image rendering are strictly **PRIVATE**. Your Python backend must dynamically generate `Signed URLs` to stream media to the client.
+## 🏗️ 1. Infrastructure (6-Store Sync)
+- [ ] **Postgres:** `DATABASE_URL` connectivity and v8 schema applied.
+- [ ] **Redis:** `REDIS_URL` connectivity and pulse buffer active.
+- [ ] **Kafka:** `KAFKA_BOOTSTRAP_SERVERS` connectivity and topic creation.
+- [ ] **Neo4j:** `NEO4J_URI` connectivity and Cypher layer active.
+- [ ] **FAISS:** `faiss-service` online and index persistent.
+- [ ] **Firestore:** `FIREBASE_PROJECT_ID` connectivity.
 
-## 2. Distributed Memory Matrix (FAISS & Redis)
-- [ ] **Persistence Volume Mounts:** If scaling to >1 API Server, FAISS memory matrix data *cannot* be local disk. `VECTOR_DB_PATH` must be mapped to a Network File System or GCS FUSE mount.
-- [ ] **Redis Rate Limiting Verified:** Test the `/api/studio/video` endpoint rapidly 5 times to ensure the `backend.db.redis_client.distributed_lock` correctly returns a 429 "Transaction in progress" rather than double-deducting credits.
+---
 
-## 3. Financial Firewall
-- [ ] **Razorpay Webhooks Registered:** Ensure the Razorpay Dashboard webhook is pointing correctly to `https://api.domain.com/payments/webhook`.
-- [ ] **HMAC Signature Check:** Force a test payload to Razorpay and verify `RAZORPAY_KEY_SECRET` perfectly hashes matching the header `X-Razorpay-Signature`.
+## 🧠 2. Cognitive Fabric
+- [ ] **Perception:** Groq (Llama-3-70B) L0/L1 routing active.
+- [ ] **Planning:** DAG generation verified via `test_v8_planner.py`.
+- [ ] **Execution:** Async wave parallelization confirmed.
+- [ ] **Reflection:** Multi-model audit ($S > 0.85$) enabled.
 
-## 4. Multi-Modal Generative Assets
-- [ ] **MoviePy Dependencies:** Does the container have `ImageMagick` binaries installed globally? MoviePy's TextClip relies heavily on external C-bindings.
-- [ ] **TTS Folders:** Execute a test generation to ensure the Coqui TTS runtime model successfully downloaded to `/tmp/tts_models` instead of crashing on a read/write permission deny.
+---
 
-## 5. Environment Health
-> [!TIP]
-> **Use the Sovereign Probe**
-> Fire a test via `GET /admin/orchestrator/stats`. Ensure `redis`, `firestore`, and `groq_api` status reads back as `healthy`.
+## 🔐 3. Security Hardening
+- [ ] **SovereignVault:** AES-256 encryption keys rotated.
+- [ ] **PII Masking:** NER protection active across all streams.
+- [ ] **Sandbox:** CPU/Memory caps enforced for `CodeAgent`.
 
-- [ ] `.env` File scrubbed. No secrets are dynamically baked into frontend build times.
-- [ ] `ENVIRONMENT=production` set on FastAPI node to completely disable Celery inline tasks (`task_always_eager=False`).
+---
+
+## 📡 4. Telemetry Pulse
+- [ ] **SSE v3:** Real-time pulse streaming to frontend dashboard.
+- [ ] **Event Metrics:** `Fidelity Score` and `Mission Latency` archival.
+
+---
+
+© 2026 LEVI-AI SOVEREIGN HUB.

@@ -14,13 +14,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from backend.auth.logic import get_current_user as get_sovereign_identity
-from backend.auth.models import UserProfile as UserIdentity
-from backend.core.brain import LeviBrainV8
-from backend.engines.utils.security import SovereignSecurity
-from backend.core.orchestrator_types import ChatMessage
+from backend.api.orchestrator import handle_chat, stream_chat
 
-# Initialize v8 brain
-brain = LeviBrainV8()
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="", tags=["Chat"])
@@ -40,20 +35,16 @@ async def conversational_endpoint(
         raise HTTPException(status_code=400, detail="Neural protocol violation.")
 
     try:
-        # Collect all events from the stream into a single response (blocking mode)
-        # Note: LeviBrain.route(streaming=False) returns the full response dict.
-        res = await brain.run(
-            user_id=identity.uid,
+        # Bridged to the v8 Unified Orchestrator pass
+        res = await handle_chat(
             user_input=request.message,
-            session_id=request.session_id,
-            streaming=False,
-            mood=request.mood or "philosophical"
+            user_id=identity.uid or identity.user_id
         )
         
         return {
             "response": res.get("response", ""),
             "session_id": request.session_id,
-            "engine": "sovereign_brain_v7",
+            "engine": "sovereign_brain_v8",
             "status": "success",
             "metadata": res.get("decision", {})
         }
@@ -74,31 +65,21 @@ async def conversational_stream_endpoint(
 
     async def _mission_generator():
         try:
-            # Engage the central LeviBrain (Sovereign OS Heart)
-            async for event in await brain.route(
-                user_id=identity.user_id,
+            # Engage the central stream via the v8 Orchestrator bridge
+            async for event in stream_chat(
                 user_input=request.message,
-                session_id=request.session_id,
-                streaming=True,
-                user_tier=identity.tier,
-                mood=request.mood or "philosophical"
+                user_id=identity.uid or identity.user_id
             ):
-                # Unified SSE protocol for the v7 frontend (api.js compatibility)
-                if "token" in event:
-                    yield f"data: {json.dumps({'choices': [{'delta': {'content': event['token']}}]})}\n\n"
-                elif "event" in event:
-                    if event["event"] == "activity":
+                # Standardized v8 SSE format
+                if "type" in event:
+                    if event["type"] == "token":
+                        yield f"data: {json.dumps({'choices': [{'delta': {'content': event['data']}}]})}\n\n"
+                    elif event["type"] == "activity":
                         yield f"data: {json.dumps({'type': 'activity', 'message': event['data']})}\n\n"
-                    elif event["event"] == "metadata":
-                        yield f"data: {json.dumps({'metadata': event['data']})}\n\n"
-                    else:
-                        # Fallback for other events
-                        yield f"data: {json.dumps({'event': event['event'], 'data': event['data']})}\n\n"
             
             yield "data: [DONE]\n\n"
-            
         except Exception as e:
-            logger.error(f"[ChatAPI] Mission failure: {e}")
+            logger.error(f"[ChatAPI] Stream failure: {e}")
             yield f"event: error\ndata: {json.dumps('Sovereign mission interrupted.')}\n\n"
 
     return StreamingResponse(_mission_generator(), media_type="text/event-stream")

@@ -3,20 +3,22 @@ from typing import Dict, Any, Type, Optional
 from pydantic import BaseModel
 
 from backend.core.agent_base import SovereignAgent, AgentResult
-from backend.agents.chat_agent import ChatAgent, ChatInput
-from backend.agents.code_agent import CodeAgent, CodeInput
-from backend.agents.critic_agent import CriticAgent, CriticInput
-from backend.agents.diagnostic_agent import DiagnosticAgent, DiagnosticInput
-from backend.agents.document_agent import DocumentAgent, DocumentInput
-from backend.agents.image_agent import ImageAgent, ImageInput
-from backend.agents.video_agent import VideoAgent, VideoInput
-from backend.agents.local_agent import LocalAgent, LocalInput
-from backend.agents.memory_agent import MemoryAgent, MemoryInput
-from backend.agents.optimizer_agent import OptimizerAgent, OptimizerInput
-from backend.agents.python_repl_agent import PythonReplAgent, PythonInput
-from backend.agents.research_agent import ResearchAgent, ResearchInput
-from backend.agents.search_agent import SearchAgent, SearchInput
-from backend.agents.task_agent import TaskAgent, TaskInput
+from backend.core.v8.agents.chat import ChatAgentV8 as ChatAgent
+from backend.core.v8.agents.code import CodeAgentV8 as CodeAgent
+from backend.core.v8.agents.document import DocumentAgentV8 as DocumentAgent
+from backend.core.v8.agents.research import ResearchAgentV8 as ResearchAgent
+from backend.core.v8.agents.python_repl import PythonReplAgentV8 as PythonReplAgent
+from backend.core.v8.agents.critic import CriticAgentV8 as CriticAgent
+
+# Specialized/Legacy Support
+from backend.agents.image_agent import ImageAgent
+from backend.agents.video_agent import VideoAgent
+from backend.agents.local_agent import LocalAgent
+from backend.agents.memory_agent import MemoryAgent
+from backend.agents.optimizer_agent import OptimizerAgent
+from backend.agents.task_agent import TaskAgent
+from backend.agents.diagnostic_agent import DiagnosticAgent
+
 
 logger = logging.getLogger(__name__)
 
@@ -39,25 +41,7 @@ class AgentRegistry:
         "optimizer": OptimizerAgent,
         "python": PythonReplAgent,
         "research": ResearchAgent,
-        "search": SearchAgent,
         "task": TaskAgent
-    }
-
-    _inputs: Dict[str, Type[BaseModel]] = {
-        "chat": ChatInput,
-        "code": CodeInput,
-        "critic": CriticInput,
-        "diagnostic": DiagnosticInput,
-        "document": DocumentInput,
-        "image": ImageInput,
-        "video": VideoInput,
-        "local": LocalInput,
-        "memory": MemoryInput,
-        "optimizer": OptimizerInput,
-        "python": PythonInput,
-        "research": ResearchInput,
-        "search": SearchInput,
-        "task": TaskInput
     }
 
     @classmethod
@@ -81,20 +65,18 @@ class AgentRegistry:
             # 1. Instantiate Agent (Per-mission for isolation)
             agent = agent_cls()
             
-            # 2. Validate & Cast Input Schema
-            # We filter context to match input_cls fields
-            valid_keys = input_cls.__fields__.keys()
-            filtered_context = {k: v for k, v in context.items() if k in valid_keys}
-            
-            # Ensure 'input' is present if required
-            if "input" not in filtered_context and "input" in valid_keys:
-                filtered_context["input"] = context.get("query", context.get("text", ""))
-
-            mission_input = input_cls(**filtered_context)
+            # 2. Mission Schema Preparation
+            # v8 Agents expect a Dict or Pydantic model directly.
+            mission_input = {
+                "input": context.get("query", context.get("message", context.get("text", ""))),
+                **context
+            }
 
             # 3. Execute Mission
-            logger.info(f"Registry: Dispatching '{name}' mission.")
-            return await agent.execute(mission_input, lang=lang)
+            logger.info(f"Registry: Dispatching '{name}' mission (v8).")
+            if hasattr(agent, "execute"):
+                 return await agent.execute(mission_input, lang=lang)
+            return await agent(mission_input)
 
         except Exception as e:
             logger.exception(f"Registry: Mission Dispatch Failure for '{name}': {e}")

@@ -1,7 +1,11 @@
 import logging
+import asyncio
 from datetime import datetime
 from backend.celery_app import celery_app
 from backend.services.learning.logic import AdaptivePromptManager
+from backend.services.learning.unbound import unbound_engine
+from backend.services.learning.trainer import poll_and_activate, upload_training_file, submit_finetuning_job
+from backend.api.v8.telemetry import broadcast_mission_event
 
 logger = logging.getLogger(__name__)
 
@@ -92,3 +96,54 @@ def consolidate_global_wisdom():
         # For now, we just ensure the index is healthy.
     
     asyncio.run(_save())
+
+@celery_app.task(name="backend.services.orchestrator.learning_tasks.unbound_training_cycle")
+def unbound_training_cycle():
+    """
+    Phase 6: Unbound Training Array Orchestration.
+    Scrapes, filters, and uploads a new autonomous training batch.
+    """
+    logger.info("[Unbound] Starting scheduled training cycle...")
+    
+    async def _run():
+        # Telemetry Start
+        broadcast_mission_event("system", "evolution_start", {"message": "Initiating Unbound Scraper Cycle."})
+        
+        batch_file = await unbound_engine.run_unbound_cycle()
+        if batch_file:
+            broadcast_mission_event("system", "evolution_upload", {"message": "Wisdom Filtered. Uploading dataset."})
+            file_id = upload_training_file(batch_file)
+            if file_id:
+                job_id = submit_finetuning_job(file_id, suffix=f"unbound_{datetime.now().strftime('%m%d')}")
+                if job_id:
+                    broadcast_mission_event("system", "evolution_job", {"job_id": job_id, "message": "Fine-tuning job submitted."})
+                    # We store the job_id in a task-specific firestore doc to poll later
+                    from backend.db.firestore_db import db as firestore_db
+                    firestore_db.collection("system").document("training_status").set({
+                        "last_job_id": job_id,
+                        "status": "pending",
+                        "updated_at": datetime.utcnow()
+                    })
+        else:
+            broadcast_mission_event("system", "evolution_idle", {"message": "No high-fidelity wisdom harvested this cycle."})
+
+    asyncio.run(_run())
+
+@celery_app.task(name="backend.services.orchestrator.learning_tasks.poll_training_status")
+def poll_training_status():
+    """
+    Polls the active fine-tuning job and activates the model if quality threshold is met.
+    """
+    from backend.db.firestore_db import db as firestore_db
+    status_doc = firestore_db.collection("system").document("training_status").get()
+    
+    if not status_doc.exists:
+        return
+        
+    data = status_doc.to_dict()
+    job_id = data.get("last_job_id")
+    if job_id and data.get("status") == "pending":
+        success = poll_and_activate(job_id)
+        if success:
+            firestore_db.collection("system").document("training_status").update({"status": "completed"})
+            broadcast_mission_event("system", "evolution_complete", {"message": f"Sovereign Evolution Successful. Model promoted."})

@@ -133,6 +133,19 @@ async def decompose_goal(user_input: str, intent: IntentResult, context: Dict[st
         data = json.loads(content.strip())
         strategy = GoalStrategy(**data)
         
+        # ── 🟢 5. Swarm Debate Node (V8 Sovereign Evolution) ───────────────────
+        # Automatically insert a CriticAgent if a ResearchAgent is planned
+        has_research = any(sg.target_agent == "research_agent" for sg in strategy.subgoals)
+        if has_research:
+            research_goals = [sg.goal_id for sg in strategy.subgoals if sg.target_agent == "research_agent"]
+            debate_node = SubGoal(
+                description="Audit and criticize the initial research findings for fidelity and bias.",
+                target_agent="critic_agent",
+                dependencies=research_goals
+            )
+            strategy.subgoals.append(debate_node)
+            logger.info("[MetaBrain] Swarm Debate Node inserted (Research -> Critic).")
+
         if HAS_REDIS:
             redis_client.setex(cache_key, 600, strategy.json()) # Cache for 10 mins
             

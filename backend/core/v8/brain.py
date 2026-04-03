@@ -12,7 +12,7 @@ from .critic import ReflectionEngine
 from .learning import LearningLoopV8
 from backend.memory.manager import MemoryManager
 from ..orchestrator_types import ToolResult, IntentResult
-from ...kafka_client import emit_brain_event
+from backend.api.v8.telemetry import broadcast_mission_event
 
 logger = logging.getLogger(__name__)
 
@@ -56,19 +56,19 @@ class LeviBrainV8:
 
         # 1. PERCEPTION
         perception = await self._perceive(user_input, user_id, session_id, **kwargs)
-        await emit_brain_event("perception", {"request_id": request_id, "intent": str(perception["intent"])})
+        broadcast_mission_event(user_id, "perception", {"request_id": request_id, "intent": str(perception["intent"])})
         
         # 2. GOAL CREATION
         goal = await self.goal_engine.create_goal(perception)
-        await emit_brain_event("goal", {"request_id": request_id, "objective": goal.objective})
+        broadcast_mission_event(user_id, "goal", {"request_id": request_id, "objective": goal.objective})
 
         # 3. PLANNING (DAG)
         task_graph = await self.planner.build_task_graph(goal, perception)
-        await emit_brain_event("planning", {"request_id": request_id, "graph": task_graph.to_dict()})
+        broadcast_mission_event(user_id, "planning", {"request_id": request_id, "graph": task_graph.to_dict()})
         
         # 4. EXECUTION
         results = await self.executor.run(task_graph, perception)
-        await emit_brain_event("execution", {"request_id": request_id, "results_count": len(results)})
+        broadcast_mission_event(user_id, "execution", {"request_id": request_id, "results_count": len(results)})
 
         # 5. REFLECTION & SYNTHESIS
         final_response = await self._reflect_and_synthesize(results, goal, perception)
@@ -88,7 +88,7 @@ class LeviBrainV8:
             tool_results=[r.dict() for r in results],
             latency_ms=latency
         )
-        await emit_brain_event("audit", {"request_id": request_id, "score": audit["total_score"]})
+        await broadcast_mission_event(user_id, "audit", {"request_id": request_id, "score": audit["total_score"]})
 
         # 8. RESPONSE SYNCHRONIZATION
         return {
@@ -167,7 +167,7 @@ class LeviBrainV8:
         
         evaluation = await self.reflection.evaluate(response, goal, perception)
         if not evaluation["is_satisfactory"]:
-            await emit_brain_event("reflection.retry", {"score": evaluation["score"]})
+            broadcast_mission_event(perception["user_id"], "reflection_retry", {"score": evaluation["score"]})
             response = await self.reflection.self_correct(response, evaluation, goal, perception)
         
         return response
@@ -185,4 +185,4 @@ class LeviBrainV8:
                 "response": response,
                 "timestamp": datetime.now(timezone.utc).isoformat()
             }
-            asyncio.create_task(emit_brain_event("learning.feedback", audit_event))
+            broadcast_mission_event(user_id, "learning_feedback", audit_event)
