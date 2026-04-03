@@ -89,7 +89,7 @@ services:
       context: .
       dockerfile: backend/Dockerfile.worker
     container_name: levi-worker
-    command: celery -A backend.celery_app worker --loglevel=info
+    command: ./backend/worker_entrypoint.sh
     env_file:
       - .env
     environment:
@@ -101,6 +101,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      levi-api:
+        condition: service_started
     networks:
       - levi-net
 
