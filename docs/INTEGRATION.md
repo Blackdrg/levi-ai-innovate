@@ -1,34 +1,75 @@
-# 🔌 The Glassmorphic Integration Interface
+# 🔌 LeviBrain v8: High-Fidelity Integration Interface
 
-How the `React + Vite` Client talks to the `FastAPI + Celery` Backend Matrix.
+Documentation for the **Sovereign Monolith** communication protocols, focusing on the refined v8 SSE (Server-Sent Events) pulse architecture and mission auditing.
 
 ---
 
-## 📡 1. Deep Core SSE Brain Streaming
+## 📡 1. Deep Core v8 SSE Pulse Protocol
 
-The frontend does not Wait 10 seconds for a response logic string. It uses `useBrain.js` to parse tokens identically out of the `EventSource` connection.
+The LeviBrain v8 frontend (`React + Vite`) utilizes a high-fidelity streaming interface to track the 8-step cognitive pipeline in real-time.
 
-### How it works natively:
-The `fetch` request uses `Accept: text/event-stream`.
-Instead of JSON wrapping, the backend Uvicorn server yields chunks separated by `event: pulse_update` and `data: {json}`. The `readStream` function decodes bytes, appending characters directly into the React ChatWindow state buffer.
+### Event Lifecycle:
+The `useStream.js` hook parses the following standardized v8 events:
 
+| Event Type | Data Payload | UI Action |
+|------------|--------------|-----------|
+| `metadata` | `{request_id, session_id}` | Initializes transmission state. |
+| `graph` | `{nodes, edges}` | Renders the topological **Execution Graph**. |
+| `activity` | `{node_id, status, content}` | Updates node pulsing and partial results. |
+| `audit` | `{fidelity, issues, fix}` | Spawns the **Mission Auditor** dashboard. |
+| `done` | `{final_response}` | Closes the stream and commits to memory. |
+
+### Implementation Example:
 ```javascript
-// frontend/src/services/brainService.js
-while(true) {
-    const {done, value} = await reader.read();
-    if (done) break;
-    // ... parse out JSON components to trigger the UI intent changes.
+// frontend/src/hooks/useStream.js
+const event = line.replace('event: ', '');
+const data = JSON.parse(line.replace('data: ', ''));
+
+switch(event) {
+  case 'graph': setExecutionGraph(data); break;
+  case 'audit': setAuditResult(data); break;
+  // ... update v8 high-fidelity states
 }
 ```
 
-## 🎥 2. Event Polling (Celery Background Renders)
-Since SSE is purely text, rendering a 21-megabyte `.mp4` file via MoviePy stops the main event loop entirely.
+---
 
-**The Polling Handshake:**
-1. UI fires `POST /api/v1/studio/generate_video`.
-2. Backend triggers Celery and immediately responds with a `mission_id`.
-3. UI mounts a `setInterval` checking `GET /api/v1/studio/mission_status/:mission_id` every 3.5 seconds.
-4. When `status == "completed"`, it safely reads the generated signed URL from Google Cloud Storage.
+## 🎥 2. Asynchronous Mission Handshake
 
-## 🌌 3. The `Intent` UI Map
-The MetaPlanner dictates the visual display. If the LLM generates JSON with `"intent": "generate_image"`, the frontend immediately drops the `MessageBubble.jsx` component and spawns the `StudioCanvas.jsx` layout seamlessly below the chat string.
+For heavy generative tasks (Video/Large Document Analysis), the v8 orchestrator uses a hybrid SSE + Polling model.
+
+1. **Mission Start:** `POST /api/v1/orchestrator/chat` yields an immediate `mission_id`.
+2. **Cognitive Streaming:** The SSE stream provides real-time updates on task execution.
+3. **Blob Delivery:** For file outputs (Image/Video), the `done` event contains the temporary or signed URL to the **Sovereign Cloud Storage**.
+
+---
+
+## 🌌 3. The `v8` Cognitive UI Mapping
+
+The **Refinement Planner** dictates the visual display. If the v8 brain determines a transformation is required, it injects UI intents into the stream:
+
+- **Graph Intent:** Triggers the glassmorphic `ExecutionGraph.jsx`.
+- **Audit Intent:** Triggers the `MissionAuditor.jsx` with fidelity scoring.
+- **Resonance Intent:** Adjusts the global CSS theme (e.g., `text-gradient-v8`) based on the brain's focus.
+
+---
+
+## 📊 4. Mission Fidelity Schema (v8)
+
+Every completed mission returns a **Fidelity Bundle**:
+
+```json
+{
+  "fidelity_score": 0.92,
+  "metrics": {
+    "alignment": 0.95,
+    "grounding": 0.90,
+    "resonance": 0.91
+  },
+  "audit": {
+    "issues": ["Minor syntactic drift in node_4"],
+    "fix_strategy": "Applied adaptive logic refinement."
+  }
+}
+```
+Missions with a score `< 0.85` automatically trigger a **Correction Wave** before final delivery.

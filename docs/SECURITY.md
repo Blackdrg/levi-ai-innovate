@@ -20,8 +20,17 @@ When Stripe/Razorpay issues an intent success status to top up an account:
 2. It mathematically checks `X-Razorpay-Signature` against `RAZORPAY_KEY_SECRET` utilizing `hashlib.sha256` HMAC validation.
 3. This completely prevents bad actors from fabricating `payment.captured` webhooks via Postman requests.
 
-## 👁️ 4. Sovereign Shield (PII & Hijack Protection)
-Users attempting to inject malicious instructions or share sensitive PII (Emails, Credit Cards, SSNs) are caught natively by the `Sovereign Shield`. 
-1. **Input Sanitization**: `backend/core/planner.py` detects sensitive patterns and forces a Local-Only GGUF route.
-2. **Real-time Masking**: `backend/engines/utils/security.py` (`SovereignSecurity`) masks tokens in the outgoing SSE stream.
-3. **Boundary Enforcement**: Filters outputs recursively checking against global rules in `backend/core/planner.py`.
+## 👁️ 4. Sovereign Shield & Mission Auditing (v8)
+The v8 "Cognitive Monolith" introduces a dual-layer security model: **Input Sanitization** (Sovereign Shield) and **Output Auditing** (Sovereign Auditor).
+
+1. **Input Sanitization (Sovereign Shield):**
+   - **PII Masking:** `backend/api/v1/orchestrator.py` automatically detects and masks sensitive data (Emails, SSNs) before it reaches the LLM.
+   - **Hijack Protection:** The **Perception Engine** filters malicious system prompt injections.
+
+2. **Output Auditing (Sovereign Auditor):**
+   - **Mission Fidelity (0.85):** Every mission is audited by the **CriticAgentV8**. If the **Fidelity Score** falls below 0.85, a **Correction Wave** is triggered.
+   - **Hallucination Detection:** The auditor explicitly checks for grounding against the **Semantic Vault** (Mongo) and search results to prevent logic drift.
+
+3. **Boundary Enforcement:**
+   - **Real-time Masking:** The v8 SSE parser in `backend.api.v1.orchestrator` masks tokens in the outgoing stream if a security breach is detected during generation.
+   - **Network Isolation:** High-compute tasks are executed in a topological wave, ensuring logical isolation from the primary API request loop.
