@@ -51,14 +51,19 @@ export const useStream = () => {
                 useChatStore.getState().setActivityPulse(data.data);
               } 
               else if (data.event === "metadata") {
-                // Engine info: { route: "LOCAL" | "API" | "CACHE" }
-                updateLastMessage({ engine: data.data.route });
+                // v8 Engine info: { request_id, status }
+                setRequestId(data.data.request_id);
               }
               else if (data.event === "graph") {
                 useChatStore.getState().setExecutionGraph(data.data);
               }
               else if (data.event === "results") {
                 useChatStore.getState().setExecutionResults(data.data);
+              }
+              else if (data.event === "audit") {
+                // v8 High-Fidelity Audit: { score, issues, etc }
+                useChatStore.getState().setMissionFidelity(data.data.score);
+                useChatStore.getState().setAuditResult(data.data);
               }
               else if (data.event === "choice" || data.token) {
                 // Clear the thinking pulse once the first real token arrives
