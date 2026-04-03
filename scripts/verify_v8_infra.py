@@ -52,11 +52,25 @@ async def verify_v8_sovereign_infra():
         mongo_url = os.getenv("MONGO_URL", "mongodb://localhost:27017")
         client = motor.motor_asyncio.AsyncIOMotorClient(mongo_url)
         await client.admin.command('ping')
-        print("[4/4] MONGODB: Sovereign Semantic Vault is ONLINE.")
+        print("[4/5] MONGODB: Sovereign Semantic Vault is ONLINE.")
     except Exception as e:
-        print(f"[4/4] MONGODB: FAILURE - {e}")
+        print(f"[4/5] MONGODB: FAILURE - {e}")
 
-    print("\n--- V8 INFRASTRUCTURE DIAGNOSTIC COMPLETE ---\n")
+    # 5. Neo4j Verification (Relational Memory Graph)
+    try:
+        from neo4j import AsyncGraphDatabase
+        uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
+        user = os.getenv("NEO4J_USER", "neo4j")
+        password = os.getenv("NEO4J_PASSWORD", "levi_pass_graph")
+        driver = AsyncGraphDatabase.driver(uri, auth=(user, password))
+        async with driver.session() as session:
+            await session.run("RETURN 1")
+        print("[5/5] NEO4J: Sovereign Relational Graph is ONLINE.")
+        await driver.close()
+    except Exception as e:
+        print(f"[5/5] NEO4J: FAILURE - {e}")
+
+    print("\n--- V8.6 INFRASTRUCTURE DIAGNOSTIC COMPLETE ---\n")
 
 if __name__ == "__main__":
     asyncio.run(verify_v8_sovereign_infra())

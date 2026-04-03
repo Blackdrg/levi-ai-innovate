@@ -96,6 +96,7 @@ services:
       - DATABASE_URL=postgresql://levi:levi_pass@postgres:5432/levidb
       - REDIS_URL=redis://redis:6379/0
       - KAFKA_URL=kafka:29092
+      - NEO4J_URI=bolt://neo4j:7687
     depends_on:
       postgres:
         condition: service_healthy
@@ -103,8 +104,30 @@ services:
         condition: service_healthy
       levi-api:
         condition: service_started
+      neo4j:
+         condition: service_healthy
     networks:
       - levi-net
+
+  neo4j:
+    image: neo4j:5.12
+    container_name: levi-neo4j
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      - NEO4J_AUTH=${NEO4J_AUTH:-neo4j/levi_pass_graph}
+      - NEO4J_PLUGINS=["apoc"]
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    networks:
+      - levi-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:7474 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
 
 networks:
   levi-net:

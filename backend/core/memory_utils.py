@@ -43,15 +43,19 @@ async def get_global_memory() -> VectorDB:
 # PUBLIC INTERFACE
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def extract_facts(user_input: str, bot_response: str) -> List[Dict[str, Any]]:
-    """Uses LLM to extract categorized atomic facts about the user."""
+async def extract_memory_graph(user_input: str, bot_response: str) -> Dict[str, Any]:
+    """
+    Sovereign v8.6: Hybrid Memory Extraction.
+    Identifies flat atomic facts for FAISS and Relation Triplets for Neo4j.
+    """
     from .planner import call_lightweight_llm
     
     system_prompt = (
-        "You are the LEVI Memory Extractor. Extract key, atomic facts about the user. "
-        "Categorize each fact as: 'preference', 'trait', 'history', or 'factual'. "
-        "Output ONLY a JSON array of objects: [{\"fact\": \"...\", \"category\": \"...\"}]. "
-        "If no new facts are found, output []."
+        "You are the LEVI Memory & Graph Extractor. Analyze the interaction and extract:\n"
+        "1. Atomic Facts: [{\"fact\": \"...\", \"category\": \"preference|trait|history|factual\"}]\n"
+        "2. Knowledge Triplets: [{\"subject\": \"...\", \"relation\": \"...\", \"object\": \"...\"}]\n\n"
+        "Identify explicit relationships between the user, projects, technologies, and concepts.\n"
+        "Output ONLY JSON: {\"facts\": [...], \"triplets\": [...]}"
     )
     user_prompt = f"User: {user_input}\nLEVI: {bot_response}"
     
@@ -60,17 +64,17 @@ async def extract_facts(user_input: str, bot_response: str) -> List[Dict[str, An
         {"role": "user", "content": user_prompt}
     ]
     
-    facts_json = await call_lightweight_llm(messages)
-    if not facts_json: return []
+    raw_json = await call_lightweight_llm(messages)
+    if not raw_json: return {"facts": [], "triplets": []}
     
     try:
-        content = facts_json.strip()
+        content = raw_json.strip()
         if "```json" in content: content = content.split("```json")[1].split("```")[0]
         elif "```" in content: content = content.split("```")[1].split("```")[0]
         return json.loads(content.strip())
     except Exception as e:
-        logger.error(f"Failed to parse extracted facts: {e}")
-        return []
+        logger.error(f"Failed to parse memory graph extraction: {e}")
+        return {"facts": [], "triplets": []}
 
 async def store_facts(user_id: str, new_facts: List[Dict[str, Any]]):
     """
