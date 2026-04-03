@@ -16,8 +16,10 @@ export const useChatStore = create((set) => ({
   engineMetadata: null, // { name: "Llama-3-8B", provider: "Local", latency: "45ms" }
   memoryCount: 0,
   sovereignStatus: "Idle",
-  executionGraph: null, // DAG from planner
-  executionResults: [], // ToolResults from executor
+  executionGraph: null, // DAG from v8 planner
+  executionResults: [], // ToolResults from v8 executor
+  missionFidelity: 0.0, // 0.0 - 1.0 from audit
+  auditResult: null, // { total_score, issues, fix, etc. }
 
   setMode: (mode) => set({ mode }),
   setDeepResearch: (isDeep) => set({ isDeepResearch: isDeep }),
@@ -26,11 +28,13 @@ export const useChatStore = create((set) => ({
   setSovereignShield: (active) => set({ sovereignShield: active }),
   setEngineMetadata: (metadata) => set({ 
     engineMetadata: metadata,
-    sovereignStatus: metadata?.provider === "Local" ? "Sovereign" : "Hybrid"
+    sovereignStatus: metadata?.provider === "Local" ? "Sovereign" : "Hybrid-v8"
   }),
   setMemoryCount: (count) => set({ memoryCount: count }),
   setExecutionGraph: (graph) => set({ executionGraph: graph }),
   setExecutionResults: (results) => set({ executionResults: results }),
+  setMissionFidelity: (score) => set({ missionFidelity: score }),
+  setAuditResult: (audit) => set({ auditResult: audit }),
 
   addMessage: (msg) =>
     set((state) => ({ 
@@ -48,8 +52,14 @@ export const useChatStore = create((set) => ({
       return { messages: newMessages };
     }),
 
-  setStreaming: (isStreaming) => set({ isStreaming }),
+  setStreaming: (streaming) => {
+    if (streaming) {
+        set({ isStreaming: true, missionFidelity: 0.0, auditResult: null });
+    } else {
+        set({ isStreaming: false });
+    }
+  },
   setRequestId: (currentRequestId) => set({ currentRequestId }),
 
-  clearMessages: () => set({ messages: [] }),
+  clearMessages: () => set({ messages: [], executionGraph: null, executionResults: [], missionFidelity: 0.0 }),
 }));

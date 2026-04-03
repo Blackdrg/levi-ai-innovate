@@ -30,6 +30,10 @@ class DAGPlanner:
     """
 
     async def build_task_graph(self, goal: Any, perception: Dict[str, Any]) -> TaskGraph:
+        """
+        LeviBrain v8: Strategic Task Graph Construction.
+        Optimizes for Wave-based parallel execution.
+        """
         intent = perception.get("intent")
         intent_type = intent.intent_type if intent else "chat"
         complexity = intent.complexity_level if intent else 2
@@ -37,84 +41,117 @@ class DAGPlanner:
         
         graph = TaskGraph()
         
-        # 1. Base Layer (Direct Local / Fast Path)
+        # 1. Base Layer: Synchronous Local Path
         if complexity == 0:
             graph.add_node(TaskNode(
                 id="t_local", 
                 agent="local_agent", 
-                description="Fast path synchronous response",
+                description="Synchronous low-latency response",
                 inputs={"input": user_input}
             ))
             return graph
 
-        # 2. Sequential / Parallel Reasoning
+        # 2. Sequential / Parallel Reasoning Layer
         if intent_type == "search":
-             # Task 1: Search
+             # Wave 1: Discovery
              graph.add_node(TaskNode(
                  id="t_search",
                  agent="search_agent",
-                 description=f"Retrieve latest data for: {user_input}",
+                 description=f"Multi-vector search for: {user_input}",
                  inputs={"query": user_input}
              ))
              
-             # Task 2: Synthesize (Depends on Task 1)
+             # Wave 2: Synthesis
              graph.add_node(TaskNode(
                  id="t_synth",
                  agent="chat_agent",
-                 description="Synthesize search results into coherent response",
+                 description="Synthesize investigative findings",
                  inputs={"input": user_input, "context": "{{t_search.result}}"},
                  dependencies=["t_search"]
              ))
              
         elif intent_type == "document":
+             # Wave 1: Retrieval
              graph.add_node(TaskNode(
                  id="t_doc",
                  agent="document_agent",
-                 description="Query internal RAG vector store",
+                 description="RAG retrieval from Sovereign archive",
                  inputs={"query": user_input}
              ))
+             
+             # Wave 2: Synthesis
              graph.add_node(TaskNode(
                  id="t_synth",
                  agent="chat_agent",
-                 description="Synthesize document context",
+                 description="Synthesize document intelligence",
                  inputs={"input": user_input, "context": "{{t_doc.result}}"},
                  dependencies=["t_doc"]
              ))
 
         elif intent_type == "code":
+             # Wave 1: Architecture & Implementation
              graph.add_node(TaskNode(
                  id="t_code",
                  agent="code_agent",
-                 description="Generate code block",
+                 description="Architect and implement solution code",
                  inputs={"input": user_input}
              ))
-             # Verification Task (Parallel or Sequential)
+             
+             # Wave 2: Verification
              graph.add_node(TaskNode(
                  id="t_verify",
                  agent="python_repl_agent",
-                 description="Verify code syntax and logic",
+                 description="Verify code syntax and logic in sandbox",
                  inputs={"code": "{{t_code.result}}"},
                  dependencies=["t_code"]
              ))
 
-        else: # Standard Chat / Reasoning
+        else: # Intent: Chat / Analytical
              graph.add_node(TaskNode(
                  id="t_core",
                  agent="chat_agent",
-                 description="Primary LLM reasoning pass",
+                 description="Primary cognitive reasoning pass",
                  inputs={"input": user_input}
              ))
 
-        # 3. Final Reflection (Universal Pass for V8)
+        # 3. Universal v8 Reflection Pass
         if complexity >= 2:
-            last_id = graph.nodes[-1].id
+            last_node_id = graph.nodes[-1].id
             graph.add_node(TaskNode(
                 id="t_reflect",
                 agent="critic_agent",
-                description="Final qualitative reflection",
-                inputs={"draft": f"{{{{{last_id}.result}}}}", "goal": goal.objective},
-                dependencies=[last_id],
+                description="High-fidelity qualitative reflection pass",
+                inputs={
+                    "draft": f"{{{{{last_node_id}.result}}}}", 
+                    "goal": goal.objective,
+                    "criteria": goal.success_criteria
+                },
+                dependencies=[last_node_id],
                 critical=False
             ))
 
         return graph
+
+    async def refine_plan(self, original_graph: TaskGraph, reflection: Dict[str, Any], goal: Any, perception: Dict[str, Any]) -> TaskGraph:
+        """
+        Applies a 'Correction Wave' to the task graph based on reflection results.
+        """
+        logger.info("[V8 Planner] Refining plan based on reflection issues: %s", reflection.get("issues", []))
+        
+        new_graph = TaskGraph()
+        
+        # 1. Inherit successful nodes if appropriate (simplified for v8)
+        # 2. Add Correction Node
+        new_graph.add_node(TaskNode(
+            id="t_correction",
+            agent="chat_agent",
+            description="Apply corrective refinement to mission output",
+            inputs={
+                "input": perception.get("input"),
+                "issues": reflection.get("issues"),
+                "fix": reflection.get("fix"),
+                "original_context": "{{all_results}}" # High-fidelity resolver
+            }
+        ))
+        
+        return new_graph

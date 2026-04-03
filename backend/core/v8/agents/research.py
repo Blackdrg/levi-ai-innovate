@@ -25,15 +25,15 @@ class ResearchAgentV8(BaseV8Agent[ResearchInput]):
 
     async def _execute_system(self, input_data: ResearchInput, context: Dict[str, Any]) -> AgentResult:
         topic = input_data.input
-        self.logger.info(f"[Research-V8] starting system operation for: {topic}")
+        self.logger.info(f"[Research-V8] Initiating high-fidelity investigation for: {topic}")
         
         if not self.tavily_key:
-            return AgentResult(success=False, error="Search API missing.")
+            return AgentResult(success=False, error="Sovereign Search infrastructure (Tavily) is offline.")
 
-        # 1. Scraper: Multi-vector discovery
+        # 1. Scraper: Multi-vector Discovery
         discovery_tasks = [
             self._tavily_search(topic, depth="basic"),
-            self._tavily_search(f"{topic} latest research and news", depth="advanced")
+            self._tavily_search(f"detailed status and deep analysis of {topic}", depth="advanced")
         ]
         discovery_results = await asyncio.gather(*discovery_tasks)
         
@@ -41,36 +41,41 @@ class ResearchAgentV8(BaseV8Agent[ResearchInput]):
         for res in discovery_results:
             all_raw_results.extend(res.get("results", []))
 
-        # 2. Ranker: LLM scoring of source quality
+        if not all_raw_results:
+            return AgentResult(success=False, error="No external data intelligence could be gathered.")
+
+        # 2. Ranker: Precision Source Analysis (Pass 1)
         ranked_results = await self._rank_sources(topic, all_raw_results)
         
-        # 3. Summarizer: High-fidelity synthesis
-        final_summary = await self._summarize_findings(topic, ranked_results)
+        # 3. Summarizer: Investigative Synthesis (Pass 2)
+        final_report = await self._summarize_findings(topic, ranked_results)
         
         urls = [r.get("url") for r in ranked_results if r.get("url")]
         
         return AgentResult(
             success=True,
-            message=final_summary,
+            message=final_report,
             citations=list(set(urls)),
             data={
-                "ranked_sources_count": len(ranked_results),
-                "total_sources_analyzed": len(all_raw_results)
+                "ranked_count": len(ranked_results),
+                "total_analyzed": len(all_raw_results),
+                "architecture": "Investigative-v8"
             }
         )
 
     async def _rank_sources(self, topic: str, sources: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Ranker system pass."""
+        """Ranker system pass: Evaluates source relevance and depth."""
         if not sources: return []
         
-        # Take top 10 for ranking to save context
-        to_rank = sources[:10]
-        context = "\n".join([f"ID: {i} | Title: {s.get('title')} | Snippet: {s.get('content')[:150]}" for i, s in enumerate(to_rank)])
+        # Take top 12 for precision ranking
+        to_rank = sources[:12]
+        context = "\n".join([f"Source [{i}]: {s.get('title')} | Snippet: {s.get('content')[:200]}" for i, s in enumerate(to_rank)])
         
         rank_prompt = (
-            f"Topic: {topic}\n"
-            f"Sources:\n{context}\n\n"
-            "Rank these sources based on relevance and quality (0.0 - 1.0).\n"
+            f"RESEARCH TOPIC: {topic}\n"
+            f"DISCOVERED SOURCES:\n{context}\n\n"
+            "Task: Score each source for depth, authority, and relevance (0.0-1.0).\n"
+            "Identify the 'Critical Core' - the most investigative sources.\n"
             "Return JSON: {\"ranks\": [{\"id\": 0, \"score\": 0.95}, ...]}"
         )
         
@@ -79,34 +84,34 @@ class ResearchAgentV8(BaseV8Agent[ResearchInput]):
                 {"role": "system", "content": "You are the LEVI Ranker."},
                 {"role": "user", "content": rank_prompt}
             ])
-            # Simplified parsing for logic walkthrough
-            import json
+            import json as json_lib
             import re
-            json_match = re.search(r"\{.*\}", raw_res, re.DOTALL)
-            if json_match:
-                 data = json.loads(json_match.group(0))
+            match = re.search(r"\{.*\}", raw_res, re.DOTALL)
+            if match:
+                 data = json_lib.loads(match.group(0))
                  ranks = {item["id"]: item["score"] for item in data.get("ranks", [])}
-                 # Filter and Sort
-                 ranked = sorted([s for i, s in enumerate(to_rank) if i in ranks and ranks[i] > 0.6], 
+                 # Sort by score and filter out low-quality noise
+                 ranked = sorted([s for i, s in enumerate(to_rank) if i in ranks and ranks[i] > 0.65], 
                                  key=lambda x: ranks.get(to_rank.index(x), 0), reverse=True)
-                 return ranked
+                 return ranked[:8]
         except Exception as e:
-            self.logger.warning(f"Ranking pass failed: {e}")
+            self.logger.warning(f"Precision ranking pass failed: {e}")
             
-        return sources[:5] # Fallback to top 5
+        return sources[:6] # Fallback to top-k
 
     async def _summarize_findings(self, topic: str, results: List[Dict[str, Any]]) -> str:
-        """Summarizer pass."""
-        context = "\n\n".join([f"Source: {r.get('title')}\nContent: {r.get('content')}" for r in results])
+        """Summarizer pass: Investigative Synthesis."""
+        corpus = "\n\n".join([f"[Source: {r.get('title')}]: {r.get('content')}" for r in results])
         
         synth_prompt = (
-            f"Research Topic: {topic}\n\n"
-            f"Context:\n{context}\n\n"
-            "Synthesize a deep, investigative report that reveals hidden patterns and critical insights."
+            f"INVESTIGATIVE TOPIC: {topic}\n\n"
+            f"RESEARCH CORPUS:\n{corpus}\n\n"
+            "Task: Produce a high-fidelity intelligence report. Focus on hidden patterns, critical risks, and emerging opportunities.\n"
+            "Use formal citations [1][2]... and maintain a deep, investigative tone."
         )
         
         return await self.generator.council_of_models([
-            {"role": "system", "content": "You are the LEVI Master Summarizer."},
+            {"role": "system", "content": "You are the LEVI Master Investigator."},
             {"role": "user", "content": synth_prompt}
         ])
 
