@@ -1,22 +1,51 @@
-# 🧹 Routine Matrix Maintenance
+# 🛠️ LEVI-AI Sovereign Maintenance Guide (v8.11.1)
 
-Sovereign OS caches vast arrays of temporal data to supply low-latency reads. Left unchecked, LEVI-AI will fill both disk and Firestore constraints. Perform these tasks bi-weekly.
+Ensuring the absolute fidelity of the LEVI-AI v8.11.1 "Sovereign Monolith" requires periodic maintenance of the cognitive data fabric.
 
-### 1. The FAISS Flush Protocol
-If dynamic routing is writing excessive conversational branches to the vector stores, those `_faiss.bin` and `_meta.json` files expand infinitely.
-- **Action:** Execute the `.venv` and run `scripts/verify_learning_brain.py --flush`. This systematically trims the oldest dense vectors and garbage-collects numpy memory.
+---
 
-### 2. Studio Binary Trash Collection
-MoviePy drops extensive temporary audio files (`levi_tts_*.wav`) and video (`levi_vid_*.mp4`) into the OS `/tmp/` directory if a job crashes before normal `.finally()` garbage collection executes.
-- **Action (Linux):** `find /tmp -name "levi_*" -mtime +1 -exec rm -f {} \;`
-- **Action (Windows):** Clear the `%TEMP%` directory targeting `levi_*` stubs.
+## 🧠 1. Cognitive Memory Maintenance
 
-### 3. Firestore Document Lifecycle
-Firestore charges per read/write and storage space.
-`decision_audit` and `jobs` collections can organically balloon.
-- Set a **TTL (Time to Live) policy** natively inside Google Cloud Console targeting `decision_audit` documents older than 30 days.
+### **Dreaming Phase (Automatic)**
+The dreaming phase is triggered automatically every 5 missions.
+- **Action:** Monitors the `sovereign:internal:mission_count` key in Redis.
+- **Manual Trigger:** Use `DreamingTask.trigger_force(user_id)` for manual memory crystallization.
 
-### 4. Semantic Evolution Syncing
-The Critic agent `AdaptivePromptManager` constantly overwrites prompt rules based on 5-star user heuristical evaluations. 
-- Over months, it may become hyper-focused on one sub-set of topics (e.g. exclusively generating "cyberpunk" reflections).
-- You can manually inspect its state and force a neural reset via `scripts/verify_sovereign_shield.py --reset-prompts`.
+### **Trait Distillation (Automatic)**
+Fragmented episodic facts are distilled into permanent traits.
+- **Action:** Background process that checks facts with **Importance > 0.8**.
+- **Service:** `backend.core.memory.manager._trigger_distillation()`.
+
+---
+
+## 🗄️ 2. Persistence Layer Maintenance
+
+### **FAISS Index Sync**
+Semantic memory is stored in a partitioned FAISS index.
+- **Recommendation:** Perform a weekly `SovereignVectorStore.rebuild_index()` for users with >10,000 interactions to optimize `HNSW` performance.
+
+### **Postgres Identity Cleanup**
+Encryption keys used by `SovereignVault` must be rotated annually via the `scripts/rotate_vault_keys.py` utility.
+
+---
+
+## 📡 3. Telemetry & Pulse Health
+
+### **Kafka Event Retention**
+- **Recommendation:** Set `log.retention.hours=24` for the Sovereign Telemetry Bus. Detailed mission logs are archived in Postgres, so short Kafka persistence is sufficient for real-time pulse.
+
+### **Redis Pulse Flush**
+The `sovereign:blackboard:{session_id}` keys are transient. They are cleared automatically upon mission completion, but it is recommended to perform a weekly `redis-cli --scan --pattern "sovereign:blackboard:*" | xargs redis-cli del` to prune any orphaned sessions.
+
+---
+
+## 📈 4. Performance Diagnostics
+Use `scripts/verify_v8_master.py` to perform a 360-degree connectivity and fidelity audit.
+- **Thresholds:**
+    - **TTFT:** < 400ms.
+    - **Memory Hydration:** < 200ms.
+    - **Fidelity Score:** > 0.85 average.
+
+---
+
+© 2026 LEVI-AI SOVEREIGN HUB.

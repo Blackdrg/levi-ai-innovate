@@ -12,12 +12,14 @@ from pydantic import BaseModel, Field
 from backend.agents.base import SovereignAgent, AgentResult
 from backend.engines.chat.generation import SovereignGenerator
 from backend.engines.utils.i18n import SovereignI18n
+from backend.core.v8.blackboard import MissionBlackboard
 
 logger = logging.getLogger(__name__)
 
 class ResearchInput(BaseModel):
     input: str = Field(..., description="The complex topic to research deeply")
     user_id: str = "guest"
+    session_id: Optional[str] = None
     depth: int = 1
 
 class ResearchAgent(SovereignAgent[ResearchInput, AgentResult]):
@@ -27,15 +29,12 @@ class ResearchAgent(SovereignAgent[ResearchInput, AgentResult]):
     """
     
     def __init__(self):
-        super().__init__("ResearchArchitect")
+        super().__init__("ResearchArchitect", use_bus=True)
         self.tavily_key = os.getenv("TAVILY_API_KEY")
 
     async def _run(self, input_data: ResearchInput, lang: str = "en", **kwargs) -> Dict[str, Any]:
         """
-        Research Protocol v8:
-        1. Discovery Pulse.
-        2. Recursive branching.
-        3. Council-based Report Synthesis.
+        Research Protocol v8 Upgrade: Mini-System Orchestration.
         """
         topic = input_data.input
         self.logger.info(f"Initiating Research Mission: '{topic[:40]}'")
@@ -43,67 +42,106 @@ class ResearchAgent(SovereignAgent[ResearchInput, AgentResult]):
         if not self.tavily_key:
             return {"message": "Tavily Pulse is currently offline.", "success": False}
 
-        # 1. Initial Discovery Pulse
-        discovery = await self._tavily_search(topic, depth="basic")
-        discovery_results = discovery.get("results", [])
+        # 1. Pipeline: Search -> Rank -> Summarize
+        discovery_results = await self.search(topic, depth="basic")
         
-        # 2. Analysis & Sub-query Generation
-        discovery_context = "\n".join([f"- {r.get('title')}: {r.get('content')[:200]}" for r in discovery_results])
+        # 2. Analysis & Sub-query Generation (Self-Expansion)
+        sub_questions = await self._generate_sub_queries(topic, discovery_results)
         
-        analysis_prompt = (
-            f"Topic: '{topic}'\nContext: {discovery_context}\n\n"
-            "Identify 2 critical sub-questions for high-fidelity research."
-        )
-        
-        generator = SovereignGenerator()
-        sub_questions_raw = await generator.council_of_models([
-            {"role": "system", "content": "You are the LEVI Research Architect."},
-            {"role": "user", "content": analysis_prompt}
-        ])
-        sub_questions = [q.strip() for q in sub_questions_raw.split("\n") if q.strip()][:2]
-
         # 3. Parallel Deep Dives
         self.logger.info(f"Branching Discovery into {len(sub_questions)} vectors.")
-        tasks = [self._tavily_search(q, depth="advanced") for q in sub_questions]
+        tasks = [self.search(q, depth="advanced") for q in sub_questions]
         deep_data = await asyncio.gather(*tasks)
-
-        # 4. Final Synthesis
-        all_urls = [r.get("url") for r in discovery_results if r.get("url")]
-        context_blocks = [f"### [Initial Pulse]\n{discovery_context}"]
-        for i, data in enumerate(deep_data):
-            results = data.get("results", [])
-            q_text = "\n".join([f"- {r.get('content')[:300]}" for r in results])
-            context_blocks.append(f"### [Vector: {sub_questions[i]}]\n{q_text}")
-            all_urls.extend([r.get("url") for r in results if r.get("url")])
-
-        synthesis_prompt = (
-            f"Mission Topic: {topic}\n\n"
-            f"Aggregated Pulse Data:\n" + "\n\n".join(context_blocks) + "\n\n"
-            "Synthesize a professional, high-fidelity report."
-        )
         
-        final_report = await generator.council_of_models([
-            {"role": "system", "content": SovereignI18n.get_prompt("system_brain", lang)},
-            {"role": "user", "content": synthesis_prompt}
-        ])
+        # 4. Aggregation & Ranking
+        all_results = discovery_results.copy()
+        for data in deep_data:
+            all_results.extend(data)
+            
+        ranked_results = self.rank(all_results)
+        
+        # 5. Final Synthesis
+        summary = await self.summarize(topic, ranked_results, lang=lang)
+
+        # 6. Swarm Integration: Post to Blackboard
+        if input_data.session_id:
+            blackboard = MissionBlackboard(input_data.session_id)
+            await blackboard.post_insight(
+                self.id, 
+                f"Completed deep research on '{topic}'. Key findings: {summary[:500]}...",
+                tag="research_summary"
+            )
+
+        # 7. Collaborative Debate: Send to Critic via Agent Bus
+        await self.send_message("critic", {
+            "from": "research",
+            "goal": topic,
+            "data": summary
+        })
+        
+        # Wait for feedback from Critic
+        self.logger.info("ResearchArchitect is waiting for Critic feedback...")
+        feedback_msg = await self.receive_message()
+        
+        if feedback_msg and feedback_msg.get("success") is False:
+            self.logger.warning(f"Critic requested refinement: {feedback_msg.get('feedback')}")
+            # In a real scenario, we would refine here. For now, we append the feedback.
+            summary = f"{summary}\n\n[Critic Feedback]: {feedback_msg.get('feedback')}"
 
         return {
-            "message": final_report,
-            "citations": list(set(all_urls)),
+            "message": summary,
+            "citations": list(set([r.get("url") for r in ranked_results if r.get("url")])),
             "data": {
                 "depth_reached": len(sub_questions) + 1,
-                "sources_analyzed": len(all_urls)
+                "sources_analyzed": len(ranked_results)
             }
         }
 
-    async def _tavily_search(self, query: str, depth: str = "basic") -> Dict[str, Any]:
+    async def search(self, query: str, depth: str = "basic") -> List[Dict[str, Any]]:
+        """Integrates search API (Tavily)."""
         import aiohttp
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post("https://api.tavily.com/search", json={
                     "api_key": self.tavily_key, "query": query, "search_depth": depth
                 }) as resp:
-                    return await resp.json()
+                    data = await resp.json()
+                    return data.get("results", [])
         except Exception as e:
             self.logger.error(f"Search failure for '{query}': {e}")
-            return {"results": []}
+            return []
+
+    def rank(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Ranks results based on relevance score (dummy or logic)."""
+        # Tavily provides score, we use it for sorting
+        return sorted(results, key=lambda x: x.get("score", 0), reverse=True)
+
+    async def summarize(self, topic: str, results: List[Dict[str, Any]], lang: str = "en") -> str:
+        """Synthesizes high-fidelity reports from ranked data."""
+        context = "\n\n".join([f"### {r.get('title')}\nSource: {r.get('url')}\nContent: {r.get('content')[:500]}" for r in results[:10]])
+        
+        synthesis_prompt = (
+            f"Mission Topic: {topic}\n\n"
+            f"Aggregated Pulse Data:\n{context}\n\n"
+            "Synthesize a professional, high-fidelity report."
+        )
+        
+        generator = SovereignGenerator()
+        return await generator.council_of_models([
+            {"role": "system", "content": "You are the LEVI Research Architect."},
+            {"role": "user", "content": synthesis_prompt}
+        ])
+
+    async def _generate_sub_queries(self, topic: str, discovery_results: List[Dict[str, Any]]) -> List[str]:
+        """Heuristic for branching research vectors."""
+        discovery_context = "\n".join([f"- {r.get('title')}: {r.get('content')[:200]}" for r in discovery_results[:5]])
+        analysis_prompt = (
+            f"Topic: '{topic}'\nContext: {discovery_context}\n\n"
+            "Identify 2 critical sub-questions for high-fidelity research."
+        )
+        generator = SovereignGenerator()
+        raw = await generator.council_of_models([
+            {"role": "system", "content": "You are the LEVI Research Architect."},
+            {"role": "user", "content": analysis_prompt}
+        ])
+        return [q.strip() for q in raw.split("\n") if q.strip() and "?" in q][:2]

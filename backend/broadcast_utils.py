@@ -15,6 +15,15 @@ logger = logging.getLogger(__name__)
 # --- Configuration ---
 BROADCAST_CHANNEL = "sovereign:telemetry"
 
+# Standardized v8 Neural Pulse Types
+PULSE_MISSION_STARTED  = "mission_started"
+PULSE_MISSION_PLANNED  = "mission_planned"
+PULSE_MISSION_EXECUTED = "mission_executed"
+PULSE_MISSION_AUDITED  = "mission_audited"
+PULSE_NODE_COMPLETED   = "node_completed"
+PULSE_MISSION_ERROR     = "mission_error"
+
+
 class SovereignBroadcaster:
     """
     Real-time Telemetry Dispatcher.
@@ -52,18 +61,23 @@ class SovereignBroadcaster:
         
         try:
             # Yield initial connection event
-            yield f"event: pulse_connected\ndata: {json.dumps({'status': 'listening'})}\n\n"
+            yield f"event: pulse_connected\ndata: {json.dumps({'status': 'listening', 'user_id': user_id})}\n\n"
+
             
             while True:
                 # We use a non-blocking check for messages in a thread
                 message = await asyncio.to_thread(lambda: pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0))
                 
                 if message and message['type'] == 'message':
-                    data = message['data']
-                    yield f"event: pulse_update\ndata: {data}\n\n"
+                    data_raw = message['data']
+                    data = json.loads(data_raw)
+                    event_type = data.get("type", "pulse_update")
+                    # Forward as a structured SSE event
+                    yield f"event: {event_type}\ndata: {data_raw}\n\n"
                 
                 # Keep-alive heartbeat
                 yield ": heartbeat\n\n"
+
                 await asyncio.sleep(0.5)
                 
         except asyncio.CancelledError:

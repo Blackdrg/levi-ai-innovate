@@ -22,6 +22,28 @@ router = APIRouter(prefix="", tags=["Orchestrator"])
 # Initialize production LeviBrain instance
 brain = LeviBrain()
 
+async def handle_chat(user_input, user_id):
+    """v8 Core Bridge: Unified cognitive execution pass."""
+    result = await brain.run(user_input, user_id)
+    return result
+
+async def stream_chat(user_input, user_id):
+    """v8 Core Bridge: Token-by-token cognitive streaming."""
+    # We yield an initial pulse as per the requested v8 pattern
+    yield {"type": "activity", "data": "Initiating Cognitive Pulse..."}
+    
+    # We use the high-fidelity brain stream for actual tokens
+    async for chunk in await brain.route(
+        user_id=user_id,
+        user_input=user_input,
+        streaming=True
+    ):
+        if "token" in chunk:
+            yield {"type": "token", "data": chunk["token"]}
+        elif "event" in chunk and chunk["event"] == "activity":
+            yield {"type": "activity", "data": chunk["data"]}
+
+
 class ChatRequest(BaseModel):
     message: str = Field(..., description="User's query")
     session_id: Optional[str] = None

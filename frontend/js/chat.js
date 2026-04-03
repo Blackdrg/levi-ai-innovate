@@ -14,6 +14,7 @@ localStorage.setItem("levi_session_id", sessionId);
 let sessionMessages = [];
 let appMode = "chat";
 let uploadedDoc = null;
+let cy = null; // Cytoscape instance
 
 // --- LocalStorage Caching ---
 function saveToCache() {
@@ -253,9 +254,6 @@ async function sendMessage() {
             sessionId,
             (chunk) => {
                 botFullText += chunk;
-                // Performance optimization: only parse full text to DOM periodically or wait till end? 
-                // For smooth streaming UI, parsing markdown every chunk is fine for small msgs, 
-                // but can be optimized with requestAnimationFrame.
                 window.requestAnimationFrame(() => {
                     const parsed = typeof marked !== 'undefined' ? marked.parse(botFullText) : botFullText;
                     textSpan.innerHTML = parsed + '<span class="streaming-cursor"></span>';
@@ -263,23 +261,48 @@ async function sendMessage() {
                 });
             },
             (meta) => {
-                metadataCaptured = meta;
-
-                // Brain Routing Mode Switch (Auto)
-                if (meta.route && meta.route !== appMode) {
-                    const mappedMode = meta.route.toLowerCase() === 'agent' ? 'search' : meta.route.toLowerCase();
-                    switchMode(mappedMode);
+                const { event, data } = meta;
+                
+                // 1. Mission Metadata
+                if (event === 'metadata') {
+                    console.log("[LEVI] Mission Pulse:", data.request_id);
+                    if (data.request_id) metadataCaptured = { ...metadataCaptured, ...data };
                 }
 
-                // Real-time Intelligence Status rendering
-                if (meta.status_update) {
+                // 2. Intent & Activity (Visual Pulse)
+                if (event === 'activity') {
                     let statusDiv = botDiv.querySelector('.levi-status-indicator');
                     if (!statusDiv) {
                         statusDiv = document.createElement('div');
-                        statusDiv.className = 'levi-status-indicator text-[9px] text-primary/60 font-mono italic mb-2 animate-pulse';
+                        statusDiv.className = 'levi-status-indicator text-[9px] text-neural/60 font-mono italic mb-2 animate-pulse';
                         botDiv.prepend(statusDiv);
                     }
-                    statusDiv.innerText = `● ${meta.status_update}`;
+                    statusDiv.innerText = `● ${data}`;
+                }
+
+                // 3. Goal Formation
+                if (event === 'goal') {
+                    console.log("[LEVI] Goal Formed:", data.objective);
+                    // Could show goal in UI if needed
+                }
+
+                // 4. Mission Graph (Cytoscape Visualization)
+                if (event === 'graph') {
+                    const panel = document.getElementById("mission-graph-panel");
+                    if (panel) {
+                        panel.classList.remove("hidden");
+                        _renderMissionGraph(data);
+                    }
+                }
+
+                // 5. Execution Results
+                if (event === 'results') {
+                    metadataCaptured = { ...metadataCaptured, results: data };
+                }
+
+                // 6. Dreaming Phase (Evolutionary Pulse)
+                if (event === 'dreaming') {
+                    uiShowToast(`Evolutionary Dreaming Phase: ${data.message || 'Crystallizing bits...'}`, "info");
                 }
             },
             currentMood,
@@ -478,6 +501,71 @@ function clearDocument() {
 function uiShowToast(msg, type) {
     if (window.ui && window.ui.showToast) window.ui.showToast(msg, type);
     else console.log(`[${type}] ${msg}`);
+}
+
+// --- V8 Mission Graph (Cytoscape) ---
+function _renderMissionGraph(graphData) {
+    if (!window.cytoscape) return;
+    
+    const elements = [];
+    // 1. Add Nodes
+    graphData.forEach(node => {
+        elements.push({
+            data: { 
+                id: node.id, 
+                label: node.agent.replace('_agent', '').toUpperCase(),
+                agent: node.agent
+            }
+        });
+    });
+
+    // 2. Add Edges (Dependencies)
+    graphData.forEach(node => {
+        if (node.dependencies) {
+            node.dependencies.forEach(dep => {
+                elements.push({
+                    data: { source: dep, target: node.id }
+                });
+            });
+        }
+    });
+
+    if (!cy) {
+        cy = cytoscape({
+            container: document.getElementById('cy-container'),
+            elements: elements,
+            style: [
+                {
+                    selector: 'node',
+                    style: {
+                        'background-color': '#a855f7',
+                        'label': 'data(label)',
+                        'color': '#fff',
+                        'font-size': '10px',
+                        'text-valign': 'center',
+                        'text-halign': 'center',
+                        'width': '50px',
+                        'height': '50px',
+                        'font-family': 'Outfit'
+                    }
+                },
+                {
+                    selector: 'edge',
+                    style: {
+                        'width': 2,
+                        'line-color': '#1e293b',
+                        'target-arrow-color': '#1e293b',
+                        'target-arrow-shape': 'triangle',
+                        'curve-style': 'bezier'
+                    }
+                }
+            ],
+            layout: { name: 'breadthfirst', directed: true, padding: 10 }
+        });
+    } else {
+        cy.json({ elements: elements });
+        cy.layout({ name: 'breadthfirst', directed: true, padding: 10 }).run();
+    }
 }
 
 // Expose functions to window

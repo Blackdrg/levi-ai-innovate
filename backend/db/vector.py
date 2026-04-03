@@ -22,13 +22,40 @@ class VectorStore:
         self.dimension = dimension
         self.index = faiss.IndexFlatIP(dimension)
         self.metadata: List[Dict[str, Any]] = []
+        self.storage_path = os.path.abspath(f"backend/data/vectors/{index_name}")
+        os.makedirs(os.path.dirname(self.storage_path), exist_ok=True)
+        self._load_from_disk()
 
-    async def add(self, embeddings: np.ndarray, metadata: List[Dict[str, Any]]):
+    def _load_from_disk(self):
+        """Initializes index from disk if it exists."""
+        if os.path.exists(self.storage_path + ".index"):
+            try:
+                self.index = faiss.read_index(self.storage_path + ".index")
+                with open(self.storage_path + ".meta", "r") as f:
+                    import json
+                    self.metadata = json.load(f)
+                logger.info(f"VectorStore: Loaded '{self.index_name}' from disk.")
+            except Exception as e:
+                logger.error(f"VectorStore: Failed to load index '{self.index_name}': {e}")
+
+    def checkpoint(self):
+        """Persists the current state to disk."""
+        try:
+            faiss.write_index(self.index, self.storage_path + ".index")
+            with open(self.storage_path + ".meta", "w") as f:
+                import json
+                json.dump(self.metadata, f)
+            logger.debug(f"VectorStore: Checkpoint successful for '{self.index_name}'.")
+        except Exception as e:
+            logger.error(f"VectorStore: Checkpoint failed for '{self.index_name}': {e}")
+
+    async def add(self, embeddings: np.ndarray, metadata: List[Dict[str, Any]], persist: bool = True):
         """Adds embeddings and metadata to the centralized index."""
         if not embeddings.any(): return
         self.index.add(embeddings.astype('float32'))
         self.metadata.extend(metadata)
-        # Persistent logic bridged to local bin files
+        if persist:
+            self.checkpoint()
 
     async def search(self, query_embedding: np.ndarray, limit: int = 5) -> List[Dict[str, Any]]:
         """Semantic search with similarity scores."""

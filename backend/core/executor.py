@@ -10,7 +10,9 @@ import json
 from typing import Dict, Any, List, Set, Coroutine
 from .orchestrator_types import ToolResult, IntentResult
 from .tool_registry import call_tool
+from backend.broadcast_utils import SovereignBroadcaster, PULSE_NODE_COMPLETED
 from ..utils.network import ai_service_breaker
+
 
 logger = logging.getLogger(__name__)
 
@@ -20,12 +22,15 @@ class GraphExecutor:
     Processes task nodes based on topological dependencies.
     """
 
-    async def execute(self, graph: Any, perception: Dict[str, Any]) -> List[ToolResult]:
+    async def execute(self, graph: Any, perception: Dict[str, Any], user_id: str = "global") -> List[ToolResult]:
+
         logger.info("[V8 Executor] Executing Task Graph...")
         results: Dict[str, ToolResult] = {}
         completed_ids: Set[str] = set()
+        blackboard: Dict[str, Any] = {} # v8 Swarm Communication
         
         remaining_nodes = list(graph.nodes)
+
         
         while remaining_nodes:
             # 1. Identify executable nodes (all deps satisfied)
@@ -42,8 +47,12 @@ class GraphExecutor:
             logger.debug("[V8 Executor] Executing Wave: %s", [n.id for n in executable_nodes])
             
             # 2. Parallel Execution of Wave
-            tasks = [self._execute_node(n, results, perception) for n in executable_nodes]
+            tasks = [self._execute_node(n, results, perception, blackboard=blackboard, user_id=user_id) for n in executable_nodes]
+            SovereignBroadcaster.publish("WAVE_STARTED", {"nodes": [n.id for n in executable_nodes]}, user_id=user_id)
+
             wave_results = await asyncio.gather(*tasks)
+
+
             
             # 3. Update State
             for n, res in zip(executable_nodes, wave_results):
@@ -65,7 +74,9 @@ class GraphExecutor:
 
         return list(results.values())
 
-    async def _execute_node(self, node: Any, previous_results: Dict[str, ToolResult], perception: Dict[str, Any]) -> ToolResult:
+    async def _execute_node(self, node: Any, previous_results: Dict[str, ToolResult], perception: Dict[str, Any], blackboard: Dict[str, Any] = None, user_id: str = "global") -> ToolResult:
+
+
         """Executes a single node with template-resolved inputs."""
         agent_name = node.agent
         start_time = asyncio.get_event_loop().time()
@@ -77,8 +88,10 @@ class GraphExecutor:
         merged_params = {
             **perception.get("context", {}), 
             **resolved_inputs, 
-            "input": perception.get("input")
+            "input": perception.get("input"),
+            "__blackboard__": blackboard or {} # Injected swarm state
         }
+
         
         try:
             # 3. Secure Invocation with Circuit Breaker
@@ -96,7 +109,23 @@ class GraphExecutor:
                  result = raw_res
                  
             result.latency_ms = int((asyncio.get_event_loop().time() - start_time) * 1000)
+            
+            # 5. Blackboard Update (Swarm Write-back)
+            if result.success and isinstance(result.data, dict) and "blackboard_update" in result.data:
+                blackboard.update(result.data["blackboard_update"])
+                logger.debug(f"[V8 Executor] Blackboard updated by {agent_name}")
+
+            # 6. Node Telemetry Pulse (v8 Sovereign)
+
+            SovereignBroadcaster.publish(PULSE_NODE_COMPLETED, {
+                "node_id": node.id, 
+                "agent": agent_name,
+                "success": result.success,
+                "latency": result.latency_ms
+            }, user_id=user_id)
+            
             return result
+
             
         except Exception as e:
             logger.exception("[V8 Executor] Execution failed for %s: %s", agent_name, e)

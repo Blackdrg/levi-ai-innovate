@@ -1,30 +1,46 @@
-# 🚨 Priority 1 Escalation: LEVI-AI Server Runbook
+# 🏃 LEVI-AI Sovereign Runbook (v8.11.1)
 
-Because LEVI-AI v7 is a multi-process, distributed pipeline, a failure usually isolates into one of three domains: Node Routing, Data Stores, or Generator Queues.
+Operations and cognitive maintenance procedures for the LEVI-AI v8.11.1 "Sovereign Monolith."
 
-## Level 1: API / Core Router Failure
-**Symptoms:** FastAPI is returning `500` continuously, or Server-Sent Events (SSE) immediately disconnect.
-**Resolution Steps:**
-1. Check the Llama.cpp fallback path or Groq API rate-limits. If `GROQ_API_KEY` hit request limits, the MetaPlanner will stall.
-2. Examine the `server_log.txt` in the root or `backend/logs/`.
-3. Hard reset the API container cluster (`backend/api/main.py`) without touching the Database or Celery Workers.
+---
 
-## Level 2: Async Queue Rendering Deadlock (Studio)
-**Symptoms:** Users click `Generate Video` and the job hangs in a `pending` state indefinitely.
-**Resolution Steps:**
-```mermaid
-graph LR
-    A[Check RabbitMQ/Redis Broker] -->|Broker down?| B(Restart redis-server)
-    A -->|Broker healthy?| C[Check Celery Workers]
-    C -->|Pool Exhausted?| D(Add concurrency or kill stuck ffmpeg threads)
-    D --> E(Flush pending stale jobs in Firestore)
+## 🚀 1. Cold Start Procedure
+1.  **Orchestration Initializer:** Initialize the service fabric.
+    ```bash
+    docker-compose up -d postgres redis kafka zookeeper neo4j faiss firestore
+    ```
+2.  **Cognitive Migration:** Apply the v8.11.1 schema.
+    ```bash
+    python backend/core/v8/db_init.py
+    ```
+3.  **Monolith Boot:** Launch the API and Worker.
+    ```bash
+    uvicorn backend.api.main:app --host 0.0.0.0 --port 8000
+    python backend/workers/generative_worker.py
+    ```
+
+---
+
+## 🩺 2. Diagnostic Verifications
+Perform a 360-degree cognitive health check.
+```bash
+python scripts/verify_v8_master.py
 ```
-1. Access the `Flower` web UI on `http://localhost:5555`.
-2. Determine if MoviePy spawned an invisible sub-process of `ImageMagick` that is hanging on a prompt.
-3. If using Windows, ensure the pool is set to `solo` (`--pool=solo`). Permitting `prefork` on Windows causes severe billiard semaphore deadlocks.
+- **Checks:** Redis context pulse, Postgres traits connection, Kafka event flow, Neo4j knowledge graph, and FAISS vector retrieval.
 
-## Level 3: Distributed Matrix / FAISS Failure
-**Symptoms:** Memory retrieval returns empty, or process dumps huge amounts of RAM.
-**Resolution Steps:**
-If RAM spikes to 100%, an embedded `paraphrase-MiniLM` sentence transformer is likely memory leaking across multi-threaded loads. 
-- You MUST cap Uvicorn workers and limit Celery concurrency, or switch to the `RENDER=true` simulated hashing algorithm to instantly cut memory usage by 800MB.
+---
+
+## 🛠️ 3. Emergency Recovery
+### **"Quantum Misalignment" (State Sync Failure)**
+If the brain enters an inconsistent state:
+1.  **Flush Pulse Cache:** `redis-cli flushall`.
+2.  **Restart Monolith:** Restart the API container to re-initialize the `MemoryManager`.
+
+### **Agent Tool Latency High**
+If agent execution waves exceed 15 seconds:
+- **Action:** Check **Tavily/OpenAI** API health.
+- **Circuit Breaker:** The `sovereign-breaker` should trigger automatically, but if it fails, manually set `ROUTING_OVERRIDE=local` in `.env` for zero-latency survival.
+
+---
+
+© 2026 LEVI-AI SOVEREIGN HUB.

@@ -1,38 +1,31 @@
-# 🚀 LAUNCH MANIFEST: Sovereign OS v7
+# 🚀 LEVI-AI Sovereign Launch Manifest (v8.11.1)
 
-The definitive list of integrated, confirmed, and operational engines in LEVI-AI v7. If a module is fundamentally rewritten and running, it belongs on this manifest.
-
----
-
-## 🧠 Brain & Memory Array
-| Subsystem | Status | Description |
-|-----------|--------|-------------|
-| **FAISS Semantic Matrix** | ONLINE | `backend.db.vector_store` and `backend.engines.memory` efficiently map textual history into 384-dimensional numerical spaces. |
-| **Critic Swarm Mutation** | ONLINE | `backend/api/learning.py` and `backend/services/learning` evaluate recent outputs against a 5-star heuristic. |
-| **Meta-Planner** | ONLINE | `backend.core.planner` determines the lowest cost execution path (e.g., direct Groq inference vs Multi-Agent task planning). |
-| **Server-Sent Events (SSE)** | ONLINE | True zero-latency streaming architecture via `SovereignBroadcaster` mapping `groq` tokens to the UI buffer. |
+The complete service set for the graduation to the v8.11.1 "Sovereign Monolith."
 
 ---
 
-## 🎨 Studio & Generative Elements
-| Subsystem | Status | Description |
-|-----------|--------|-------------|
-| **Ken Burns Synthesizer** | ONLINE | `backend.engines.studio` and `backend/services/` programmatic image manipulation scaling and panning arrays via `moviepy`. |
-| **Together AI Stable Connect** | ONLINE | Bridged to fast-path LoRA and Stable Diffusion XL pipelines for philosophical scene generation. |
-| **Coqui Text-To-Speech** | ONLINE | Asynchronously renders `.wav` overlays of cinematic AI narrations. |
-| **Celery Queue Isolation** | ONLINE | Prevents any visual rendering load from damaging the core REST API's event loop via Redis backpressure routing. |
+## 🏗️ 1. Service Fabric
+| Service | Image | Role | Status |
+| :--- | :--- | :--- | :--- |
+| **Monolith API** | `sovereign-core:v8` | **The Brain** (Brain, Orchestrator, SSE) | Active |
+| **Generative Worker** | `sovereign-worker:v8` | **The Swarm** (Agent Execution, Distillation) | Active |
+| **Identity DB** | `postgres:15-alpine` | **Identity (Tier 4)** (User traits, Profiles) | Active |
+| **Episodic DB** | `firestore-local` | **Episodic (Tier 2)** (Conversations, Jobs) | Active |
+| **Context Cache** | `redis:7-alpine` | **Working (Tier 1)** (Pulse, Blackboard) | Active |
+| **Semantic Store** | `faiss-service` | **Semantic (Tier 3)** (Vector facts) | Active |
+| **Knowledge Graph**| `neo4j:5-community` | **Relational Knowledge** (Research artifacts) | Active |
+| **Event Bus** | `confluentinc/cp-kafka` | **Telemetry Pulse** (Event-driven bus) | Active |
 
 ---
 
-## 🛡️ Security & Economics
-| Subsystem | Status | Description |
-|-----------|--------|-------------|
-| **Sovereign Privacy Shield** | ONLINE | Active PII scrubbers running inline before memory is committed into global storage. |
-| **Atomic Redis Locks** | ONLINE | Concurrency-protected credit deduction loops mitigating generation-layer race conditions. |
-| **Firebase JWT Auth** | ONLINE | Zero-trust RBAC (Free, Pro, Creator) controlling the exact compute resources afforded per session. |
+## 🛠️ 2. Core Cognition Components
+- **Perception Engine:** Llama-3 70B (Groq).
+- **Goal Engine:** GPT-4o / Sonnet-3.5.
+- **DAG Planner:** Sovereign v8.11 Recursive Logic.
+- **Graph Executor:** Asynchronous Wave Engine.
+- **Reflection Engine:** Critic-driven multi-model audit.
+- **SovereignVault:** AES-256 Encryption utilities.
 
 ---
 
-> [!NOTE]
-> **Total Logotomization Confirmed**
-> 19 monolithic root-level backend scripts have been aggressively deactivated and over-written. 100% of execution runs purely inside isolated domain micro-architectures. Modules securely mapped via `scripts/fix_legacy_imports.py` verification.
+© 2026 LEVI-AI SOVEREIGN HUB.

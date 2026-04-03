@@ -20,21 +20,24 @@ from backend.db.firebase import db as sovereign_db
 from backend.utils.broadcast import SovereignBroadcaster
 
 # --- Routers ---
-from backend.api.v1.orchestrator import router as orchestrator_router
-from backend.api.v1.brain import router as brain_router
-from backend.api.v1.chat import router as chat_router
-from backend.api.v1.studio import router as studio_router
-from backend.api.v1.ai_studio import router as ai_studio_router
-from backend.api.v1.memory import router as memory_router
-from backend.api.v1.documents import router as documents_router
-from backend.api.v1.learning import router as learning_router
-from backend.api.v1.auth import router as auth_router
-from backend.api.v1.payments import router as payments_router
-from backend.api.v1.monitor_routes import router as monitor_router
-from backend.api.v1.search import router as search_router
-from backend.api.v1.privacy import router as privacy_router
-from backend.api.v1.gallery import router as gallery_router
-from backend.api.v1.analytics import router as analytics_router
+# --- Routers (Sovereign v8 Consolidation) ---
+from backend.api.v8.orchestrator import router as orchestrator_router
+from backend.api.v8.chat import router as chat_router
+from backend.api.v8.memory import router as memory_router
+from backend.api.v8.documents import router as documents_router
+from backend.api.v8.auth import router as auth_router
+from backend.api.v8.payments import router as payments_router
+from backend.api.v8.learning import router as learning_router
+from backend.api.v8.search import router as search_router
+from backend.api.v8.gallery_analytics import router as gallery_router
+from backend.api.v8.privacy_studio import router as studio_router
+from backend.api.v8.monitor import router as monitor_router
+
+# --- V8 Sovereign Bridge ---
+from backend.api.v8.mobile_auth import router as mobile_auth_router
+from backend.api.v8.telemetry import router as telemetry_router
+from backend.api.v8.shield import SovereignShieldMiddleware
+from backend.api.v8.knowledge import router as knowledge_router
 
 logger = logging.getLogger(__name__)
 
@@ -44,63 +47,64 @@ async def lifespan(app: FastAPI):
     Sovereign OS v8 Lifespan Management.
     Ensures persistent neural links and clean shutdown.
     """
-    logger.info("Initializing Sovereign Heart (v8)...")
+    logger.info("Initializing Sovereign Heart (v8 Core)...")
     
     # 1. Connectivity Check (Ledger & Cache)
     try:
         sovereign_cache().ping()
-        logger.info("[Main] Sovereign Cache active (v8).")
-        
-        # Test Firestore connection
-        logger.info("[Main] Sovereign Ledger active (Firestore).")
+        logger.info("[Main] Sovereign Cache (Redis) active.")
     except Exception as e:
         logger.error(f"[Main] Critical infrastructure failure: {e}")
         
-    # 2. Daily Evolution Schedule
-    # (Simulated - in production this triggers Celery Beat)
     yield
     
     logger.info("Stopping Sovereign Heart (v8)...")
 
+# --- Middleware ---
 app = FastAPI(
     title="LEVI-AI Sovereign OS",
-    version="8.0.0",
+    version="8.11.0", # Consolidated V8 Monolith
     lifespan=lifespan
 )
 
-# --- Middleware ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Standardized for global readiness
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# Phase 7: Sovereign Shield Hardening
+app.add_middleware(SovereignShieldMiddleware, rate_limit=150)
+
 @app.middleware("http")
 async def context_middleware(request: Request, call_next):
-    """Injects mission context into all request headers."""
+    """Injects mission context into all request headers (v8)."""
     request_id = str(asyncio.get_event_loop().time())
     response = await call_next(request)
     response.headers["X-Sovereign-ID"] = request_id
+    response.headers["X-V8-Status"] = "evolutionary"
     return response
 
-# --- V1 Global API Routing ---
-app.include_router(orchestrator_router, prefix="/api/v1/orchestrator", tags=["Orchestrator"])
-app.include_router(brain_router, prefix="/api/v1/brain", tags=["Brain"])
-app.include_router(chat_router, prefix="/api/v1/chat", tags=["Chat"])
-app.include_router(studio_router, prefix="/api/v1/studio", tags=["Studio"])
-app.include_router(ai_studio_router, prefix="/api/v1/ai_studio", tags=["AI Studio"])
-app.include_router(memory_router, prefix="/api/v1/memory", tags=["Memory"])
-app.include_router(documents_router, prefix="/api/v1/documents", tags=["Documents"])
-app.include_router(learning_router, prefix="/api/v1/learning", tags=["Learning"])
-app.include_router(auth_router, prefix="/api/v1/auth", tags=["Auth"])
-app.include_router(payments_router, prefix="/api/v1/payments", tags=["Payments"])
-app.include_router(monitor_router, prefix="/api/v1/monitor", tags=["Monitor"])
-app.include_router(search_router, prefix="/api/v1/search", tags=["Search"])
-app.include_router(privacy_router, prefix="/api/v1/privacy", tags=["Privacy"])
-app.include_router(gallery_router, prefix="/api/v1/gallery", tags=["Gallery"])
-app.include_router(analytics_router, prefix="/api/v1/analytics", tags=["Analytics"])
+# --- V8 Sovereign API Routing (Hard Cutover) ---
+# All features consolidated under /api/v8/
+app.include_router(orchestrator_router, prefix="/api/v8/orchestrator", tags=["Orchestrator V8"])
+app.include_router(chat_router, prefix="/api/v8/chat", tags=["Chat V8"])
+app.include_router(memory_router, prefix="/api/v8/memory", tags=["Memory V8"])
+app.include_router(documents_router, prefix="/api/v8/documents", tags=["Documents V8"])
+app.include_router(auth_router, prefix="/api/v8/auth", tags=["Auth V8"])
+app.include_router(payments_router, prefix="/api/v8/payments", tags=["Payments V8"])
+app.include_router(learning_router, prefix="/api/v8/learning", tags=["Learning V8"])
+app.include_router(search_router, prefix="/api/v8/search", tags=["Search V8"])
+app.include_router(gallery_router, prefix="/api/v8/gallery", tags=["Gallery V8"])
+app.include_router(studio_router, prefix="/api/v8/studio", tags=["Studio V8"])
+app.include_router(monitor_router, prefix="/api/v8/monitor", tags=["Monitor V8"])
+
+# Sovereign Bridge Routing (Mobile & Telemetry)
+app.include_router(mobile_auth_router, prefix="/api/v8/mobile")
+app.include_router(telemetry_router, prefix="/api/v8/telemetry")
+app.include_router(knowledge_router, prefix="/api/v8/knowledge")
 
 @app.get("/")
 async def root():

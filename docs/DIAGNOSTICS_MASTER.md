@@ -1,38 +1,33 @@
-# 🩺 The Master Diagnostics Guide (`/admin/orchestrator/stats`)
+# 🩺 LEVI-AI Sovereign Diagnostics Master (v8.11.1)
 
-How to read the internal telemetry array that the Sovereign OS broadcasts at `http://api.../admin/orchestrator/stats` (Authentication required `is_admin=True`).
+Standard health-monitoring and cognitive-fidelity metrics for the v8.11.1 "Sovereign Monolith."
 
-## Understanding the Payload
+---
 
-### 1. Route Validation
-```json
-"orchestration": {
-  "routes": {
-    "cache": 1420,
-    "local": 0,
-    "tool": 34,
-    "api": 620
-  }
-}
-```
-If `cache` is extremely low compared to `api`, your Vector matching threshold (default `0.92`) is likely too restrictive, forcing LEVI to spend computational cycles asking LLMs to re-answer standard identical prompts.
+## 🔍 1. Standard Testing Suite
+LEVI-AI graduates to a 3-tier testing hierarchy:
+1.  **Unit Logic:** `pytest tests/unit/test_brain.py`.
+2.  **Integration Core:** `pytest tests/integration/test_v8_graph.py`.
+3.  **Cognitive Fidelity:** `pytest tests/cognitive/test_mission_accuracy.py`.
 
-### 2. Agent Health Tracking
-```json
-"agents": {
-  "research_agent": {
-      "status": "degraded",
-      "failures_7d": 24
-  }
-}
-```
-The MetaPlanner monitors the exact instances sub-tasks stall (e.g. Tavily search timeouts). If failures cross 20, LEVI actively routes traffic away from that agent.
+---
 
-### 3. Evolutionary Thresholds
-```json
-"evolution": {
-    "interaction_surplus": 30,
-    "threshold": 25
-}
-```
-This is the Critic-Driven Mutation ticker. Once `interaction_surplus` > `threshold`, the overnight Celery task (`learning_tasks.py`) forces an execution sequence crossing Groq and Together AI to evaluate failure points and rewrite LEVI's internal code of conduct/system prompt.
+## 🧪 2. Multi-Store Health Metrics
+The v8.11.1 system requires 6 healthy data connections.
+
+- **Postgres (Identity):** `SELECT 1 FROM user_profiles` (Latency < 20ms).
+- **Redis (Context):** `PING` (Latency < 5ms).
+- **Kafka (Telemetry):** `LIST_TOPICS` (Consumer lag < 100ms).
+- **Neo4j (Knowledge):** `MATCH (n) RETURN n LIMIT 1` (Latency < 50ms).
+- **FAISS (Semantic):** `index.ntotal > 0` (Retrieval < 40ms).
+- **Firestore (Episodic):** `db.collection('conversations')` (Latency < 100ms).
+
+---
+
+## 🛡️ 3. Security Diagnostics (Shield)
+- **NER Masking:** `DiagnosticAgent.verify_masking("My email is me@example.com")` ➔ `[MASKED]`.
+- **Vault Health:** `SovereignVault.test_encryption()` ➔ `Success`.
+
+---
+
+© 2026 LEVI-AI SOVEREIGN HUB.

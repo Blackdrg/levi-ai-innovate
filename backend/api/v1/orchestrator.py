@@ -12,16 +12,15 @@ from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from backend.auth.logic import get_current_user as get_sovereign_identity
-from backend.auth.models import UserProfile as UserIdentity
-from backend.core.v8.brain import LeviBrainV8
+from backend.api.orchestrator import handle_chat, stream_chat, brain
 from backend.engines.utils.security import SovereignSecurity
+
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="", tags=["Orchestrator V8"])
 
-# Initialize finalized modular LeviBrain instance
-brain = LeviBrainV8()
+# Using the centralized brain instance from the v8 orchestrator
+
 
 class ChatRequest(BaseModel):
     message: str = Field(..., description="User's query")
@@ -43,18 +42,18 @@ async def orchestrate_vision(
         raise HTTPException(status_code=400, detail="Neural protocol violation detected.")
 
     try:
-        # Bridge to the modular v8 Brain engine
-        res = await brain.route(
-            user_id=identity.uid if hasattr(identity, "uid") else "guest",
+        # Unified v8 Cognitive Mission
+        res = await handle_chat(
             user_input=request.message,
-            session_id=request.session_id or f"s_{asyncio.get_event_loop().time()}",
-            streaming=False,
-            mood=request.mood
+            user_id=identity.uid if hasattr(identity, "uid") else identity.user_id
         )
         
+        # Strategic insight (merged from v1/brain.py logic)
         return {
             "response": res.get("response", ""),
             "intent": res.get("intent", "chat"),
+            "strategy": res.get("intent", "chat"), # For compatibility with brain.py
+            "confidence": res.get("audit", {}).get("total_score", 0.9),
             "session_id": request.session_id,
             "status": "success",
             "audit": res.get("audit", {}),
@@ -77,21 +76,18 @@ async def orchestrate_stream(
 
     async def _brain_stream():
         try:
-            # Engage the modular v8 Brain mission stream
-            async for chunk in await brain.route(
-                user_id=identity.uid if hasattr(identity, "uid") else "guest",
+            # Engage the v8 unified cognitive stream
+            async for event in stream_chat(
                 user_input=request.message,
-                session_id=request.session_id or f"s_{asyncio.get_event_loop().time()}",
-                streaming=True,
-                mood=request.mood
+                user_id=identity.uid if hasattr(identity, "uid") else identity.user_id
             ):
                 # Standardized v8.3 SSE Protocol
-                event = chunk.get("event", "choice")
-                data = chunk.get("data", chunk.get("token", ""))
-                yield f"event: {event}\ndata: {json.dumps(data)}\n\n"
+                if event["type"] == "token":
+                    yield f"event: choice\ndata: {json.dumps(event['data'])}\n\n"
+                elif event["type"] == "activity":
+                    yield f"event: activity\ndata: {json.dumps(event['data'])}\n\n"
             
             yield f"event: done\ndata: {json.dumps('[MISSION_COMPLETE]')}\n\n"
-            
         except Exception as e:
             logger.error(f"[Gateway-V8] Stream failure: {e}")
             yield f"event: error\ndata: {json.dumps('Cosmic synchronization failed (v8).')}\n\n"

@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 from backend.db.redis import r as redis_client, HAS_REDIS
 from backend.db.firestore_db import db as firestore_db
 from backend.services.learning.logic import UserPreferenceModel
-from backend.utils.kafka import SovereignKafka
+from backend.api.v8.telemetry import broadcast_mission_event
 
 # Internal v8 Cognitive Modules
 from backend.memory.cache import MemoryCache
@@ -151,11 +151,10 @@ class MemoryManager:
         pruned_context = self._trim_facts_by_tokens(facts, max_tokens=_MAX_CONTEXT_TOKENS)
         
         # 5. Telemetry Pulse
-        asyncio.create_task(SovereignKafka.emit_event("memory_events", {
-            "event": "CONTEXT_GENERATED",
-            "user_id": user_id,
+        broadcast_mission_event(user_id, "memory_context_generated", {
+            "request_id": session_id, 
             "latency_ms": facts["latency"]
-        }))
+        })
 
         return pruned_context
 
@@ -234,12 +233,10 @@ class MemoryManager:
             # 4. Trigger Autonomous Evolution (Fact -> Trait)
             await self._trigger_evolution(user_id)
             
-            # 5. Kafka Telemetry
-            asyncio.create_task(SovereignKafka.emit_event("memory_events", {
-                "event": "FACTS_EXTRACTED",
-                "user_id": user_id,
+            # 5. Telemetry Pulse
+            broadcast_mission_event(user_id, "facts_extracted", {
                 "count": len(new_facts)
-            }))
+            })
             
         except Exception as e:
             logger.error(f"[MemoryV8] Fact extraction anomaly: {e}")
@@ -346,10 +343,8 @@ class MemoryManager:
                 logger.error(f"Redis purge failed: {e}")
 
         # 4. Mission Telemetry
-        asyncio.create_task(SovereignKafka.emit_event("system_events", {
-            "event": "MEMORY_WIPE_COMPLETE",
-            "user_id": user_id,
+        broadcast_mission_event(user_id, "memory_wipe_complete", {
             "facts_cleared": cleared_count
-        }))
+        })
 
         return cleared_count

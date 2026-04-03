@@ -1,36 +1,39 @@
-# 🛡️ The Sovereign Security Framework
+# 🛡️ The Sovereign Security Framework (v8.11.1)
 
-Architectural isolation relies fundamentally on Identity and Economics. You cannot scale an LLM orchestrator without immediately hemorrhaging developer tokens if your network bounds fail.
+Architectural isolation relies fundamentally on Identity, Encryption, and Sanitization. LEVI-AI v8.11.1 implements a multi-layered security mesh to protect user-specific cognitive traits.
 
 ---
 
-## 🔐 1. Authentication (Firebase Handshake)
-LEVI-AI routes completely block unregistered users from accessing High-Compute Tiers (Creator/Pro video parsing). 
-- **`backend/services/auth/logic.py`**: Executes strict validation of the Firebase `idToken` attached as `Authorization: Bearer` against the `firebase-admin` internal SDK.
-- It returns user Identity Maps tied to `uid` values mapped in Firestore, bypassing standard session-cookie hijacking vulnerabilities.
+## 🔐 1. Identity & Encryption (SovereignVault)
 
-## 💰 2. Transaction Integrity (Redis Atomic Locks)
-Generating an AI video can cost >$0.02 and take 4 minutes. A malicious user submitting 50 rapid requests could cripple the host.
-- **`backend/db/redis_client.py` (`distributed_lock`)**: Protects the exact second an AI Studio deduction initiates via `backend.services.payments.logic.use_credits()`.
-- Wait blocks ensure credit reads and updates fire simultaneously via Lua scripts to prevent **Race Conditions**. 
+LEVI-AI v8.11.1 graduates beyond simple plaintext storage for user identity.
+- **SovereignVault (AES-256):** All Tier 4 Identity traits in Postgres are encrypted at rest via `SovereignVault.encrypt()`. Decryption only occurs during authorized context hydration.
+- **Firebase Handshake:** Routes strictly validate the Firebase `idToken` against the `firebase-admin` internal SDK, returning `uid` values mapped to internal Sovereign IDs.
 
-## ⚖️ 3. Webhook Cryptography (Razorpay)
-When Stripe/Razorpay issues an intent success status to top up an account:
-1. `backend/api/payments.py` receives the payload.
-2. It mathematically checks `X-Razorpay-Signature` against `RAZORPAY_KEY_SECRET` utilizing `hashlib.sha256` HMAC validation.
-3. This completely prevents bad actors from fabricating `payment.captured` webhooks via Postman requests.
+## ⚖️ 2. Transaction Integrity (Redis Atomic Locks)
 
-## 👁️ 4. Sovereign Shield & Mission Auditing (v8)
-The v8 "Cognitive Monolith" introduces a dual-layer security model: **Input Sanitization** (Sovereign Shield) and **Output Auditing** (Sovereign Auditor).
+Mission execution and high-compute tasks are protected by a distributed locking mechanism.
+- **Distributed Locking:** Prevents race conditions during credit deductions and agent commissions.
+- **Webhook Cryptography:** Razorpay/Stripe payloads are mathematically verified using `hashlib.sha256` HMAC validation against `RAZORPAY_KEY_SECRET`.
 
-1. **Input Sanitization (Sovereign Shield):**
-   - **PII Masking:** `backend/api/v1/orchestrator.py` automatically detects and masks sensitive data (Emails, SSNs) before it reaches the LLM.
-   - **Hijack Protection:** The **Perception Engine** filters malicious system prompt injections.
+## 👁️ 3. Sovereign Shield & NER Sanitization
 
-2. **Output Auditing (Sovereign Auditor):**
-   - **Mission Fidelity (0.85):** Every mission is audited by the **CriticAgentV8**. If the **Fidelity Score** falls below 0.85, a **Correction Wave** is triggered.
-   - **Hallucination Detection:** The auditor explicitly checks for grounding against the **Semantic Vault** (Mongo) and search results to prevent logic drift.
+The v8.11.1 "Cognitive Monolith" implements a dual-layer sanitization model.
 
-3. **Boundary Enforcement:**
-   - **Real-time Masking:** The v8 SSE parser in `backend.api.v1.orchestrator` masks tokens in the outgoing stream if a security breach is detected during generation.
-   - **Network Isolation:** High-compute tasks are executed in a topological wave, ensuring logical isolation from the primary API request loop.
+1.  **Input Sanitization (Sovereign Shield):**
+    - **NER PII Masking:** Automatically detects and masks sensitive entities before hitting external inference (Groq, OpenAI). Protected entities: `PERSON`, `ORG`, `LOC`, `PERCENT`, `MONEY`, `EMAIL`, `PHONE`.
+    - **Hijack Protection:** The **Perception Engine** filters for "ignore previous instructions" injection patterns.
+
+2.  **Output Auditing (Sovereign Auditor):**
+    - **Mission Fidelity (0.85):** Every mission is audited by the **CriticAgentV8**. If the **Fidelity Score** falls below 0.85, a **Correction Wave** is triggered.
+    - **Logic Grounding:** The auditor explicitly checks for grounding against the Knowledge Graph (Neo4j) and Semantic Store (FAISS).
+
+## 🧩 4. Execution Sandbox
+
+The `CodeAgent` executes all generated Python artifacts in an isolated, zero-host-access sandbox.
+- **Resource Limits:** CPU and Memory caps are enforced per execution block.
+- **Network Isolation:** No external internet access from within the PythonREPL sandbox.
+
+---
+
+© 2026 LEVI-AI SOVEREIGN HUB.

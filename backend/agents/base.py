@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 # Local imports from utility layer
 from backend.engines.utils.security import SovereignSecurity
 from backend.engines.utils.i18n import SovereignI18n
+from backend.services.agent_bus import sovereign_bus, AgentBus
 
 T = TypeVar("T", bound=BaseModel)
 R = TypeVar("R", bound=BaseModel)
@@ -39,9 +40,25 @@ class SovereignAgent(abc.ABC, Generic[T, R]):
     Architecture: Identity -> Input Scrubbing -> Execution -> Output Sanitization.
     """
     
-    def __init__(self, name: str):
+    def __init__(self, name: str, use_bus: bool = False):
         self.name = name
         self.logger = logging.getLogger(f"agent.{name.lower()}")
+        if use_bus:
+            self.bus = sovereign_bus
+            self.bus.register(self.name.lower())
+        else:
+            self.bus = None
+
+    async def send_message(self, to_agent: str, message: Dict[str, Any]):
+        """Directly send a message via the Agent Bus."""
+        if self.bus:
+            await self.bus.send(to_agent.lower(), message)
+
+    async def receive_message(self) -> Optional[Dict[str, Any]]:
+        """Wait for a message from the Agent Bus."""
+        if self.bus:
+            return await self.bus.receive(self.name.lower())
+        return None
 
     async def execute(self, input_data: T, lang: str = "en", **kwargs) -> AgentResult:
         """

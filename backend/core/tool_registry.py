@@ -8,40 +8,41 @@ import logging
 from typing import Dict, Any, Type, Optional
 from backend.utils.network import standard_retry, ai_service_breaker
 
-# Importing from the new tiered agent ecosystem
-from backend.agents.chat_agent import ChatAgent
-from backend.agents.image_agent import ImageAgent
-from backend.agents.code_agent import CodeAgent
-from backend.agents.search_agent import SearchAgent
-from backend.agents.local_agent import LocalAgent
-from backend.agents.python_repl_agent import PythonREPLAgent
-from backend.agents.video_agent import VideoAgent
-from backend.agents.critic_agent import CriticAgent
-from backend.agents.diagnostic_agent import DiagnosticAgent
-from backend.agents.optimizer_agent import OptimizerAgent
-from backend.agents.document_agent import DocumentAgent
-from backend.agents.research_agent import ResearchAgent
-from backend.agents.task_agent import TaskAgent
-from backend.agents.memory_agent import MemoryAgent
+# Importing from the new tiered agent ecosystem (V8 Hardened)
+from backend.core.v8.agents.chat import ChatAgentV8
+from backend.core.v8.agents.code import CodeAgentV8
+from backend.core.v8.agents.document import DocumentAgentV8
+from backend.core.v8.agents.research import ResearchAgentV8
+from backend.core.v8.agents.python_repl import PythonReplAgentV8
 from backend.core.v8.agents.consensus import ConsensusAgentV8
 from backend.core.v8.agents.relation_agent import RelationAgentV8
+from backend.core.v8.agents.critic import CriticAgentV8
+
+# Legacy / Non-reasoning agents
+from backend.agents.image_agent import ImageAgent
+from backend.agents.local_agent import LocalAgent
+from backend.agents.video_agent import VideoAgent
+from backend.agents.diagnostic_agent import DiagnosticAgent
+from backend.agents.optimizer_agent import OptimizerAgent
+from backend.agents.task_agent import TaskAgent
+from backend.agents.memory_agent import MemoryAgent
 
 logger = logging.getLogger(__name__)
 
-# Registry of tool instances (retaining the name mapping for the V8 Orchestrator)
+# Registry of tool instances (V8 Synchronized)
 _TOOL_INSTANCES: Dict[str, Any] = {
-    "chat_agent":   ChatAgent(),
+    "chat_agent":   ChatAgentV8(),
     "image_agent":  ImageAgent(),
-    "code_agent":   CodeAgent(),
-    "search_agent": SearchAgent(),
+    "code_agent":   CodeAgentV8(),
+    "search_agent": ResearchAgentV8(), # V8 Research agent handles search missions
     "local_agent":  LocalAgent(),
-    "python_repl_agent": PythonREPLAgent(),
+    "python_repl_agent": PythonReplAgentV8(),
     "video_agent": VideoAgent(),
-    "critic_agent": CriticAgent(),
+    "critic_agent": CriticAgentV8(),
     "diagnostic_agent": DiagnosticAgent(),
     "optimizer_agent": OptimizerAgent(),
-    "document_agent": DocumentAgent(),
-    "research_agent": ResearchAgent(),
+    "document_agent": DocumentAgentV8(),
+    "research_agent": ResearchAgentV8(),
     "task_agent": TaskAgent(),
     "memory_agent": MemoryAgent(),
     "consensus_agent": ConsensusAgentV8(),

@@ -28,7 +28,8 @@ class ResearchAgentV8(BaseV8Agent[ResearchInput]):
         self.logger.info(f"[Research-V8] Initiating high-fidelity investigation for: {topic}")
         
         if not self.tavily_key:
-            return AgentResult(success=False, error="Sovereign Search infrastructure (Tavily) is offline.")
+            self.logger.warning("[Research-V8] Tavily offline. Falling back to Sovereign Vector Intelligence.")
+            return await self._execute_local_fallback(topic, context)
 
         # 1. Scraper: Multi-vector Discovery
         discovery_tasks = [
@@ -127,3 +128,28 @@ class ResearchAgentV8(BaseV8Agent[ResearchInput]):
         except Exception as e:
              self.logger.error(f"Search failure for '{query}': {e}")
              return {"results": []}
+
+    async def _execute_local_fallback(self, topic: str, context: Dict[str, Any]) -> AgentResult:
+        """Fallback mission using internal knowledge and vector resonance."""
+        from backend.db.vector_store import VectorDB
+        try:
+            user_id = context.get("user_id", "system")
+            kb = await VectorDB.get_user_collection(user_id, "knowledge")
+            results = await kb.search(topic, limit=10)
+            
+            if not results:
+                return AgentResult(success=False, error="Local neural resonance found no matches for this topic.")
+            
+            corpus = "\n".join([f"- {r.get('text')}" for r in results])
+            summary = await self.generator.council_of_models([
+                {"role": "system", "content": "You are the LEVI Internal Researcher. Summarize the following internal knowledge based on the user topic."},
+                {"role": "user", "content": f"Topic: {topic}\nInternal Corpus:\n{corpus}"}
+            ])
+            
+            return AgentResult(
+                success=True,
+                message=summary + "\n\n*(Note: This intelligence was gathered from internal Sovereign memory as external links are offline.)*",
+                data={"source": "local_vector_kb"}
+            )
+        except Exception as e:
+            return AgentResult(success=False, error=f"Local research failure: {str(e)}")

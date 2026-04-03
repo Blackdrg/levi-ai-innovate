@@ -1,75 +1,66 @@
-# 🔌 LeviBrain v8: High-Fidelity Integration Interface
+# 🔌 LEVI-AI v8.11.1 Integration Master Spec
 
-Documentation for the **Sovereign Monolith** communication protocols, focusing on the refined v8 SSE (Server-Sent Events) pulse architecture and mission auditing.
-
----
-
-## 📡 1. Deep Core v8 SSE Pulse Protocol
-
-The LeviBrain v8 frontend (`React + Vite`) utilizes a high-fidelity streaming interface to track the 8-step cognitive pipeline in real-time.
-
-### Event Lifecycle:
-The `useStream.js` hook parses the following standardized v8 events:
-
-| Event Type | Data Payload | UI Action |
-|------------|--------------|-----------|
-| `metadata` | `{request_id, session_id}` | Initializes transmission state. |
-| `graph` | `{nodes, edges}` | Renders the topological **Execution Graph**. |
-| `activity` | `{node_id, status, content}` | Updates node pulsing and partial results. |
-| `audit` | `{fidelity, issues, fix}` | Spawns the **Mission Auditor** dashboard. |
-| `done` | `{final_response}` | Closes the stream and commits to memory. |
-
-### Implementation Example:
-```javascript
-// frontend/src/hooks/useStream.js
-const event = line.replace('event: ', '');
-const data = JSON.parse(line.replace('data: ', ''));
-
-switch(event) {
-  case 'graph': setExecutionGraph(data); break;
-  case 'audit': setAuditResult(data); break;
-  // ... update v8 high-fidelity states
-}
-```
+The LEVI-AI "Sovereign Monolith" architecture exposes a high-fidelity cognitive API for real-time mission orchestration.
 
 ---
 
-## 🎥 2. Asynchronous Mission Handshake
+## ⚡ 1. Primary Entry Point (V8 Stream)
 
-For heavy generative tasks (Video/Large Document Analysis), the v8 orchestrator uses a hybrid SSE + Polling model.
+### **POST `/api/v1/orchestrator/chat/stream`**
+Executes a full 8-step cognitive mission with real-time SSE telemetry.
 
-1. **Mission Start:** `POST /api/v1/orchestrator/chat` yields an immediate `mission_id`.
-2. **Cognitive Streaming:** The SSE stream provides real-time updates on task execution.
-3. **Blob Delivery:** For file outputs (Image/Video), the `done` event contains the temporary or signed URL to the **Sovereign Cloud Storage**.
+- **Request Headers:**
+    - `Authorization: Bearer <FirebaseID>`
+    - `Content-Type: application/json`
 
----
-
-## 🌌 3. The `v8` Cognitive UI Mapping
-
-The **Refinement Planner** dictates the visual display. If the v8 brain determines a transformation is required, it injects UI intents into the stream:
-
-- **Graph Intent:** Triggers the glassmorphic `ExecutionGraph.jsx`.
-- **Audit Intent:** Triggers the `MissionAuditor.jsx` with fidelity scoring.
-- **Resonance Intent:** Adjusts the global CSS theme (e.g., `text-gradient-v8`) based on the brain's focus.
-
----
-
-## 📊 4. Mission Fidelity Schema (v8)
-
-Every completed mission returns a **Fidelity Bundle**:
-
+- **Request Body (JSON):**
 ```json
 {
-  "fidelity_score": 0.92,
-  "metrics": {
-    "alignment": 0.95,
-    "grounding": 0.90,
-    "resonance": 0.91
-  },
-  "audit": {
-    "issues": ["Minor syntactic drift in node_4"],
-    "fix_strategy": "Applied adaptive logic refinement."
-  }
+  "prompt": "Analyze the technical impact of v8 cognitive monoliths.",
+  "user_id": "user_123",
+  "session_id": "sess_456"
 }
 ```
-Missions with a score `< 0.85` automatically trigger a **Correction Wave** before final delivery.
+
+---
+
+## 📡 2. Neural Pulse Telemetry (SSE)
+
+Every mission emits a sequence of SSE Neural Pulse events for real-time observability.
+
+| Event Type | Description | Schema / Payload |
+| :--- | :--- | :--- |
+| `metadata` | Mission ID and Version. | `{request_id: "v8_...", status: "pulsing"}` |
+| `activity` | Human-readable status updates. | `"Research Agent: Searching Tavily..."` |
+| `graph` | The full DAG-based TaskGraph. | `TaskGraph.to_dict()` (JSON) |
+| `results` | Raw compiled agent outputs. | `[ToolResult, ...]` |
+| `choice` | Token-by-token neural synthesis. | `{token: "The", delta: 124}` |
+| `audit` | Final mission fidelity score. | `{request_id: "...", score: 0.94}` |
+
+---
+
+## 🧠 3. Memory & Context Retrieval
+
+### **GET `/api/v8/telemetry/crystallized-traits`**
+Fetches the user's crystallized identity traits (Tier 4 Memory).
+
+- **Response:**
+```json
+{
+  "traits": [
+    {"trait": "Values deterministic architecture", "crystallized_at": "..."}
+  ]
+}
+```
+
+---
+
+## 🛠️ 4. Tool Registry Integration
+
+To integrate a third-party API into the LEVI-AI fabric, use the **Sovereign Tool Factory**:
+1.  **Ingest OpenAPI**: `DynamicToolFactory.ingest_openapi(url)`.
+2.  **Generate Wrapper**: Generates typed Python execution code for the `TaskExecutor`.
+
+---
+
+© 2026 LEVI-AI SOVEREIGN HUB.

@@ -14,7 +14,12 @@ from .cache import MemoryCache
 from .vector_store import SovereignVectorStore
 from .resonance import MemoryResonance
 from .graph_engine import GraphEngine
+from ..services.learning.distiller import MemoryDistiller
 from backend.db.firestore_db import db as firestore_db
+from backend.db.postgres import PostgresDB
+from backend.db.models import UserProfile, UserTrait, UserPreference
+from sqlalchemy import select
+
 from backend.services.learning.logic import UserPreferenceModel
 
 logger = logging.getLogger(__name__)
@@ -25,6 +30,8 @@ _MIDTERM_TIMEOUT = 3.0
 class MemoryManager:
     def __init__(self):
         self.graph = GraphEngine()
+        self.distiller = MemoryDistiller()
+
 
     async def get_combined_context(self, user_id: str, session_id: str, query: str = "") -> Dict[str, Any]:
         """
@@ -35,9 +42,10 @@ class MemoryManager:
         long_term_task  = self.get_long_term(user_id, query)
         creation_task   = self.get_creation_context(user_id)
         graph_task      = self.graph.get_connected_resonance(user_id, query)
+        tier4_task      = self.get_tier4_traits(user_id)
         
-        short_term, mid_term, long_term, creation_context, graph_resonance = await asyncio.gather(
-            short_term_task, mid_term_task, long_term_task, creation_task, graph_task
+        short_term, mid_term, long_term, creation_context, graph_resonance, tier4_data = await asyncio.gather(
+            short_term_task, mid_term_task, long_term_task, creation_task, graph_task, tier4_task
         )
 
         # Build preferences pulse
@@ -59,6 +67,7 @@ class MemoryManager:
             "mid_term":          mid_term,
             "creation_context":  creation_context,
             "graph_resonance":   graph_resonance,
+            "tier4_traits":      tier4_data,
             "interaction_pulse": pulse,
             "preferences":       preferences,
             "user_id":           user_id,
@@ -69,12 +78,16 @@ class MemoryManager:
         # Token-Aware Trimming (v8 Production Safety)
         return self._trim_facts_by_tokens(facts, max_tokens=1500)
 
+    async def get_context(self, user_id: str) -> List[Dict[str, Any]]:
+        """Standardized v8 bridge for conversational context discovery."""
+        return await self.get_mid_term(user_id, limit=10)
+
     def _trim_facts_by_tokens(self, facts: Dict[str, Any], max_tokens: int = 1500) -> Dict[str, Any]:
         """Prunes memory to fit context window, prioritizing Identity and Semantic tiers."""
         total_chars = 0
         char_limit = max_tokens * 4
         
-        priority = ["traits", "preferences", "long_term", "mid_term", "history"]
+        priority = ["prototypes", "traits", "preferences", "long_term", "mid_term", "history"]
         pruned = {k: facts.get(k, []) for k in facts.keys() if k not in priority}
         for k in priority: pruned[k] = []
 
@@ -86,8 +99,7 @@ class MemoryManager:
             for item in items:
                 text = str(item.get("fact", "")) if isinstance(item, dict) else str(item)
                 if total_chars + len(text) < char_limit:
-                    if cat == "long_term": pruned[cat].append(item)
-                    else: pruned[cat].append(item)
+                    pruned[cat].append(item)
                     total_chars += len(text)
                 else: break
         return pruned
@@ -126,10 +138,11 @@ class MemoryManager:
         if not user_id: return {}
         
         try:
-            relevant_facts = await SovereignVectorStore.search_facts(user_id, query, limit=15)
+            relevant_facts = await SovereignVectorStore.search_facts(user_id, query, limit=20)
             decayed = MemoryResonance.apply_decay(relevant_facts)
             
             return {
+                "prototypes":  [f["fact"] for f in decayed if f["category"] == "prototype"],
                 "preferences": [f["fact"] for f in decayed if f["category"] == "preference" and f.get("survival_score", 0) > 0.5],
                 "traits":      [f["fact"] for f in decayed if f["category"] == "trait"],
                 "history":     [f["fact"] for f in decayed if f["category"] == "history" and f.get("survival_score", 0) > 0.6],
@@ -140,8 +153,45 @@ class MemoryManager:
             logger.error(f"Long-term retrieval failed: {e}")
             return {}
 
-    async def store(self, user_id: str, session_id: str, user_input: str, response: str, perception: Dict[str, Any], results: List[Any]):
+    async def get_tier4_traits(self, user_id: str) -> Dict[str, Any]:
+        """
+        Tier 4: Structured User Identity Archetypes from Postgres.
+        Provides the highest-confidence behavioral and identity traits.
+        """
+        if not user_id or str(user_id).startswith("guest:"):
+            return {}
+
+        try:
+            from sqlalchemy.orm import selectinload
+            async with PostgresDB._session_factory() as session:
+                query = select(UserProfile).options(
+                    selectinload(UserProfile.traits),
+                    selectinload(UserProfile.preferences)
+                ).where(UserProfile.user_id == user_id)
+                
+                result = await session.execute(query)
+                profile = result.scalar_one_or_none()
+                
+                if not profile:
+                    return {}
+
+                return {
+                    "archetype": profile.persona_archetype,
+                    "style": profile.response_style,
+                    "traits": [{"trait": t.trait, "weight": t.weight} for t in profile.traits],
+                    "preferences": [{"cat": p.category, "val": p.value} for p in profile.preferences],
+                    "metrics": {"avg_rating": profile.avg_rating, "total": profile.total_interactions}
+                }
+        except Exception as e:
+            logger.error(f"Tier 4 trait retrieval anomaly: {e}")
+            return {}
+
+    async def store(self, user_id: str, session_id: Optional[str] = None, user_input: str = "", response: str = "", perception: Optional[Dict[str, Any]] = None, results: Optional[List[Any]] = None):
         """Coordinates short-term (Working) and long-term (Episodic/Semantic) updates."""
+        session_id = session_id or f"sess_v8_{user_id}"
+        perception = perception or {}
+        results = results or []
+        
         logger.info("[MemoryManager] Storing interaction: %s", session_id)
         
         await self.store_memory(user_id, session_id, user_input, response)
@@ -208,43 +258,16 @@ class MemoryManager:
             count = redis_client.incr(distill_key)
             if count >= 20: 
                 logger.info(f"[MemoryManager] Triggering silent distillation for {user_id}...")
-                asyncio.create_task(self.distill_core_memory(user_id))
+                asyncio.create_task(self.distiller.distill_user_memory(user_id))
                 redis_client.set(distill_key, 0)
+
         except Exception as e:
             logger.error(f"Distillation trigger failed: {e}")
 
-    async def distill_core_memory(self, user_id: str) -> None:
-        """Identifying clusters of fragmented facts and distilling them into unified core traits."""
-        from backend.core.memory_utils import store_facts
-        from backend.core.planner import call_lightweight_llm
+    async def distill_legacy_core(self, user_id: str) -> None:
+        """DEPRECATED: Use MemoryDistiller.distill_user_memory instead."""
+        pass
 
-        try:
-            # 1. Fetch recent facts to identify patterns
-            facts_data = await SovereignVectorStore.search_facts(user_id, query="user personality and values", limit=25)
-            if len(facts_data) < 10: return
-
-            fact_strings = "\n".join([f"- {f.get('fact')} (Importance: {f.get('importance', 0.5)})" for f in facts_data])
-            
-            prompt = (
-                "You are the LEVI Core Distiller. Analyze these fragmented user facts and distill them into "
-                "3-5 deep, high-level core identity traits or permanent preferences.\n"
-                f"Facts:\n{fact_strings}\n\n"
-                "Output ONLY JSON: {\"distilled_traits\": [{\"fact\": \"...\", \"importance\": 0.95}]}"
-            )
-
-            raw_json = await call_lightweight_llm([{"role": "system", "content": prompt}])
-            if "```json" in raw_json: raw_json = raw_json.split("```json")[1].split("```")[0]
-            
-            data = json.loads(raw_json.strip())
-            new_traits = data.get("distilled_traits", [])
-            
-            if new_traits:
-                for trait in new_traits: trait["category"] = "trait"
-                await store_facts(user_id, new_traits)
-                logger.info(f"[MemoryManager] Consolidate {len(facts_data)} points into {len(new_traits)} traits for {user_id}")
-
-        except Exception as e:
-            logger.error(f"Memory distillation failed for {user_id}: {e}")
 
     async def get_creation_context(self, user_id: str) -> List[Dict[str, Any]]:
         """Fetch recent Studio activity with Redis caching."""

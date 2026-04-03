@@ -12,6 +12,7 @@
     <!-- Dependencies -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.26.0/cytoscape.min.js"></script>
 </head>
 
 <body class="bg-[#050507] text-slate-200 font-['Outfit'] overflow-hidden">
@@ -85,6 +86,17 @@
                     <span class="material-symbols-outlined text-[12px]">database</span> Semantic Vault Active
                 </span>
             </div>
+        </div>
+
+        <!-- Mission Graph Overlay (Cytoscape) -->
+        <div id="mission-graph-panel" class="fixed right-6 top-32 w-80 h-[500px] sovereign-glass rounded-3xl border border-white/10 hidden flex flex-col overflow-hidden">
+            <div class="p-4 border-b border-white/10 bg-white/5 flex justify-between items-center">
+                <span class="text-[10px] uppercase tracking-widest font-bold text-neural">Mission Task Graph</span>
+                <button onclick="document.getElementById('mission-graph-panel').classList.add('hidden')" class="text-slate-500 hover:text-white transition-colors">
+                    <span class="material-symbols-outlined text-sm">close</span>
+                </button>
+            </div>
+            <div id="cy-container" class="flex-1 w-full bg-[#050507]/40"></div>
         </div>
     </main>
 

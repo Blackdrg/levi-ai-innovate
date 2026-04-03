@@ -6,6 +6,12 @@ from ..orchestrator_types import ToolResult, IntentResult
 from ..tool_registry import call_tool
 from ...utils.network import ai_service_breaker
 
+# V8.8 Bridge: Telemetry & Push Notifications
+from backend.api.v8.telemetry import broadcast_mission_event
+from backend.services.push_service import PushService
+from backend.core.v8.blackboard import MissionBlackboard
+from backend.core.v8.dreaming_task import DreamingTask
+
 logger = logging.getLogger(__name__)
 
 class GraphExecutor:
@@ -16,49 +22,69 @@ class GraphExecutor:
 
     async def run(self, graph: Any, perception: Dict[str, Any]) -> List[ToolResult]:
         logger.info("[V8 Executor] Initiating Topological Wave Execution...")
-        results: Dict[str, ToolResult] = {}
-        completed_ids: Set[str] = set()
+        # 1. Start Telemetry & Blackboard
+        user_id = perception.get("user_id", "default_user")
+        session_id = perception.get("session_id", "default_session")
         
-        # 1. Topological Sorting / Parallel Execution Grouping
-        remaining_nodes = list(graph.nodes)
+        broadcast_mission_event(user_id, "mission_start", {"graph_size": len(graph.nodes), "input": perception.get("input")})
         
-        while remaining_nodes:
-            # Identify executable nodes (all deps satisfied)
-            executable_nodes = [
-                n for n in remaining_nodes 
-                if all(dep in completed_ids for dep in n.dependencies)
-            ]
+        # Swarm Intelligence: Initialize & Clear Blackboard for the new mission
+        blackboard = MissionBlackboard(session_id)
+        await blackboard.clear()
+        
+        # 2. Dynamic DAG Execution Loop
+        while not graph.is_complete():
+            # Identify executable nodes via active graph state
+            executable_nodes = graph.get_ready_tasks()
             
             if not executable_nodes:
-                if remaining_nodes:
-                    logger.error("[V8 Executor] Dependency deadlock in mission graph.")
+                logger.error("[V8 Executor] Dependency deadlock in mission graph.")
                 break
             
             logger.debug("[V8 Executor] Dispatching Wave: %s", [n.id for n in executable_nodes])
             
-            # 2. Parallel Execution of Wave
-            tasks = [self._execute_node(n, results, perception) for n in executable_nodes]
+            # 3. Parallel Execution of Wave
+            tasks = [self._execute_node(n, graph.results, perception) for n in executable_nodes]
             wave_results = await asyncio.gather(*tasks)
             
-            # 3. State Synchronization
+            # 4. State Synchronization & Telemetry
             for n, res in zip(executable_nodes, wave_results):
-                results[n.id] = res
-                completed_ids.add(n.id)
-                remaining_nodes.remove(n)
+                graph.mark_complete(n.id, res)
                 
-            # 4. Critical Path Failure Check
-            critical_failure = False
-            for n in executable_nodes:
-                res = results[n.id]
+                # Broadcast Task Completion
+                broadcast_mission_event(user_id, "task_complete", {
+                    "id": n.id, 
+                    "success": res.success, 
+                    "latency": res.latency_ms,
+                    "agent": n.agent
+                })
+                
+                # Critical Path Failure Check
                 if not res.success and n.critical:
-                    critical_failure = True
                     logger.warning("[V8 Executor] Critical mission failure at node: %s", n.id)
-                    break
+                    # 5. Push Notification for Critical Failure
+                    push = PushService()
+                    await push.send_critical_alert(
+                        user_id=user_id,
+                        title="Critical Mission Failure",
+                        message=f"LEVI mission aborted: Node '{n.id}' failed.",
+                        data={"node": n.id, "agent": n.agent}
+                    )
+                    broadcast_mission_event(user_id, "mission_aborted", {"reason": f"Critical failure: {n.id}"})
+                    return list(graph.results.values())
+        
+        # 6. Final Telemetry & Evolutionary Intelligence
+        if graph.is_complete():
+            broadcast_mission_event(user_id, "mission_complete", {"status": "success"})
             
-            if critical_failure:
-                break
+            # Post Final Mission Summary to Blackboard for session continuity
+            summary = f"Mission successfully completed. {len(graph.results)} tasks crystallized."
+            await blackboard.post_insight("executor", summary, tag="mission_summary")
+            
+            # Trigger 'Dreaming Phase' (Episodic -> Semantic)
+            await DreamingTask.increment_and_check(user_id)
 
-        return list(results.values())
+        return list(graph.results.values())
 
     async def _execute_node(self, node: Any, previous_results: Dict[str, ToolResult], perception: Dict[str, Any]) -> ToolResult:
         """Executes a single node with template-resolved inputs and circuit-breaker protection."""
@@ -66,13 +92,19 @@ class GraphExecutor:
         start_time = asyncio.get_event_loop().time()
         
         # 1. Input Resolution ({{task_id.result}})
-        resolved_inputs = self._resolve_inputs(node.inputs, previous_results)
+        resolved_inputs = self._resolve_inputs(node, node.inputs, previous_results)
         
-        # 2. Parameter Synthesis
+        # 2. Swarm Context Injection (Blackboard)
+        session_id = perception.get("session_id", "default_session")
+        blackboard_context = await MissionBlackboard.get_session_context(session_id)
+        
+        # 3. Parameter Synthesis
         merged_params = {
             **perception.get("context", {}), 
             **resolved_inputs, 
-            "input": perception.get("input")
+            "input": perception.get("input"),
+            "blackboard_context": blackboard_context,
+            "session_id": session_id
         }
         
         try:
@@ -97,15 +129,20 @@ class GraphExecutor:
             logger.exception("[V8 Executor] Wave execution failure for %s: %s", agent_name, e)
             return ToolResult(success=False, error=str(e), agent=agent_name)
 
-    def _resolve_inputs(self, inputs: Dict[str, Any], previous_results: Dict[str, ToolResult]) -> Dict[str, Any]:
+    def _resolve_inputs(self, node: Any, inputs: Dict[str, Any], previous_results: Dict[str, ToolResult]) -> Dict[str, Any]:
         """Resolves template placeholders like {{task_search.result}} or {{all_results}}."""
         resolved = {}
         for key, value in inputs.items():
             if isinstance(value, str) and "{{" in value and "}}" in value:
                 template = value.replace("{{", "").replace("}}", "")
                 
+                if template == "dependency_results":
+                    # V8.7 Swarm Optimization: Returns a mapping of ONLY direct dependency results
+                    resolved[key] = {tid: res.message for tid, res in previous_results.items() if tid in node.dependencies and res.success}
+                    continue
+                    
                 if template == "all_results":
-                    # Optimized for v8.5 Swarm Consensus: Returns a mapping for the ConsensusAgent
+                    # Legacy v8.5: Returns a mapping of all successful results
                     resolved[key] = {tid: res.message for tid, res in previous_results.items() if res.success}
                     continue
                 

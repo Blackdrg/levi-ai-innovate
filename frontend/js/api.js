@@ -6,7 +6,7 @@
 (function() {
     const getBase = () => {
         const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        return isLocal ? 'http://127.0.0.1:8000/api/v1' : (window.LEVI_CONFIG?.getApiBase() || '/api/v1');
+        return isLocal ? 'http://127.0.0.1:8000/api/v8' : (window.LEVI_CONFIG?.getApiBase() || '/api/v8');
     };
 
     const API_BASE = getBase();
@@ -140,9 +140,9 @@
             });
         },
 
-        // --- Streaming ---
+        // --- Streaming (V8 Hardened) ---
         chatStream: async (message, sessionId, onChunk, onMetadata, mood = "philosophical", history = []) => {
-            const url = `${API_BASE}/chat/stream`;
+            const url = `${API_BASE}/mission/stream`;
             const token = localStorage.getItem('levi_token') || window.levi_user_token;
             
             const response = await fetch(url, {
@@ -152,14 +152,15 @@
                     'Accept': 'text/event-stream',
                     'Authorization': token ? `Bearer ${token}` : ''
                 },
-                body: JSON.stringify({ message, session_id: sessionId, mood, stream: true, history })
+                body: JSON.stringify({ input: message, session_id: sessionId, context: { mood, history } })
             });
 
-            if (!response.ok) throw new Error(`Stream failed: ${response.status}`);
+            if (!response.ok) throw new Error(`Mission stream failed: ${response.status}`);
 
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let partial = '';
+            let currentEvent = 'message';
 
             while (true) {
                 const { done, value } = await reader.read();
@@ -170,17 +171,29 @@
                 partial = lines.pop();
 
                 for (const line of lines) {
-                    if (line.trim().startsWith('data: ')) {
-                        const data = line.slice(6).trim();
-                        if (data === '[DONE]') break;
+                    const trimmed = line.trim();
+                    if (!trimmed) continue;
+
+                    if (trimmed.startsWith('event: ')) {
+                        currentEvent = trimmed.slice(7);
+                    } else if (trimmed.startsWith('data: ')) {
+                        const dataStr = trimmed.slice(6);
+                        if (dataStr === '[DONE]') break;
+                        
                         try {
-                            const json = JSON.parse(data);
-                            if (json.metadata) onMetadata(json.metadata);
-                            if (json.type === "activity") onMetadata({ status_update: json.message });
-                            if (json.choices?.[0]?.delta?.content) onChunk(json.choices[0].delta.content);
+                            const data = JSON.parse(dataStr);
+                            // Standardize V8 Event Handling
+                            if (currentEvent === 'token') {
+                                onChunk(data.token || data);
+                            } else {
+                                onMetadata({ event: currentEvent, data: data });
+                            }
                         } catch (e) {
-                            console.warn("[API] Malformed chunk", data);
+                            // Fallback for non-JSON tokens if any
+                            if (currentEvent === 'token') onChunk(dataStr);
                         }
+                        // Reset event to default
+                        currentEvent = 'message';
                     }
                 }
             }

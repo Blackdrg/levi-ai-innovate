@@ -159,3 +159,21 @@ def get_failure_count(agent_name: str) -> int:
             return int(val) if val else 0
         except Exception: return 0
     return 0
+
+# --- Working Memory (Mini-System Helpers) ---
+def store_working_context(user_id: str, user_input: str, output: str):
+    """Simple list-based working context for rapid mini-system retrieval."""
+    if not HAS_REDIS: return
+    try:
+        key = f"working_ctx:{user_id}"
+        r.lpush(key, f"{user_input} -> {output}")
+        r.ltrim(key, 0, 10) # Keep last 10 entries
+        r.expire(key, 3600) # 1 hour TTL
+    except Exception: pass
+
+def get_working_context(user_id: str, limit: int = 5) -> List[str]:
+    """Retrieves the recent working context buffer."""
+    if not HAS_REDIS: return []
+    try:
+        return r.lrange(f"working_ctx:{user_id}", 0, limit - 1)
+    except Exception: return []

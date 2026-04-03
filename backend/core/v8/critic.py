@@ -14,57 +14,71 @@ class ReflectionEngine:
 
     async def evaluate(self, response: str, goal: Any, perception: Dict[str, Any]) -> Dict[str, Any]:
         """
-        LeviBrain v8: High-Fidelity Mission Evaluation.
-        Measures Alignment, Grounding, and Resonance.
+        LeviBrain v8.7: Evolutionary qualitative audit.
+        Adjusts strictness based on historical fragility and mission complexity.
         """
         user_input = perception.get("input", "")
         context = perception.get("context", {})
         
-        logger.info("[V8 Reflection] Initiating qualitative audit...")
+        # 1. Pull Evolutionary Weight (0.1 to 1.0)
+        sc_weight = getattr(goal, "self_correction_weight", 0.5)
+        hyper_reflection = sc_weight > 0.8
         
-        # 1. Auditor Invocation (CriticAgentV8)
+        logger.info(f"[V8 Reflection] Initiating qualitative audit (Weight: {sc_weight:.2f})...")
+        
+        # 2. Auditor Invocation (CriticAgentV8)
+        # We inject the hyper_reflection flag into context to trigger deeper audit logic in the agent
+        audit_context = {**context, "hyper_reflection": hyper_reflection, "sc_weight": sc_weight}
+        
         audit_raw = await call_tool("critic_agent", {
             "goal": goal.objective,
             "success_criteria": goal.success_criteria,
             "response": response,
-            "user_input": user_input
-        }, context)
+            "user_input": user_input,
+            "rigor": "exhaustive" if hyper_reflection else "standard"
+        }, audit_context)
         
-        # 2. Extract High-Fidelity Metrics
+        # 3. Extract High-Fidelity Metrics
         metrics = audit_raw.get("data", {})
         fidelity_score = metrics.get("quality_score", 0.5)
         issues = metrics.get("issues", [])
         fix_strategy = metrics.get("fix", "Apply general refinement.")
         is_safe = not metrics.get("hallucination_detected", True)
         
-        # 3. v8 Threshold Logic
-        is_satisfactory = fidelity_score >= 0.85 and is_safe
+        # 4. Dynamic Threshold Logic
+        # High-fragility missions require higher fidelity (up to 0.95)
+        threshold = 0.80 + (sc_weight * 0.15)
+        is_satisfactory = fidelity_score >= threshold and is_safe
+        
+        if hyper_reflection and not is_satisfactory:
+            logger.warning("[V8 Reflection] Hyper-Reflection Triggered: Fidelity (%.2f) < Threshold (%.2f)", fidelity_score, threshold)
         
         return {
             "score": fidelity_score,
             "issues": issues,
             "fix": fix_strategy,
             "is_satisfactory": is_satisfactory,
+            "threshold": threshold,
             "metrics": metrics.get("metrics", {})
         }
 
     async def self_correct(self, response: str, evaluation: Dict[str, Any], goal: Any, perception: Dict[str, Any]) -> str:
-        """
-        Triggers an Adaptive Refinement pass based on audit failure.
-        This represents a 'Correction Wave' in the cognitive pipeline.
-        """
+        """Adaptive Refinement pass with Evolutionary context."""
         if evaluation["is_satisfactory"]:
             return response
             
-        logger.warning("[V8 Reflection] Mission Fidelity Failure (%.2f). Executing Correction Wave...", evaluation["score"])
+        logger.warning("[V8 Reflection] Mission Fidelity Gap (%.2f < %.2f). Executing Correction Wave...", 
+                       evaluation["score"], evaluation["threshold"])
         
         context = perception.get("context", {})
+        sc_weight = getattr(goal, "self_correction_weight", 0.5)
         
         # High-Fidelity Refinement Pass
         correction_raw = await call_tool("chat_agent", {
             "input": f"ORIGINAL INPUT: {perception['input']}\n\nDRAFT RESPONSE: {response}\n\nAUDIT ISSUES: {evaluation['issues']}\n\nFIX STRATEGY: {evaluation['fix']}",
-            "mood": "precise",
-            "context": "MISSION_REFINEMENT"
+            "mood": "precise" if sc_weight > 0.6 else "balanced",
+            "context": "MISSION_REFINEMENT",
+            "rigor_weight": sc_weight
         }, context)
         
         return correction_raw.get("message", response)
