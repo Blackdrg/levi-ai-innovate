@@ -1,90 +1,77 @@
-# 🚢 LEVI-AI Global CI/CD Deployment Architecture
+# 🚢 LEVI-AI Sovereign Monolith Deployment Architecture
 
 > [!IMPORTANT]
-> **Sovereign OS v7 Specification**
-> LEVI-AI is no longer a localized monolith. It is a strictly structured micro-service array. Deployment requires dual-process hosting (FastAPI synchronous nodes + Celery asynchronous workers) backed by external State and Blob instances.
+> **LeviBrain v8 "Cognitive Monolith" Specification**
+> LEVI-AI has transitioned from a fragmented micro-service array to a **Unified Cognitive Monolith**. Deployment now centers on a high-fidelity **API Container** (Orchestration + Brain) and a **Generative Worker** (Multi-Pass Reasoning), backed by the **Sovereign Multi-Store** (Postgres, Redis, Kafka, Mongo).
 
 ---
 
-## 🏗️ 1. Infrastructure Topology
+## 🏗️ 1. Infrastructure Topology (v8)
 
-To successfully deploy LEVI-AI, your cloud provider MUST support the following topology:
+The v8 Monolith uses a topological wave execution model, requiring a robust event bus (Kafka) for multi-brain synchronization.
 
 ```mermaid
 graph TD
-    LB[Cloud Load Balancer] --> HTTPS
-    HTTPS --> Web[Vercel / Netlify Frontend]
-    HTTPS --> API[GCP / AWS ECS API Cluster]
+    LB[Sovereign Load Balancer] --> HTTPS
+    HTTPS --> Web[Vite / SPA Frontend]
+    HTTPS --> V8[LeviBrain v8 API Monolith]
     
-    API -->|Async Tasks & Locks| Redis[(Cloud Memorystore / ElastiCache)]
-    API -->|Firestore DB| GCP[(Google Cloud Firestore)]
+    V8 -->|Mission Logs| Postgres[(Sovereign Mission Postgres)]
+    V8 -->|Context State| Redis[(Sovereign Context Redis)]
+    V8 -->|Trait Pulses| Kafka{Sovereign Event Bus}
     
-    Redis --> Worker[Celery Render Cluster]
-    Worker --> API
-    Worker -->|Blob Outputs| Storage[(Google Cloud Storage / S3)]
+    Kafka --> Worker[Monolith Generative Worker]
+    Worker --> V8
+    Worker -->|Semantic Vault| Mongo[(Semantic Vault Mongo)]
 ```
 
-## ⚙️ 2. Hardware Matrix Recommendations
+## ⚙️ 2. Hardware Matrix Recommendations (v8)
 
-LEVI-AI is modular. You scale the **API** independently from the **Worker Nodes**.
+LEVI-AI v8 requires coherent RAM for the sentence-transformer embeddings and the 8-step pipeline state.
 
 | Node Type | Minimum Spec | Recommended Spec | Primary Role |
 |-----------|--------------|------------------|--------------|
-| **API Web Node** | 1 vCPU, 512MB RAM | 2 vCPU, 8GB RAM | Routing, Identity, Token Streaming. (8Gi recommended for Monolith) |
-| **Generative Worker** | 2 vCPU, 4GB RAM | 4 vCPU, 8GB RAM | Image processing, PyDub Audio, Ken-Burns Rendering. |
-| **FAISS Matrix Worker** | 2 vCPU, 2GB RAM | 4 vCPU, 4GB RAM | Keeps `paraphrase-MiniLM` in RAM for rapid vector inference. |
-| **Cache Broker** | 50MB RAM | 1GB RAM Redis | Handles distributed locks and pub/sub Celery routing. |
+| **v8 API Monolith** | 2 vCPU, 4GB RAM | 4 vCPU, 16GB RAM | 8-Step Pipeline, Perception, Planning, and API SSE Streaming. |
+| **Monolith Worker** | 4 vCPU, 8GB RAM | 8 vCPU, 32GB RAM | Multi-pass reasoning, Image/Video generation, and Trait Distillation. |
+| **Sovereign Event Bus** | 1 vCPU, 1GB RAM | 2 vCPU, 2GB RAM | Kafka/Zookeeper for cognitive pulse distribution. |
+| **Context Cache** | 256MB RAM | 2GB RAM Redis | Real-time state and wave execution locking. |
 
 ---
 
-## ☁️ 3. Deployment Provider Guides
+## ☁️ 3. Deployment & Orchestration
 
-### Google Cloud Run (Recommended for API)
-LEVI-AI was built natively with GCP APIs (Firestore, GCS). 
-1. **Containerize:** Use the included `backend/Dockerfile.prod`.
-2. **Deploy via Cloud Build:** 
+### Multi-Container Graduation (Docker Compose)
+The recommended production deployment for the v8 Monolith is via the unified `docker-compose.yml`:
+1. **Initialize Persistence:** Run the `backend/core/v8/db_init.py` migration script.
+2. **Boot the Monolith:** 
    ```bash
-   gcloud run deploy levi-ai-api --source . --platform managed --allow-unauthenticated
+   docker-compose up -d --build
    ```
-3. **Secrets Management:** Instead of raw `.env` texts, bind GCP Secret Manager directly to your container.
+3. **Verify Health:** Use `scripts/verify_v8_infra.py` to ensure all 4 stores are online.
 
-### Render / Digital Ocean App Platform
-> [!WARNING]
-> Render Free Tier drops connections after 15 minutes of inactivity. Due to the massive RAM usage of sentence-transformers, LEVI-AI detects `RENDER=true` in its environment variables and forces a deterministic Numpy hash fallback for the FAISS matrix.
-
-1. **Create Web Service (API)**: Set the start command to `uvicorn backend.api.main:app --host 0.0.0.0 --port 10000`.
-2. **Create Background Worker**: Set the start command to `celery -A backend.celery_app worker --loglevel=info --pool=solo`.
-
-### Vercel (Frontend Client)
-1. Fork the GitHub repository.
-2. Link Vercel exclusively to the `frontend/` Root Directory.
-3. Configure Environment Variables:
-   - `VITE_API_BASE_URL=https://api.your-levi-instance.app`
-4. Deploy the Vite React SPA.
+### GitHub Actions: Sovereign Graduate Pipeline
+Deployment is automated via [sovereign-graduate.yml](file:///c:/Users/mehta/Desktop/New%20folder/LEVI-AI/.github/workflows/sovereign-graduate.yml):
+- **Verify:** Runs `test_v8_core.py` on every push.
+- **Deploy:** Builds and pushes the `sovereign-monolith:v8` image to your registry.
 
 ---
 
 ## 🔐 4. Environmental Configuration Validation
 
-Before booting a Production Node, guarantee the following values are properly injected:
+Ensure your `.env` contains the v8 Sovereign URI set:
 
 ```env
-# ── Identity ──
-FIREBASE_SERVICE_ACCOUNT_JSON=/etc/secrets/firebase.json
+# ── Sovereign Monolith v8 ──
+DATABASE_URL=postgresql://user:pass@postgres:5432/levidb
+REDIS_URL=redis://redis:6379/0
+KAFKA_URL=kafka:29092
+MONGO_URL=mongodb://mongo:27017
 
-# ── AI Acceleration ──
-GROQ_API_KEY=gsk_....
-TOGETHER_API_KEY=....
-
-# ── Infrastructure ──
-ENVIRONMENT=production
-REDIS_URL=redis://your-remote-host:6379/0
-
-# ── Monetization ──
-RAZORPAY_KEY_ID=rzp_live_...
-RAZORPAY_KEY_SECRET=...
+# ── Cognitive Acceleration ──
+GROQ_API_KEY=gsk_...
+TAVILY_API_KEY=tvly-...
+OPENAI_API_KEY=sk-...  # For Identity DALL-E/GPT-4o fallback
 ```
 
 > [!CAUTION]
-> **Do not deploy the Worker Instance without the FAISS path correctly mapped!** 
-> Set `VECTOR_DB_PATH=/tmp/faiss_data` on serverless instances, or mount a persistent volume if you want vector memory to sustain across pod restarts.
+> **v8 Importance Decay:** Memories with significance < 0.5 are purged periodically. Ensure your **Semantic Vault (Mongo)** has daily backups to prevent accidental loss of distiled traits.

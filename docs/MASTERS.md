@@ -1,21 +1,27 @@
-# 👑 LEVI-AI Masters of the Architecture
+# 👑 LeviBrain v8: Masters of the Architecture
 
-This document explicitly defines the **Non-Negotiable Immutable Laws** of Sovereign OS v7. If you are extending functionality, you MUST obey these constraints or risk shattering the load balancer.
+This document defines the **Non-Negotiable Cognitive Laws** of the LeviBrain v8 "Cognitive Monolith". Adherence to these constraints is mandatory to maintain mission fidelity and system sovereignty.
 
-## Law 1: API Route Immobility
-**No file in `backend/api/` may ever process CPU-bound logic.**
-FastAPI runs natively async. Processing a Regex block, parsing a massive PDF, or rendering an image inside `api/main.py` blocks the Python Event Loop for ALL global users simultaneously.
-- **Enforcement:** If logic takes > 10ms, it is relegated to `engines/` or `services/`.
-- **Enforcement:** If logic involves Disk I/O or Hardware (FFmpeg), it MUST be shipped to Celery via `task.delay()`.
+## Law 1: 8-Step Pipeline Integrity
+Every cognitive mission MUST traverse the full **8-Step Deterministic Pipeline** (Perception → Goal → Planning → Execution → Reflection → Memory → Auditing → Response).
+- **Enforcement:** No step may be bypassed for "speed" or "optimization".
+- **Enforcement:** The **Sovereign Auditor** (Step 7) is the final arbiter. If fidelity < 0.85, the response MUST be refined.
 
-## Law 2: The Redis Atom
-**No financial unit (Tokens, AI Credits, Tiers) changes without a Redis Lua Lock.**
-If an API accepts a Razorpay webhook, it first verifies `is_locked("credits_uid")`. Never execute a sequence like `val = read() -> val = val - 1 -> write(val)` in python natively.
+## Law 2: Wave Execution Determinism
+The **GraphExecutor** uses topological wave resolution.
+- **Dependency Law:** No node may execute until its parent wave is 100% resolved.
+- **State Law:** All node inter-dependencies MUST be resolved via the `{{parent_id.result}}` template engine.
 
-## Law 3: Modularity or Death
-**Never `import backend.X`**. The entire migration to v7 relied on killing root-level files.
-- You must always path precisely: `from backend.db.firestore_db import db`.
-- Never weave the UI directly into backend API schemas.
+## Law 3: Multi-Store Consistency
+LeviBrain v8 relies on a strictly structured 4-tier storage matrix.
+- **Identity (Postgres):** All user profiles and mission logs MUST reside in Postgres.
+- **Context (Redis):** All real-time wave states and locks MUST reside in Redis.
+- **Intelligence (Kafka):** All learning pulses and traits MUST be distributed via the Sovereign Event Bus.
+- **Semantic (Mongo):** All vectorized long-term memories MUST reside in the Semantic Vault.
 
-## Law 4: FAISS Sovereignty
-Memory buffers dictate LLM accuracy. When tweaking thresholds (`0.92`), recognize that lowering the threshold forces LEVI into hallucinatory loops blending irrelevant philosophical concepts, while raising it forces total amnesia.
+## Law 4: Resonance or Decay
+- **Distillation:** Every successful mission (Fidelity >= 0.9) MUST trigger a **Trait Distillation** pulse.
+- **Decay:** Memories with a resonance score < 0.5 are subject to **Importance-Decay** and will be purged to maintain cognitive leaness.
+
+## Law 5: Sovereign Shield Priority
+No external API call (Groq, Tavily, OpenAI) may occur without passing through the **Sovereign Shield** (PII masking and circuit breakers).
