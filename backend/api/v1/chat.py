@@ -14,8 +14,11 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from backend.auth.logic import get_current_user as get_sovereign_identity
-from backend.api.orchestrator import handle_chat, stream_chat
+from backend.core.v8.brain import LeviBrainCoreController
+from backend.engines.utils.security import SovereignSecurity
 
+# Global v9.8.1 Brain Singleton for Unified Missions
+brain_v8 = LeviBrainCoreController()
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="", tags=["Chat"])
@@ -26,31 +29,34 @@ async def conversational_endpoint(
     identity: UserIdentity = Depends(get_sovereign_identity)
 ):
     """
-    Standard Sovereign Mission (Blocking).
-    Bridges to the BrainOrchestrator for full mission lifecycle.
+    Standard Sovereign Mission (Blocking) - Redirected to v9.8.1 Monolith.
     """
-    logger.info(f"[ChatAPI] Mission started for {identity.user_id}")
+    logger.info(f"[ChatAPI v1] Mission redirected to v9.8.1 for {identity.user_id}")
     
     if SovereignSecurity.detect_injection(request.message):
         raise HTTPException(status_code=400, detail="Neural protocol violation.")
 
     try:
-        # Bridged to the v8 Unified Orchestrator pass
-        res = await handle_chat(
+        # Standardize on v9.8.1 Monolith Logic
+        res = await brain_v8.run(
             user_input=request.message,
-            user_id=identity.uid or identity.user_id
+            user_id=identity.uid or identity.user_id,
+            session_id=request.session_id
         )
         
         return {
             "response": res.get("response", ""),
             "session_id": request.session_id,
-            "engine": "sovereign_brain_v8",
+            "engine": "sovereign_monolith_v9.8.1",
             "status": "success",
-            "metadata": res.get("decision", {})
+            "metadata": {
+                "decision": res.get("decision"),
+                "resonance": res.get("resonance", 1.0)
+            }
         }
     except Exception as e:
-        logger.error(f"[ChatAPI] Mission failure: {e}")
-        return {"status": "error", "message": "The mission encountered an anomaly."}
+        logger.error(f"[ChatAPI v1] Mission failure: {e}")
+        return {"status": "error", "message": "The monolith encountered an anomaly."}
 
 @router.post("/stream")
 async def conversational_stream_endpoint(
@@ -58,28 +64,27 @@ async def conversational_stream_endpoint(
     identity: UserIdentity = Depends(get_sovereign_identity)
 ):
     """
-    Sovereign Mission Stream (SSE).
-    Real-time multi-agent orchestration via the Brain Pulse.
+    Sovereign Mission Stream (SSE) - Redirected to v9.8.1 Monolith.
     """
-    logger.info(f"[ChatAPI] Mission stream started for {identity.user_id}")
+    logger.info(f"[ChatAPI v1] Mission stream redirected to v9.8.1 for {identity.user_id}")
 
     async def _mission_generator():
         try:
-            # Engage the central stream via the v8 Orchestrator bridge
-            async for event in stream_chat(
+            # v9.8.1: Unified Routing for tokens and events
+            async for chunk in await brain_v8.route(
                 user_input=request.message,
-                user_id=identity.uid or identity.user_id
+                user_id=identity.uid or identity.user_id,
+                session_id=request.session_id,
+                streaming=True
             ):
-                # Standardized v8 SSE format
-                if "type" in event:
-                    if event["type"] == "token":
-                        yield f"data: {json.dumps({'choices': [{'delta': {'content': event['data']}}]})}\n\n"
-                    elif event["type"] == "activity":
-                        yield f"data: {json.dumps({'type': 'activity', 'message': event['data']})}\n\n"
+                if "token" in chunk:
+                    yield f"data: {json.dumps({'choices': [{'delta': {'content': chunk['token']}}]})}\n\n"
+                elif "event" in chunk:
+                    yield f"data: {json.dumps({'type': 'pulse', 'event': chunk['event'], 'data': chunk.get('data')})}\n\n"
             
             yield "data: [DONE]\n\n"
         except Exception as e:
-            logger.error(f"[ChatAPI] Stream failure: {e}")
-            yield f"event: error\ndata: {json.dumps('Sovereign mission interrupted.')}\n\n"
+            logger.error(f"[ChatAPI v1] Stream failure: {e}")
+            yield f"event: error\ndata: {json.dumps('Monolith synchronization failed.')}\n\n"
 
     return StreamingResponse(_mission_generator(), media_type="text/event-stream")

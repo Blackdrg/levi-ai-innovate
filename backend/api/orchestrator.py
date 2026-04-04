@@ -13,35 +13,38 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from backend.auth import SovereignAuth, UserIdentity
-from backend.core.brain import LeviBrain
+from backend.core.v8.brain import LeviBrainCoreController
 from backend.engines.utils.security import SovereignSecurity
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="", tags=["Orchestrator"])
 
-# Initialize production LeviBrain instance
-brain = LeviBrain()
+# Initialize production v9.8.1 LeviBrain instance
+brain = LeviBrainCoreController()
 
-async def handle_chat(user_input, user_id):
-    """v8 Core Bridge: Unified cognitive execution pass."""
-    result = await brain.run(user_input, user_id)
+async def handle_chat(user_input, user_id, session_id=None, tier='free'):
+    """v9.8.1: Unified cognitive execution pass."""
+    result = await brain.run(
+        user_input=user_input, 
+        user_id=user_id,
+        session_id=session_id
+    )
     return result
 
-async def stream_chat(user_input, user_id):
-    """v8 Core Bridge: Token-by-token cognitive streaming."""
-    # We yield an initial pulse as per the requested v8 pattern
-    yield {"type": "activity", "data": "Initiating Cognitive Pulse..."}
+async def stream_chat(user_input, user_id, session_id=None, tier='free'):
+    """v9.8.1: Token-by-token cognitive streaming."""
+    yield {"type": "activity", "data": "Synchronizing Sovereignty..."}
     
-    # We use the high-fidelity brain stream for actual tokens
     async for chunk in await brain.route(
         user_id=user_id,
         user_input=user_input,
+        session_id=session_id,
         streaming=True
     ):
         if "token" in chunk:
             yield {"type": "token", "data": chunk["token"]}
-        elif "event" in chunk and chunk["event"] == "activity":
-            yield {"type": "activity", "data": chunk["data"]}
+        elif "event" in chunk:
+            yield {"type": "activity", "data": chunk.get("data") or f"Mission Pulse: {chunk['event']}"}
 
 
 class ChatRequest(BaseModel):

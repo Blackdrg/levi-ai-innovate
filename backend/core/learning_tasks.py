@@ -129,21 +129,58 @@ def unbound_training_cycle():
 
     asyncio.run(_run())
 
-@celery_app.task(name="backend.services.orchestrator.learning_tasks.poll_training_status")
-def poll_training_status():
+
+def execute_evolution_sweep() -> Dict[str, Any]:
     """
-    Polls the active fine-tuning job and activates the model if quality threshold is met.
+    Sovereign v9.8.1: Global Evolution Sweep.
+    Propagates local high-fidelity patterns to the shared Postgres sovereignty store.
     """
-    from backend.db.firestore_db import db as firestore_db
-    status_doc = firestore_db.collection("system").document("training_status").get()
+    from backend.core.v8.evolution_engine import EvolutionEngine
+    from backend.db.postgres import PostgresDB
+    from sqlalchemy import text
+    import json
     
-    if not status_doc.exists:
-        return
-        
-    data = status_doc.to_dict()
-    job_id = data.get("last_job_id")
-    if job_id and data.get("status") == "pending":
-        success = poll_and_activate(job_id)
-        if success:
-            firestore_db.collection("system").document("training_status").update({"status": "completed"})
-            broadcast_mission_event("system", "evolution_complete", {"message": f"Sovereign Evolution Successful. Model promoted."})
+    evo = EvolutionEngine()
+    # 1. Filter for patterns promoted to 'Gold' rules at the edge
+    promoted = {k: v for k, v in evo.rules.items() if v.get("promoted")}
+    
+    if not promoted:
+        logger.info("[Evolver] No promoted patterns found for global synchronization.")
+        return {"status": "idle", "synced": 0}
+
+    logger.info(f"[Evolver] Syncing {len(promoted)} patterns to Postgres sovereignty store...")
+    
+    async def _sync():
+        if PostgresDB._session_factory is None:
+            PostgresDB.get_engine()
+            
+        async with PostgresDB._session_factory() as session:
+            for pattern, data in promoted.items():
+                # v9.8.1: Upsert rule into the global store
+                stmt = text("""
+                    INSERT INTO sovereign_rules 
+                    (task_pattern, result_data, fidelity_score, is_promoted, last_validated_at)
+                    VALUES (:pat, :res, :fid, :prom, :now)
+                    ON CONFLICT (task_pattern) 
+                    DO UPDATE SET 
+                        fidelity_score = EXCLUDED.fidelity_score,
+                        is_promoted = EXCLUDED.is_promoted,
+                        last_validated_at = EXCLUDED.last_validated_at
+                """)
+                await session.execute(stmt, {
+                    "pat": pattern,
+                    "res": json.dumps(data.get("result", {})),
+                    "fid": data.get("avg_quality", 0.9),
+                    "prom": True,
+                    "now": datetime.now(timezone.utc)
+                })
+            await session.commit()
+            
+    try:
+        # Note: In a celery worker, we use a separate run loop for sync consistency
+        asyncio.run(_sync())
+        broadcast_mission_event("system", "evolution_sync", {"count": len(promoted)})
+        return {"status": "synced", "synced": len(promoted)}
+    except Exception as e:
+        logger.error(f"[Evolver] Global sync failure: {e}")
+        return {"status": "failed", "error": str(e)}

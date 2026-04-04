@@ -40,7 +40,28 @@ async def test_v8_relational_intelligence():
     print(f"Resonance Findings: {resonance}")
     assert len(resonance) > 0, "Failed to perform graph traversal for relational resonance."
 
-    print("\n--- V8.6 RELATIONAL INTELLIGENCE VERIFICATION COMPLETE ---")
+    # 4. Sovereign Shield (PII Scrubber) Test
+    print("\nTesting Sovereign Shield (PII Scrubbing)...")
+    from backend.core.v8.llm_guard import PIIScrubber
+    scrubber = PIIScrubber()
+    
+    raw_prompt = "My email is john.doe@example.com and my phone is +1-555-0199. My API key is sk-12345."
+    scrubbed = scrubber.scrub(raw_prompt)
+    
+    print(f"Original: {raw_prompt}")
+    print(f"Scrubbed: {scrubbed}")
+    
+    assert "john.doe@example.com" not in scrubbed, "Email not scrubbed."
+    assert "sk-12345" not in scrubbed, "API Key not scrubbed."
+    assert "<EMAIL_0>" in scrubbed, "Scrubbing token missing."
+
+    # 5. Swarm Consensus Verification
+    print("\nTesting Swarm Consensus Initialization...")
+    from backend.core.v8.agents.consensus import ConsensusAgentV8
+    consensus_agent = ConsensusAgentV8()
+    print("Consensus Agent ready for Expert Review passes.")
+
+    print("\n--- V9.8.1 MISSION RELIABILITY VERIFICATION COMPLETE ---")
     await graph.close()
 
 if __name__ == "__main__":

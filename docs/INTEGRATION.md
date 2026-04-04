@@ -1,12 +1,12 @@
 # 🔌 LEVI-AI v9.8.1 Integration Master Spec
 
-The LEVI-AI "Sovereign Monolith" architecture exposes a high-fidelity cognitive API for real-time mission orchestration.
+The LEVI-AI "Sovereign Monolith" architecture exposes a high-fidelity cognitive API for real-time mission orchestration via the Unified Brain Controller.
 
 ---
 
-## ⚡ 1. Primary Entry Point (V9 Stream)
+## ⚡ 1. Primary Entry Point (v8/v9 Stream)
 
-### **POST `/api/v1/orchestrator/chat/stream`**
+### **POST `/api/v8/orchestrator/chat/stream`**
 Executes a full 8-step cognitive mission with real-time SSE telemetry.
 
 - **Request Headers:**

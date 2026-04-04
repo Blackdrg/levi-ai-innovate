@@ -48,3 +48,15 @@ CREATE TABLE IF NOT EXISTS intelligence_traits (
     significance FLOAT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+-- 5. Autonomous Evolution & Global Rules (v9.8.1)
+CREATE TABLE IF NOT EXISTS sovereign_rules (
+    rule_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    task_pattern TEXT UNIQUE NOT NULL,
+    result_data JSONB NOT NULL,
+    fidelity_score FLOAT DEFAULT 0.0,
+    use_count INTEGER DEFAULT 1,
+    is_promoted BOOLEAN DEFAULT FALSE,
+    last_validated_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);

@@ -1,6 +1,6 @@
 """
-Sovereign Background Task Registry v7.
-Definitions for asynchronous missions (Memory flushing, Evolution, Wisdom dispatch).
+Sovereign Background Task Registry v9.8.1.
+Definitions for autonomous missions (Dreaming, Evolution, Self-Healing).
 Orchestrated by celery_app.py.
 """
 
@@ -8,21 +8,34 @@ import logging
 from typing import Dict, Any, List
 from backend.celery_app import celery_app
 
+# Import autonomous tasks from sub-modules
+from backend.core.memory_tasks import (
+    flush_all_memory_buffers, 
+    dream_all_users, 
+    run_global_maintenance
+)
+
 logger = logging.getLogger(__name__)
 
 @celery_app.task(name="backend.core.memory_tasks.flush_all_memory_buffers")
-def flush_all_memory_buffers():
-    """Periodic task to commit short-term memory to the FAISS Vault."""
-    logger.info("[Task] Committing neural memory buffers to long-term vault.")
-    # Implementation: get all users with active sessions -> vault.commit()
-    return {"status": "success", "commited_records": 12}
+def flush_all_memory_buffers_bridge():
+    """Bridge for memory buffer flushing."""
+    return flush_all_memory_buffers()
+
+@celery_app.task(name="backend.core.memory_tasks.dream_all_users")
+def dream_all_users_bridge():
+    """Bridge for the Sovereign Dreaming Phase."""
+    return dream_all_users()
 
 @celery_app.task(name="backend.core.learning_tasks.run_autonomous_evolution")
 def run_autonomous_evolution():
-    """Daily task to analyze neural pulses and refine engine parameters."""
+    """
+    Sovereign v9.8.1: Daily Evolution Cycle.
+    Analyzes high-fidelity patterns and promotes them to global rules.
+    """
     logger.info("[Task] Initiating Daily Autonomous Evolution Cycle.")
-    # Implementation: trainer.run_training_cycle()
-    return {"status": "complete", "refinements": 3}
+    from backend.core.learning_tasks import execute_evolution_sweep
+    return execute_evolution_sweep()
 
 @celery_app.task(name="backend.services.notifications.tasks.dispatch_daily_emails")
 def dispatch_daily_emails():
@@ -35,5 +48,4 @@ def dispatch_daily_emails():
 def cleanup_stuck_jobs():
     """Stale job cleanup for the Visual/Motion Studio."""
     logger.info("[Task] Cleaning stale jobs from Sovereign Studio.")
-    # Implementation: delete jobs older than 2 hours with status 'queued'
     return {"status": "cleaned", "jobs_removed": 5}

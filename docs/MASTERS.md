@@ -9,7 +9,7 @@ LEVI-AI is orchestrated by the **LeviBrain v9.8.1 Core Controller**.
 - **The Philosophy:** **Logic-Before-Language**. LLMs are treated as a Last Resort Fallback (Level 4).
 - **The Stack:** 4-Level Deterministic Priority Stack (Logic -> Engine -> Tool -> LLM).
 - **The Swarm:** 14 specialized agents commissioned into parallel "Waves" via a topological `GraphExecutor`.
-- **The Multi-Store:** 6-database service fabric (Postgres, Redis, FAISS, Firestore, Neo4j, Kafka).
+- **The Multi-Store:** High-performance service fabric (Postgres, Redis Pulse v4.1, FAISS, Firestore, Neo4j).
 
 ---
 

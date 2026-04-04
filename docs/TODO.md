@@ -5,26 +5,21 @@ The graduation to the **v9.8.1 Sovereign Monolith** represents the achievement o
 ---
 
 ## ✅ v9.8.1: Cognitive Finality (The Monolith)
-- [x] **Swarm Intelligence 2.0**: Mission Blackboard and mood-diverse reasoning.
-- [x] **Resonant Memory**: 4-tier state matrix with persistence decay.
+- [x] **Swarm Consensus (Expert Review)**: Consensus-driven mission aggregation via `ConsensusAgentV8`.
+- [x] **Sovereign Shield (Security Hardening)**: Mandatory tokenization-based PII scrubbing and LLMGuard.
+- [x] **Adaptive Pulse v4.1**: zlib-compressed, profile-filtered telemetry for mobile resilience.
+- [x] **Autonomous Transition (Rules ➡️ Weights)**: Automated fine-tuning loop in `EvolutionEngine`.
+- [x] **Logic-Before-Language**: Mandated internal engine priority and 4-tier stack.
+- [x] **Production Resilience**: Multi-tier `TaskSemaphores` and circuit breaker stabilization.
 - [x] **Deterministic DAG Architecture**: Wave-based execution and topological sorting.
-- [x] **SovereignVault**: AES-256 identity encryption and PII masking.
-- [x] **Knowledge Graph**: Neo4j-integrated research artifact mapping.
-- [x] **Logic-Before-Language**: Mandated internal engine priority.
 
 ---
 
 ## 🚀 v10.0: Local Sovereignty (Development Window: Q1 2027)
-- [ ] **100% Local Inference Failover**: Persistent neural capability even in zero-bandwidth environments.
-- [ ] **Decentralized Memory Pulse**: Peer-to-peer sharing of high-fidelity "Identity archetypes".
-- [ ] **Neural Handoff**: Local-to-Cloud dynamic switching based on latency and cost.
+- [ ] **100% Local Inference Failover**: Persistent neural capability in zero-bandwidth environments.
+- [ ] **Decentralized Memory Pulse**: P2P sharing of identity archetypes.
 - [ ] **Sovereign OS Hard Hand**: Direct system-level agent manipulation via `DiagnosticAgent` v2.
-
----
-
-## 🛠️ Ongoing Architecture Hardening
-- [ ] **HNSW Optimization**: Tuning the FAISS index for sub-30ms retrieval at scale.
-- [ ] **Pulse SSE v4**: Binary-encoded SSE events for extreme bandwidth reduction.
+- [ ] **HNSW Optimization**: Sub-30ms retrieval at scale for 1M+ nodes.
 
 ---
 

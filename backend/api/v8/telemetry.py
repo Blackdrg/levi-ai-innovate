@@ -36,15 +36,20 @@ def broadcast_mission_event(user_id: str, event_type: str, data: Dict[str, Any])
 
 
 @router.get("/stream")
-async def stream_telemetry(request: Request, current_user: Any = Depends(get_current_user)):
+async def stream_telemetry(
+    request: Request, 
+    profile: str = "desktop",
+    current_user: Any = Depends(get_current_user)
+):
     """
     SSE endpoint to stream real-time mission telemetry (Redis Pulse).
+    Supports 'profile' parameter for adaptive filtering and compression.
     """
     user_id = current_user.uid if hasattr(current_user, "uid") else "guest"
-    logger.info(f"[Telemetry] User {user_id} connected to v8 Pulse stream.")
+    logger.info(f"[Telemetry] User {user_id} connected to v8 Pulse stream. Profile: {profile}")
     
     return StreamingResponse(
-        SovereignBroadcaster.subscribe(user_id=user_id), 
+        SovereignBroadcaster.subscribe(user_id=user_id, profile=profile), 
         media_type="text/event-stream"
     )
 

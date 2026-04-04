@@ -1,34 +1,46 @@
-# LeviBrain v8: Unified Service Container
-FROM python:3.11-slim
-
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONPATH=/app
+# Stage 1: Builder
+FROM python:3.11-slim as builder
 
 WORKDIR /app
-
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-RUN python -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
-
 COPY backend/requirements.prod.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.prod.txt
+RUN pip install --no-cache-dir --user -r requirements.prod.txt
 
-# Copy shared logic and backend code
+# Stage 2: Final (Sovereign Monolith Graduation)
+FROM python:3.11-slim
+
+WORKDIR /app
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app \
+    PATH="/home/levi_monolith/.local/bin:$PATH"
+
+# Create production non-root user
+RUN useradd -m levi_monolith && \
+    mkdir -p /app/backend/data && \
+    chown -R levi_monolith:levi_monolith /app
+
+USER levi_monolith
+
+# Copy lean dependencies from builder
+COPY --from=builder /root/.local /home/levi_monolith/.local
+
+# Copy application source
 COPY shared/ /app/shared/
 COPY backend/ /app/backend/
 
-# Default port
+# Metadata & Health
 EXPOSE 8000
-
-# Metadata
 LABEL maintainer="LEVI-AI Core"
-LABEL version="8.0.0"
-# Default command: Run the Unified Sovereign API
+LABEL version="9.8.1"
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD curl -f http://localhost:8000/health || exit 1
+
+# Launch the Unified Monolith
 CMD ["uvicorn", "backend.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

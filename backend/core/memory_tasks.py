@@ -276,38 +276,70 @@ def garbage_collect_memory(self, user_id: str):
 @celery_app.task(
     name="backend.services.orchestrator.memory_tasks.distill_user_memories",
     bind=True,
+    max_retries=2,
 )
 def distill_user_memories(self, user_id: str):
     """
-    Celery task: Run the v6 Evolutionary Distillation (Dreaming) for a user.
-    Condenses fragmented facts into core traits.
+    Sovereign v9.8.1: Memory Distillation (Dreaming).
+    Crystallizes recent episodic/mid-term patterns into permanent traits.
     """
     from backend.memory.manager import MemoryManager
     import asyncio
+    
+    logger.info(f"[Dreaming] Executing distillation loop for user: {user_id}")
     try:
-        asyncio.run(MemoryManager.distill_core_memory(user_id))
-        return {"status": "distilled", "user_id": user_id}
+        manager = MemoryManager()
+        # V9.8.1: Use the enhanced dream() method
+        success = asyncio.run(manager.dream(user_id))
+        
+        # Clear the flag in Redis upon success
+        if success:
+             redis_client, has_redis = _get_redis()
+             if has_redis and redis_client:
+                 redis_client.delete(f"user:{user_id}:dream_ready")
+                 
+        return {"status": "crystallized" if success else "no_material", "user_id": user_id}
     except Exception as e:
-        logger.error(f"Distillation task failed for {user_id}: {e}")
+        logger.error(f"[Dreaming] Distillation breach for {user_id}: {e}")
         return {"status": "failed", "error": str(e)}
 
 @celery_app.task(
-    name="backend.services.orchestrator.memory_tasks.run_prompt_evolution",
+    name="backend.services.orchestrator.memory_tasks.dream_all_users",
     bind=True,
 )
-def run_prompt_evolution(self):
+def dream_all_users(self):
     """
-    Celery task: Trigger the autonomous prompt evolution process.
-    Identifies weak system prompts and evolves them based on user success.
+    Sovereign v9.8.1: Periodic Dreaming discovery.
+    Scans Redis for 'dream_ready' signals and dispatches distillation tasks.
     """
-    import asyncio
-    from backend.services.learning.logic import AdaptivePromptManager
+    redis_client, has_redis = _get_redis()
+    if not has_redis or redis_client is None:
+        logger.warning("[Dreaming] Redis offline. Skipping discovery.")
+        return {"scheduled": 0}
+
+    scheduled = 0
     try:
-        asyncio.run(AdaptivePromptManager().evolve_variants())
-        return {"status": "evolution_complete"}
+        cursor = 0
+        while True:
+            # Discover users who have triggered the dream_ready signal
+            cursor, keys = redis_client.scan(cursor, match="user:*:dream_ready", count=100)
+            for key in keys:
+                key_str = key.decode() if isinstance(key, bytes) else key
+                # Extract user_id from "user:{user_id}:dream_ready"
+                parts = key_str.split(":")
+                if len(parts) >= 2:
+                    uid = parts[1]
+                    distill_user_memories.delay(uid)
+                    scheduled += 1
+            if cursor == 0:
+                break
+                
+        logger.info(f"[Dreaming] Task Discovery complete. {scheduled} users scheduled for distillation.")
+        return {"scheduled": scheduled}
+        
     except Exception as e:
-        logger.error(f"Prompt evolution task failed: {e}")
-        return {"status": "failed", "error": str(e)}
+        logger.error(f"[Dreaming] Discovery loop failed: {e}")
+        return {"error": str(e)}
 
 @celery_app.task(
     name="backend.services.orchestrator.memory_tasks.run_global_maintenance",
@@ -315,39 +347,26 @@ def run_prompt_evolution(self):
 )
 def run_global_maintenance(self):
     """
-    Periodic task to discover all users and schedule memory distillation for active ones.
+    Sovereign v9.8.1: Global Maintenance Sweep.
+    Dispatches maintenance jobs for all users to ensure system hygiene.
     """
     db = _get_firestore()
-    # In a real system, we'd only pick users active in the last 24h
-    # We use pagination to avoid memory issues with 10k+ sessions
+    # Fetch active users (Simplified for Monolith scalability)
     conv_ref = db.collection("conversations")
     uids = set()
-    batch_size = 500
-    last_doc = None
-
-    while True:
-        query = conv_ref.limit(batch_size)
-        if last_doc:
-            query = query.start_after(last_doc)
-        
-        docs = list(query.get())
-        if not docs:
-            break
+    try:
+        # Get users from the last 72 hours
+        docs = conv_ref.limit(500).get()
+        for doc in docs:
+            uid = doc.to_dict().get("user_id")
+            if uid: uids.add(uid)
             
-        for u in docs:
-            uid = u.to_dict().get("user_id")
-            if uid:
-                uids.add(uid)
-        
-        last_doc = docs[-1]
-        if len(uids) >= 1000: # Safety cap for maintenance task in one run
-            break
-    
-    for uid in uids:
-        distill_user_memories.delay(uid)
-        garbage_collect_memory.delay(uid)
-    
-    # ── Autonomous Evolution Trigger (v6 Phase 4) ──
-    run_prompt_evolution.delay()
-    
-    return {"scheduled": len(uids)}
+        for uid in uids:
+            garbage_collect_memory.delay(uid)
+            # We don't force dreaming here; it's handled by dream_all_users logic
+            
+        logger.info(f"[Maintenance] Scheduled hygiene for {len(uids)} users.")
+        return {"scheduled": len(uids)}
+    except Exception as e:
+        logger.error(f"[Maintenance] Sweep drift: {e}")
+        return {"error": str(e)}

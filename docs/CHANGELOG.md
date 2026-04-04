@@ -2,11 +2,13 @@
 
 The repository has graduated to the **v9.8.1 Sovereign Monolith**. This version represents the absolute technical finalization of the cognitive core, providing 100% architectural transparency and auditability.
 
-## [9.8.1] The Absolute Sovereignty Update
-- **Logic-Before-Language**: Mandated internal engine priority over LLM inference for all core operations.
-- **Enhanced Sovereign Shield**: Expanded real-time PII masking and prompt injection detection.
-- **Hardware-Coherent Optimizations**: Optimized for distributed node architectures (API, Worker, Memory Bus).
-- **Global Evolution Cycle**: Triggered the first autonomous self-correction loop across the 8-step pipeline.
+## [9.8.1] The Absolute Sovereignty Update (Monolith Finality)
+- **Swarm Consensus (Expert Review)**: Implemented multi-agent output aggregation with a dedicated `ConsensusAgentV8` pass, leveraging the `CriticAgent` for high-fidelity resonance scoring.
+- **Sovereign Shield (Security Hardening)**: Deployed mandatory tokenization-based PII scrubbing across all cloud-bound neural missions. 100% data sovereignty enforced at the `LLMGuard`.
+- **Adaptive Pulse v4.1**: Optimized real-time telemetry for mobile resilience with `zlib` compression and profile-based event filtering.
+- **Autonomous Transition (Rules ➡️ Weights)**: Integrated the `EvolutionEngine` with Together AI fine-tuning. Successfully implemented the autonomous jump from symbolic rules to neural weight optimization.
+- **Production Resilience**: Hardened the cognitive core with user-tier-aware `TaskSemaphores` and circuit breakers.
+- **API Consolidation**: Unified all entry points into the `LeviBrainCoreController` v9.8.1, deprecating legacy generation paths.
 
 ## [8.11.1] The High-Fidelity Monolith
 - **Swarm Intelligence 2.0**: Integrated the **Mission Blackboard** for cross-agent collaboration and mood-diverse reasoning passes.

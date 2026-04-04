@@ -19,30 +19,35 @@ class MemoryResonance:
     @staticmethod
     def apply_decay(facts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
-        Calculates a 'survival_score' based on importance and recency.
-        Higher importance or recency = higher survival score.
+        LeviBrain v9.8: Resonance Survival Formula.
+        Calculates a 'survival_score' based on importance, recency, and Frequency of Access (F.O.A).
         """
         now = datetime.now(timezone.utc)
         decayed_facts = []
         
         for f in facts:
             try:
-                # Use isoformat to parse the creation timestamp
+                # 1. Recency Factor (90-day linear decay)
                 created_at_str = f.get("created_at")
                 if created_at_str:
                     created_at = datetime.fromisoformat(created_at_str)
                     age_days = (now - created_at).days
-                    # Recency factor: decays over 90 days
                     recency_factor = max(0, (90 - age_days) / 90)
                 else:
                     recency_factor = 0.5
                 
+                # 2. Importance (Core weight)
                 importance = f.get("importance", 0.5)
-                # Survival = (Importance * 0.7) + (Recency * 0.3)
-                survival_score = (importance * 0.7) + (recency_factor * 0.3)
                 
-                # Keep if survival is high enough or it's a core trait
-                if survival_score > 0.3 or importance > 0.8:
+                # 3. Frequency of Access (v9.8 Neural Resonance)
+                access_count = f.get("access_count", 1)
+                access_factor = min(1.0, access_count / 15)
+                
+                # Survival Formula: Importance (50%) + Access (30%) + Recency (20%)
+                survival_score = (importance * 0.5) + (access_factor * 0.3) + (recency_factor * 0.2)
+                
+                # Keep if survival is high enough or it's a critical core trait
+                if survival_score > 0.35 or importance > 0.85:
                     f["survival_score"] = survival_score
                     decayed_facts.append(f)
             except Exception as e:
