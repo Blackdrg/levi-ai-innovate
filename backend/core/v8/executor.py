@@ -16,12 +16,12 @@ logger = logging.getLogger(__name__)
 
 class GraphExecutor:
     """
-    LeviBrain v8: Graph-Aware Executor
+    LeviBrain v9.8.1: Graph-Aware Executor
     Executes DAG task nodes in parallel where possible.
     """
 
     async def run(self, graph: Any, perception: Dict[str, Any]) -> List[ToolResult]:
-        logger.info("[V8 Executor] Initiating Topological Wave Execution...")
+        logger.info("[V9 Executor] Initiating Topological Wave Execution...")
         # 1. Start Telemetry & Blackboard
         user_id = perception.get("user_id", "default_user")
         session_id = perception.get("session_id", "default_session")

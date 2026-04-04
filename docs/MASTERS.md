@@ -1,27 +1,24 @@
-# ⚖️ LEVI-AI Sovereign Masters Spec (v8.11.1)
+# ⚖️ LEVI-AI Sovereign Masters Spec (v9.8.1)
 
-Absolute technical finality for the LEVI-AI v8.11.1 "Sovereign Monolith."
+Absolute technical finality for the LEVI-AI v9.8.1 "Sovereign Monolith."
 
 ---
 
-## 🏗️ 1. The Monolith Architecture
-LEVI-AI graduates from distributed microservices to a **Unified Cognitive Monolith**. 
-- **The Brain:** Centralized `LeviBrainV8` orchestrating Perception, Planning, Execution, and Reflection.
-- **The Swarm:** 14 especializados agents commissioned into parallel "Waves" via a topological `GraphExecutor`.
+## 🏗️ 1. The Core Controller Architecture
+LEVI-AI is orchestrated by the **LeviBrain v9.8.1 Core Controller**.
+- **The Philosophy:** **Logic-Before-Language**. LLMs are treated as a Last Resort Fallback (Level 4).
+- **The Stack:** 4-Level Deterministic Priority Stack (Logic -> Engine -> Tool -> LLM).
+- **The Swarm:** 14 specialized agents commissioned into parallel "Waves" via a topological `GraphExecutor`.
 - **The Multi-Store:** 6-database service fabric (Postgres, Redis, FAISS, Firestore, Neo4j, Kafka).
 
 ---
 
 ## 🔄 2. The Deterministic Pipeline
-Every mission follows an immutable 8-step lifecycle:
-1.  **Perception:** Intent detection and entity hydration.
-2.  **Goal:** Quantitative objective formulation.
-3.  **Planning:** Dynamic DAG generation (Swarm-Aware).
-4.  **Execution:** Parallel wave resolution (async).
-5.  **Reflection:** Critic-driven multi-model audit ($S > 0.85$).
-6.  **Memory:** 4-tier resonant state crystallization.
-7.  **Auditing:** 360-degree transaction log emission.
-8.  **Synthesis:** Real-time SSE Neural Pulse response.
+Every mission follows the **4-Level Priority Stack**:
+1.  **LEVEL 1: Internal Logic**: Rule-based intent detection and memory retrieval.
+2.  **LEVEL 2: Engine Execution**: Direct execution via specialized deterministic engines.
+3.  **LEVEL 3: Agent Tool Usage**: Structured tool calls by the agent swarm.
+4.  **LEVEL 4: LLM Fallback**: Generative reasoning (only when Levels 1-3 are insufficient).
 
 ---
 

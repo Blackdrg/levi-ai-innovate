@@ -1,6 +1,6 @@
-# 🧠 LEVI-AI Sovereign Documentation (v8.11.1)
+# 🧠 LEVI-AI Sovereign Documentation (v9.8.1)
 
-Welcome to the technical hub for the LEVI-AI v8.11.1 graduate architecture.
+Welcome to the technical hub for the LEVI-AI v9.8.1 graduate architecture.
 
 ---
 
@@ -27,9 +27,9 @@ Welcome to the technical hub for the LEVI-AI v8.11.1 graduate architecture.
 ## 🗺️ 3. Project Soul
 | Manual | Description |
 | :--- | :--- |
-| **[CHANGELOG](file:///c:/Users/mehta/Desktop/New%20folder/LEVI-AI/docs/CHANGELOG.md)** | Evolution history from v7 to v8.11.1. |
-| **[MANIFEST](file:///c:/Users/mehta/Desktop/New%20folder/LEVI-AI/docs/LAUNCH_MANIFEST.md)** | The complete v8.11.1 graduate service set. |
-| **[TODO](file:///c:/Users/mehta/Desktop/New%20folder/LEVI-AI/docs/TODO.md)** | Global Hive v9.0 roadmap sync. |
+| **[CHANGELOG](file:///c:/Users/mehta/Desktop/New%20folder/LEVI-AI/docs/CHANGELOG.md)** | Evolution history from v7 to v9.8.1. |
+| **[MANIFEST](file:///c:/Users/mehta/Desktop/New%20folder/LEVI-AI/docs/LAUNCH_MANIFEST.md)** | The complete v9.8.1 graduate service set. |
+| **[TODO](file:///c:/Users/mehta/Desktop/New%20folder/LEVI-AI/docs/TODO.md)** | Global Hive v10.0 roadmap sync. |
 
 ---
 

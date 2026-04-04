@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Float, DateTime, JSON, ForeignKey, Text
+from sqlalchemy import Column, String, Float, DateTime, JSON, ForeignKey, Text, Integer
 from sqlalchemy.orm import relationship
 from backend.db.postgres import Base
 from datetime import datetime, timezone
@@ -49,5 +49,3 @@ class UserPreference(Base):
     resonance_score = Column(Float, default=0.5)
 
     profile = relationship("UserProfile", back_populates="preferences")
-
-from sqlalchemy import Integer

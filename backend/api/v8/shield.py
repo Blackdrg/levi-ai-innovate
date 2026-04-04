@@ -7,47 +7,80 @@ from backend.core.logger import logger
 
 class SovereignShieldMiddleware(BaseHTTPMiddleware):
     """
-    Sovereign OS v8.9: Sovereign Shield Middleware.
-    Hardens the API against exhaustion and provides deep audit logging to Neo4j.
+    Sovereign OS v9.8: Sovereign Shield Middleware.
+    Hardens the API against exhaustion using Redis-backed windowed rate limiting.
+    Provides deep audit logging and anomaly detection.
     """
-    def __init__(self, app, rate_limit: int = 100):
+    def __init__(self, app, rate_limit: int = 150):
         super().__init__(app)
         self.rate_limit = rate_limit
-        self.vault = MemoryVault()
-        self.request_counts = {} # Simple in-memory rate limiting for now, can be Redis-backed
+        self.window = 60 # 1 minute window
+        self.request_counts = {} # Fallback in-memory logic
+        
+        try:
+            from backend.db.redis import get_redis_client
+            self.redis = get_redis_client()
+            logger.info("[SovereignShield] Redis-backed rate limiting ACTIVATED.")
+        except Exception as e:
+            logger.error(f"[SovereignShield] Redis connection failed, falling back to in-memory: {e}")
+            self.redis = None
 
     async def dispatch(self, request: Request, call_next):
         client_ip = request.client.host
-        current_time = time.time()
+        
+        # 1. Production Rate Limiting (Redis-first)
+        if await self._is_rate_limited(client_ip):
+            logger.warning(f"[SovereignShield] RATE LIMIT EXCEEDED: {client_ip}")
+            raise HTTPException(
+                status_code=429, 
+                detail="Sovereign Shield: Rate limit exceeded. Transcendence requires patience."
+            )
 
-        # 1. Rate Limiting Logic
-        self._clean_old_requests(current_time)
-        if self._is_rate_limited(client_ip, current_time):
-            logger.warning(f"Sovereign Shield: Rate limit exceeded for {client_ip}")
-            raise HTTPException(status_code=429, detail="Sovereign Shield: Rate limit exceeded. Transcendence requires patience.")
-
-        # 2. Audit Logging Pre-Execution
         start_time = time.time()
         
-        # 3. Request Execution
-        response = await call_next(request)
-        
-        # 4. Audit Logging Post-Execution
+        # 2. Execute Request
+        try:
+            response = await call_next(request)
+        except Exception as e:
+            logger.error(f"[SovereignShield] Dispatch Error: {e}")
+            # Global Exception Suppression for Production
+            raise HTTPException(status_code=500, detail="Internal Sovereign Error.")
+
+        # 3. Audit Trace
         duration = time.time() - start_time
         await self._log_audit_trace(request, response, duration)
 
         return response
 
-    def _is_rate_limited(self, ip: str, current_time: float) -> bool:
+    async def _is_rate_limited(self, ip: str) -> bool:
+        """Windowed rate limiting logic."""
+        if self.redis:
+            try:
+                key = f"limit:{ip}"
+                # Multi/Exec block for atomic increment and expire
+                pipe = self.redis.pipeline()
+                pipe.incr(key)
+                pipe.expire(key, self.window)
+                results = pipe.execute()
+                count = results[0]
+                return count > self.rate_limit
+            except Exception as e:
+                logger.error(f"[SovereignShield] Redis rate limit failure: {e}")
+                # Fallback to in-memory if Redis fails during execution
+                return self._is_rate_limited_memory(ip)
+        else:
+            return self._is_rate_limited_memory(ip)
+
+    def _is_rate_limited_memory(self, ip: str) -> bool:
+        """In-memory fallback for rate limiting."""
+        current_time = time.time()
         if ip not in self.request_counts:
             self.request_counts[ip] = []
         
+        # Clean old requests
+        self.request_counts[ip] = [t for t in self.request_counts[ip] if current_time - t < self.window]
         self.request_counts[ip].append(current_time)
         return len(self.request_counts[ip]) > self.rate_limit
-
-    def _clean_old_requests(self, current_time: float):
-        for ip in list(self.request_counts.keys()):
-            self.request_counts[ip] = [t for t in self.request_counts[ip] if current_time - t < 60]
 
     async def _log_audit_trace(self, request: Request, response, duration: float):
         """Asynchronously logs the request trace to Neo4j."""

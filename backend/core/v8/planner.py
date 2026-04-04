@@ -36,8 +36,10 @@ class DAGPlanner:
 
     async def build_task_graph(self, goal: Any, perception: Dict[str, Any]) -> TaskGraph:
         """
-        Strategic Task Graph Construction with Swarm Orchestration.
+        Strategic Task Graph Construction with Engine-Aware Priorities (v8.12).
         """
+        from .engine_registry import EngineRegistry
+        
         intent = perception.get("intent")
         intent_type = intent.intent_type if intent else "chat"
         complexity = intent.complexity_level if intent else 2
@@ -46,12 +48,14 @@ class DAGPlanner:
         
         graph = TaskGraph()
         
-        # 1. Base Layer: Synchronous Local Path
-        if complexity == 0:
+        # 1. ENGINE-AWARE SHORTCUT: Check if a Level 2 Engine can solve the whole mission
+        engine_name = await EngineRegistry.get_engine_for_task(intent_type, intent.capabilities if intent else [])
+        if engine_name and complexity < 3:
+            logger.info(f"[V8 Planner] Engine Shortcut: Using {engine_name} for mission.")
             graph.add_node(TaskNode(
-                id="t_local", 
-                agent="local_agent", 
-                description="Synchronous low-latency response",
+                id="t_engine_direct", 
+                agent=engine_name, 
+                description=f"Deterministic execution via specialized engine: {engine_name}",
                 inputs={"input": user_input}
             ))
             return graph
@@ -59,33 +63,34 @@ class DAGPlanner:
         # 2. Fragility Check & Swarm Configuration
         fragility = FragilityTracker.get_fragility(user_id, intent_type)
         is_fragile = fragility > 0.6
-        # Scale swarm size (3 to 5) based on fragility and intent complexity
         swarm_size = 5 if (is_fragile or complexity >= 5) else 3
         
-        logger.info(f"[V8 Planner] Analyzing Swarm needs for {intent_type}. Fragility: {fragility:.2f}, Swarm: {is_fragile}")
+        logger.info(f"[V8 Planner] Building DAG for {intent_type}. Fragility: {fragility:.2f}")
 
-        # 3. Wave 0: Relational Discovery
+        # 3. Wave 0: Relational Discovery (Engine-Aware)
         if complexity >= 4:
             graph.add_node(TaskNode(
                 id="t_relation",
                 agent="relation_agent",
-                description=f"Explore Knowledge Graph and Evolutionary Prototypes",
+                description="Explore Knowledge Graph Resonance",
                 inputs={"objective": user_input, "user_id": user_id, "depth": 2}
             ))
 
-        # 4. Core Reasoning Wave (Swarm vs Single)
+        # 4. Core Reasoning Wave
         reasoner_ids = []
         
+        # Determine core agent based on engine registry if possible
+        core_agent = engine_name if engine_name else (f"{intent_type}_agent" if intent_type in ["code", "search", "document"] else "chat_agent")
+
         if is_fragile:
-            # EXPLODE: Create a Swarm Group
+            # EXPLODE: Create a Swarm
             for i in range(swarm_size):
                 tid = f"t_swarm_{intent_type}_{i}"
-                # 70/30 Mood Distribution
                 mood = "precise" if i < int(swarm_size * 0.7) else "creative"
                 
                 graph.add_node(TaskNode(
                     id=tid,
-                    agent=f"{intent_type}_agent" if intent_type in ["code", "search", "document"] else "chat_agent",
+                    agent=core_agent,
                     description=f"Swarm Member {i} ({mood.capitalize()}): Reasoning pass",
                     inputs={"input": user_input, "mood": mood, "swarm_pass": i},
                     metadata={"swarm_group": intent_type, "mood": mood}
@@ -96,36 +101,32 @@ class DAGPlanner:
             tid = "t_core"
             graph.add_node(TaskNode(
                 id=tid,
-                agent=f"{intent_type}_agent" if intent_type in ["code", "search", "document"] else "chat_agent",
+                agent=core_agent,
                 description="Standard cognitive reasoning pass",
                 inputs={"input": user_input},
                 metadata={"mood": "balanced"}
             ))
             reasoner_ids.append(tid)
 
-        # 5. Specialized Verification (Parallel to/After Core)
+        # 5. Specialized Verification (Deterministic)
         if intent_type == "code":
             for r_id in reasoner_ids:
                 graph.add_node(TaskNode(
                     id=f"v_{r_id}",
                     agent="python_repl_agent",
-                    description=f"Verify {r_id} syntax/logic",
+                    description=f"Verify {r_id} execution",
                     inputs={"code": f"{{{{{r_id}.result}}}}"},
                     dependencies=[r_id],
-                    critical=False if is_fragile else True
+                    critical=True
                 ))
 
-        # 6. v8.7: Consensus & Reconciliation (Evolutionary Wave)
+        # 6. Consensus & Reflection
         if is_fragile or (complexity >= 3 and len(graph.nodes) > 1):
             graph.add_node(TaskNode(
                 id="t_consensus",
                 agent="consensus_agent",
-                description="Swarm reconciliation and conflict resolution",
-                inputs={
-                    "input": user_input,
-                    "agent_outputs": "{{dependency_results}}",
-                    "fragility_score": fragility
-                },
+                description="Final reconciliation of swarm logic",
+                inputs={"input": user_input, "agent_outputs": "{{dependency_results}}"},
                 dependencies=reasoner_ids,
                 critical=True
             ))
@@ -133,20 +134,17 @@ class DAGPlanner:
         else:
             final_node_id = reasoner_ids[-1]
 
-        # 7. Universal Reflection Pass
         if complexity >= 2:
             graph.add_node(TaskNode(
                 id="t_reflect",
                 agent="critic_agent",
-                description="Qualitative audit and self-correction pass",
-                inputs={
-                    "draft": f"{{{{{final_node_id}.result}}}}", 
-                    "goal": goal.objective,
-                    "criteria": goal.success_criteria
-                },
+                description="Brain-level qualitative audit",
+                inputs={"draft": f"{{{{{final_node_id}.result}}}}", "goal": goal.objective},
                 dependencies=[final_node_id],
                 critical=False
             ))
+
+        return graph
 
         return graph
 

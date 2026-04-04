@@ -75,13 +75,18 @@ class GoalEngine:
             "Resonance: Cognitive style and tone alignment."
         ]
         
-        # Domain-Specific extras
+        # Domain-Specific extras (Logic-First Hardening)
         if intent_type == "search":
              criteria.append("Investigative Depth: Multi-vector source synthesis.")
+             criteria.append("Deterministic: Search results verified against internal cache.")
         elif intent_type == "code":
              criteria.append("Syntactic Correctness: Sandbox-passed logic.")
+             criteria.append("Logic-First: Code execution via Python REPL Engine confirmed.")
              if fragility > 0.5: # Hardened requirement if fragile
                  criteria.append("Verification: Mandatory multi-path cross-check (Fragility Mode).")
+        elif intent_type == "math":
+             criteria.append("Precision: Result derived from deterministic calculation engine.")
+             criteria.append("Verification: Sandbox-verified output.")
         
         if complexity >= 3 or fragility > 0.7:
              criteria.append("Cross-Engine Validation: Swarm-based consensus check.")

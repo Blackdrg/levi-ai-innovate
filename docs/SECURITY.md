@@ -1,12 +1,12 @@
-# 🛡️ The Sovereign Security Framework (v8.11.1)
+# 🛡️ The Sovereign Security Framework (v9.8.1)
 
-Architectural isolation relies fundamentally on Identity, Encryption, and Sanitization. LEVI-AI v8.11.1 implements a multi-layered security mesh to protect user-specific cognitive traits.
+Architectural isolation relies fundamentally on Identity, Encryption, and Sanitization. LEVI-AI v9.8.1 implements a multi-layered security mesh to protect user-specific cognitive traits.
 
 ---
 
 ## 🔐 1. Identity & Encryption (SovereignVault)
 
-LEVI-AI v8.11.1 graduates beyond simple plaintext storage for user identity.
+LEVI-AI v9.8.1 graduates beyond simple plaintext storage for user identity.
 - **SovereignVault (AES-256):** All Tier 4 Identity traits in Postgres are encrypted at rest via `SovereignVault.encrypt()`. Decryption only occurs during authorized context hydration.
 - **Firebase Handshake:** Routes strictly validate the Firebase `idToken` against the `firebase-admin` internal SDK, returning `uid` values mapped to internal Sovereign IDs.
 
@@ -18,7 +18,7 @@ Mission execution and high-compute tasks are protected by a distributed locking 
 
 ## 👁️ 3. Sovereign Shield & NER Sanitization
 
-The v8.11.1 "Cognitive Monolith" implements a dual-layer sanitization model.
+The v9.8.1 "Cognitive Monolith" implements a dual-layer sanitization model.
 
 1.  **Input Sanitization (Sovereign Shield):**
     - **NER PII Masking:** Automatically detects and masks sensitive entities before hitting external inference (Groq, OpenAI). Protected entities: `PERSON`, `ORG`, `LOC`, `PERCENT`, `MONEY`, `EMAIL`, `PHONE`.

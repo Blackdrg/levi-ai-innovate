@@ -1,6 +1,6 @@
-# 🏃 LEVI-AI Sovereign Runbook (v8.11.1)
+# 🏃 LEVI-AI Sovereign Runbook (v9.8.1)
 
-Operations and cognitive maintenance procedures for the LEVI-AI v8.11.1 "Sovereign Monolith."
+Operations and cognitive maintenance procedures for the LEVI-AI v9.8.1 "Sovereign Monolith."
 
 ---
 
@@ -9,7 +9,7 @@ Operations and cognitive maintenance procedures for the LEVI-AI v8.11.1 "Soverei
     ```bash
     docker-compose up -d postgres redis kafka zookeeper neo4j faiss firestore
     ```
-2.  **Cognitive Migration:** Apply the v8.11.1 schema.
+2.  **Cognitive Migration:** Apply the v9.8.1 schema.
     ```bash
     python backend/core/v8/db_init.py
     ```
@@ -24,7 +24,7 @@ Operations and cognitive maintenance procedures for the LEVI-AI v8.11.1 "Soverei
 ## 🩺 2. Diagnostic Verifications
 Perform a 360-degree cognitive health check.
 ```bash
-python scripts/verify_v8_master.py
+python scripts/verify_v9_8_full.py
 ```
 - **Checks:** Redis context pulse, Postgres traits connection, Kafka event flow, Neo4j knowledge graph, and FAISS vector retrieval.
 

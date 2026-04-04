@@ -12,10 +12,23 @@ class ResearchInput(BaseModel):
     input: str = Field(..., description="Topic for deep research")
     depth: int = 2
 
+class SourceModel(BaseModel):
+    title: str
+    url: str
+    snippet: str
+    score: float = 0.0
+
+class ResearchData(BaseModel):
+    topic: str
+    sources: List[SourceModel]
+    primary_themes: List[str] = Field(default_factory=list)
+    total_analyzed: int
+    architecture: str = "Investigative-v8"
+
 class ResearchAgentV8(BaseV8Agent[ResearchInput]):
     """
     LeviBrain v8: Deep Research System
-    Scraper + Ranker + Summarizer
+    Scraper + Ranker + Data Collector
     """
 
     def __init__(self):
@@ -23,9 +36,9 @@ class ResearchAgentV8(BaseV8Agent[ResearchInput]):
         self.tavily_key = os.getenv("TAVILY_API_KEY")
         self.generator = SovereignGenerator()
 
-    async def _execute_system(self, input_data: ResearchInput, context: Dict[str, Any]) -> AgentResult:
+    async def _execute_system(self, input_data: ResearchInput, context: Dict[str, Any]) -> AgentResult[ResearchData]:
         topic = input_data.input
-        self.logger.info(f"[Research-V8] Initiating high-fidelity investigation for: {topic}")
+        self.logger.info(f"[Research-V8] Initiating structured investigation for: {topic}")
         
         if not self.tavily_key:
             self.logger.warning("[Research-V8] Tavily offline. Falling back to Sovereign Vector Intelligence.")
@@ -34,7 +47,7 @@ class ResearchAgentV8(BaseV8Agent[ResearchInput]):
         # 1. Scraper: Multi-vector Discovery
         discovery_tasks = [
             self._tavily_search(topic, depth="basic"),
-            self._tavily_search(f"detailed status and deep analysis of {topic}", depth="advanced")
+            self._tavily_search(f"detailed investigative report on {topic}", depth="advanced")
         ]
         discovery_results = await asyncio.gather(*discovery_tasks)
         
@@ -45,23 +58,32 @@ class ResearchAgentV8(BaseV8Agent[ResearchInput]):
         if not all_raw_results:
             return AgentResult(success=False, error="No external data intelligence could be gathered.")
 
-        # 2. Ranker: Precision Source Analysis (Pass 1)
-        ranked_results = await self._rank_sources(topic, all_raw_results)
+        # 2. Ranker: Precision Source Analysis
+        # We still use the LLM to Rank, but it returns JSON, not a final answer
+        ranked_nodes = await self._rank_sources(topic, all_raw_results)
         
-        # 3. Summarizer: Investigative Synthesis (Pass 2)
-        final_report = await self._summarize_findings(topic, ranked_results)
+        # 3. Theme Extraction (New: Extract themes from ranked results)
+        themes = await self._extract_themes(topic, ranked_nodes)
         
-        urls = [r.get("url") for r in ranked_results if r.get("url")]
-        
+        structured_sources = [
+            SourceModel(
+                title=r.get("title", "Unknown"),
+                url=r.get("url", ""),
+                snippet=r.get("content", ""),
+                score=r.get("score", 0.0)
+            ) for r in ranked_nodes
+        ]
+
         return AgentResult(
             success=True,
-            message=final_report,
-            citations=list(set(urls)),
-            data={
-                "ranked_count": len(ranked_results),
-                "total_analyzed": len(all_raw_results),
-                "architecture": "Investigative-v8"
-            }
+            message=f"Investigation complete. {len(structured_sources)} primary intelligence vectors identified.",
+            citations=[s.url for s in structured_sources if s.url],
+            data=ResearchData(
+                topic=topic,
+                sources=structured_sources,
+                primary_themes=themes,
+                total_analyzed=len(all_raw_results)
+            )
         )
 
     async def _rank_sources(self, topic: str, sources: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -100,21 +122,27 @@ class ResearchAgentV8(BaseV8Agent[ResearchInput]):
             
         return sources[:6] # Fallback to top-k
 
-    async def _summarize_findings(self, topic: str, results: List[Dict[str, Any]]) -> str:
-        """Summarizer pass: Investigative Synthesis."""
-        corpus = "\n\n".join([f"[Source: {r.get('title')}]: {r.get('content')}" for r in results])
+    async def _extract_themes(self, topic: str, results: List[Dict[str, Any]]) -> List[str]:
+        """Theme Extraction pass: Identifies primary investigative vectors."""
+        if not results: return []
         
-        synth_prompt = (
-            f"INVESTIGATIVE TOPIC: {topic}\n\n"
-            f"RESEARCH CORPUS:\n{corpus}\n\n"
-            "Task: Produce a high-fidelity intelligence report. Focus on hidden patterns, critical risks, and emerging opportunities.\n"
-            "Use formal citations [1][2]... and maintain a deep, investigative tone."
+        corpus = "\n".join([f"- {r.get('title')}: {r.get('content')[:150]}" for r in results[:5]])
+        
+        theme_prompt = (
+            f"TOPIC: {topic}\n"
+            f"CORPUS SNIPPET:\n{corpus}\n\n"
+            "Identify 3-5 primary research themes or investigative vectors.\n"
+            "Return a simple comma-separated list."
         )
         
-        return await self.generator.council_of_models([
-            {"role": "system", "content": "You are the LEVI Master Investigator."},
-            {"role": "user", "content": synth_prompt}
-        ])
+        try:
+            res = await self.generator.council_of_models([
+                {"role": "system", "content": "You are the LEVI Intelligence Analyst."},
+                {"role": "user", "content": theme_prompt}
+            ])
+            return [t.strip() for t in res.split(",") if t.strip()][:5]
+        except:
+            return ["General Investigation"]
 
     async def _tavily_search(self, query: str, depth: str = "basic") -> Dict[str, Any]:
         """Safe Tavily execution helper."""

@@ -1,10 +1,10 @@
-# 🔌 LEVI-AI v8.11.1 Integration Master Spec
+# 🔌 LEVI-AI v9.8.1 Integration Master Spec
 
 The LEVI-AI "Sovereign Monolith" architecture exposes a high-fidelity cognitive API for real-time mission orchestration.
 
 ---
 
-## ⚡ 1. Primary Entry Point (V8 Stream)
+## ⚡ 1. Primary Entry Point (V9 Stream)
 
 ### **POST `/api/v1/orchestrator/chat/stream`**
 Executes a full 8-step cognitive mission with real-time SSE telemetry.
@@ -30,7 +30,7 @@ Every mission emits a sequence of SSE Neural Pulse events for real-time observab
 
 | Event Type | Description | Schema / Payload |
 | :--- | :--- | :--- |
-| `metadata` | Mission ID and Version. | `{request_id: "v8_...", status: "pulsing"}` |
+| `metadata` | Mission ID and Version. | `{request_id: "v9_...", status: "pulsing"}` |
 | `activity` | Human-readable status updates. | `"Research Agent: Searching Tavily..."` |
 | `graph` | The full DAG-based TaskGraph. | `TaskGraph.to_dict()` (JSON) |
 | `results` | Raw compiled agent outputs. | `[ToolResult, ...]` |

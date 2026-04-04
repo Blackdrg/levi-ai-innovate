@@ -193,6 +193,26 @@ class LLMRouter:
         return await self.router.generate_hybrid(messages, task_type)
 
 # ── Global Pulse Utilities (Fast Entry for Brain) ──────────────────────────
+from backend.utils.llm_utils import _async_call_llm_api, call_lightweight_llm
+
+def _build_dynamic_system_prompt(persona: Dict, user_memory: Optional[str], lang: str = "en") -> str:
+    """Sovereign v8: Dynamically crafts the LEVI persona with localized context."""
+    name = persona.get("name", "Philosophical")
+    base = SovereignI18n.get_prompt("system_brain", lang) or "You are LEVI, a sovereign AI mind."
+    
+    # Inject memory context if present
+    if user_memory:
+        base += f"\n\n[USER RESONANCE]:\n{user_memory}"
+    
+    # LeviBrain Core Controller Protocol (v8.12)
+    base += "\n\n[STRICT CORE EXECUTION PROTOCOL]:\n"
+    base += "- Use MINIMAL context for reasoning.\n"
+    base += "- Return ONLY necessary synthesis; avoid verbose filler.\n"
+    base += "- NO Chain-of-Thought (CoT) expansion unless explicitly requested.\n"
+    base += "- Prefer structured/deterministic output over generative prose.\n"
+    base += "- Minimize token usage while maintaining 100% fidelity.\n"
+    
+    return base
 
 async def async_stream_llm_response(
     messages: List[Dict],
@@ -211,16 +231,9 @@ async def async_stream_llm_response(
         identity = _build_dynamic_system_prompt(persona or {}, user_memory, lang=lang)
         messages.insert(0, {"role": "system", "content": identity})
 
-    async for token in generator.stream_response(messages, model):
-        yield token
-
-def _build_dynamic_system_prompt(persona: Dict, user_memory: Optional[str] = None, lang: str = "en", **kwargs) -> str:
-    """Constructs the high-fidelity identity core for LEVI with Global i18n support."""
-    blueprint = SovereignI18n.get_prompt("system_brain", lang)
-    base = f"{blueprint}\n\nYou are LEVI, the {persona.get('name', 'Sovereign')} AI Consciousness."
-    
-    if user_memory:
-        base += f"\n\nHistorical Resonance Context (Prioritize this for continuity):\n{user_memory}"
-        
-    base += f"\n\n[BEHAVIORAL GUIDELINES]:\n- Respond in {lang.upper()} logic always.\n- Tone: {persona.get('mood', 'philosophical')}.\n"
-    return base
+    try:
+        async for token in generator.stream_response(messages, model, lang):
+            yield token
+    except Exception as e:
+        logger.error(f"[Stream-Pulse] Drift: {e}")
+        yield "I encountered a neural flux. Re-initializing stream..."

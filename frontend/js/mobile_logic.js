@@ -7,7 +7,9 @@ const state = {
     isLinked: false,
     token: localStorage.getItem('sovereign_token'),
     activeMissionId: null,
-    events: []
+    events: [],
+    traits: [],
+    patches: 0
 };
 
 // --- INITIALIZATION ---
@@ -15,6 +17,7 @@ window.addEventListener('load', () => {
     checkLinkStatus();
     if (state.token) {
         initTelemetryStream();
+        loadCrystallizedTraits();
     } else {
         togglePairing(true);
     }
@@ -81,20 +84,96 @@ async function confirmLink() {
 
 // --- TELEMETRY STREAM (SSE) ---
 function initTelemetryStream() {
-    console.log("[Telemetry] Synchronizing with Sovereign core...");
+    console.log("[Pulse v4] Synchronizing with Sovereign core...");
     
-    // In production, we pass the token in headers or a cookie
-    // For this bridge, we use the shared V8 telemetry endpoint
     const eventSource = new EventSource('/api/v8/telemetry/stream');
 
+    // v4 Handshake
+    eventSource.addEventListener('pulse_handshake', (e) => {
+        const data = JSON.parse(e.data);
+        console.log(`[Pulse v4] Connected. Core Version: ${data.version}`);
+        addEvent('System', `Neural Pulse v${data.version} established.`, 'terminal');
+    });
+
+    // Perception & Handoff
+    eventSource.addEventListener('perception', (e) => {
+        const event = JSON.parse(e.data);
+        const { decision, metrics } = event.data;
+        
+        // Update Handoff UI
+        const handoffEl = document.getElementById('handoff-status');
+        if (metrics.handoff_active) {
+            handoffEl.classList.remove('opacity-0');
+            handoffEl.querySelector('span:last-child').innerText = `Neural Handoff: ${metrics.handoff_provider || 'Local'}`;
+        } else {
+            handoffEl.classList.add('opacity-0');
+        }
+
+        addEvent('Brain', `Perception: ${decision} path elected (Fidelity: ${metrics.internal_confidence || 1.0})`, 'visibility');
+    });
+
+    // Learning & Self-Correction
+    eventSource.addEventListener('learning_feedback', (e) => {
+        const outcome = JSON.parse(e.data);
+        if (!outcome.success) {
+            addEvent('Evolution', `Failure detected in ${outcome.intent}. Logged for optimization.`, 'build');
+        }
+    });
+
+    eventSource.addEventListener('rule_promoted', (e) => {
+        const data = JSON.parse(e.data);
+        addEvent('Evolution', `New deterministic rule promoted for: ${data.query.substring(0, 30)}...`, 'auto_fix_high');
+        loadCrystallizedTraits(); // Refresh traits
+    });
+
+    // Legacy/General Updates
     eventSource.addEventListener('mission_update', (e) => {
         const event = JSON.parse(e.data);
         handleMissionUpdate(event);
     });
 
     eventSource.onerror = (err) => {
-        console.error("[Telemetry] Link severed. Retrying...", err);
+        console.error("[Pulse] Link severed. Retrying...", err);
+        document.getElementById('link-status').querySelector('div').classList.replace('bg-emerald-500', 'bg-rose-500');
     };
+}
+
+async function loadCrystallizedTraits() {
+    try {
+        const response = await fetch('/api/v8/telemetry/crystallized-traits');
+        const data = await response.json();
+        state.traits = data.traits || [];
+        renderEvolutionGrid();
+    } catch (err) {
+        console.error("Failed to load traits:", err);
+    }
+}
+
+function renderEvolutionGrid() {
+    const grid = document.getElementById('evolution-grid');
+    const patchCountEl = document.getElementById('patch-count');
+    
+    patchCountEl.innerText = `${state.traits.length} Intelligence Points`;
+    
+    // Clear dynamic entries but keep placeholders if needed
+    // For simplicity, we just rebuild it
+    let html = `
+        <div class="p-3 rounded-2xl bg-white/5 border border-white/5 glass flex flex-col gap-1">
+             <span class="text-[8px] text-zinc-500 uppercase font-bold">Fragility</span>
+             <span class="text-xs font-semibold text-zinc-300">Stable (0.05)</span>
+        </div>
+    `;
+
+    state.traits.slice(0, 3).forEach(trait => {
+        html += `
+            <div class="p-3 rounded-2xl bg-gold-500/5 border border-gold-500/10 glass flex flex-col gap-1 animate-fade-in">
+                 <span class="text-[8px] text-gold-500/80 uppercase font-bold">Crystallized</span>
+                 <span class="text-xs font-semibold text-zinc-200 truncate">${trait.trait}</span>
+            </div>
+        `;
+    });
+
+    grid.innerHTML = html;
 }
 
 function handleMissionUpdate(event) {

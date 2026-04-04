@@ -1,28 +1,24 @@
-# 🗺️ LEVI-AI Sovereign Roadmap (v8.11 ➡️ v9.2)
+# 🗺️ LEVI-AI Sovereign Roadmap (v9.8 ➡️ v10.0)
 
-The graduation to the **v8.11.1 Sovereign Monolith** represents the achievement of Technical Finality for the cognitive core. The roadmap shifts towards **Global Hive** decentralized intelligence.
+The graduation to the **v9.8.1 Sovereign Monolith** represents the achievement of Technical Finality for the cognitive core. The roadmap shifts towards **Local Sovereignty**.
 
 ---
 
-## ✅ v8.11.1: Cognitive Finality (The Monolith)
+## ✅ v9.8.1: Cognitive Finality (The Monolith)
 - [x] **Swarm Intelligence 2.0**: Mission Blackboard and mood-diverse reasoning.
 - [x] **Resonant Memory**: 4-tier state matrix with persistence decay.
 - [x] **Deterministic DAG Architecture**: Wave-based execution and topological sorting.
 - [x] **SovereignVault**: AES-256 identity encryption and PII masking.
 - [x] **Knowledge Graph**: Neo4j-integrated research artifact mapping.
+- [x] **Logic-Before-Language**: Mandated internal engine priority.
 
 ---
 
-## 🚀 v9.0: The Global Hive (Development Window: Q3 2026)
-- [ ] **Decentralized Memory Pulse**: Peer-to-peer sharing of high-fidelity "Identity archetypes" between Sovereign instances.
-- [ ] **Swarm Consensus Protocol**: Multi-monolith mission collaboration via the Sovereign Event Bus.
-- [ ] **Recursive Self-Correction 2.0**: Automated system-level code adjustment based on reflection trends.
-
----
-
-## 🧠 v9.2: Neural Handoff (Development Window: Q4 2026)
-- [ ] **Local-to-Cloud Seamless Transition**: Real-time switching between `llama.cpp` local inference and high-tier Groq/OpenAI based on latency and cost.
-- [ ] **Sovereign OS Hard Hand**: Direct system-level agent manipulation via the `DiagnosticAgent` v2.
+## 🚀 v10.0: Local Sovereignty (Development Window: Q1 2027)
+- [ ] **100% Local Inference Failover**: Persistent neural capability even in zero-bandwidth environments.
+- [ ] **Decentralized Memory Pulse**: Peer-to-peer sharing of high-fidelity "Identity archetypes".
+- [ ] **Neural Handoff**: Local-to-Cloud dynamic switching based on latency and cost.
+- [ ] **Sovereign OS Hard Hand**: Direct system-level agent manipulation via `DiagnosticAgent` v2.
 
 ---
 

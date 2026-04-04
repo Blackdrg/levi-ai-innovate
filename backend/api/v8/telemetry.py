@@ -16,9 +16,19 @@ logger = logging.getLogger(__name__)
 
 def broadcast_mission_event(user_id: str, event_type: str, data: Dict[str, Any]):
     """
-    Unified V8 Mission Pulse Bridge.
-    Communicates execution state to the frontend via Redis PubSub.
+    Unified V8 Mission Pulse Bridge with Structured Audit Logging.
+    Communicates execution state to the frontend and logs to the system audit trail.
     """
+    # 1. Structured Audit Log (Production Requirement)
+    audit_payload = {
+        "user_id": user_id,
+        "event": event_type,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "metadata": data
+    }
+    logger.info(f"[AUDIT] Mission Event: {json.dumps(audit_payload)}")
+    
+    # 2. Real-Time Broadcast (SSE)
     SovereignBroadcaster.publish(event_type, data, user_id=user_id)
 
 

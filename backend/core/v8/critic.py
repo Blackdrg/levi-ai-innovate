@@ -82,3 +82,43 @@ class ReflectionEngine:
         }, context)
         
         return correction_raw.get("message", response)
+
+    async def suggest_system_patch(self, failures: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """
+        v9.5: Recursive Self-Correction.
+        Analyzes a batch of failures to suggest a logical patch for the Sovereign system.
+        """
+        if not failures:
+            return None
+            
+        logger.info(f"[V9.5 Reflection] Analyzing {len(failures)} failures for recursive self-correction...")
+        
+        failure_context = "\n".join([f"Input: {f['input']} | Issue: {f['reasons']}" for f in failures])
+        
+        prompt = (
+            "You are the LEVI Recursive Architect. Analyze the following recurring system failures:\n\n"
+            f"{failure_context}\n\n"
+            "Suggest a specific logical improvement or 'System Patch' to prevent these issues.\n"
+            "Your patch should target one of the following domains:\n"
+            "- PERCEPTION (Intent detection)\n"
+            "- PLANNING (DAG generation)\n"
+            "- DECISION (Priority scoring)\n"
+            "- ENGINE (Deterministic logic)\n\n"
+            "Response format (JSON): {'domain': '', 'reasoning': '', 'patch_logic': '', 'risk_score': 0.0}"
+        )
+        
+        # We use a high-fidelity model for recursive patching
+        from backend.engines.chat.generation import SovereignGenerator
+        generator = SovereignGenerator()
+        
+        patch_raw = await generator.council_of_models([
+            {"role": "system", "content": "You are the LEVI Recursive Architect (v9.5)."},
+            {"role": "user", "content": prompt}
+        ], temperature=0.1)
+        
+        try:
+            import json
+            return json.loads(patch_raw.strip().replace("```json", "").replace("```", ""))
+        except:
+            logger.warning("[V9.5 Reflection] Failed to parse patch proposal.")
+            return None

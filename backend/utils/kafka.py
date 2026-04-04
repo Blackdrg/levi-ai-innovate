@@ -3,7 +3,12 @@ import logging
 import os
 import asyncio
 from typing import Any, Dict, Optional
-from aiokafka import AIOKafkaProducer # type: ignore
+try:
+    from aiokafka import AIOKafkaProducer # type: ignore
+    KAFKA_AVAILABLE = True
+except ImportError:
+    AIOKafkaProducer = None
+    KAFKA_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -11,12 +16,16 @@ class SovereignKafka:
     """
     Sovereign Kafka Interface v8.
     Asynchronous event emission for the cognitive mission bus.
+    Degrades gracefully if aiokafka is not installed.
     """
-    _producer: Optional[AIOKafkaProducer] = None
+    _producer: Optional[Any] = None
     _loop = None
 
     @classmethod
-    async def get_producer(cls) -> Optional[AIOKafkaProducer]:
+    async def get_producer(cls) -> Optional[Any]:
+        if not KAFKA_AVAILABLE:
+            return None
+
         if cls._producer is None:
             kafka_url = os.getenv("KAFKA_URL", "kafka:29092")
             try:
@@ -35,6 +44,10 @@ class SovereignKafka:
     @classmethod
     async def emit_event(cls, topic: str, data: Dict[str, Any]):
         """Emits a cognitive event to the global mission bus."""
+        if not KAFKA_AVAILABLE:
+            logger.debug("[Kafka] aiokafka not installed. Event skipped.")
+            return
+
         producer = await cls.get_producer()
         if producer:
             try:

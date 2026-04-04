@@ -11,20 +11,31 @@ class DocumentInput(BaseModel):
     input: str = Field(..., description="The user's question about their documents")
     user_id: str = "guest"
 
+class FragmentModel(BaseModel):
+    content: str
+    score: float = 0.0
+    source_id: Optional[str] = None
+
+class DocumentData(BaseModel):
+    query: str
+    fragments: List[FragmentModel]
+    total_retrieved: int
+    precision_layer: str = "ContextScorer-v8"
+
 class DocumentAgentV8(BaseV8Agent[DocumentInput]):
     """
     LeviBrain v8: Document Intelligence System
-    RAG + Re-ranking + Synthesis
+    RAG + Re-ranking + Data Extraction
     """
 
     def __init__(self):
         super().__init__("DocumentAgentV8")
         self.generator = SovereignGenerator()
 
-    async def _execute_system(self, input_data: DocumentInput, context: Dict[str, Any]) -> AgentResult:
+    async def _execute_system(self, input_data: DocumentInput, context: Dict[str, Any]) -> AgentResult[DocumentData]:
         query = input_data.input
         user_id = input_data.user_id
-        self.logger.info(f"[Document-V8] Initiating high-fidelity audit for {user_id}")
+        self.logger.info(f"[Document-V8] Initiating structured audit for {user_id}")
 
         # 1. Retrieval: Multi-vector RAG pass
         from backend.engines.document.document_engine import DocumentEngine
@@ -32,22 +43,29 @@ class DocumentAgentV8(BaseV8Agent[DocumentInput]):
         fragments = await doc_engine.extract_context(query=query, user_id=user_id, top_k=15)
         
         if not fragments:
-            return AgentResult(success=True, message="No relevant documentation was discovered in the Sovereign archives.")
+            return AgentResult(
+                success=True, 
+                message="No relevant documentation was discovered in the Sovereign archives.",
+                data=DocumentData(query=query, fragments=[], total_retrieved=0)
+            )
 
         # 2. Re-ranker: Precision Scoring (Pass 1)
         ranked_fragments = await self._rerank_fragments(query, fragments)
         
-        # 3. Summarizer: Contextual Synthesis (Pass 2)
-        final_answer = await self._synthesize_answer(query, ranked_fragments)
-        
+        # 3. Model mapping
+        structured_fragments = [
+            FragmentModel(content=f, score=0.9) # Simple score for now
+            for f in ranked_fragments
+        ]
+
         return AgentResult(
             success=True,
-            message=final_answer,
-            data={
-                "retrieved": len(fragments),
-                "analyzed": len(ranked_fragments),
-                "precision_layer": "ContextScorer-v8"
-            }
+            message=f"Document intelligence extraction complete. {len(structured_fragments)} relevant fragments identified.",
+            data=DocumentData(
+                query=query,
+                fragments=structured_fragments,
+                total_retrieved=len(fragments)
+            )
         )
 
     async def _rerank_fragments(self, query: str, fragments: List[str]) -> List[str]:
@@ -79,18 +97,3 @@ class DocumentAgentV8(BaseV8Agent[DocumentInput]):
             
         return fragments[:5] # Fallback to standard top-k
 
-    async def _synthesize_answer(self, query: str, fragments: List[str]) -> str:
-        """High-fidelity synthesis for document intelligence."""
-        corpus = "\n\n".join([f"[Source {i+1}]: {f}" for i, f in enumerate(fragments)])
-        
-        prompt = (
-            f"RESEARCH QUERY: {query}\n\n"
-            f"CORPUS DATA:\n{corpus}\n\n"
-            "Task: Provide a definitive synthesis. Use numbered citations e.g. [1][2] to denote sources.\n"
-            "If the corpus does not contain the answer, state so precisely."
-        )
-        
-        return await self.generator.council_of_models([
-            {"role": "system", "content": "You are the LEVI Document Sage."},
-            {"role": "user", "content": prompt}
-        ])

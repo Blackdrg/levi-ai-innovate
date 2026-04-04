@@ -1,6 +1,6 @@
-# 🛠️ LEVI-AI Sovereign Maintenance Guide (v8.11.1)
+# 🛠️ LEVI-AI Sovereign Maintenance Guide (v9.8.1)
 
-Ensuring the absolute fidelity of the LEVI-AI v8.11.1 "Sovereign Monolith" requires periodic maintenance of the cognitive data fabric.
+Ensuring the absolute fidelity of the LEVI-AI v9.8.1 "Sovereign Monolith" requires periodic maintenance of the cognitive data fabric.
 
 ---
 
@@ -40,7 +40,7 @@ The `sovereign:blackboard:{session_id}` keys are transient. They are cleared aut
 ---
 
 ## 📈 4. Performance Diagnostics
-Use `scripts/verify_v8_master.py` to perform a 360-degree connectivity and fidelity audit.
+Use `scripts/verify_v9_8_full.py` to perform a 360-degree connectivity and fidelity audit.
 - **Thresholds:**
     - **TTFT:** < 400ms.
     - **Memory Hydration:** < 200ms.

@@ -1,11 +1,11 @@
-# ✅ LEVI-AI Sovereign Deployment Checklist (v8.11.1)
+# ✅ LEVI-AI Sovereign Deployment Checklist (v9.8.1)
 
-Ensure all 10 checkpoints are verified before graduating the v8.11.1 Monolith to production.
+Ensure all 10 checkpoints are verified before graduating the v9.8.1 Monolith to production.
 
 ---
 
 ## 🏗️ 1. Infrastructure (6-Store Sync)
-- [ ] **Postgres:** `DATABASE_URL` connectivity and v8 schema applied.
+- [ ] **Postgres:** `DATABASE_URL` connectivity and v9.8 schema applied.
 - [ ] **Redis:** `REDIS_URL` connectivity and pulse buffer active.
 - [ ] **Kafka:** `KAFKA_BOOTSTRAP_SERVERS` connectivity and topic creation.
 - [ ] **Neo4j:** `NEO4J_URI` connectivity and Cypher layer active.

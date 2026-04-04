@@ -134,3 +134,18 @@ async def handle_local_task(query: str, complexity: int = 1) -> str:
         response += token
     
     return response.strip()
+
+def is_locally_handleable(domain: str, complexity: int = 2) -> bool:
+    """Checks if the local engine is online and capable of the specific mission."""
+    if not HAS_LLAMA_CPP: return False
+    
+    model_path = DEFAULT_MODEL if complexity > 1 else SMALL_MODEL
+    return os.path.exists(model_path)
+
+async def handle_local_sync(messages: List[Dict], model_type: str = "default") -> str:
+    """High-speed synchronous-style (non-streaming) local pulse."""
+    response = ""
+    async for token in generate_local_stream(messages, model_type=model_type):
+        if token == "__FALLBACK_TRIGGER__": return "Neural flux: Local engine saturated."
+        response += token
+    return response.strip()

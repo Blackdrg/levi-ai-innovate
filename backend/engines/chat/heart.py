@@ -7,7 +7,7 @@ Generation, Persona Management, and Soul Optimization.
 
 import logging
 from typing import Dict, Any, List, Optional
-from backend.generation import _async_call_llm_api
+from backend.utils.llm_utils import _async_call_llm_api
 
 logger = logging.getLogger(__name__)
 
