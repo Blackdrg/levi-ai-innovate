@@ -12,6 +12,10 @@ from .orchestrator_types import ToolResult, IntentResult
 from .tool_registry import call_tool
 from backend.broadcast_utils import SovereignBroadcaster, PULSE_NODE_COMPLETED
 from ..utils.network import ai_service_breaker
+from ..celery_app import celery_app
+from ..agents.registry import AGENT_REGISTRY
+from ..agents.consensus_agent import ConsensusAgentV8
+from ..utils.rate_limit import check_agent_limit
 
 
 logger = logging.getLogger(__name__)
@@ -75,11 +79,11 @@ class GraphExecutor:
         return list(results.values())
 
     async def _execute_node(self, node: Any, previous_results: Dict[str, ToolResult], perception: Dict[str, Any], blackboard: Dict[str, Any] = None, user_id: str = "global") -> ToolResult:
-
-
-        """Executes a single node with template-resolved inputs."""
+        """Executes a single node with template-resolved inputs, retries and fallbacks."""
         agent_name = node.agent
         start_time = asyncio.get_event_loop().time()
+        max_retries = getattr(node, 'retry_count', 2)
+        timeout = getattr(node, 'timeout', 30) # Default 30s
         
         # 1. Input Resolution ({{task_id.result}})
         resolved_inputs = self._resolve_inputs(node.inputs, previous_results)
@@ -92,44 +96,127 @@ class GraphExecutor:
             "__blackboard__": blackboard or {} # Injected swarm state
         }
 
+        attempts = 0
+        last_error = None
         
-        try:
-            # 3. Secure Invocation with Circuit Breaker
-            raw_res = await ai_service_breaker.async_call(
-                call_tool, 
-                agent_name, 
-                merged_params, 
-                perception.get("context", {})
-            )
-            
-            # 4. Result Normalization
-            if not isinstance(raw_res, ToolResult):
-                 result = ToolResult(**raw_res) if isinstance(raw_res, dict) else ToolResult(success=True, message=str(raw_res), agent=agent_name)
-            else:
-                 result = raw_res
-                 
-            result.latency_ms = int((asyncio.get_event_loop().time() - start_time) * 1000)
-            
-            # 5. Blackboard Update (Swarm Write-back)
-            if result.success and isinstance(result.data, dict) and "blackboard_update" in result.data:
-                blackboard.update(result.data["blackboard_update"])
-                logger.debug(f"[V8 Executor] Blackboard updated by {agent_name}")
+        while attempts <= max_retries:
+            try:
+                attempts += 1
+                
+                # 2.5 Rate Limit Check (v9.8.1 Protection)
+                if not await check_agent_limit(user_id, agent_name, limit=60): # 60/hr/agent default
+                    return ToolResult(
+                        success=False, 
+                        error=f"Sovereign Rate Limit Exceeded for agent '{agent_name}'. Please wait before next mission.", 
+                        agent=agent_name
+                    )
 
-            # 6. Node Telemetry Pulse (v8 Sovereign)
+                # 3. Check for Swarm Consensus Requirements (v9.8.1)
+                # Trigged if node is 'fragile', 'high_friction', or 'consensus' is explicitly requested
+                is_fragile = getattr(node, 'is_fragile', False) or getattr(node, 'high_friction', False)
+                
+                if is_fragile and attempts == 1:
+                    logger.info(f"[V8 Swarm] Mission Fragility Detected for node {node.id}. Activating Consensus Adjudication.")
+                    
+                    # Parallel Swarm Run: Execute multiple perspectives
+                    # We run the primary agent vs a 'Corrective' profile (Critic) and an 'Optimized' profile
+                    swarm_tasks = [
+                        ai_service_breaker.async_call(call_tool, agent_name, merged_params, perception.get("context", {})), # Primary
+                        ai_service_breaker.async_call(call_tool, "critic", merged_params, perception.get("context", {})),  # Critic
+                        ai_service_breaker.async_call(call_tool, "optimizer", merged_params, perception.get("context", {})) # Optimizer
+                    ]
+                    
+                    candidate_results = await asyncio.gather(*swarm_tasks, return_exceptions=True)
+                    valid_candidates = []
+                    
+                    for cr in candidate_results:
+                        if isinstance(cr, Exception): continue
+                        if isinstance(cr, dict): valid_candidates.append(AgentResult(**cr) if "success" in cr else AgentResult(success=True, message=str(cr), agent="unknown"))
+                        elif isinstance(cr, ToolResult): valid_candidates.append(cr)
+                        else: valid_candidates.append(cr) # Assume it's a result object
+                    
+                    # 4. Consensus Adjudication
+                    consensus_agent = ConsensusAgentV8()
+                    from ..agents.consensus_agent import ConsensusInput
+                    consensus_res = await consensus_agent.execute(ConsensusInput(
+                        goal=perception.get("input", "Synchronous mission"),
+                        candidates=valid_candidates,
+                        context=perception.get("context", {})
+                    ))
+                    
+                    if consensus_res.success:
+                        # Extract the winning candidate from the consensus data
+                        winner_data = consensus_res.data.get("winner", {})
+                        result = ToolResult(
+                            success=True, 
+                            message=winner_data.get("message", "Consensus selected winner."),
+                            agent=winner_data.get("agent", agent_name),
+                            data=winner_data.get("data", {}),
+                            fidelity_score=consensus_res.fidelity_score
+                        )
+                    else:
+                        # Fallback to the first valid candidate if consensus fails
+                        result = valid_candidates[0] if valid_candidates else ToolResult(success=False, error="Swarm failure", agent=agent_name)
+                
+                else:
+                    # Standard Single-Agent Execution
+                    raw_res = await asyncio.wait_for(
+                        ai_service_breaker.async_call(
+                            call_tool, 
+                            agent_name, 
+                            merged_params, 
+                            perception.get("context", {})
+                        ),
+                        timeout=timeout
+                    )
+                    
+                    if not isinstance(raw_res, ToolResult):
+                        result = ToolResult(**raw_res) if isinstance(raw_res, dict) else ToolResult(success=True, message=str(raw_res), agent=agent_name)
+                    else:
+                        result = raw_res
+                
+                # Success Check
+                if result.success:
+                    result.latency_ms = int((asyncio.get_event_loop().time() - start_time) * 1000)
+                    
+                    # 5. Blackboard Update
+                    if isinstance(result.data, dict) and "blackboard_update" in result.data:
+                        blackboard.update(result.data["blackboard_update"])
+                    
+                    # Telemetry
+                    SovereignBroadcaster.publish(PULSE_NODE_COMPLETED, {
+                        "node_id": node.id, 
+                        "agent": agent_name,
+                        "success": True,
+                        "latency": result.latency_ms,
+                        "fidelity": getattr(result, 'fidelity_score', 0.0)
+                    }, user_id=user_id)
+                    
+                    return result
+                
+                else:
+                    last_error = result.error or "Unknown failure"
+                    logger.warning(f"[V8 Executor] Agent {agent_name} failed (Attempt {attempts}/{max_retries+1}): {last_error}")
 
-            SovereignBroadcaster.publish(PULSE_NODE_COMPLETED, {
-                "node_id": node.id, 
-                "agent": agent_name,
-                "success": result.success,
-                "latency": result.latency_ms
-            }, user_id=user_id)
-            
-            return result
+            except asyncio.TimeoutError:
+                last_error = f"Timeout ({timeout}s)"
+                logger.error(f"[V8 Executor] Agent {agent_name} timed out.")
+            except Exception as e:
+                last_error = str(e)
+                logger.exception(f"[V8 Executor] Agent {agent_name} crashed: {e}")
 
-            
-        except Exception as e:
-            logger.exception("[V8 Executor] Execution failed for %s: %s", agent_name, e)
-            return ToolResult(success=False, error=str(e), agent=agent_name)
+            if attempts <= max_retries:
+                # Optional: Exponential Backoff delay
+                await asyncio.sleep(2 ** attempts)
+
+        # 6. Fallback mechanism
+        if getattr(node, 'fallback_node_id', None):
+             logger.info(f"[V8 Executor] Node {node.id} exhausted retries. Activating fallback: {node.fallback_node_id}")
+             # In a real implementation, we might mark this node as 'failed_handled'
+             # and the executor would then pick up the fallback node.
+             # For now, we return a failure result indicating fallback is needed.
+
+        return ToolResult(success=False, error=f"Max retries exceeded: {last_error}", agent=agent_name)
 
     def _resolve_inputs(self, inputs: Dict[str, Any], previous_results: Dict[str, ToolResult]) -> Dict[str, Any]:
         """Resolves template placeholders like {{t_search.result}}."""

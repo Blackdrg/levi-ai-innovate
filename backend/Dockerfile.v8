@@ -34,10 +34,11 @@ COPY --from=builder /root/.local /home/levi_monolith/.local
 COPY shared/ /app/shared/
 COPY backend/ /app/backend/
 
-# Metadata & Health
+# Metadata & Health Graduation
 EXPOSE 8000
-LABEL maintainer="LEVI-AI Core"
-LABEL version="9.8.1"
+LABEL maintainer="LEVI-AI Collective"
+LABEL version="13.0.0-final"
+LABEL architecture="Distributed Cognitive Network (DCN)"
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
   CMD curl -f http://localhost:8000/health || exit 1

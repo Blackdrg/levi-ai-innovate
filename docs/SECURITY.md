@@ -8,7 +8,7 @@ Architectural isolation relies fundamentally on Identity, Encryption, and Saniti
 
 LEVI-AI v9.8.1 graduates beyond simple plaintext storage for user identity.
 - **SovereignVault (AES-256):** All Tier 4 Identity traits in Postgres are encrypted at rest via `SovereignVault.encrypt()`. Decryption only occurs during authorized context hydration.
-- **Firebase Handshake:** Routes strictly validate the Firebase `idToken` against the `firebase-admin` internal SDK, returning `uid` values mapped to internal Sovereign IDs.
+- **Sovereign Identity Layer:** Routes strictly validate the system-issued `SovereignToken` against the local SQL identity store.
 
 ## ⚖️ 2. Transaction Integrity (Redis Atomic Locks)
 

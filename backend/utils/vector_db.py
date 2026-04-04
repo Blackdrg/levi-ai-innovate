@@ -78,10 +78,13 @@ class VectorDB:
                 logger.error(f"Failed to load collection {self.collection_name}: {e}")
         
         if self.index is None:
-            # Use IndexFlatIP for Inner Product (Cosine Similarity on normalized vectors)
-            self.index = faiss.IndexFlatIP(self.dimension)
+            # v10.0 Upgrade: Use HNSW for sub-30ms retrieval at scale
+            # M=32 for high-speed production performance
+            self.index = faiss.IndexHNSWFlat(self.dimension, 32)
+            self.index.hnsw.efConstruction = 40
+            self.index.hnsw.efSearch = 16
             self.metadata = []
-            logger.info(f"Initialized new collection '{self.collection_name}' (FlatIP).")
+            logger.info(f"Initialized new collection '{self.collection_name}' (HNSW v10.0).")
 
     async def add(self, texts: List[str], metadatas: List[Dict[str, Any]]):
         if not texts: return

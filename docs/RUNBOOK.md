@@ -7,7 +7,7 @@ Operations and cognitive maintenance procedures for the LEVI-AI v9.8.1 "Sovereig
 ## 🚀 1. Cold Start Procedure
 1.  **Orchestration Initializer:** Initialize the service fabric.
     ```bash
-    docker-compose up -d postgres redis neo4j faiss firestore
+    docker-compose up -d postgres redis neo4j
     ```
 2.  **Cognitive Migration:** Apply the v9.8.1 schema.
     ```bash
@@ -24,7 +24,7 @@ Operations and cognitive maintenance procedures for the LEVI-AI v9.8.1 "Sovereig
 ## 🩺 2. Diagnostic Verifications
 Perform a 360-degree cognitive health check.
 ```bash
-python scripts/verify_v9_8_full.py
+python tests/verify_v13_monolith.py
 ```
 - **Checks:** Redis context pulse, Postgres traits connection, Neo4j knowledge graph, and FAISS vector retrieval.
 

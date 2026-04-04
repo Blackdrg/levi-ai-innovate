@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 
 from backend.db.firestore_db import db as firestore_db
-from backend.services.learning.logic import export_training_data as exp_logic
+from backend.services.learning.logic import export_training_data
 
 logger = logging.getLogger(__name__)
 

@@ -23,58 +23,70 @@ class NeuralHandoffManager:
         # Cloud Configuration
         self.cloud_provider = os.getenv("CLOUD_INFERENCE_PROVIDER", "groq")
 
-    async def route_inference(self, prompt: str, context: Dict[str, Any], sensitivity: float = 0.5) -> Dict[str, Any]:
+    async def route_inference(self, prompt: str, context: Dict[str, Any], task_type: str = "general") -> Dict[str, Any]:
         """
-        Decides whether to use Local or Cloud inference based on:
+        LeviBrain v12.0 Neural Router.
+        Routes based on:
         - Complexity (from context)
-        - Privacy/Sensitivity
-        - Availability
+        - task_type (intent, reasoning, speed)
+        - Latency thresholds & Health
         """
-        complexity = context.get("complexity", 0.5)
-        is_private = sensitivity > 0.8
-        
-        # v9.5 Decision Logic:
-        # High Sensitivity OR Low Complexity -> LOCAL
-        # High Complexity AND Low Sensitivity -> CLOUD
-        
-        if is_private or complexity < 0.3:
-            logger.info(f"[NeuralHandoff] Routing to LOCAL ({self.local_provider}). Reason: Private={is_private}, Complexity={complexity}")
-            return await self._call_local(prompt, context)
-        else:
-            # v9.8 Hardening: Check Cloud Circuit Breaker
-            if not groq_breaker.allow_request():
-                logger.warning(f"[NeuralHandoff] CLOUD CIRCUIT OPEN. Falling back to LOCAL ({self.local_provider}).")
-                return await self._call_local(prompt, context)
-            
-            # v9.8.1 Sovereign Shield: Mandatory PII Scrubbing for Cloud
-            try:
-                from .llm_guard import LLMGuard
-                scrubbed_prompt = LLMGuard.secure_outbound(prompt)
-                if scrubbed_prompt != prompt:
-                    logger.info("[NeuralHandoff] Sovereign Shield: PII Masked in outbound prompt.")
-                    context["pii_masked"] = True
-            except Exception as e:
-                logger.error(f"[NeuralHandoff] Security Layer failure: {e}. Aborting cloud route.")
-                return await self._call_local(prompt, context)
-                
-            logger.info(f"[NeuralHandoff] Routing to CLOUD ({self.cloud_provider}). Reason: Complexity={complexity}")
-            return {"target": "cloud", "provider": self.cloud_provider, "prompt": scrubbed_prompt}
+        # Phase 9: Local Sovereignty (Zero-Bandwidth Failover)
+        if os.getenv("OFFLINE_MODE") == "true":
+             logger.info("[Sovereign] OFFLINE_MODE Active. Forcing Local Inference (Llama 3).")
+             return await self._call_local(prompt, context, model="llama3:8b")
 
-    async def _call_local(self, prompt: str, context: Dict[str, Any]) -> Dict[str, Any]:
+        complexity = context.get("complexity", 0.5)
+        
+        # Phase 5: Health & Latency check
+        is_local_healthy = await self.verify_local_health()
+        
+        # v12.0 Routing Logic:
+        # A. Intent Detection -> Phi-3 Mini (Ultra Fast)
+        if task_type == "intent" and is_local_healthy:
+            logger.info("[NeuralRouter] Routing INTENT to local Phi-3 Mini.")
+            return await self._call_local(prompt, context, model="phi3:mini")
+            
+        # B. Low Complexity -> Mistral 7B (Speed)
+        if complexity < 0.4 and is_local_healthy:
+             logger.info("[NeuralRouter] Routing simple task to local Mistral 7B.")
+             return await self._call_local(prompt, context, model="mistral:7b")
+
+        # C. Moderate Complexity -> Llama 3 8B (Sovereign Reasoning)
+        if complexity < 0.7 and is_local_healthy:
+             logger.info("[NeuralRouter] Routing reasoned task to local Llama 3 8B.")
+             return await self._call_local(prompt, context, model="llama3:8b")
+
+        # D. High Complexity / Local Unhealthy -> Cloud (Groq/OpenAI)
+        if not groq_breaker.allow_request():
+            logger.warning("[NeuralRouter] CLOUD CIRCUIT OPEN. Forcing local fallback (Llama 3).")
+            return await self._call_local(prompt, context, model="llama3:8b")
+            
+        # Sovereign Shield: PII Scrubbing for Cloud
+        try:
+            from .llm_guard import LLMGuard
+            scrubbed_prompt = LLMGuard.secure_outbound(prompt)
+        except:
+            scrubbed_prompt = prompt
+            
+        logger.info(f"[NeuralRouter] Routing complex task to CLOUD ({self.cloud_provider}).")
+        return {"target": "cloud", "provider": self.cloud_provider, "prompt": scrubbed_prompt}
+
+    async def _call_local(self, prompt: str, context: Dict[str, Any], model: Optional[str] = None) -> Dict[str, Any]:
         """
-        LeviBrain v9.8: Direct Local Inference Execution.
-        Orchestrates calls to local LLM servers with zero external telemetry.
+        LeviBrain v12.0: Targeted Local Inference.
+        Supports model-specific routing within Ollama/llama.cpp.
         """
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 if self.local_provider == "ollama":
-                    model = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
-                    logger.debug(f"[NeuralHandoff] Dispatching to Ollama ({model})...")
+                    target_model = model or os.getenv("OLLAMA_MODEL", "llama3:8b")
+                    logger.debug(f"[NeuralHandoff] Dispatching to Ollama ({target_model})...")
                     
                     response = await client.post(
                         self.ollama_url,
                         json={
-                            "model": model,
+                            "model": target_model,
                             "prompt": prompt,
                             "stream": False,
                             "options": {"temperature": 0.5, "num_predict": 1024}
@@ -86,7 +98,7 @@ class NeuralHandoffManager:
                         return {
                             "target": "local",
                             "provider": "ollama",
-                            "model": model,
+                            "model": target_model,
                             "response": data.get("response", ""),
                             "success": True
                         }

@@ -17,6 +17,9 @@ class TaskNode(BaseModel):
     dependencies: List[str] = Field(default_factory=list) # IDs of parent tasks
     critical: bool = True
     retry_count: int = 2
+    retry_policy: str = "exponential_backoff"
+    fallback_node_id: Optional[str] = None # ID of the node to run if this fails
+    condition: Optional[str] = None # Lambda-like string to evaluate before running
     result: Optional[Any] = None # Added for active state tracking
 
     def dict(self, *args, **kwargs):

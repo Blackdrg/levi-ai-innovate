@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from backend.api.utils.auth import get_current_user
 from backend.db.firebase import db as firestore_db
+from backend.core.memory_manager import MemoryManager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="", tags=["Privacy & Studio V8"])
@@ -26,12 +27,19 @@ async def get_privacy_status(current_user: Any = Depends(get_current_user)):
 @router.post("/privacy/erase")
 async def request_data_erasure(current_user: Any = Depends(get_current_user)):
     """
-    ERASE MISSION: Completely removes all user episodic and semantic traces.
+    ERASE MISSION (Phase 6): Completely removes all user episodic and semantic traces.
     """
     user_id = current_user.uid if hasattr(current_user, "uid") else "guest"
-    logger.warning(f"[Privacy-V8] Critical Erasure Request for {user_id}")
-    # Logic to clear FAISS and Firestore for this user
-    return {"status": "erased_requested", "mission": "neural_cleanup"}
+    logger.warning(f"[Privacy-V8] Critical GDPR Erasure for {user_id}")
+    
+    memory = MemoryManager()
+    cleared_count = await memory.clear_all_user_data(user_id)
+    
+    return {
+        "status": "success", 
+        "mission": "neural_cleanup_complete", 
+        "traces_cleared": cleared_count
+    }
 
 @router.post("/studio/generate")
 async def studio_generate_endpoint(

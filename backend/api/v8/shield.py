@@ -4,6 +4,7 @@ from fastapi import Request, HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 from backend.services.memory.vault import MemoryVault
 from backend.core.logger import logger
+from backend.core.v8.llm_guard import PIIScrubber
 
 class SovereignShieldMiddleware(BaseHTTPMiddleware):
     """
@@ -83,17 +84,18 @@ class SovereignShieldMiddleware(BaseHTTPMiddleware):
         return len(self.request_counts[ip]) > self.rate_limit
 
     async def _log_audit_trace(self, request: Request, response, duration: float):
-        """Asynchronously logs the request trace to Neo4j."""
+        """Asynchronously logs the request trace to Neo4j, with PII scrubbing."""
         try:
+            # Scrub URL and potentially headers/body if logged
+            url = PIIScrubber.scrub(str(request.url))
+            
             audit_data = {
                 "method": request.method,
-                "url": str(request.url),
+                "url": url,
                 "status_code": response.status_code,
                 "duration_ms": int(duration * 1000),
                 "timestamp": time.time()
             }
-            # Injecting into Neo4j via MemoryVault utility
-            # self.vault.create_audit_node(audit_data) 
             logger.debug(f"Sovereign Shield Audit: {audit_data['method']} {audit_data['url']} - {audit_data['status_code']} ({audit_data['duration_ms']}ms)")
         except Exception as e:
             logger.error(f"Fidelity Breach: Audit logging failed - {str(e)}")

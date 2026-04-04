@@ -14,6 +14,8 @@ class Goal(BaseModel):
     goal_id: str = Field(default_factory=lambda: f"goal_{uuid.uuid4().hex[:6]}")
     objective: str
     success_criteria: List[str] = Field(default_factory=list)
+    validators: List[Dict[str, Any]] = Field(default_factory=list) # Machine-verifiable rules
+    metrics: Dict[str, Any] = Field(default_factory=dict) # Quantitative targets
     priority: str = "medium"
     state: str = "active"
 
@@ -35,15 +37,17 @@ class GoalEngine:
         # 1. Objective Formulation
         objective = self._formulate_objective(perception)
         
-        # 2. Success Criteria Generation
-        success_criteria = self._generate_success_criteria(intent_type, complexity)
+        # 2. Success Criteria & Validators Generation
+        success_criteria, validators, metrics = self._generate_measurable_criteria(intent_type, complexity, perception.get("input", ""))
         
-        # 3. Priority Calculation (Sovereign Level)
+        # 3. Priority Calculation
         priority = "high" if complexity >= 3 else "medium"
         
         return Goal(
             objective=objective,
             success_criteria=success_criteria,
+            validators=validators,
+            metrics=metrics,
             priority=priority
         )
 
@@ -63,19 +67,26 @@ class GoalEngine:
         
         return f"Synthesize coherent response: {input_text}"
 
-    def _generate_success_criteria(self, intent_type: str, complexity: int) -> List[str]:
+    def _generate_measurable_criteria(self, intent_type: str, complexity: int, user_input: str) -> tuple:
         criteria = ["Syntactic coherence", "Factual alignment"]
+        validators = []
+        metrics = {"min_confidence": 0.8}
         
         if intent_type == "search":
              criteria.append("Citations included")
-             criteria.append("Real-time relevance")
+             validators.append({"type": "regex", "pattern": r"\[\d+\]|https?://", "field": "response"})
+             metrics["min_sources"] = 2
         elif intent_type == "code":
              criteria.append("Syntactical correctness")
-             criteria.append("Logic verification (TDD)")
-        elif intent_type == "creative":
-             criteria.append("Philosophical resonance")
+             validators.append({"type": "python_check", "field": "code"})
+             metrics["max_latency_ms"] = 5000
+        elif intent_type == "summarize" or "summarize" in user_input.lower():
+             criteria.append("Length < 250 words")
+             validators.append({"type": "word_count", "max": 250})
+             metrics["compression_ratio"] = 0.5
         
         if complexity >= 3:
              criteria.append("Cross-engine validation")
+             validators.append({"type": "consensus", "min_agreement": 0.9})
              
-        return criteria
+        return criteria, validators, metrics

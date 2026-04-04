@@ -3,21 +3,20 @@ Sovereign Agent Registry v8.
 Centralized mapping for autonomous cognitive agents.
 """
 
-from backend.core.v8.agents.research import ResearchAgentV8
-from backend.core.v8.agents.code import CodeAgentV8
-from backend.core.v8.agents.document import DocumentAgentV8
-from backend.core.v8.agents.chat import ChatAgentV8
-from backend.core.v8.agents.python_repl import PythonReplAgentV8
+from .research_agent import ResearchAgent
+from .code_agent import CodeAgent
+from .document_agent import DocumentAgent
+from .chat_agent import ChatAgent
+from .python_repl_agent import PythonReplAgent
+from .consensus_agent import ConsensusAgentV11 as ConsensusAgentV8
+from .critic_agent import CriticAgent
 
 AGENT_REGISTRY = {
-    "research": ResearchAgentV8(),
-    "code": CodeAgentV8(),
-    "document": DocumentAgentV8(),
-    "chat": ChatAgentV8(),
-    "python": PythonReplAgentV8(),
+    "research": ResearchAgent(),
+    "code": CodeAgent(),
+    "document": DocumentAgent(),
+    "chat": ChatAgent(),
+    "python": PythonReplAgent(),
+    "consensus": ConsensusAgentV8(),
+    "critic": CriticAgent(),
 }
-
-# Alias for compatibility with simple registry patterns
-ResearchAgent = ResearchAgentV8
-CodeAgent = CodeAgentV8
-DocumentAgent = DocumentAgentV8

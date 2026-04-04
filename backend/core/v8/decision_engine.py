@@ -23,6 +23,22 @@ class DecisionEngine:
         self.stats_keywords = ["sum", "avg", "average", "min", "max", "count", "mean", "median", "sort", "length"]
         self.evolution_engine = EvolutionEngine()
 
+    def _get_agent_reward(self, agent_name: str) -> float:
+        """Fetches the average reinforcement reward for an agent from Redis (v12.0)."""
+        from backend.db.redis import r as redis_client, HAS_REDIS
+        if not HAS_REDIS or not agent_name:
+            return 0.0
+            
+        key = f"reinforcement:path:{agent_name}"
+        try:
+            rewards = redis_client.lrange(key, 0, 9) # Get last 10 trials
+            if not rewards: return 1.0 # Default high for new/untested agents
+            
+            float_rewards = [float(r) for r in rewards]
+            return sum(float_rewards) / len(float_rewards)
+        except Exception:
+            return 0.0
+
     def is_abstract_query(self, text: str) -> bool:
         """
         Detects philosophical, open-ended, or high-concept reasoning tasks.
@@ -141,7 +157,12 @@ class DecisionEngine:
         if metrics.get("fragility", 0) >= 0.8:
             return "LLM"
 
+        # Reinforcement Loop (v12.0): Check if engine reward is sufficient
         if metrics["engine_capability"]:
+            reward = self._get_agent_reward(metrics["capable_engine"])
+            if reward < -0.5: # Significant negative reward threshold
+                logger.warning(f"[Decision] Low reward ({reward}) for agent '{metrics['capable_engine']}'. Falling back to LLM.")
+                return "LLM"
             return "ENGINE"
         
         if metrics["memory_match_score"] >= 0.75: # Higher threshold for direct memory shortcut
@@ -150,4 +171,8 @@ class DecisionEngine:
         if metrics["internal_confidence"] >= 0.7:
             return "INTERNAL"
             
+        # v11.0: If high complexity but no clear winner -> Trigger Swarm Consensus
+        if metrics.get("fragility", 0) > 0.5 or metrics.get("is_abstract"):
+             return "EXPERT_REVIEW"
+
         return "LLM"

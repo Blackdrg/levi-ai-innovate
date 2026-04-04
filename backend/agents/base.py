@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from backend.engines.utils.security import SovereignSecurity
 from backend.engines.utils.i18n import SovereignI18n
 from backend.services.agent_bus import sovereign_bus, AgentBus
+from backend.redis_client import cache
 
 T = TypeVar("T", bound=BaseModel)
 R = TypeVar("R", bound=BaseModel)
@@ -29,10 +30,19 @@ class AgentResult(BaseModel):
     agent: str = ""
     error: Optional[str] = None
     latency_ms: float = 0.0
+    confidence: float = Field(1.0, ge=0.0, le=1.0)
     citations: List[str] = Field(default_factory=list)
+    fidelity_score: float = 0.0
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
     def dict(self, *args, **kwargs):
         return super().model_dump(*args, **kwargs)
+
+class AgentState(BaseModel):
+    """Internal state for a Sovereign Agent."""
+    memory: List[Dict[str, Any]] = Field(default_factory=list)
+    tools: List[str] = Field(default_factory=list)
+    strategy: str = Field("optimize", pattern="^(optimize|explore|verify)$")
 
 class SovereignAgent(abc.ABC, Generic[T, R]):
     """
@@ -40,14 +50,46 @@ class SovereignAgent(abc.ABC, Generic[T, R]):
     Architecture: Identity -> Input Scrubbing -> Execution -> Output Sanitization.
     """
     
-    def __init__(self, name: str, use_bus: bool = False):
+    def __init__(self, name: str, profile: str = "Standard", use_bus: bool = False):
         self.name = name
+        self.profile = profile # Neural Profile (e.g. The Architect)
+        self.system_prompt_template = "" # Domain-specific instructions
         self.logger = logging.getLogger(f"agent.{name.lower()}")
         if use_bus:
             self.bus = sovereign_bus
             self.bus.register(self.name.lower())
         else:
             self.bus = None
+        
+        # Phase 2: State Persistence
+        self.state = AgentState()
+
+    def _get_state_key(self, session_id: str) -> str:
+        return f"sovereign:agent:state:{self.name.lower()}:{session_id}"
+
+    async def save_state(self, session_id: str):
+        """Persists the current agent state to Redis."""
+        key = self._get_state_key(session_id)
+        try:
+            # Use json.dumps because cache.set expects a string value
+            import json
+            cache.set(key, self.state.model_dump_json(), ex=86400) # 24h
+        except Exception as e:
+            self.logger.error(f"Failed to save state: {e}")
+
+    async def load_state(self, session_id: str):
+        """Loads agent state from Redis."""
+        key = self._get_state_key(session_id)
+        data = cache.get(key)
+        if data:
+            try:
+                self.state = AgentState.model_validate_json(data)
+            except Exception as e:
+                self.logger.error(f"Failed to parse loaded state: {e}")
+
+    async def send(self, to_agent: str, data: Dict[str, Any]):
+        """Alias for send_message to comply with Phase 2 specs."""
+        await self.send_message(to_agent, data)
 
     async def send_message(self, to_agent: str, message: Dict[str, Any]):
         """Directly send a message via the Agent Bus."""
@@ -65,6 +107,10 @@ class SovereignAgent(abc.ABC, Generic[T, R]):
         Main execution wrapper for Agentic Missions.
         Handles PII masking and standardized reporting.
         """
+        session_id = getattr(input_data, "session_id", kwargs.get("session_id"))
+        if session_id:
+            await self.load_state(session_id)
+
         start_time = time.perf_counter()
         self.logger.info(f"Agent {self.name} received mission.")
         
@@ -89,14 +135,22 @@ class SovereignAgent(abc.ABC, Generic[T, R]):
             # 3. Sovereign Shield: Output Sanitization
             safe_msg = SovereignSecurity.mask_pii(msg)
             
-            return AgentResult(
+            agent_res = AgentResult(
                 success=True,
                 message=safe_msg,
                 data=data,
                 agent=self.name,
                 latency_ms=latency,
-                citations=citations
+                citations=citations,
+                fidelity_score=result_data.get("score", 0.0) if isinstance(result_data, dict) else 0.0,
+                metadata=result_data.get("metadata", {}) if isinstance(result_data, dict) else {}
             )
+            
+            # Post-execution persistence
+            if session_id:
+                await self.save_state(session_id)
+            
+            return agent_res
             
         except Exception as e:
             latency = (time.perf_counter() - start_time) * 1000

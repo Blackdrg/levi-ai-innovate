@@ -36,8 +36,8 @@ class SovereignVectorStore:
         return await VectorDB.get_collection("global")
 
     @staticmethod
-    async def store_fact(user_id: str, fact_text: str, category: str = "factual", importance: float = 0.5):
-        """Standardized fact storage with FAISS deduplication and cloud backup."""
+    async def store_fact(user_id: str, fact_text: str, category: str = "factual", importance: float = 0.5, success_impact: float = 0.5):
+        """Standardized fact storage with FAISS deduplication and cloud backup (v11.0)."""
         if not user_id or not fact_text: return
 
         try:
@@ -61,6 +61,8 @@ class SovereignVectorStore:
                 "category": category,
                 "fact_id": f"{user_id}_{fact_id}", 
                 "importance": importance,
+                "success_impact": success_impact,
+                "access_count": 1,
                 "created_at": datetime.now(timezone.utc).isoformat(),
             }
 

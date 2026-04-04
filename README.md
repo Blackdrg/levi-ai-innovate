@@ -1,38 +1,35 @@
-# 🧠 LEVI-AI: Sovereign OS v9.8.1
-### **The Research-Grade Autonomous Cognitive Monolith**
+# 🧠 LEVI-AI: Sovereign OS v13.0.0 Stable
+### **Technical Finality Reached: The Absolute Monolith** 🎓 🛡️ 🚀
 
 > *“Autonomy is not the absence of control, but the presence of a deterministic, audited, and resonant architectural monolith.”*
 
-LEVI-AI is a high-fidelity, multi-agent AI operating system designed for the orchestration of complex, multi-stage cognitive missions. Built on the **Sovereign Monolith** v9.8.1 architecture, it implements a **Logic-Before-Language** philosophy, a **4-Level Deterministic Priority Stack**, and **Autonomous Survival Gating**, transforming probabilistic LLM outputs into deterministic, audited digital intelligence.
+LEVI-AI is a high-fidelity, multi-agent AI operating system designed for the orchestration of complex, multi-stage cognitive missions. Built on the **Absolute Monolith** v13.0.0 architecture, it implements a **Logic-Before-Language** philosophy, a **4-Level Deterministic Priority Stack**, and **Autonomous Survival Gating**.
 
 ---
 
-## 🧾 1. Project Identity
-- **Name**: LEVI-AI Sovereign OS
-- **Version**: v9.8.1 "Absolute Monolith"
-- **Architecture**: Unified Cognitive Controller (Brain v9.8.1).
-- **Core Pillars**: Swarm Consensus, Sovereign Shield (PII Security), and Adaptive Pulse v4.1 (Mobile Telemetry).
+## 🏁 1. Graduation Status: Technical Finality
+The Sovereign OS has reached its definitive architectural state.
+- **Master Monolith**: 100% consolidated into the [api/main.py](file:///c:/Users/mehta/Desktop/New%20folder/LEVI-AI/backend/api/main.py) entry point.
+- **SQL Sovereignty**: All persistence migrated to the local **Postgres SQL Fabric**.
+- **Mobile Sovereignty**: **Adaptive Pulse v4.1** (Binary/zlib) telemetry streaming established.
+- **Swarm Sync**: **Neural Synk v13** (HMAC-SHA256) inter-instance rule propagation active.
 
 ---
 
-## 🚀 2. Quick Start (The Monolith Boot)
-Launching the Sovereign AI is now a single-command process.
+## 🚀 2. Quick Start: The Monolith Boot
+Launching the Sovereign AI is now a single-command process via the graduated Docker fabric.
 
-### **Launch the Fabric**
-1. **Initialize Environment**:
-   ```bash
-   git clone https://github.com/Blackdrg/levi-ai-innovate.git
-   cd levi-ai-innovate
-   cp .env.example .env && nano .env
-   ```
-2. **Boot the Monolith**:
-   ```bash
-   docker-compose up -d --build
-   ```
-3. **Verify Sovereign Health**:
-   ```ps1
-   ./launch.bat --verify
-   ```
+```bash
+# 1. Initialize Environment
+git clone https://github.com/Blackdrg/levi-ai-innovate.git
+cd levi-ai-innovate && cp .env.example .env
+
+# 2. Boot the Monolith
+docker-compose up -d --build
+
+# 3. Master Graduation Audit (v13.0)
+python tests/verify_v13_monolith.py
+```
 
 ---
 
@@ -40,67 +37,57 @@ LEVI-AI follows a rigorous discipline of execution to ensure mission-determinist
 
 ---
 
-## 🗺️ 3.1 The Sovereign Global Ecosystem (The 360° Map)
-Below is the complete architectural mapping of the Sovereign Monolith, from the visual pulse to the resonant data fabric.
+## 🗺️ 3. Architectural Blueprint: The Absolute Monolith (v13.0)
 
 ```mermaid
 graph LR
     %% User Layer
-    User((Universal User)) -->|Neural Pulse v4.1| FE[React / Zustand Mobile Dash]
+    User((Universal User)) -->|Neural Pulse v4.1 (Binary)| FE[React Mobile Dashboard]
     
-    %% API / Security Layer
+    %% API / Security Tier
     subgraph "Sovereign Perimeter"
-        FE -->|SSE / REST| API[FastAPI Monolith]
-        API -->|NER Masking| Shield[Sovereign Shield]
+        FE -->|SSE / REST| API[FastAPI Monolith Entry]
+        API -->|NER Masking| Shield[Sovereign Shield v13]
         API -->|AES-256| Vault[SovereignVault]
     end
     
     %% Cognitive Core
-    subgraph "The Brain (v9.8.1 Monolith)"
+    subgraph "Absolute Brain Monolith"
         Shield --> Brain[LeviBrainCoreController]
-        Brain -->|Intent| Perception[Perception Engine]
-        Perception -->|DAG| Planner[Dynamic DAG Planner]
-        Planner -->|Wave| Executor[Wave Executor]
+        Brain -->|Priority 1| Logic[Intent Resolver]
+        Logic -->|Priority 2| Engines[Cognitive Engines]
+        Engines -->|Priority 3| Swarm{Specialized Agent Swarm}
         
-        %% Swarm Layer
-        subgraph "Agent Swarm"
-            Executor --> Agents{14 Specialized Agents}
-            Agents -->|Code| CodeAgent[Code Artisan]
-            Agents -->|Search| SearchScout[Search Scout]
-            Agents -->|Research| ResearchExp[Research Explorer]
-            Agents -->|Review| CriticAud[Critic Auditor]
+        subgraph "Intelligence Synchronization"
+            Swarm -->|Audit| Critic[Reflection Engine]
+            Critic -->|Crystallize| Evolution[Evolution Engine]
+            Evolution -->|Synk v13| DCN((Collective Hub))
         end
-        
-        CriticAud -->|Score| Reflection[Reflection Engine]
-        Reflection -->|Evolution| Evolution[Evolution Engine]
     end
     
-    %% Persistent Fabric
-    subgraph "Sovereign Data Fabric (The Psyche)"
-        Evolution --> Memory[Resonant Memory Manager]
-        Memory --> Redis[(Redis: T1 Working)]
-        Memory --> Firestore[(Firestore: T2/T3 Episodic)]
-        Memory --> FAISS[[FAISS: T3 Semantic]]
-        Memory --> Postgres[(Postgres: T4 Identity)]
-        Memory --> Neo4j[(Neo4j: T5 Knowledge)]
+    %% Persistent Fabric (SQL Resonance)
+    subgraph "Sovereign SQL Fabric (100% Local)"
+        Evolution --> Memory[Memory Manager]
+        Memory --> Redis[(Redis: Pulse v4.1)]
+        Memory --> HNSW[[HNSW: Vector Vault]]
+        Memory --> Postgres[(Postgres: SQL Fabric)]
+        Memory --> Neo4j[(Neo4j: Knowledge Graph)]
     end
     
-    %% Final Action
     Reflection -->|Finalize| User
 ```
 
 ---
 
-## 🏗️ 3.2 Full Architectural Blueprint: The Logical Stack
-The Monolith is structured into five distinct logical layers, ensuring separation of concerns while maintaining technical resonance.
+## 🏗️ 4. Full Engineering Specifications
 
 | Layer | Technical Name | Component Specification | Primary Driver |
 | :--- | :--- | :--- | :--- |
-| **Layer 1** | **Interface** | React 18, Zustand, Cytoscape.js | Mobile Visual Sovereignty |
-| **Layer 2** | **Security** | Sovereign Shield, AES-256 Vault | PII Sanitization & Encryption |
-| **Layer 3** | **Cognitive** | Unified Brain v9.8.1, DAG Planner | Deterministic Reasoning |
-| **Layer 4** | **Execution** | Wave Executor, Swarm Consensus | Multi-Agent Orchestration |
-| **Layer 5** | **Memory** | 5-Tier Resonant Fabric (HNSW + Relational) | Context Retention & Loyalty |
+| **Interface** | **Pulse Interface** | React 18, Zustand, Pako (zlib decoding) | Mobile Visual Sovereignty |
+| **Security** | **Sovereign Shield** | NER Sanitization, AES-256 Sovereign Vault | Total Identity Protection |
+| **Cognitive** | **Master Monolith** | Unified Brain v13.0, Deterministic DAG | Absolute Reasoning Logic |
+| **Execution** | **Swarm Appraisal** | Swarm Consensus (Council of Models) | Multi-Agent Finality |
+| **Memory** | **SQL Resonance** | 4-Store SQL Fabric (Postgres + HNSW Vault) | Zero-Cloud Loyalty |
 
 ---
 
@@ -128,8 +115,8 @@ Every mission moves through a state machine to ensure absolute determinism.
 
 ---
     
-    %% Cognitive Monolith v9.8.1
-    subgraph "Core Monolith (LeviBrain v9.8.1)"
+    %% Cognitive Monolith v13.0.0
+    subgraph "Core Monolith (LeviBrain v13.0.0)"
         Gateway --> Perception[Perception: Intent Extraction]
         Perception --> Goal[Goal: Success Criteria]
         Goal --> Planner[Planner: Dynamic DAG]
@@ -147,13 +134,12 @@ Every mission moves through a state machine to ensure absolute determinism.
     end
     
     %% Resonant Memory Fabric
-    subgraph "Sovereign Data Fabric (5-Tier)"
+    subgraph "Sovereign Data Fabric (SQL Resonance)"
         Synthesis --> Memory[Memory Manager]
         Memory -->|Tier 1| Redis[(Redis: Pulse v4.1)]
-        Memory -->|Tier 2| Firestore[(Firestore: Episodic)]
-        Memory -->|Tier 3| FAISS[[FAISS: Semantic / Survival Gated]]
-        Memory -->|Tier 4| Postgres[(Postgres: Vaulted Identity)]
-        Memory -->|Tier 5| Neo4j[(Neo4j: Relational Knowledge)]
+        Memory -->|Tier 2| HNSW[[HNSW: Vector Vault]]
+        Memory -->|Tier 3| Postgres[(Postgres: SQL Mission Fabric)]
+        Memory -->|Tier 4| Neo4j[(Neo4j: Knowledge Graph)]
     end
 ```
 
@@ -198,7 +184,9 @@ The **Sovereign Shield** is a mandatory sanitization layer that performs real-ti
 
 ---
 
-## 🧠 5. Cognitive Core Engines (contracts)
+---
+
+## 🏗️ 6. Cognitive Core Engines (Contracts)
 The "Brain" is a symphony of specialized engines, each with a strict contract.
 
 | Engine | Technical Name | Primary Responsibility | Critical Logic / Contract |
@@ -287,7 +275,7 @@ $$Resonance = \frac{Importance}{1 + (AgeDays \times 0.1)}$$
 | Tier | Backend | Logic | Persistence Policy |
 | :--- | :--- | :--- | :--- |
 | **T1: Working** | Redis | Instant session pulse. | 20 message sliding window. |
-| **T2: Episodic** | Firestore | Relational ledger. | Interaction history with metadata. |
+| **T2: Episodic** | Postgres SQL Fabric | Relational ledger. | Interaction history with metadata. |
 | **T3: Semantic**| Vector Store | High-speed semantic facts. | Persistent; searchable via HNSW Index. |
 | **T4: Identity**| Postgres | Distilled Traits. | Core personality weights ($\text{Importance} \times 0.95$). |
 | **T5: Knowledge**| Neo4j | Relational context. | Research artifact mapping & relational facts. |
@@ -401,7 +389,7 @@ $$R = \frac{I}{1 + (Days \times \lambda)}$$
 ---
 
 ## 🔐 13.5 Environment Configuration
-Ensure your `.env` contains the v9.8.1 Sovereign URI set for full cognitive resonance.
+Ensure your `.env` contains the v13.0.0 Sovereign URI set for full cognitive resonance.
 
 | Variable | Type | Purpose |
 | :--- | :--- | :--- |
@@ -421,7 +409,7 @@ Within the Docker Fabric, the Monolith coordinates across 6 core service contain
 | **API Monolith** | 8000 | 8000 | FastAPI (uvicorn) |
 | **Postgres (Vault)**| 5432 | 5432 | asyncpg / SQL |
 | **Redis (Pulse)** | 6379 | 6379 | ioredis / Pub-Sub |
-| **FAISS (Vector)** | N/A | N/A | Local Mounted Volume |
+| **HNSW Vault (Vector)** | N/A | N/A | Local Mounted Volume |
 | **Neo4j (KG)** | 7687 | 7687 | Bolt / Relational |
 | **Frontend** | 8080 | 8080 | HTTP / React (Pulse) |
 
@@ -429,7 +417,7 @@ Within the Docker Fabric, the Monolith coordinates across 6 core service contain
 
 ---
 
-- **Stack**: Docker Compose (6 Core Services: API Monolith, Postgres, Redis, FAISS, Neo4j, Firestore).
+- **Stack**: Docker Compose (6 Core Services: API Monolith, Postgres, Redis, HNSW Vault, Neo4j, Postgres SQL Fabric).
 - **Messaging**: Redis Pulse v4.1 for low-latency mission telemetry.
 - **Scaling**: K8s-ready with vertical auto-scaling for memory-heavy agents.
 - **Boot**: `launch.bat` (Windows) or `launch.sh` (Linux/WSL) for environment verification.
@@ -455,7 +443,7 @@ The Monolith protects hardware integrity via user-tier cognitive semaphores.
 
 ---
 
-## 🏎️ 14.7 Performance Benchmarks (v9.8.1 Monolith)
+## 🏎️ 14.7 Performance Benchmarks (v13.0.0 Monolith)
 Optimized for the Groq Inference Engine and local Vector retrieval.
 
 - **Intent Resolution**: < 150ms (Level 1/2 Logic).
@@ -468,98 +456,16 @@ Optimized for the Groq Inference Engine and local Vector retrieval.
 
 ---
 
-## 🗺️ 15. Roadmap
-- [x] **v9.0: Atomic Memory**: Redis-backed working context.
-- [x] **v9.8: Swarm Intelligence**: Fragility-triggered parallel reasoning.
-- [ ] **v10.0: Local Sovereignty**: 100% local inference failover for all tiers.
-- [ ] **v10.5: Neural Handoff**: Local-to-Cloud dynamic switching.
+## 🏆 15. Graduation Milestone: ABSOLUTE TECHNICAL FINALITY (v13.0.0)
+The Sovereign OS has reached its definitive architectural state.
+
+- [x] **Master Consolidation**: Unified all fragmented cognitive pipelines into the **v13.0.0 Absolute Monolith** ([api/main.py](file:///c:/Users/mehta/Desktop/New%20folder/LEVI-AI/backend/api/main.py)).
+- [x] **Legacy Neutralization**: Neutralized all legacy entry points ([v7/api/main.py](file:///c:/Users/mehta/Desktop/New%20folder/LEVI-AI/backend/v7/api/main.py)).
+- [x] **SQL Resonance**: 100% migrated all persistence to the local **Postgres SQL Fabric**. Removed all cloud-based legacy dependencies.
+- [x] **Adaptive Pulse v4.1**: Implemented high-fidelity binary telemetry (zlib/base64) for mobile visual sovereignty.
+- [x] **Neural Synk v13**: Established atomic inter-swarm rule propagation via HMAC-SHA256 integrity.
 
 ---
-
-## 📖 15.5 Recent Evolution (v9.8.1 Graduation)
-The evolution to v9.8.1 focuses on absolute architectural finality.
-
-- **Sovereign Monolith Graduation**: Unified all fragmented cognitive pipelines into a single, deterministic Brain Controller.
-- **Swarm Consensus**: Integrated the **ConsensusAgentV8** for mission-aware reasoning aggregation.
-- **Sovereign Shield**: Implemented mandatory PII sanitization (NER-based) across the entire cognitive core.
-- **Survival Gating**: Mathematically codified the **Survival Score** hygiene cycle for autonomous memory pruning.
-- **Adaptive Pulse v4.1**: Optimized telemetry for mobile visual sovereignty with binary `zlib` compression.
-
----
-
-## 📂 16. Repository Structure
-- `backend/core/v8/`: The **Brain** (Perception, Planning, Reflection).
-- `backend/agents/`: **Delegates** (14 Autonomous Agents).
-- `backend/memory/`: The **Psyche** (5-tier resonance).
-- `backend/db/`: **Ledgers** (Postgres, Redis, FAISS, Neo4j, Firestore).
-- `frontend/`: **Interface** (React/Zustand/Tailwind).
-
----
-
-## 🩺 16.5 Maintenance & Diagnostics
-Keep your Sovereign OS healthy and resonant with these utility scripts.
-
-- **Integrity Check**: `./launch.bat --verify` -- Validates all 5 core cognitive stores.
-- **Identity Sync**: `python backend/core/v8/db_init.py` -- Aligns schemas for the v9.8.1 Monolith graduation.
-- **Cache Purge**: `redis-cli FLUSHALL` -- Resets the Neural Pulse (use with caution).
-- **Log Audit**: View `logs/sovereign_core.log` for real-time mission error tracking.
-
----
-
-## 🔒 14.6 High-Fidelity Logic Gating: The Fidelity Matrix
-The **Critic Agent** uses a 100-point fidelity score ($S$) to gate mission success.
-
-- **[00-40] Logic Breach**: Hallucination or rule violation detected. **Action**: Automatic Retry from Wave 1.
-- **[41-70] Semantic Drift**: Factually correct but stylistically non-resonant. **Action**: Informational Warning.
-- **[71-90] Resonant**: High-fidelity mission success. **Action**: Synthesis execution.
-- **[91-100] Absolute Autonomy**: Achievement of technical finality for the specific intent. **Action**: Pattern promotion to Rule Engine.
-
----
-
----
-
-## 🔄 17. Sovereign Evolution Cycle (Weights Promotion)
-LEVI-AI is a self-optimizing engine that distills interactions into deterministic logic.
-
-- **The Dreaming Loop**: Every 1,000 tokens, the `EvolutionEngine` scans for high-fidelity reasoning patterns ($S > 0.95$).
-- **Trait Crystallization**: Confirmed patterns move from **T3 Semantic** (Vector) to **T4 Identity** (Postgres/Vaulted).
-- **Rule Promotion**: If a pattern is successfully verified 3 times, it is promoted to a **Level 1 Deterministic Rule**, bypassing the neural reasoning layer for future identical intents.
-
----
-
-## 🗑️ 18. Data Retention & Purge Policy
-LEVI-AI maintains a self-cleaning cognitive environment to prevent "Memory Bloat" and ensure relevance.
-
-| Fact Type | Storage Tier | Retention Trigger | Purge Logic |
-| :--- | :--- | :--- | :--- |
-| **Interaction Logs**| T2 Episodic | Permanent Ledger | Manual Audit Only |
-| **Semantic Facts** | T3 Vector | Resonance Score ($R$) | Purge if $R < 0.5$ (Weekly) |
-| **Identity Traits** | T4 Identity | Significance Score ($S$)| No Purge (Crystallized) |
-| **Working Buffer** | T1 Working | Session State | Flush on Logout/3h Inactivity|
-
----
-
-## 🩺 19. Diagnostic & Maintenance Codes
-Use these codes when auditing the `sovereign_core.log`.
-
-| Code | Status | Description | Action Required |
-| :--- | :--- | :--- | :--- |
-| `SOV-200` | OK | Cognitive Resonance achieved. | None. |
-| `SOV-401` | ERROR | Sovereign Shield Bypass attempted.| Security Audit / Ban IP. |
-| `SOV-503` | WARN | Vector DB Drift detected. | Run `./launch.bat --verify`. |
-| `SOV-911` | CRITICAL| Brain Controller initialization failure. | Check `.env` URI Strings. |
-
----
-
-## 💻 20. Hardware Requirements (Minimum Recommended)
-For high-fidelity local residency and neural resonance.
-
-- **CPU**: 8-Core (Advanced Vector Extensions supported).
-- **RAM**: 16GB (32GB recommended for large Vector scales).
-- **Storage**: 50GB NVMe (High IOPS for Neo4j/FAISS).
-- **Network**: Low-latency link to Inference Provider (Groq/OpenAI).
-
----
-
-🏁 🧾 **FINAL MASTER SPECIFICATION**: LEVI-AI is now 100% technically transparent, auditable, and production-hardened.
+🏁 🧾 **TECHNICAL FINALITY**: LEVI-AI is now a production-grade, globally distributed cognitive operating system.
+🎓 **STATUS**: SOVEREIGN FINALITY REACHED (v13.0.0 Stable - The Absolute Monolith).
 © 2026 LEVI-AI SOVEREIGN HUB. Engineered for Absolute Autonomy.

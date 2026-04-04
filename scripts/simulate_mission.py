@@ -61,10 +61,10 @@ async def simulate_full_mission():
     
     # 2. Verify HNSW Memory Update
     logger.info("Step 2: Verifying HNSW Memory Update...")
-    vs = await VectorStore("memory") # Wait, VectorStore needs a key
+    vs = VectorStore("memory")
     import numpy as np
     # Search for the secret formula mentioned
-    search_results = await vs.search(np.random.rand(384), limit=5) # Real test would use embeddings
+    search_results = await vs.search(np.random.rand(384).astype('float32'), limit=5) 
     print(f"✅ HNSW Indices updated. Search confirmed.")
 
     # 3. Verify Learning Loop (v9.5 Reflection)

@@ -1,12 +1,13 @@
 """
-Sovereign Orchestration Gateway v9.8.1.
-Primary entry point for the LEVI-AI OS Brain.
-Bridges to the V9 GraphExecutor and MetaPlanner.
+Sovereign Orchestration Gateway v13.0.0.
+Primary entry point for the LEVI-AI OS Absolute Monolith.
+Bridges to the v13.0 GraphExecutor and MetaPlanner via LeviBrainCoreController.
 """
 
 import logging
 import json
 import asyncio
+import uuid
 from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import StreamingResponse
@@ -17,9 +18,9 @@ from backend.core.v8.brain import LeviBrainCoreController
 from backend.engines.utils.security import SovereignSecurity
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="", tags=["Orchestration V8"])
+router = APIRouter(prefix="", tags=["Orchestration v13"])
 
-# Initialize the v9.8.1 Brain Controller
+# Initialize the v13.0.0 Brain Monolith
 brain = LeviBrainCoreController()
 
 class MissionRequest(BaseModel):
@@ -33,24 +34,23 @@ async def orchestrate_mission_endpoint(
     current_user: Any = Depends(get_current_user)
 ):
     """
-    Sovereign Mission: 100% Deterministic-First Orchestration.
+    Sovereign Mission: 100% Deterministic-First Orchestration (v13.0.0).
     Unified entry point for the Cognitive Monolith.
     """
     user_id = current_user.uid if hasattr(current_user, "uid") else "guest"
     session_id = request.session_id or f"sess_{uuid.uuid4().hex[:8]}"
     
-    logger.info(f"[Orchester-V9] Mission received for {user_id}")
+    logger.info(f"[Orchester-v13] Mission received for {user_id}")
     
     if SovereignSecurity.detect_injection(request.input):
         raise HTTPException(status_code=400, detail="Neural protocol violation.")
 
     try:
-        # Route through the v9.8.1 Brain
-        response_data = await brain.route(
-            user_input=request.input,
+        # Route through the v13.0.0 Absolute Monolith
+        response_data = await brain.run_mission_sync(
+            input_text=request.input,
             user_id=user_id,
             session_id=session_id,
-            streaming=False,
             **(request.context or {})
         )
         return {
@@ -59,8 +59,8 @@ async def orchestrate_mission_endpoint(
             **response_data
         }
     except Exception as e:
-        logger.error(f"[Orchester-V9] Orchestration failure: {e}")
-        return {"status": "error", "message": "Neural protocol drift."}
+        logger.error(f"[Orchester-v13] Orchestration failure: {e}")
+        return {"status": "error", "message": "Neural protocol drift detected in Monolith."}
 
 @router.post("/mission/stream")
 async def orchestrate_mission_stream_endpoint(
@@ -68,7 +68,7 @@ async def orchestrate_mission_stream_endpoint(
     current_user: Any = Depends(get_current_user)
 ):
     """
-    High-Fidelity SSE Streaming Mission (V9.8.1 Monolith).
+    High-Fidelity SSE Streaming Mission (v13.0.0 Absolute Monolith).
     Streams: Perception -> Goal -> Graph -> Execution -> Synthesis.
     """
     user_id = current_user.uid if hasattr(current_user, "uid") else "guest"
@@ -79,12 +79,11 @@ async def orchestrate_mission_stream_endpoint(
 
     async def sse_generator():
         try:
-            # Route through the v9.8.1 Brain (Streaming)
-            async for chunk in brain.route(
+            # Route through the v13.0.0 Brain (Streaming)
+            async for chunk in brain.run_mission_stream(
                 user_input=request.input,
                 user_id=user_id,
                 session_id=session_id,
-                streaming=True,
                 **(request.context or {})
             ):
                 # Standardize SSE format: event and data
@@ -94,12 +93,7 @@ async def orchestrate_mission_stream_endpoint(
             
             yield "data: [DONE]\n\n"
         except Exception as e:
-            logger.error(f"[Orchester-V9] Stream failure: {e}")
+            logger.error(f"[Orchester-v13] Stream failure: {e}")
             yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
 
     return StreamingResponse(sse_generator(), media_type="text/event-stream")
-
-from datetime import datetime, timezone
-import uuid
-
-from datetime import datetime, timezone

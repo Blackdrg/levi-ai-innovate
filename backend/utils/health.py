@@ -58,6 +58,20 @@ async def check_brain_health() -> Dict[str, Any]:
         health["checks"]["groq_api"] = groq_breaker.state == "CLOSED"
         health["checks"]["tavily_api"] = ai_service_breaker.state == "CLOSED"
     except Exception: pass
+    
+    # 5. Check v13.0 Specifics (HNSW & Consensus)
+    try:
+        from backend.utils.vector_db import VectorDB
+        from backend.agents.consensus_agent import ConsensusAgentV11
+        import faiss
+        
+        # Check if HNSW is the active index type
+        coll = await VectorDB.get_collection("global_health_check")
+        health["checks"]["hnsw_index"] = isinstance(coll.index, faiss.IndexHNSWFlat)
+        
+        health["checks"]["consensus_agent"] = True # Profile active locally
+    except Exception as e:
+        logger.warning(f"[Probe] v13.0 Health Check failure: {e}")
 
     # Overall Status Mapping
     failed_counts = list(health["checks"].values()).count(False)

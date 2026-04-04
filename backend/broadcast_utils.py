@@ -25,8 +25,9 @@ PULSE_MISSION_ERROR     = "mission_error"
 
 # v9.8.1: Swarm & Security Pulsar Types
 PULSE_SWARM_CONSENSUS  = "swarm_consensus"
-PULSE_SECURITY_SHIELD   = "security_shield" # PII Masking/Audit events
-PULSE_DREAM_PULSE       = "dream_pulse"     # Cognitive distillation events
+PULSE_SECURITY_SHIELD   = "security_shield" 
+PULSE_FIDELITY_UPDATE   = "fidelity_update" # Live Swarm Confidence
+PULSE_DREAM_PULSE       = "dream_pulse"     
 
 
 class SovereignBroadcaster:
@@ -86,23 +87,23 @@ class SovereignBroadcaster:
                          
                          # 1. Profile-Based Filtering (Sovereign v9.8.1)
                          if profile == "mobile":
-                             # Only allow high-level mission events for mobile
-                             allowed = ["mission_start", "mission_complete", "mission_error", "mission_aborted"]
+                             # v13.0: 360 observability for mobile sovereignty
+                             allowed = [
+                                 "mission_start", "mission_started", "mission_complete", "mission_completed", 
+                                 "mission_error", "mission_aborted", "perception", "activity", "graph", "results",
+                                 "rule_promoted", "learning_feedback", "neural_synthesis",
+                                 "MEMORY_DREAMING_START", "MEMORY_DREAMING_COMPLETE", "MEMORY_DREAMING_ERROR"
+                             ]
                              if event_type not in allowed:
                                  continue
                          
-                         # 2. Dynamic Compression for Mobile
-                         payload = data_raw
-                         is_compressed = False
+                         # 2. Dynamic Compression for Mobile (Base64 Binary Pulse)
                          if profile == "mobile":
                              compressed = zlib.compress(data_raw.encode('utf-8'))
                              payload = base64.b64encode(compressed).decode('utf-8')
-                             is_compressed = True
-                         
-                         yield f"event: {event_type}\ndata: {payload}\n"
-                         if is_compressed:
-                             yield "x-compression: zlib\n"
-                         yield "\n"
+                             yield f"event: {event_type}\ndata: {payload}\n\n"
+                         else:
+                             yield f"event: {event_type}\ndata: {data_raw}\n\n"
 
                     except json.JSONDecodeError:
                          yield f"data: {data_raw}\n\n"
@@ -122,6 +123,14 @@ class SovereignBroadcaster:
             logger.error(f"[Pulse v4] Critical stream failure: {e}")
             yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
 
-# Global Accessor
+# Global Accessors
 def broadcast_event(event_type: str, data: Dict[str, Any], user_id: str = "global"):
     SovereignBroadcaster.publish(event_type, data, user_id)
+
+def broadcast_fidelity(fidelity: float, mission_id: str, user_id: str = "global"):
+    """Broadcasts a real-time fidelity score update."""
+    SovereignBroadcaster.publish(PULSE_FIDELITY_UPDATE, {
+        "mission_id": mission_id,
+        "fidelity": round(fidelity, 4),
+        "status": "stable" if fidelity > 0.8 else "fragile"
+    }, user_id)

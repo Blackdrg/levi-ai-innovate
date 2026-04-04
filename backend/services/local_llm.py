@@ -19,6 +19,10 @@ class LocalLLM:
             cls._instance._initialize_model()
         return cls._instance
 
+    def is_available(self) -> bool:
+        """v13.0 Model Integrity Probe."""
+        return self.model is not None
+
     def _initialize_model(self):
         """Lazy load the GGUF model."""
         if not os.path.exists(self.model_path):
@@ -37,6 +41,19 @@ class LocalLLM:
             logger.info("[LocalLLM] Model loaded successfully.")
         except Exception as e:
             logger.error(f"[LocalLLM] Failed to load local model: {e}")
+
+    async def agenerate(self, prompt: str, system_prompt: str = "You are LEVI, a local AI.", max_tokens: int = 512) -> Optional[str]:
+        """Async local generation for v13.0.0 brain stream."""
+        if not self.model:
+            return None
+            
+        try:
+            # We use to_thread to prevent blocking the async loop by llama-cpp
+            import asyncio
+            return await asyncio.to_thread(self.generate, prompt, system_prompt, max_tokens)
+        except Exception as e:
+            logger.error(f"[LocalLLM] Async generation error: {e}")
+            return None
 
     def generate(self, prompt: str, system_prompt: str = "You are LEVI, a local AI.", max_tokens: int = 512) -> Optional[str]:
         """Synchronous local generation."""
