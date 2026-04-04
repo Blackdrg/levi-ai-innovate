@@ -20,6 +20,9 @@ class VectorDB:
         self.collection_name = collection_name
         self.user_id = user_id
         self.dimension = dimension
+        # v13.0 Model Specification
+        from backend.embeddings import MODEL_PATH
+        self.model_name = MODEL_PATH
         
         # Production: Mount point for GCS FUSE
         self.base_path = os.getenv("VECTOR_DB_PATH", "backend/data/vector_db")
@@ -68,14 +71,62 @@ class VectorDB:
             return cls._instances[instance_key]
 
     async def _load(self):
+        """Loads index and metadata with v13.0 integrity checks."""
         if os.path.exists(self.index_path) and os.path.exists(self.meta_path):
             try:
                 self.index = faiss.read_index(self.index_path)
                 with open(self.meta_path, "r") as f:
-                    self.metadata = json.load(f)
+                    data = json.load(f)
+                    self.metadata = data.get("records", [])
+                    
+                    # v13.0 Model Integrity Check
+                    stored_model = data.get("model_name")
+                    if stored_model and stored_model != self.model_name:
+                        logger.warning(f"[VectorDB] Model Mismatch for {self.collection_name}! Index: {stored_model}, System: {self.model_name}")
+                        # Auto-rebuild if deterministic (reversible)
+                        if all("text" in m for m in self.metadata):
+                            logger.info(f"[VectorDB] Re-indexing collection {self.collection_name}...")
+                            await self.rebuild_index()
+                        else:
+                            logger.critical(f"[VectorDB] RE-INDEXING FAILED: No raw text found. Manual intervention required.")
+                            raise ValueError("Deterministic re-indexing impossible: Text data missing in metadata.")
+                            
                 logger.info(f"Loaded collection '{self.collection_name}' with {len(self.metadata)} records.")
             except Exception as e:
                 logger.error(f"Failed to load collection {self.collection_name}: {e}")
+
+    async def rebuild_index(self):
+        """
+        Sovereign v13.0: High-fidelity deterministic re-indexing.
+        Re-embeds all texts in the metadata to match the current system model.
+        """
+        if not self.metadata: return
+        
+        texts = [m["text"] for m in self.metadata if "text" in m]
+        if len(texts) != len(self.metadata):
+            raise ValueError("Cannot rebuild index: Partial text availability.")
+            
+        logger.info(f"[VectorDB] Commencing rebuild for {len(texts)} vectors...")
+        
+        from backend.db.vector_store import embed_text
+        new_embeddings = []
+        for text in texts:
+            emb = await asyncio.to_thread(embed_text, text)
+            new_embeddings.append(emb)
+            
+        emb_np = np.array(new_embeddings).astype('float32')
+        self.dimension = emb_np.shape[1]
+        
+        # Build new HNSW index
+        new_index = faiss.IndexHNSWFlat(self.dimension, 32)
+        new_index.hnsw.efConstruction = 40
+        new_index.hnsw.efSearch = 16
+        new_index.add(emb_np)
+        
+        async with self._lock:
+            self.index = new_index
+            self._save()
+        logger.info(f"[VectorDB] Rebuild complete for {self.collection_name}.")
         
         if self.index is None:
             # v10.0 Upgrade: Use HNSW for sub-30ms retrieval at scale
@@ -114,7 +165,11 @@ class VectorDB:
             
             faiss.write_index(self.index, temp_index)
             with open(temp_meta, "w") as f:
-                json.dump(self.metadata, f, default=str)
+                json.dump({
+                    "model_name": self.model_name,
+                    "dimension": self.dimension,
+                    "records": self.metadata
+                }, f, default=str)
                 
             os.replace(temp_index, self.index_path)
             os.replace(temp_meta, self.meta_path)
@@ -122,14 +177,16 @@ class VectorDB:
         except Exception as e:
             logger.error(f"Persistence error for {self.collection_name}: {e}")
 
-    async def search(self, query: str, limit: int = 5, min_score: float = 0.4) -> List[Dict[str, Any]]:
+    async def search(self, query: str, limit: int = 5, min_score: float = 0.4, tenant_id: Optional[str] = None) -> List[Dict[str, Any]]:
         from backend.db.vector_store import embed_text
         query_emb = await asyncio.to_thread(embed_text, query)
         query_np = np.array([query_emb]).astype('float32')
         
         if self.index.ntotal == 0: return []
         
-        scores, indices = self.index.search(query_np, limit)
+        # We fetch more than 'limit' to allow for filtering
+        search_limit = limit * 2 if tenant_id else limit
+        scores, indices = self.index.search(query_np, search_limit)
         results = []
         for i, idx in enumerate(indices[0]):
             if idx != -1 and idx < len(self.metadata):
@@ -138,8 +195,12 @@ class VectorDB:
                     meta = self.metadata[idx].copy()
                     if meta.get("deleted"):
                         continue
+                    # v13.0 Tenant Isolation
+                    if tenant_id and meta.get("tenant_id") != tenant_id:
+                        continue
                     meta["score"] = score
                     results.append(meta)
+                    if len(results) >= limit: break
         return results
 
     async def remove_indices(self, indices: List[int]):

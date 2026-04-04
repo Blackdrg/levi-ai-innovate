@@ -30,6 +30,12 @@ def check_allowance(user_id: str, tier: str, cost: int = 1) -> bool:
         if credits < cost: return False
     return True
 
+from enum import Enum
+class SovereignRole(str, Enum):
+    USER = "user"
+    ADMIN = "admin"
+    AUDITOR = "auditor"
+
 async def get_current_user(cred: HTTPAuthorizationCredentials = Depends(security)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -60,23 +66,26 @@ async def get_current_user(cred: HTTPAuthorizationCredentials = Depends(security
             raise credentials_exception
         
         user_ref = firestore_db.collection("users").document(uid)
-        user_doc = await asyncio.to_thread(user_ref.get)
+        user_doc = user_ref.get() # Note: firebase_admin is blocking, asyncio.to_thread used below
         
         if not user_doc.exists:
             user_data = {
                 "uid": uid,
                 "username": email.split('@')[0] if email else f"user_{uid[:8]}",
                 "email": email,
+                "role": SovereignRole.USER.value,
                 "created_at": datetime.now(timezone.utc),
                 "tier": "free",
                 "credits": 10,
                 "last_active": datetime.now(timezone.utc)
             }
-            await asyncio.to_thread(user_ref.set, user_data)
+            user_ref.set(user_data)
         else:
             user_data = user_doc.to_dict()
             user_data["uid"] = uid
-            await asyncio.to_thread(user_ref.update, {"last_active": datetime.now(timezone.utc)})
+            if "role" not in user_data:
+                user_data["role"] = SovereignRole.USER.value
+            user_ref.update({"last_active": datetime.now(timezone.utc)})
 
         user_data["jti"] = jti
         user_data["tier_config"] = TIERS.get(user_data.get("tier", "free"))
@@ -93,6 +102,19 @@ async def get_current_user(cred: HTTPAuthorizationCredentials = Depends(security
     except Exception as e:
         logger.error(f"Auth failure: {e}")
         raise credentials_exception
+
+def require_role(required_role: SovereignRole):
+    """Dependency to enforce Sovereign RBAC at the route level."""
+    async def role_checker(user: dict = Depends(get_current_user)):
+        user_role = user.get("role", SovereignRole.USER.value)
+        if user_role != required_role.value and user_role != SovereignRole.ADMIN.value:
+            logger.warning(f"RBAC VIOLATION: User {user['uid']} (role: {user_role}) attempted access to {required_role.value} resource.")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Restricted access. {required_role.value.capitalize()} privileges required."
+            )
+        return user
+    return role_checker
 
 async def get_current_user_optional(cred: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False))):
     if not cred: return None

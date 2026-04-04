@@ -1,61 +1,97 @@
-# Implementation Plan - LEVI-AI v13 Frontend & Backend Synchronized Upgrade
+# Absolute Monolith Hardening: v13.0.0 Production Graduation
 
-The objective is to overhaul the LEVI-AI frontend using React + Vite and synchronize the backend with an SSE-powered (Server-Sent Events) mission architecture. This provides a real-time, premium dashboard experience for autonomous mission execution.
+This plan outlines the technical implementation for fixing 28 identified critical, high, and medium-level issues to graduate LEVI-AI to a production-ready Sovereign OS.
+
+## User Review Required
+
+> [!IMPORTANT]
+> This is a massive overhaul of the system's core. Some changes (including Multi-tenant isolation and HNSW migration) will require database migrations and potential re-indexing of existing data.
+
+> [!WARNING]
+> **Code Sandboxing** requires Docker to be running on the host machine to provide real isolation. If Docker is not available, we will implement the strictest possible local process isolation as a fallback.
+
+> [!CAUTION]
+> **Multi-tenant isolation** will change how data is queried. Legacy data without a `tenant_id` will be inaccessible unless migration scripts are run.
 
 ## Proposed Changes
 
-### [Frontend] `levi-frontend`
-
-#### [NEW] [levi-frontend/](file:///d:/LEVI-AI/levi-frontend)
-- Initialize with Vite + React.
-- Install: `zustand`, `axios`, `react-router-dom`, `@tanstack/react-query`, `tailwindcss`.
-- **API Client**: `src/api/client.js` with JWT interceptors.
-- **Stores**: `src/stores/authStore.js` (persisted) and `src/stores/missionStore.js`.
-- **Hooks**: `src/hooks/useSSEMission.js` for real-time mission updates.
-- **Dashboard**: `src/pages/Dashboard.jsx` featuring dynamic `MissionPanel` and `StreamEventLog`.
-- **Premium UI**: Modern dark theme with Tailwind, glassmorphism, and smooth transitions.
+The implementation is divided into four main thrusts: **Security**, **Architecture**, **Reliability**, and **Intelligence**.
 
 ---
 
-### [Backend] Cognition & Streaming
+### Phase 1: Security Hardening (Shield & Sandbox)
 
-#### [NEW] [app/routes/chat.py](file:///d:/LEVI-AI/app/routes/chat.py)
-- Implementation of `/api/v13/chat/stream` SSE endpoint.
-- Handles real-time event generation from the Brain Controller.
+#### [MODIFY] [generation.py](file:///d:/LEVI-AI/backend/engines/chat/generation.py)
+- Integrate `PromptSanitizer` to prevent injection.
+- Implement instruction-boundary enforcement (e.g., `<INST>` tags).
 
-#### [NEW] [app/brain/controller.py](file:///d:/LEVI-AI/app/brain/controller.py)
-- Unified orchestrator for Perception, Planning, Execution, and Audit.
-- Yields granular events for the frontend stream.
+#### [MODIFY] [python_repl_agent.py](file:///d:/LEVI-AI/backend/agents/python_repl_agent.py)
+- Replace `exec` with a `DockerSandbox` executor.
+- Define resource limits (CPU, Memory, IO).
 
-#### [NEW] [app/memory/manager.py](file:///d:/LEVI-AI/app/memory/manager.py)
-- Integration of 5-tier memory (Redis, Postgres, HNSW, Neo4j).
+#### [NEW] [sanitizer.py](file:///d:/LEVI-AI/backend/utils/sanitizer.py)
+- regex-based and LLM-based (fast-local) input sanitization for adversarial patterns.
 
-#### [NEW] [app/auth.py](file:///d:/LEVI-AI/app/auth.py)
-- JWT verification logic supporting SSE query parameter authentication.
+#### [NEW] [secret_manager.py](file:///d:/LEVI-AI/backend/config/secret_manager.py)
+- Abstract secret access with rotation logic and TTL support.
 
 ---
 
-### [Infrastructure] Deployment & Environment
+### Phase 2: Architectural Integrity (Multi-tenancy & Ontology)
 
-#### [MODIFY] [docker-compose.yml](file:///d:/LEVI-AI/docker-compose.yml)
-- Update Nginx to serve the new `levi-frontend/dist` build.
-- Ensure all environment variables match the plan.
+#### [MODIFY] [models.py](file:///d:/LEVI-AI/backend/db/models.py)
+- Update models to support Row Level Security (RLS) hooks.
+- Implement `system_audit` cryptographic chaining.
 
-#### [NEW] [build-and-run.sh](file:///d:/LEVI-AI/build-and-run.sh)
-- Automated script to build the frontend and launch the stack.
+#### [MODIFY] [vector_store.py](file:///d:/LEVI-AI/backend/db/vector_store.py)
+- Add `model_metadata` header to HNSW index file.
+- Implement tenant-scoped partitioning for vector searches.
+
+#### [NEW] [ontology.py](file:///d:/LEVI-AI/backend/db/ontology.py)
+- Define Pydantic models for Neo4j Entity-Relation triplets with validation constraints.
+
+#### [MODIFY] [base.py](file:///d:/LEVI-AI/backend/agents/base.py)
+- Enforce Pydantic structured output contracts for all agents.
+
+---
+
+### Phase 3: Reliability & Operations (CI/CD & Recovery)
+
+#### [NEW] [deploy.yml](file:///d:/LEVI-AI/.github/workflows/deploy.yml)
+- Full CI/CD pipeline: Build, Tag, K8s Deploy, Canary rollout.
+
+#### [NEW] [backup_policy.py](file:///d:/LEVI-AI/backend/scripts/backup_policy.py)
+- Automated backup orchestration for Postgres (pg_dump), Neo4j (dump), and HNSW.
+
+#### [MODIFY] [celery_app.py](file:///d:/LEVI-AI/backend/celery_app.py)
+- Implement mission cancellation protocol via Redis signals.
+
+---
+
+### Phase 4: Intelligence & Cost (Fidelity & CUs)
+
+#### [MODIFY] [fidelity.py](file:///d:/LEVI-AI/backend/evaluation/fidelity.py)
+- Formally define Fidelity Score S as a weighted aggregation of 14 agent outputs.
+
+#### [NEW] [billing.py](file:///d:/LEVI-AI/backend/services/billing.py)
+- Implement Cognitive Unit (CU) formula calculation and per-user ledger.
+
+#### [MODIFY] [planner.py](file:///d:/LEVI-AI/backend/engines/brain/planner.py)
+- Add DAG cycle detection algorithm.
 
 ## Open Questions
 
-1. **Backend Path**: Do you want me to keep the `app/` folder structure exactly as provided, or should I integrate these into the existing `backend/api/`, `backend/core/` folders? The provided snippets use `from app....` imports.
-2. **Existing Data**: The v13 migration mentions `knowledge_seeds`. Should I assume the databases are already initialized or include a migration step in the `build-and-run.sh`?
+- **Docker Availability**: Can I assume Docker is available for the sandbox?
+- **Secrets Management**: Should I use a local mock for Vault or is there a specific provider preferred?
+- **Fidelity Weights**: Are there preferred weights for the 14 agents in the S calculation?
 
 ## Verification Plan
 
 ### Automated Tests
-- `npm run build` in `levi-frontend` to verify React/Vite builds.
-- Python import checks for the new `app` module.
+- `pytest tests/security/test_injection.py`
+- `pytest tests/architecture/test_tenancy.py`
+- `pytest tests/agents/test_outputs.py`
 
 ### Manual Verification
-- Launch the stack using `./build-and-run.sh`.
-- Navigate to `https://localhost` (via Nginx).
-- Test Login -> Submit Mission -> Observe real-time SSE stream.
+- Trigger a mission and attempt to cancel it mid-stream via the API.
+- Verify vector index corruption check by manually changing the model name in metadata.

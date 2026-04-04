@@ -9,8 +9,11 @@ class UserProfile(Base):
     Centralized store for highly distilled identity archetypes.
     """
     __tablename__ = "user_profiles"
+    __tenant_scoped__ = True # Flag for RLS enforcement
 
     user_id = Column(String, primary_key=True, index=True)
+    tenant_id = Column(String, index=True) # Domain/Org partitioning
+    role = Column(String, default="user") # user, admin, auditor
     response_style = Column(String, default="balanced")
     persona_archetype = Column(String, default="philosophical")
     avg_rating = Column(Float, default=3.0)
@@ -29,6 +32,7 @@ class UserTrait(Base):
 
     id = Column(Integer, primary_key=True)
     user_id = Column(String, ForeignKey("user_profiles.user_id"), index=True)
+    tenant_id = Column(String, index=True)
     trait = Column(String, nullable=False)
     weight = Column(Float, default=0.5)
     evidence_count = Column(Integer, default=1)
@@ -44,6 +48,7 @@ class UserPreference(Base):
 
     id = Column(Integer, primary_key=True)
     user_id = Column(String, ForeignKey("user_profiles.user_id"), index=True)
+    tenant_id = Column(String, index=True)
     category = Column(String) # e.g., 'topic', 'format', 'tone'
     value = Column(String)
     resonance_score = Column(Float, default=0.5)
@@ -59,6 +64,7 @@ class MissionMetric(Base):
     id = Column(Integer, primary_key=True)
     mission_id = Column(String, index=True)
     user_id = Column(String, ForeignKey("user_profiles.user_id"), index=True)
+    tenant_id = Column(String, index=True)
     intent = Column(String)
     status = Column(String)
     token_count = Column(Integer, default=0)
@@ -112,7 +118,19 @@ class SystemAudit(Base):
     ip_address = Column(String)
     user_agent = Column(String)
     signature = Column(String) # HMAC-SHA256 integrity pulse
+    prev_signature = Column(String) # Cryptographic chain link
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    @staticmethod
+    def calculate_signature(prev_sig: str, data: str) -> str:
+        """
+        Sovereign v13.0: Cryptographic chaining.
+        HMAC-SHA256(prev_sig + data)
+        """
+        import hmac, hashlib
+        secret = os.getenv("AUDIT_CHAIN_SECRET", "sovereign_monolith_genesis")
+        msg = f"{prev_sig}:{data}".encode()
+        return hmac.new(secret.encode(), msg, hashlib.sha256).hexdigest()
 
 class MissionSchedule(Base):
     """

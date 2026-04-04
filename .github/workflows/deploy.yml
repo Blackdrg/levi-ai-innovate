@@ -1,58 +1,59 @@
-name: LEVI-AI Absolute Monolith Graduation (v13.0.0)
+name: Sovereign-CD-v13
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+    branches: [ main, production ]
+  workflow_dispatch:
+
+env:
+  PROJECT_ID: levi-ai-sovereign
+  GKE_CLUSTER: absolute-monolith-cluster
+  GKE_ZONE: us-central1-a
+  IMAGE_NAME: sovereign-backend
 
 jobs:
-  graduation-audit:
-    name: Absolute Monolith Graduation Audit
+  build-and-deploy:
     runs-on: ubuntu-latest
-
-    services:
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-      postgres:
-        image: postgres:15-alpine
-        env:
-          POSTGRES_USER: levi
-          POSTGRES_PASSWORD: levi
-          POSTGRES_DB: levi_db
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
-    - uses: actions/checkout@v3
+    - name: Checkout
+      uses: actions/checkout@v3
 
-    - name: Set up Python 3.11
-      uses: actions/setup-python@v4
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v1
       with:
-        python-version: "3.11"
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-    - name: Install Monolith Dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r backend/requirements.txt
-        pip install pytest pytest-asyncio
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v1
 
-    - name: Execute v13.0.0 Master Audit
-      env:
-        REDIS_URL: redis://localhost:6379/0
-        DATABASE_URL: postgresql://levi:levi@localhost:5432/levi_db
-        SWARM_SYNC_KEY: ${{ secrets.SWARM_SYNC_KEY }}
-        TOGETHER_API_KEY: ${{ secrets.TOGETHER_API_KEY }}
-      run: |
-        python tests/verify_v13_monolith.py
+    - name: Configure Docker
+      run: gcloud auth configure-docker --quiet
 
-    - name: Build Absolute Monolith Container
+    - name: Build and Push Docker Image
       run: |
-        docker build -t levi-ai:v13.0.0-monolith -f backend/Dockerfile.prod .
+        TAG=$(git rev-parse --short HEAD)
+        docker build -t gcr.io/$PROJECT_ID/$IMAGE_NAME:$TAG .
+        docker build -t gcr.io/$PROJECT_ID/$IMAGE_NAME:latest .
+        docker push gcr.io/$PROJECT_ID/$IMAGE_NAME:$TAG
+        docker push gcr.io/$PROJECT_ID/$IMAGE_NAME:latest
+
+    - name: Set up Kustomize
+      run: |
+        curl -sfLo kustomize https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv4.5.2/kustomize_v4.5.2_linux_amd64.tar.gz
+        tar -xzf kustomize
+        chmod u+x kustomize
+
+    - name: Deploy to GKE (Canary Rollout)
+      run: |
+        gcloud container clusters get-credentials $GKE_CLUSTER --zone $GKE_ZONE
+        ./kustomize edit set image gcr.io/$PROJECT_ID/$IMAGE_NAME:$TAG
+        ./kustomize build backend/deployment/k8s | kubectl apply -f -
+        
+        # Verify rollout
+        kubectl rollout status deployment/sovereign-backend
+        
+    - name: Automated Rollback on Failure
+      if: failure()
+      run: |
+        echo "Deployment failed. Rolling back..."
+        kubectl rollout undo deployment/sovereign-backend

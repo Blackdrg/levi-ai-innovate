@@ -37,7 +37,14 @@ class GraphExecutor:
 
         
         while remaining_nodes:
-            # 1. Identify executable nodes (all deps satisfied)
+            # 1. Mission Cancellation Check
+            from backend.utils.mission import MissionControl
+            mission_id = perception.get("request_id") or "global"
+            if MissionControl.is_cancelled(mission_id):
+                logger.warning(f"[V8 Executor] Mission {mission_id} cancelled by user. Aborting...")
+                break
+
+            # 2. Identify executable nodes (all deps satisfied)
             executable_nodes = [
                 n for n in remaining_nodes 
                 if all(dep in completed_ids for dep in n.dependencies)

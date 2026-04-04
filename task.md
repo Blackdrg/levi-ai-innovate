@@ -1,28 +1,29 @@
-# Task List - LEVI-AI v13 Graduation (10 Steps)
+# Task List: Absolute Monolith Hardening (v13.0 Graduation)
 
-- [x] **Step 1: Wire Ollama into all Agents**
-    - [x] Update `backend/utils/llm_utils.py` for Ollama-only inference
-    - [x] Update `backend/engines/chat/generation.py` for local routing
-- [x] **Step 2: Fix Postgres Migrations**
-    - [x] Add `user_facts` to `backend/migrations/v13_migration.sql`
-    - [x] Ensure `start.bat` applies SQL
-- [x] **Step 3: Connect Neo4j (Bolt Driver)**
-    - [x] Implement `Neo4jStore` with Bolt connection
-- [x] **Step 4: Fix Learning Loop**
-    - [x] Implement/Update `BrainCoreController` refine logic
-- [x] **Step 5: Build FastAPI Auth**
-    - [x] Create `app/routes/auth.py` (/register, /login)
-    - [x] Mount Auth router in `backend/api/main.py`
-- [x] **Step 6: Connect SSE Streaming End-to-End**
-    - [x] Finalize `app/routes/chat.py` stream logic
-    - [x] Verify Nginx Proxy Buffering
-- [x] **Step 7: Build the Frontend (React + Zustand)**
-    - [x] Finalize `levi-frontend` components
-- [x] **x] Step 8: Wire all 5 Memory Tiers**
-    - [x] Finalize `app/memory/manager.py` (Redis, PG, HNSW, JSONL, Neo4j)
-- [x] **Step 9: Test Full Mission Flow**
-    - [x] Run end-to-end cognitive mission test
-- [x] **Step 10: Docker Compose everything and run start.sh**
-    - [x] Finalize `docker-compose.yml` and `start.sh`
-
-## ✅ ALL STEPS GRADUATED (Pulse v13.0.0 Global)
+- [x] Phase 1: Security Hardening (Shield & Sandbox)
+    - [x] Implement `PromptSanitizer` (Unified in `SovereignSecurity`)
+    - [x] Integrate sanitizer into `backend/engines/chat/generation.py`
+    - [x] Create `DockerSandbox` executor in `backend/utils/sandbox.py`
+    - [x] Update `PythonReplAgent` and `CodeAgent` to use Docker
+    - [x] Implement `SecretManager` with rotation mock in `backend/config/secret_manager.py`
+    - [x] Add cryptographic chaining to `SystemAudit` in `backend/db/models.py`
+- [x] Phase 2: Architectural Integrity (Multi-tenancy & Ontology)
+    - [x] Update `backend/db/models.py` for RLS hooks and `tenant_id`
+    - [x] Implement HNSW metadata and tenant partitioning in `backend/utils/vector_db.py`
+    - [x] Define Neo4j Ontology and Pydantic triplets in `backend/db/ontology.py`
+    - [x] Enforce Agent Output Schemas in `backend/agents/base.py`
+    - [x] Implement SSE reconnect/resume protocol in `backend/api/chat.py`
+- [x] Phase 3: Reliability & Operations (CI/CD & Recovery)
+    - [x] Create GitHub Action `deploy.yml` with GKE Canary logic
+    - [x] Implement mission cancellation protocol in `backend/core/executor.py`
+    - [x] Create automated backup orchestrator in `backend/scripts/backup_policy.py`
+    - [x] Define per-agent Prometheus counters for error budgets and SLOs in `backend/utils/metrics.py`
+- [x] Phase 4: Intelligence & Cost (Fidelity & CUs)
+    - [x] Formally define Fidelity Score S formula in `backend/evaluation/fidelity.py`
+    - [x] Implement Cognitive Unit (CU) formula and billing ledger in `backend/services/billing.py`
+    - [x] Add DAG cycle detection to `backend/core/planner.py`
+    - [x] Implement model drift detection using statistical Z-scores in `backend/utils/drift_detector.py`
+- [x] Phase 5: Verification & Walkthrough
+    - [x] Run security injection tests (Verified via `tests/v13_hardening_test.py`)
+    - [x] Run multi-tenant isolation tests (Verified via `tests/v13_hardening_test.py`)
+    - [x] Create final `walkthrough_v13_hardening.md`

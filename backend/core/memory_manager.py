@@ -344,7 +344,31 @@ class MemoryManager:
 
         cleared_count = await asyncio.to_thread(_purge_firestore)
 
-        # 3. Redis Cache Purge (Tier 1)
+        # 3. Neo4j Graph Purge (Relationships & Nodes)
+        try:
+            await Neo4jClient.clear_user_data(user_id)
+        except Exception as e:
+            logger.error(f"Neo4j purge failed for {user_id}: {e}")
+
+        # 4. Postgres SQL Purge (Traits, Preferences, Metrics)
+        from backend.db.postgres import PostgresDB
+        from sqlalchemy import delete
+        from backend.db.models import UserProfile, UserTrait, UserPreference, MissionMetric
+        
+        try:
+            async with PostgresDB._session_factory() as session:
+                async with session.begin():
+                    # Order matters for foreign keys if not CASCADE
+                    await session.execute(delete(UserTrait).where(UserTrait.user_id == user_id))
+                    await session.execute(delete(UserPreference).where(UserPreference.user_id == user_id))
+                    await session.execute(delete(MissionMetric).where(MissionMetric.user_id == user_id))
+                    await session.execute(delete(UserProfile).where(UserProfile.user_id == user_id))
+                await session.commit()
+            logger.info(f"[Postgres] Absolute SQL purge complete for user: {user_id}")
+        except Exception as e:
+            logger.error(f"Postgres purge failed for {user_id}: {e}")
+
+        # 5. Redis Cache Purge (Tier 1)
         if HAS_REDIS:
             try:
                 keys = redis_client.keys(f"*:{user_id}*")

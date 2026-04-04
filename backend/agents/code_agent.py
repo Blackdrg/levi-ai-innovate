@@ -56,7 +56,7 @@ class CodeAgent(SovereignAgent[CodeInput, AgentResult]):
         # 2. Execute & Verify (if Python)
         execution_output = "Execution skipped (non-python or disabled)."
         if input_data.lang_preference.lower() == "python":
-            execution_output = self.execute_code(code)
+            execution_output = await self.execute_code(code)
         
         return {
             "message": f"### Implementation\n\n```python\n{code}\n```\n\n### Execution Results\n```\n{execution_output}\n```",
@@ -81,32 +81,10 @@ class CodeAgent(SovereignAgent[CodeInput, AgentResult]):
                 code = code.split("```")[-1].split("```")[0].strip()
         return code
 
-    def execute_code(self, code: str) -> str:
-        """Executes Python code in a safe local sandbox."""
-        import subprocess
-        import os
+    async def execute_code(self, code: str) -> str:
+        """Sovereign Sandbox v13: Executes code via Docker for absolute isolation."""
+        from backend.utils.sandbox import DockerSandbox
+        import asyncio
         
-        sandbox_dir = os.path.abspath("backend/data/sandbox")
-        temp_file = os.path.join(sandbox_dir, "temp_exec.py")
-        
-        try:
-            with open(temp_file, "w") as f:
-                f.write(code)
-            
-            # Execute with a timeout
-            result = subprocess.run(
-                ["python", temp_file], 
-                capture_output=True, 
-                text=True, 
-                timeout=5,
-                cwd=sandbox_dir
-            )
-            return result.stdout if result.returncode == 0 else result.stderr
-        except subprocess.TimeoutExpired:
-            return "Error: Execution timed out (5s limit)."
-        except Exception as e:
-            return f"Error during execution: {str(e)}"
-        finally:
-            if os.path.exists(temp_file):
-                try: os.remove(temp_file)
-                except: pass
+        result = await asyncio.to_thread(DockerSandbox.execute, code)
+        return result["message"] if result["success"] else f"Error: {result['message']}"

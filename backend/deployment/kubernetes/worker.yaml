@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: levi-worker
+  namespace: sovereign
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: levi-worker
+  template:
+    metadata:
+      labels:
+        app: levi-worker
+    spec:
+      containers:
+      - name: worker
+        image: gcr.io/levi-ai/worker:v13.0.0
+        command: ["celery", "-A", "backend.celery_app", "worker", "--loglevel=info", "--concurrency=4"]
+        envFrom:
+        - secretRef:
+            name: levi-secrets
+        - configMapRef:
+            name: levi-config
+        resources:
+          requests:
+            cpu: "1000m"
+            memory: "2Gi"
+          limits:
+            cpu: "2000m"
+            memory: "8Gi" # Higher for heavy agent tasks
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: levi-worker-hpa
+  namespace: sovereign
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: levi-worker
+  minReplicas: 2
+  maxReplicas: 20 # Highly scalable workers
+  metrics:
+  - type: Resource
+    resource:
+      name: memory # Memory is often the bottleneck for LLM agents
+      target:
+        type: Utilization
+        averageUtilization: 80

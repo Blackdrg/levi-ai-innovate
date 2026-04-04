@@ -52,17 +52,57 @@ class SovereignSecurity:
 
     @classmethod
     def detect_injection(cls, query: str) -> bool:
-        """Basic detection of system prompt injection attempts."""
+        """Sovereign Shield v13.0.0: High-fidelity injection detection."""
         patterns = [
-            r"ignore previous instructions",
-            r"you are now",
+            r"ignore (all )?previous instructions",
+            r"you are now a",
             r"system override",
             r"reveal your system prompt",
-            r"disregard all earlier"
+            r"disregard all earlier",
+            r"dan:", # Do Anything Now
+            r"jailbreak",
+            r"bypass (all )?restrictions"
         ]
         q_lower = query.lower()
         for p in patterns:
             if re.search(p, q_lower):
-                logger.warning(f"Malicious prompt injection attempt detected: {query[:50]}")
+                logger.warning(f"[Shield] Malicious prompt injection attempt detected: {query[:50]}...")
                 return True
         return False
+
+    @classmethod
+    def sanitize(cls, text: str) -> str:
+        """
+        Filters adversarial strings and tags intent boundaries.
+        """
+        if not text: return ""
+        
+        # Neutralize injections
+        sanitized = text
+        patterns = [
+            (r"(?i)ignore all (previous )?instructions", "[FILTERED_INTENT]"),
+            (r"(?i)system (prompt|message):", "[FILTERED_INTENT]"),
+            (r"(?i)you are now a", "[FILTERED_INTENT]"),
+            (r"(?i)bypass (all )?restrictions", "[FILTERED_INTENT]")
+        ]
+        for p, r in patterns:
+            sanitized = re.sub(p, r, sanitized)
+            
+        # Enforce boundary tags
+        return f"<USER_MISSION>\n{sanitized}\n</USER_MISSION>"
+
+    @classmethod
+    def enforce_boundaries(cls, messages: List[Dict]) -> List[Dict]:
+        """
+        Wraps user messages in mission-boundary tags to prevent instruction hijack.
+        """
+        shielded_messages = []
+        for msg in messages:
+            if msg.get("role") == "user":
+                shielded_messages.append({
+                    **msg,
+                    "content": cls.sanitize(msg["content"])
+                })
+            else:
+                shielded_messages.append(msg)
+        return shielded_messages
