@@ -69,8 +69,8 @@ The following diagram represents the exhaustive architectural mapping of the LEV
 ```mermaid
 graph TD
     %% Global Ingress & UI
-    User((Universal User)) -->|Neural Pulse v4.1 (Binary)| Mobile[React Mobile Dashboard]
-    Mobile -->|SSE / REST| Entry[FastAPI Monolith Entry Point]
+    User((Universal User)) -->|"Neural Pulse v4.1 (Binary)"| Mobile[React Mobile Dashboard]
+    Mobile -->|"SSE / REST"| Entry[FastAPI Monolith Entry Point]
 
     %% Security & Sanitization
     subgraph "Sovereign Shield Perimeter"
