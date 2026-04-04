@@ -1,36 +1,34 @@
 @echo off
-REM push_graduation.bat — LEVI-AI Sovereign OS v13.1.0 (Stabilized Monolith)
-setlocal
+REM push_graduation.bat — LEVI-AI Sovereign OS v13.1.0 Stable
+setlocal enabledelayedexpansion
 
-echo [🚀] Preparing for Sovereign Graduation Push (v13.1)...
+echo [🚀] Initializing Sovereign Graduation Push (v13.1)...
 
-REM 1. Stage all graduation artifacts
+REM 1. Detect Branch
+for /f "tokens=*" %%i in ('git rev-parse --abbrev-ref HEAD') do set BRANCH=%%i
+echo [📍] Current Branch: %BRANCH%
+
+REM 2. Stage Changes
+echo [🏗️] Staging Graduation Artifacts...
 git add .
-if %errorlevel% neq 0 (
-    echo [ERROR] Git add failed. Check terminal for conflicts.
-    pause
-    exit /b %errorlevel%
-)
 
-REM 2. Commit with graduation metadata
-echo [🏗️] Committing Graduated Monolith (28/28 Audit Points)...
-git commit -m "🚀 Graduation: Absolute Monolith Stable v13.1.0
+REM 3. Pulse Pull (Avoid non-fast-forward)
+echo [📡] Pulling latest swarm metadata...
+git pull origin %BRANCH% --rebase
 
-- Hardening: 28/28 Technical Audit Points addressed.
-- Stabilization: Throttler, Circuit Breaker, and DCN Gossip implemented.
-- Infrastructure: D:\ drive localization and HNSW performance alignment.
-- Compliance: SBOM generated and Genesis Seed ready.
-- Documentation: v13.1 Master Blueprint finalized."
+REM 4. Graduation Commit
+echo [🧱] Committing Absolute Monolith (28/28 Audit)...
+git commit -m "🚀 Graduation: Absolute Monolith Stable v13.1.0 (28/28 Audit Hardened)"
 
-REM 3. Create Graduation Tag
+REM 5. Tagging
 echo [🏷️] Tagging release v13.1.0-stable...
-git tag -a v13.1.0-stable -m "Graduation Tier: Absolute Monolith Stable"
+git tag -f v13.1.0-stable -m "Graduation Tier: Absolute Monolith Stable"
 
-REM 4. Final Push
-echo [🛰️] Pushing to Sovereign Hub...
-git push origin master --tags
+REM 6. Secure Push
+echo [🛰️] Pushing to Sovereign Hub (%BRANCH%)...
+git push origin %BRANCH% --tags
 if %errorlevel% neq 0 (
-    echo [ERROR] Git push failed. Verify remote connectivity.
+    echo [ERROR] Push failed. Check remote connectivity or credentials.
     pause
     exit /b %errorlevel%
 )
