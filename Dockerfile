@@ -36,6 +36,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 RUN mkdir -p /app/model_cache && chmod 777 /app/model_cache
 
 COPY backend/ backend/
+COPY app/ app/
 
 RUN chmod +x backend/entrypoint.sh backend/worker_entrypoint.sh
 

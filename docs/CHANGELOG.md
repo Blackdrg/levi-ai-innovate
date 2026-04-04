@@ -2,12 +2,42 @@
 
 The repository has graduated to the **v13.0.0 Sovereign OS: Absolute Monolith**. This version represents the total technical finalization of the cognitive core, memory fabric, and distributed intelligence synchronization.
 
-## [13.0.0] The Absolute Monolith Graduation
-- **Unified SQL Persistence**: Migrated all episodic, semantic, and identity persistence to a high-fidelity Postgres SQL fabric. Removed all legacy Firebase/Firestore dependencies.
-- **DCN Neural Synk v13**: Implemented HMAC-SHA256 signature verification for atomic, secure rule propagation across the Distributed Cognitive Network.
-- **Sovereign Safe Mode**: Optimized the handoff layer to enforce privacy-grounded deterministic execution when local models are unavailable.
-- **Adaptive Pulse v4.1**: Finalized binary telemetry streaming with zlib compression, achieving sub-50ms observability.
-- **Hard Hand Self-Repair**: Deployed autonomous system patching with risk-gated gating, ensuring absolute system resilience.
+## [13.0.0] - 2026-04-05 (Technical Graduation)
+### **The Absolute Monolith Graduation**
+- **Sovereign Graduation**: Finalized the 10-step mission to achieve total technical finality.
+- **Drive Localization**: 100% Migrated all projects, databases, and neural caches to the **D drive**.
+- **Neural Backbone**: Replaced all cloud dependencies with a **100% Local Ollama** (llama3.1:8b) fabric.
+- **Unified Cognition**: Integrated the **BrainCoreController** v13.0 and the 5-Tier Memory manager.
+- **Premium Interface**: Deployed the **React + Zustand** Mission Controller for real-time telemetry.
+- **SSE Power**: Implementation of end-to-end streaming through the Nginx/FastAPI gateway.
+
+# 🚀 Sovereign OS v13.0: Deployment Guide (Absolute Monolith)
+
+This guide provides the definitive steps for initializing the LEVI-AI Sovereign OS on a drive-localized (D:) infrastructure with 100% local inference.
+
+## 📦 Prerequisites
+- **Docker & Docker Compose** (Hardened v2.20+)
+- **NPM & Node.js** (v18+)
+- **Ollama** (v0.1.32+) with `llama3.1:8b` and `nomic-embed-text` pulldowns.
+- **Drive Partitioning**: Ensure at least 50GB of free space on the **D drive**.
+
+## 🛠️ Quick Start (The Graduation Path)
+
+1. **Clone & Localize**:
+   Ensure the repository is located at `D:\LEVI-AI`.
+
+2. **Initialize Environment**:
+   Copy `.env.example` to `.env` and verify the `OLLAMA_BASE_URL` and `DATABASE_URL`.
+
+3. **Ignition**:
+   Run the master graduation script:
+   ```bash
+   ./start.sh
+   ```
+   Or on Windows:
+   ```bash
+   start.bat
+   ```
 
 ## [9.8.1] The Absolute Sovereignty Update (Monolith Finality)
 - **Swarm Consensus (Expert Review)**: Implemented multi-agent output aggregation with a dedicated `ConsensusAgentV8` pass, leveraging the `CriticAgent` for high-fidelity resonance scoring.

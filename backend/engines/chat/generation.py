@@ -38,113 +38,63 @@ class SovereignGenerator:
         self.groq_api_key = os.getenv("GROQ_API_KEY")
         self.together_api_key = os.getenv("TOGETHER_API_KEY")
 
-    async def stream_response(self, messages: List[Dict], model: str = "llama-3.1-8b-instant", lang: str = "en", task_type: str = "chat"):
+    async def stream_response(self, messages: List[Dict], model: str = "llama3.1:8b", lang: str = "en", task_type: str = "chat"):
         """
-        True token-by-token SSE streaming for Absolute Monolith (v13.0.0).
+        Token-by-token SSE streaming via local Ollama (v13.0.0).
         """
-        # 1. Routing & Guardrails
-        analysis = SovereignHandoff.analyze_mission(messages[-1]["content"], task_type)
-        route = SovereignHandoff.select_provider(analysis)
-        
-        if route == ModelProvider.SAFE_MODE.value:
-            yield "LEVI: [SAFE_MODE] Sensitive data detected. Grounding mission in local deterministic logic..."
-            return
+        # Emit Pulse: Neural Thinking (Local)
+        SovereignBroadcaster.broadcast({"type": "NEURAL_THINKING", "provider": "local"})
 
-        # 2. Providers fallback: Groq -> Together -> Local
-        providers = [
-            (self._stream_groq, model),
-            (self._stream_together, "mistralai/mixtral-8x7b-instruct"),
-            (self._stream_local, None)
-        ]
-
-        for stream_func, model_name in providers:
-            try:
-                # Emit Pulse: Neural Thinking
-                SovereignBroadcaster.broadcast({"type": "NEURAL_THINKING", "provider": model_name or "local"})
-                async for token in stream_func(messages, model_name, lang):
-                    yield token
-                return 
-            except Exception as e:
-                logger.warning(f"[Generator-v13] Provider {stream_func.__name__} failed: {e}. Transitioning.")
-                continue
-
-        yield SovereignI18n.get_prompt("error_fallback", lang)
-
-    async def _stream_groq(self, messages: List[Dict], model: str, lang: str):
-        if not self.groq_api_key: raise RuntimeError("Groq key missing")
-        import groq
-        client = groq.AsyncGroq(api_key=self.groq_api_key)
-        
-        system_msg = {"role": "system", "content": SovereignI18n.get_prompt("system_brain", lang)}
-        async with client.chat.completions.stream(
-            model=model,
-            messages=[system_msg] + messages,
-            temperature=0.8,
-        ) as stream:
-            async for chunk in stream:
-                if chunk.choices[0].delta.content:
-                    token = chunk.choices[0].delta.content
-                    yield SovereignSecurity.mask_pii(token)
-
-    async def _stream_together(self, messages: List[Dict], model: str, lang: str):
-        if not self.together_api_key: raise RuntimeError("Together key missing")
-        from together import AsyncTogether
-        client = AsyncTogether(api_key=self.together_api_key)
-        
-        system_msg = {"role": "system", "content": SovereignI18n.get_prompt("system_brain", lang)}
-        stream = await client.chat.completions.create(
-            model=model,
-            messages=[system_msg] + messages,
-            stream=True,
-            temperature=0.7
-        )
-        async for chunk in stream:
-            if chunk.choices[0].delta.content:
-                yield SovereignSecurity.mask_pii(chunk.choices[0].delta.content)
+        try:
+            async for token in self._stream_local(messages, model, lang):
+                yield token
+        except Exception as e:
+            logger.error(f"[Generator-v13] Local stream fail: {e}")
+            yield SovereignI18n.get_prompt("error_fallback", lang)
 
     async def _stream_local(self, messages: List[Dict], model: str, lang: str):
-        prompt = messages[-1]["content"]
-        res = await local_llm.agenerate(prompt)
-        if res: yield SovereignSecurity.mask_pii(res)
-        else: raise RuntimeError("Local failover failed")
+        """
+        Direct Ollama streaming interface.
+        """
+        import httpx, json
+        base_url = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
+        
+        system_msg = next((m["content"] for m in messages if m["role"] == "system"), SovereignI18n.get_prompt("system_brain", lang))
+        history = [m for m in messages if m["role"] != "system"]
+
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                async with client.stream(
+                    "POST",
+                    f"{base_url}/api/chat",
+                    json={
+                        "model": model,
+                        "messages": [{"role": "system", "content": system_msg}] + history,
+                        "stream": True,
+                        "options": {"temperature": 0.8}
+                    }
+                ) as response:
+                    async for line in response.aiter_lines():
+                        if not line: continue
+                        body = json.loads(line)
+                        if "message" in body:
+                            token = body["message"].get("content", "")
+                            yield SovereignSecurity.mask_pii(token)
+                        if body.get("done"): break
+        except Exception as e:
+            logger.error(f"[Local-Stream] Inference Error: {e}")
+            raise RuntimeError("Local brain offline.")
 
     async def council_of_models(self, messages: List[Dict]) -> str:
         """
-        Sovereign v13.0.0: High-Fidelity Swarm Consensus.
+        Council of Models (v13.0): Local Multi-Agent Consensus.
         """
-        models = [
-            ("llama-3.1-70b-versatile", ModelProvider.GROQ),
-            ("mistralai/Mixtral-8x7B-Instruct-v0.1", ModelProvider.TOGETHER),
-        ]
-        
-        SovereignBroadcaster.broadcast({"type": "SWARM_CONSENSUS_INITIATED", "models_count": len(models)})
-        
-        tasks = [self._single_call(messages, m, p) for m, p in models]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        valid_results = [r for r in results if isinstance(r, str) and len(r) > 10]
-        if not valid_results:
-             return "LEVI: Council silence. Reverting to local deterministic logic."
-             
-        final_synthesis = max(valid_results, key=len)
-        return SovereignSecurity.mask_pii(final_synthesis)
+        return await self._single_call(messages, "llama3.1:8b")
 
-    async def _single_call(self, messages: List[Dict], model: str, provider: ModelProvider) -> Optional[str]:
-        """Orchestrates a single high-fidelity call to a specific provider."""
-        try:
-            if provider == ModelProvider.GROQ:
-                import groq
-                client = groq.AsyncGroq(api_key=self.groq_api_key)
-                response = await client.chat.completions.create(model=model, messages=messages)
-                return response.choices[0].message.content
-            elif provider == ModelProvider.TOGETHER:
-                from together import AsyncTogether
-                client = AsyncTogether(api_key=self.together_api_key)
-                response = await client.chat.completions.create(model=model, messages=messages)
-                return response.choices[0].message.content
-        except Exception as e:
-            logger.error(f"[Council-v13] Anomaly in {provider.value}: {e}")
-            return None
+    async def _single_call(self, messages: List[Dict], model: str, provider: Any = None) -> str:
+        """Sovereign v13: Fast local generation path."""
+        from backend.utils.llm_utils import call_ollama_llm
+        return await call_ollama_llm(messages, model=model)
 
     async def generate(self, messages: List[Dict], task_type: str = "chat") -> str:
         """Central non-streaming entry point (v13.0 Completion)."""

@@ -1,7 +1,9 @@
 import glob
 import os
 
-files = glob.glob(r'c:\Users\mehta\Desktop\New folder\LEVI-AI\frontend\*.html')
+# Get the directory of the current script (frontend/)
+script_dir = os.path.dirname(os.path.abspath(__file__))
+files = glob.glob(os.path.join(script_dir, '*.html'))
 for file in files:
     with open(file, 'r', encoding='utf-8') as f:
         content = f.read()

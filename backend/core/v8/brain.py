@@ -25,6 +25,7 @@ from backend.agents.consensus_agent import ConsensusAgentV11
 from backend.memory.manager import MemoryManager
 from ..orchestrator_types import ToolResult, IntentResult
 from backend.api.v8.telemetry import broadcast_mission_event
+from backend.utils.usage import count_tokens, estimate_cost
 
 logger = logging.getLogger(__name__)
 
@@ -490,6 +491,13 @@ class LeviBrainCoreController:
             
             # 2. Self-Improvement Loop (v8.14)
             # This handles fragility, pattern promotion, and optimization
+            agent_tokens = sum(getattr(r, 'total_tokens', 0) for r in results)
+            # If agents didn't provide tokens (e.g. local models), estimate locally
+            if agent_tokens == 0:
+                agent_tokens = count_tokens(response)
+            
+            total_mission_tokens = count_tokens(user_input) + agent_tokens
+            
             outcome = {
                 "user_id": user_id,
                 "query": user_input,
@@ -500,7 +508,8 @@ class LeviBrainCoreController:
                 "score": 1.0 if level < 4 else 0.8, # Heuristic score
                 "latency_ms": latency,
                 "results": [r.dict() if hasattr(r, "dict") else r for r in results],
-                "token_count": len(user_input.split()) + len(response.split()), # Mock token count
+                "token_count": total_mission_tokens, 
+                "cost_usd": estimate_cost(total_mission_tokens),
                 "timestamp": datetime.now(timezone.utc).isoformat()
             }
             asyncio.create_task(SelfImprovementLoop.process_mission(user_id, outcome))

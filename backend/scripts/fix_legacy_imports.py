@@ -53,4 +53,6 @@ def fix_imports(root_dir):
     print(f"\n✅ Successfully replaced legacy imports in {count} files.")
 
 if __name__ == "__main__":
-    fix_imports(r"c:\Users\mehta\Desktop\New folder\LEVI-AI\backend")
+    # Get the backend directory (one level up from this script)
+    backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    fix_imports(backend_dir)

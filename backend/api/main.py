@@ -20,6 +20,16 @@ from backend.api.v8.memory import router as memory_v13
 from backend.api.v8.search import router as search_v13
 from backend.api.v1.payments import router as payments_v13
 from backend.api.v8.auth import router as auth_v13
+from backend.api.billing import router as billing_v13
+from backend.api.analytics import router as analytics_v13
+from backend.api.agents import router as agents_v13
+from backend.api.marketplace import router as marketplace_v13
+from backend.api.compliance import router as compliance_v13
+from backend.api.scheduling import router as scheduling_v13
+
+# New v13 Sovereign Cognition (SSE Stream)
+from app.routes.chat import router as chat_v13_stream
+from app.routes.auth import router as auth_v13_monolith
 
 # Sovereign Core
 from backend.db.postgres_db import verify_resonance
@@ -66,6 +76,14 @@ app.include_router(memory_v13, prefix="/api/v13/memory", tags=["Memory v13"])
 app.include_router(search_v13, prefix="/api/v13/search", tags=["Search v13"])
 app.include_router(payments_v13, prefix="/api/v13/payments", tags=["Payments v13"])
 app.include_router(auth_v13, prefix="/api/v13/auth", tags=["Auth v13"])
+app.include_router(billing_v13, prefix="/api/v13/billing", tags=["Sovereign Billing"])
+app.include_router(analytics_v13, prefix="/api/v13/analytics", tags=["Sovereign Analytics"])
+app.include_router(agents_v13, prefix="/api/v13/agents", tags=["Custom Agents"])
+app.include_router(marketplace_v13, prefix="/api/v13/marketplace", tags=["Sovereign Marketplace"])
+app.include_router(compliance_v13, prefix="/api/v13/compliance", tags=["Sovereign Compliance"])
+app.include_router(scheduling_v13, prefix="/api/v13/scheduling", tags=["Scheduled Missions"])
+app.include_router(chat_v13_stream, tags=["Sovereign Cognition v13"])
+app.include_router(auth_v13_monolith)
 
 # 4. Monolith Startup Integrity Audit
 @app.on_event("startup")

@@ -34,7 +34,9 @@ def fix_imports(root_dir):
     print(f"Cleanup complete. Fixed {fixed_count} files.")
 
 if __name__ == "__main__":
+    # Get the project root directory (one level up from this script)
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     # Fix backend
-    fix_imports("c:/Users/mehta/Desktop/New folder/LEVI-AI/backend")
+    fix_imports(os.path.join(project_root, "backend"))
     # Fix frontend
-    fix_imports("c:/Users/mehta/Desktop/New folder/LEVI-AI/frontend/src")
+    fix_imports(os.path.join(project_root, "frontend", "src"))

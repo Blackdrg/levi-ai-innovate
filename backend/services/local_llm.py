@@ -21,7 +21,7 @@ class LocalLLM:
 
     def is_available(self) -> bool:
         """v13.0 Model Integrity Probe."""
-        return self.model is not None
+        return self.model is not None or os.getenv("OLLAMA_BASE_URL") is not None
 
     def _initialize_model(self):
         """Lazy load the GGUF model."""
@@ -44,6 +44,16 @@ class LocalLLM:
 
     async def agenerate(self, prompt: str, system_prompt: str = "You are LEVI, a local AI.", max_tokens: int = 512) -> Optional[str]:
         """Async local generation for v13.0.0 brain stream."""
+        # 1. Prioritize Ollama if configured
+        if os.getenv("OLLAMA_BASE_URL"):
+            from backend.utils.llm_utils import call_ollama_llm
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt}
+            ]
+            return await call_ollama_llm(messages, model=os.getenv("OLLAMA_MODEL", "llama3"))
+
+        # 2. Fallback to llama-cpp
         if not self.model:
             return None
             

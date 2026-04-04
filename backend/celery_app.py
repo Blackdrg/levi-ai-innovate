@@ -117,6 +117,10 @@ celery_app.conf.beat_schedule = {
     "poll-training-status-4h": {
         "task": "backend.core.learning_tasks.poll_training_status",
         "schedule": 14400.0, # Every 4 hours
+    },
+    "trigger-scheduled-missions-60s": {
+        "task": "backend.services.scheduling.trigger_scheduled_missions",
+        "schedule": 60.0,
     }
 }
 
