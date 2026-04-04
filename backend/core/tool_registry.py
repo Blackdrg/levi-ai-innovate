@@ -29,6 +29,8 @@ from backend.agents.memory_agent import MemoryAgent
 
 logger = logging.getLogger(__name__)
 
+from backend.engines.deterministic_engine import DeterministicEngine
+
 # Registry of tool instances (V8 Synchronized)
 _TOOL_INSTANCES: Dict[str, Any] = {
     "chat_agent":   ChatAgentV8(),
@@ -47,6 +49,7 @@ _TOOL_INSTANCES: Dict[str, Any] = {
     "memory_agent": MemoryAgent(),
     "consensus_agent": ConsensusAgentV8(),
     "relation_agent": RelationAgentV8(),
+    "deterministic_engine": DeterministicEngine(),
 }
 
 def get_tool(name: str) -> Optional[Any]:

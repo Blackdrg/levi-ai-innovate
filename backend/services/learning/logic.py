@@ -16,7 +16,8 @@ from typing import Optional, List, Dict, Any, Tuple
 from backend.db.firebase import db as firestore_db
 from backend.db.redis import HAS_REDIS, r as redis_client, get_cached_json, cache_json
 from backend.utils.encryption import SovereignVault
-from backend.core.planner import call_lightweight_llm, detect_sensitivity
+from backend.utils.llm_utils import call_lightweight_llm
+from backend.core.planner import detect_sensitivity
 from backend.core.local_engine import handle_local_sync, is_locally_handleable
 
 logger = logging.getLogger(__name__)

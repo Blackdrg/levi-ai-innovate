@@ -1,7 +1,7 @@
 {
   "name": "LEVI-AI",
-  "version": "1.0.0",
-  "description": "Root management for LEVI-AI",
+  "version": "9.8.1",
+  "description": "Root management for LEVI-AI Sovereign OS",
   "scripts": {
     "server": "python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000",
     "client": "python -m http.server 8080 --bind 127.0.0.1 --directory frontend",

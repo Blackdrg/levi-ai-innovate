@@ -7,6 +7,7 @@ from typing import Dict, Any, List, Optional
 from backend.api.v8.telemetry import broadcast_mission_event
 from backend.memory.cache import MemoryCache
 from backend.memory.vector_store import SovereignVectorStore
+from backend.core.v8.critic import ReflectionEngine
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,37 @@ class FragilityTracker:
             
         MemoryCache.set_cached_context(cache_key, data, ttl=3600)
 
+class PatternRegistry:
+    """
+    LeviBrain v8.8: Exact-Match Pattern Registry.
+    Tracks repeated LLM reasoning patterns to promote them to deterministic rules.
+    """
+    
+    @staticmethod
+    def track_pattern(user_id: str, query: str, response: str) -> bool:
+        """
+        Increments hit count for a query/response pair.
+        Returns True if promoted to a deterministic rule (hits >= 3).
+        """
+        cache_key = f"pattern_hits:{hash(query)}"
+        data = MemoryCache.get_cached_context(cache_key) or {"query": query, "response": response, "hits": 0}
+        
+        if data["response"] == response:
+            data["hits"] += 1
+            MemoryCache.set_cached_context(cache_key, data, ttl=86400 * 7) # Keep for 7 days
+            
+            if data["hits"] >= 3:
+                logger.info(f"[PatternRegistry] Promoting pattern to deterministic rule: {query[:50]}...")
+                return True
+        else:
+            # Response diverged, reset or track alternative? 
+            # For now, strict exact match means same response must be returned.
+            data["response"] = response
+            data["hits"] = 1
+            MemoryCache.set_cached_context(cache_key, data, ttl=86400 * 7)
+            
+        return False
+
 class CrystallizationEngine:
     """
     Sovereign v8.7: Knowledge Crystallization.
@@ -91,31 +123,67 @@ class CrystallizationEngine:
             category="prototype", 
             importance=0.9
         )
+        
+        # v8.14: Distill into Knowledge Graph (Neo4j Bridge)
+        try:
+             from backend.utils.vector_db import add_to_knowledge_graph
+             await add_to_knowledge_graph(user_id, prototype["intent"], "HAS_PROTOTYPE", prototype["id"], metadata=prototype)
+        except Exception as e:
+             logger.warning(f"[Crystallization] Knowledge Graph distillation failed: {e}")
+
         broadcast_mission_event(user_id, "intelligence_crystallized", prototype)
+
+from .rules_engine import RulesEngine
 
 class LearningLoopV8:
     """
-    LeviBrain v8.7: Evolutionary Intelligence Loop.
+    LeviBrain v8.12: Evolutionary Intelligence Loop.
     Autonomous strategic adjustment based on environmental outcomes.
     """
+    
+    _rules_engine = RulesEngine()
 
     @classmethod
     async def process_mission_outcome(cls, user_id: str, outcome: Dict[str, Any]):
         """
-        The central heart of the evolutionary loop.
+        The central heart of the evolutionary loop (v8.12).
         Updates fragility and triggers crystallization.
         """
         intent = outcome.get("intent", "general")
-        success = outcome.get("total_score", 0.0) >= 0.8
+        success = outcome.get("total_score", 0.0) >= 0.8 if "total_score" in outcome else True
+        level = outcome.get("level", 4)
         
         # 1. Update Domain Fragility (Self-Optimization Weighting)
         FragilityTracker.record_outcome(user_id, intent, success)
         
-        # 2. Trigger Crystallization (Skill Acquisition)
+        # 2. EXACT-MATCH LEARNING RULE (v8.14 Hardened)
+        if level >= 2 and success:
+            query = outcome.get("query")
+            response = outcome.get("response")
+            
+            # Track recurring patterns for promotion to Rules Engine
+            if PatternRegistry.track_pattern(user_id, query, response):
+                
+                # v8.14: Validation Pass via ReflectionEngine before promotion
+                reflection = ReflectionEngine()
+                # Mocking a goal for the reflection pass
+                class MockGoal: objective = "Validate deterministic rule." ; success_criteria = ["No hallucination", "Logical correctness"] ; self_correction_weight = 0.9
+                
+                eval_res = await reflection.evaluate(response, MockGoal(), {"input": query})
+                
+                if eval_res["is_satisfactory"]:
+                    # Promote to persistent Rules Engine
+                    cls._rules_engine.create_rule(query, response)
+                    broadcast_mission_event(user_id, "rule_promoted", {"query": query, "fidelity": eval_res["score"]})
+                else:
+                    logger.warning(f"[V8 Evolution] Rule promotion rejected by Critic: {query[:50]}")
+                    broadcast_mission_event(user_id, "rule_rejected", {"query": query, "reason": eval_res["issues"]})
+
+        # 3. Trigger Crystallization (Skill Acquisition - Prototype Layer)
         if success and outcome.get("total_score", 0.0) >= 0.95:
             await CrystallizationEngine.crystallize_prototype(user_id, outcome)
             
-        # 3. Archive Failures for Cluster Analysis
+        # 4. Archive Failures for Cluster Analysis
         if not success:
             logger.warning(f"[V8 Evolution] Fragile pattern detected in domain: {intent}")
             broadcast_mission_event(user_id, "evolution_fragility", {

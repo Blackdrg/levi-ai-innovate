@@ -1,6 +1,6 @@
-# 🩺 LEVI-AI Sovereign Diagnostics Master (v8.11.1)
+# 🩺 LEVI-AI Sovereign Diagnostics Master (v9.8.1)
 
-Standard health-monitoring and cognitive-fidelity metrics for the v8.11.1 "Sovereign Monolith."
+Standard health-monitoring and cognitive-fidelity metrics for the v9.8.1 "Sovereign Monolith."
 
 ---
 
@@ -13,7 +13,7 @@ LEVI-AI graduates to a 3-tier testing hierarchy:
 ---
 
 ## 🧪 2. Multi-Store Health Metrics
-The v8.11.1 system requires 6 healthy data connections.
+The v9.8.1 system requires 6 healthy data connections.
 
 - **Postgres (Identity):** `SELECT 1 FROM user_profiles` (Latency < 20ms).
 - **Redis (Context):** `PING` (Latency < 5ms).

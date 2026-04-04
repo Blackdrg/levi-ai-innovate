@@ -3,19 +3,11 @@ import logging
 import time
 from typing import Any, Dict, List, Optional, Generic, TypeVar
 from pydantic import BaseModel, Field
+from backend.core.orchestrator_types import AgentResult, AgentBase
 
 T = TypeVar("T", bound=BaseModel)
 
-class AgentResult(BaseModel):
-    success: bool = True
-    message: str = ""
-    data: Dict[str, Any] = Field(default_factory=dict)
-    agent: str = ""
-    error: Optional[str] = None
-    latency_ms: float = 0.0
-    citations: List[str] = Field(default_factory=list)
-
-class BaseV8Agent(abc.ABC, Generic[T]):
+class BaseV8Agent(AgentBase, abc.ABC, Generic[T]):
     """
     LeviBrain v8: Base Agent Contract
     Agents are now 'Systems' with internal scoring, parallel tasks, and self-correction.
@@ -25,14 +17,13 @@ class BaseV8Agent(abc.ABC, Generic[T]):
         self.name = name
         self.logger = logging.getLogger(f"v8.agent.{name.lower()}")
 
-    async def run(self, input_data: T, context: Dict[str, Any] = None) -> AgentResult:
+    async def run(self, input_data: T, context: Dict[str, Any] = None) -> AgentResult[Any]:
         """Standardized entry point for all V8 system agents."""
         start_time = time.perf_counter()
         self.logger.info(f"V8 Agent {self.name} starting mission.")
         
         try:
-            # 1. Perception/Input handling is handled by the Brain
-            # 2. Execute internal system logic
+            # 1. Execute internal system logic
             result = await self._execute_system(input_data, context or {})
             
             latency = (time.perf_counter() - start_time) * 1000
@@ -52,6 +43,6 @@ class BaseV8Agent(abc.ABC, Generic[T]):
             )
 
     @abc.abstractmethod
-    async def _execute_system(self, input_data: T, context: Dict[str, Any]) -> AgentResult:
+    async def _execute_system(self, input_data: T, context: Dict[str, Any]) -> AgentResult[Any]:
         """Internal system implementation to be overridden."""
         pass

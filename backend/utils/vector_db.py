@@ -5,7 +5,6 @@ import logging
 import numpy as np
 import faiss  # type: ignore
 from typing import List, Dict, Any, Optional
-from backend.db.vector_store import embed_text
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +87,7 @@ class VectorDB:
         if not texts: return
         
         embeddings = []
+        from backend.db.vector_store import embed_text
         for text in texts:
             emb = await asyncio.to_thread(embed_text, text)
             embeddings.append(emb)
@@ -120,6 +120,7 @@ class VectorDB:
             logger.error(f"Persistence error for {self.collection_name}: {e}")
 
     async def search(self, query: str, limit: int = 5, min_score: float = 0.4) -> List[Dict[str, Any]]:
+        from backend.db.vector_store import embed_text
         query_emb = await asyncio.to_thread(embed_text, query)
         query_np = np.array([query_emb]).astype('float32')
         

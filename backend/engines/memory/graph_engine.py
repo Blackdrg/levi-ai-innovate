@@ -45,14 +45,18 @@ class GraphEngine:
 
     async def get_connected_resonance(self, user_id: str, concept: str, depth: int = 2) -> List[Dict[str, Any]]:
         """
-        Traverses the Knowledge Graph up to 'depth' degrees to find related entities.
+        Hardened v8.12: Traverses the Knowledge Graph up to 'depth' degrees.
+        Returns a list of connected entities and their relationship types.
         """
         async with self.driver.session() as session:
+            # Traversal query: Find all nodes connected to 'concept' within 'depth' hops
             query = (
                 "MATCH (s:Entity {name: $concept, user_id: $user_id}) "
                 "MATCH path = (s)-[*1..$depth]-(related:Entity) "
                 "WHERE related.user_id = $user_id "
-                "RETURN DISTINCT related.name as name, relationships(path) as relationships"
+                "WITH related, relationships(path) as rels, length(path) as hops "
+                "RETURN DISTINCT related.name as name, [r in rels | type(r)] as types, hops "
+                "ORDER BY hops ASC LIMIT 20"
             )
             try:
                 result = await session.run(query, user_id=user_id, concept=concept, depth=depth)
@@ -61,6 +65,28 @@ class GraphEngine:
             except Exception as e:
                 logger.error(f"[GraphEngine] Failed to retrieve connected resonance: {e}")
                 return []
+
+    async def get_entity_context(self, user_id: str, entity_name: str) -> Dict[str, Any]:
+        """
+        Retrieves the immediate neighborhood of an entity for rich status context.
+        """
+        async with self.driver.session() as session:
+            query = (
+                "MATCH (e:Entity {name: $entity_name, user_id: $user_id}) "
+                "MATCH (e)-[r:RELATION]->(neighbor:Entity) "
+                "RETURN type(r) as relation, neighbor.name as neighbor, r.metadata as metadata"
+            )
+            try:
+                result = await session.run(query, user_id=user_id, entity_name=entity_name)
+                records = await result.data()
+                return {
+                    "entity": entity_name,
+                    "relationships": records,
+                    "count": len(records)
+                }
+            except Exception as e:
+                logger.error(f"[GraphEngine] Failed to get entity context: {e}")
+                return {"entity": entity_name, "relationships": [], "count": 0}
 
     async def get_user_schema(self, user_id: str) -> Dict[str, Any]:
         """Returns a summary of the user's current knowledge graph structure."""

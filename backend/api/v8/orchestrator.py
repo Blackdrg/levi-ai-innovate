@@ -1,7 +1,7 @@
 """
-Sovereign Orchestration Gateway v8.
+Sovereign Orchestration Gateway v9.8.1.
 Primary entry point for the LEVI-AI OS Brain.
-Bridges to the V8 GraphExecutor and MetaPlanner.
+Bridges to the V9 GraphExecutor and MetaPlanner.
 """
 
 import logging
@@ -31,11 +31,11 @@ async def orchestrate_mission_endpoint(
     current_user: Any = Depends(get_current_user)
 ):
     """
-    Standard Sovereign Mission (V8 Monolith).
+    Standard Sovereign Mission (V9.8.1 Monolith).
     Unified end-to-end cognitive orchestration.
     """
     user_id = current_user.uid if hasattr(current_user, "uid") else "guest"
-    logger.info(f"[Orchester-V8] Mission received for {user_id}: {request.input[:50]}")
+    logger.info(f"[Orchester-V9] Mission received for {user_id}: {request.input[:50]}")
     
     if SovereignSecurity.detect_injection(request.input):
         raise HTTPException(status_code=400, detail="Neural protocol violation.")
@@ -59,7 +59,7 @@ async def orchestrate_mission_endpoint(
             **mission_result
         }
     except Exception as e:
-        logger.error(f"[Orchester-V8] Orchestration failure: {e}")
+        logger.error(f"[Orchester-V9] Orchestration failure: {e}")
         return {"status": "error", "message": str(e)}
 
 @router.post("/mission/stream")
@@ -68,7 +68,7 @@ async def orchestrate_mission_stream_endpoint(
     current_user: Any = Depends(get_current_user)
 ):
     """
-    High-Fidelity SSE Streaming Mission (V8 Monolith).
+    High-Fidelity SSE Streaming Mission (V9.8.1 Monolith).
     Streams: Perception -> Goal -> Graph -> Tasks -> Synthesis.
     """
     user_id = current_user.uid if hasattr(current_user, "uid") else "guest"

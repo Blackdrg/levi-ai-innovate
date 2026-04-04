@@ -1,7 +1,7 @@
-# 🚢 LEVI-AI Sovereign Monolith Deployment Architecture
+# 🚢 LEVI-AI Sovereign Monolith Deployment Architecture (v9.8.1)
 
 > [!IMPORTANT]
-> **LeviBrain v8.11.1 "Sovereign Monolith" Specification**
+> **LeviBrain v9.8.1 "Sovereign Monolith" Specification**
 > LEVI-AI has transitioned to a High-Fidelity **Unified Cognitive Monolith**. Deployment centers on a high-performance **API Container** (Orchestration + Brain) and a **Generative Worker** (Multi-Pass Reasoning), backed by the **Sovereign Service Fabric** (Postgres, Redis, Kafka, FAISS, Firestore, Neo4j).
 
 ---
@@ -32,7 +32,7 @@ graph TD
 
 ## ⚙️ 2. Hardware Matrix Recommendations (v8.11.1)
 
-LEVI-AI v8.11.1 requires coherent RAM for the sentence-transformer embeddings and the 8-step pipeline state.
+LEVI-AI v9.8.1 requires coherent RAM for the sentence-transformer embeddings and the 8-step pipeline state.
 
 | Node Type | Minimum Spec | Recommended Spec | Primary Role |
 |-----------|--------------|------------------|--------------|
@@ -62,7 +62,7 @@ The recommended production deployment is via the unified `docker-compose.yml`:
 Ensure your `.env` contains the v8.11.1 Sovereign URI set:
 
 ```env
-# ── Sovereign Monolith v8.11.1 ──
+# ── Sovereign Monolith v9.8.1 ──
 DATABASE_URL=postgresql+asyncpg://user:pass@postgres:5432/levidb
 REDIS_URL=redis://redis:6379/0
 KAFKA_BOOTSTRAP_SERVERS=kafka:9092
@@ -75,7 +75,7 @@ OPENAI_API_KEY=sk-...
 ```
 
 > [!CAUTION]
-> **v8.11.1 Survival Scores:** Memories with a Survival Score < 0.5 are purged after 90 days. Ensure periodic backups of the **FAISS Index** and **Postgres Audit Logs** to prevent identity drift.
+> **v9.8.1 Survival Scores:** Memories with a Survival Score < 0.5 are purged after 90 days. Ensure periodic backups of the **FAISS Index** and **Postgres Audit Logs** to prevent identity drift.
 
 ---
 

@@ -1,14 +1,14 @@
-# 🚀 LEVI-AI Sovereign Launch Manifest (v8.11.1)
+# 🚀 LEVI-AI Sovereign Launch Manifest (v9.8.1)
 
-The complete service set for the graduation to the v8.11.1 "Sovereign Monolith."
+The complete service set for the graduation to the v9.8.1 "Sovereign Monolith."
 
 ---
 
 ## 🏗️ 1. Service Fabric
 | Service | Image | Role | Status |
 | :--- | :--- | :--- | :--- |
-| **Monolith API** | `sovereign-core:v8` | **The Brain** (Brain, Orchestrator, SSE) | Active |
-| **Generative Worker** | `sovereign-worker:v8` | **The Swarm** (Agent Execution, Distillation) | Active |
+| **Monolith API** | `sovereign-core:v9.8` | **The Brain** (Brain, Orchestrator, SSE) | Active |
+| **Generative Worker** | `sovereign-worker:v9.8` | **The Swarm** (Agent Execution, Distillation) | Active |
 | **Identity DB** | `postgres:15-alpine` | **Identity (Tier 4)** (User traits, Profiles) | Active |
 | **Episodic DB** | `firestore-local` | **Episodic (Tier 2)** (Conversations, Jobs) | Active |
 | **Context Cache** | `redis:7-alpine` | **Working (Tier 1)** (Pulse, Blackboard) | Active |
@@ -21,7 +21,7 @@ The complete service set for the graduation to the v8.11.1 "Sovereign Monolith."
 ## 🛠️ 2. Core Cognition Components
 - **Perception Engine:** Llama-3 70B (Groq).
 - **Goal Engine:** GPT-4o / Sonnet-3.5.
-- **DAG Planner:** Sovereign v8.11 Recursive Logic.
+- **DAG Planner:** Sovereign v9.8.1 Recursive Logic.
 - **Graph Executor:** Asynchronous Wave Engine.
 - **Reflection Engine:** Critic-driven multi-model audit.
 - **SovereignVault:** AES-256 Encryption utilities.

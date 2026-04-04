@@ -10,6 +10,7 @@ import re
 from typing import List, Dict, Any, Optional
 from .orchestrator_types import IntentResult
 from .task_graph import TaskGraph, TaskNode
+from backend.utils.llm_utils import call_lightweight_llm
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,34 @@ INTENT_RULES: List[Dict[str, Any]] = [
         "patterns": [
             r"\b(search|find|google|look up|research|who is|what is the latest|where is)\b",
             r"\b(news on|information about|check the status of|real-time data|current events)\b",
+        ],
+    },
+    {
+        "intent": "math",
+        "complexity_level": 1,
+        "cost_weight": "low",
+        "patterns": [
+            r"^\s*[\d\.\+\-\*\/\(\)\^ \t]+\s*[=|\?]?\s*$",
+            r"\b(calculate|solve|what is|compute)\b.*\b([\d\.\+\-\*\/\^]+)\b",
+            r"(sin|cos|tan|log|sqrt)\(.*\)"
+        ],
+    },
+    {
+        "intent": "document",
+        "complexity_level": 2,
+        "cost_weight": "medium",
+        "patterns": [
+            r"\b(summarize|read|analyze|extract)\b.*\b(pdf|document|file|paper|text)\b",
+            r"\b(rag|vector|knowledge base)\b",
+        ],
+    },
+    {
+        "intent": "knowledge",
+        "complexity_level": 2,
+        "cost_weight": "medium",
+        "patterns": [
+            r"\b(relation|graph|neo4j|connection|link)\b",
+            r"\b(how is .* related to .*)\b",
         ],
     }
 ]

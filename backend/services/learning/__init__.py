@@ -22,7 +22,6 @@ from backend.services.learning.logic import (
     UserPreferenceModel,
     AdaptivePromptManager,
     get_learning_stats,
-    infer_implicit_feedback,
     update_memory_graph,
     export_training_data,
 )
@@ -73,7 +72,7 @@ async def submit_feedback(
         logger.warning(f"Feedback hash mismatch for user {user_id}. Proceeding anyway.")
 
     try:
-        sample_id = collect_training_sample(
+        sample_id = await collect_training_sample(
             user_message=req.user_message,
             bot_response=req.bot_response,
             mood=req.mood or "philosophical",
@@ -117,15 +116,16 @@ async def get_my_learning_profile(
 
     try:
         model = UserPreferenceModel(user_id)
-        profile = model.get_profile()
+        profile = await model.get_profile()
         prompt_manager = AdaptivePromptManager()
-        best_variant = prompt_manager.get_best_variant(
+        best_variant, _, _ = await prompt_manager.get_best_variant(
             profile.get("preferred_moods", ["philosophical"])[0]
         )
+        system_prompt = await model.build_system_prompt(best_variant, "philosophical")
         return {
             "user_id": user_id,
             "profile": profile,
-            "system_prompt_preview": model.build_system_prompt(best_variant, "philosophical")[:300] + "...",
+            "system_prompt_preview": system_prompt[:300] + "...",
         }
     except Exception as e:
         logger.error(f"Profile retrieval failed for {user_id}: {e}")

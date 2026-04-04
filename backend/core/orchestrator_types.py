@@ -7,7 +7,7 @@ import uuid
 from enum import Enum
 from dataclasses import dataclass, field
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional, List, Dict, Any, Union
+from typing import Optional, List, Dict, Any, Union, Generic, TypeVar
 
 
 # ---------------------------------------------------------------------------
@@ -120,6 +120,40 @@ class OrchestratorResponse(BaseModel):
     job_ids: List[str] = Field(default_factory=list)
     request_id: str = ""
     latency_total: int = 0
+
+# ---------------------------------------------------------------------------
+# V8 Agent Contracts (Brain-First Cognitive Evolution)
+# ---------------------------------------------------------------------------
+
+DataT = TypeVar("DataT", bound=Any)
+
+class AgentResult(BaseModel, Generic[DataT]):
+    """
+    Standardized result for all Sovereign v8 Agents.
+    Enforces Brain-level validation for mission outputs.
+    """
+    success: bool = True
+    message: str = ""
+    data: Optional[DataT] = None
+    agent: str = "unknown"
+    error: Optional[str] = None
+    latency_ms: float = 0.0
+    citations: List[str] = Field(default_factory=list)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    # Backward compatibility alias
+    @property
+    def id(self) -> str:
+        return self.agent
+
+class AgentBase:
+    """
+    Base Contract for v8 Autonomous Systems.
+    """
+    def __init__(self, name: str, description: str = ""):
+        self.name = name
+        self.description = description
+        self.logger = logging.getLogger(f"v8.agent.{name.lower()}")
 
 # ---------------------------------------------------------------------------
 # API Request / Response Schemas (Moved from backend/models.py)

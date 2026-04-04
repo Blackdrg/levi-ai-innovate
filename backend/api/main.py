@@ -1,7 +1,7 @@
 """
-LEVI-AI Sovereign OS v8.
+LEVI-AI Sovereign OS v9.8.1.
 Central API Heart & Entry Point.
-Standardized for v8 Cognitive Monolith, 4-Tier Memory, and Real-Time Mission Auditing.
+Standardized for v9 Cognitive Monolith, 4-Tier Memory, and Real-Time Mission Auditing.
 """
 
 import os
@@ -18,6 +18,7 @@ from backend.auth.logic import get_current_user # Bridged for v8
 from backend.db.redis import get_redis_client as sovereign_cache
 from backend.db.firebase import db as sovereign_db
 from backend.utils.broadcast import SovereignBroadcaster
+from backend.config.system import CORS_ORIGINS, ENVIRONMENT
 
 # --- Routers ---
 # --- Routers (Sovereign v8 Consolidation) ---
@@ -47,7 +48,7 @@ async def lifespan(app: FastAPI):
     Sovereign OS v8 Lifespan Management.
     Ensures persistent neural links and clean shutdown.
     """
-    logger.info("Initializing Sovereign Heart (v8 Core)...")
+    logger.info("Initializing Sovereign Heart (v9.8.1 Core)...")
     
     # 1. Connectivity Check (Ledger & Cache)
     try:
@@ -58,18 +59,18 @@ async def lifespan(app: FastAPI):
         
     yield
     
-    logger.info("Stopping Sovereign Heart (v8)...")
+    logger.info("Stopping Sovereign Heart (v9.8.1)...")
 
 # --- Middleware ---
 app = FastAPI(
     title="LEVI-AI Sovereign OS",
-    version="8.11.0", # Consolidated V8 Monolith
+    version="9.8.1", # Consolidated V9 Monolith
     lifespan=lifespan
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -86,6 +87,16 @@ async def context_middleware(request: Request, call_next):
     response.headers["X-Sovereign-ID"] = request_id
     response.headers["X-V8-Status"] = "evolutionary"
     return response
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Sovereign Shield: Suppresses stack traces in production."""
+    logger.error(f"[SovereignShield] Unhandled exception: {exc}")
+    detail = "Internal Sovereign error." if ENVIRONMENT == "production" else str(exc)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": detail, "request_id": request.headers.get("X-Sovereign-ID")}
+    )
 
 # --- V8 Sovereign API Routing (Hard Cutover) ---
 # All features consolidated under /api/v8/
@@ -111,7 +122,7 @@ async def root():
     """Heartbeat Pulse of the Sovereign OS."""
     return {
         "status": "online",
-        "heart": "LEVI-AI Sovereign v8",
+        "heart": "LEVI-AI Sovereign v9.8.1",
         "vision": "Global Readiness Complete",
         "timestamp": datetime.now(timezone.utc).isoformat()
     }

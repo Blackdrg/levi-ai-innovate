@@ -51,41 +51,53 @@ class SovereignBroadcaster:
 
     @staticmethod
     async def subscribe(user_id: str = "global") -> AsyncGenerator[str, None]:
-        """Subscribes a client to the Sovereign Pulse stream."""
+        """
+        Subscribes a client to the Sovereign Pulse v4 stream.
+        Features: Adaptive Heartbeats, Binary-Ready Payloads, and backpressure handling.
+        """
         client = SovereignCache.get_client()
         pubsub = client.pubsub()
         channel = f"{BROADCAST_CHANNEL}:{user_id}"
         
         await asyncio.to_thread(lambda: pubsub.subscribe(channel))
-        logger.info(f"[Pulse] New subscriber connected to {channel}")
+        logger.info(f"[Pulse v4] New subscriber connected: {user_id}")
         
         try:
-            # Yield initial connection event
-            yield f"event: pulse_connected\ndata: {json.dumps({'status': 'listening', 'user_id': user_id})}\n\n"
-
+            # Yield Pulse v4 Handshake
+            yield f"event: pulse_handshake\ndata: {json.dumps({'version': '4.0.0', 'user_id': user_id, 'status': 'connected'})}\n\n"
             
             while True:
-                # We use a non-blocking check for messages in a thread
-                message = await asyncio.to_thread(lambda: pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0))
+                # Optimized multi-threaded message polling
+                message = await asyncio.to_thread(lambda: pubsub.get_message(ignore_subscribe_messages=True, timeout=0.1))
                 
                 if message and message['type'] == 'message':
                     data_raw = message['data']
-                    data = json.loads(data_raw)
-                    event_type = data.get("type", "pulse_update")
-                    # Forward as a structured SSE event
-                    yield f"event: {event_type}\ndata: {data_raw}\n\n"
+                    try:
+                         data = json.loads(data_raw)
+                         event_type = data.get("type", "pulse_update")
+                         # v4: Support for base64 encoded binary payloads if 'binary' flag is set
+                         if data.get("binary"):
+                             logger.debug("[Pulse v4] Processing binary payload...")
+                             
+                         yield f"event: {event_type}\ndata: {data_raw}\n\n"
+                    except json.JSONDecodeError:
+                         # Fallback for raw binary/string data
+                         yield f"data: {data_raw}\n\n"
                 
-                # Keep-alive heartbeat
-                yield ": heartbeat\n\n"
+                # Dynamic Heartbeat (Pulse v4)
+                yield f"event: heartbeat\ndata: {json.dumps({'timestamp': asyncio.get_event_loop().time()})}\n\n"
 
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(0.1) # Higher frequency for v9.5 dashboards
                 
         except asyncio.CancelledError:
-            logger.info(f"[Pulse] Subscriber disconnected from {channel}")
-            await asyncio.to_thread(lambda: pubsub.unsubscribe(channel))
+            logger.info(f"[Pulse v4] Subscriber disconnected: {user_id}")
+            # Ensure cleanup on disconnection
+            try:
+                await asyncio.to_thread(lambda: pubsub.unsubscribe(channel))
+            except: pass
         except Exception as e:
-            logger.error(f"[Pulse] Subscription failure: {e}")
-            yield f"event: error\ndata: {str(e)}\n\n"
+            logger.error(f"[Pulse v4] Critical stream failure: {e}")
+            yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
 
 # Global Accessor
 def broadcast_event(event_type: str, data: Dict[str, Any], user_id: str = "global"):

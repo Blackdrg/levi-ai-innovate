@@ -31,7 +31,15 @@ COST_MATRIX = {
     "video": 10
 }
 
-ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
-SECRET_KEY = os.getenv("SECRET_KEY", "levi-secret-key")
-CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
+ENVIRONMENT = os.getenv("ENVIRONMENT", "production")
+SECRET_KEY = os.getenv("SECRET_KEY") # No default fallback for production safety
+
+# Production Domain: https://levi-ai.com
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "https://levi-ai.com").split(",")
+
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+
+# Resilience Settings
+FAILURE_THRESHOLD = 5
+RETRY_DELAY = 2.0

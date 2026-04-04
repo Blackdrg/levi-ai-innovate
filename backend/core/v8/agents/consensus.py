@@ -14,8 +14,8 @@ class ConsensusInput(BaseModel):
 
 class ConsensusAgentV8(BaseV8Agent[ConsensusInput]):
     """
-    LeviBrain v8.7: Swarm Consensus Engine
-    Performs high-fidelity reconciliation with mood diversity and confidence weighting.
+    LeviBrain v9.5: Swarm Consensus Engine 2.0
+    Performs high-fidelity reconciliation with multi-model voting and confidence weighting.
     """
 
     def __init__(self):
@@ -27,19 +27,28 @@ class ConsensusAgentV8(BaseV8Agent[ConsensusInput]):
         outputs = input_data.agent_outputs
         fragility = input_data.fragility_score
         
-        self.logger.info(f"[Consensus-V8] Initiating election for swarm size {len(outputs)} (Fragility: {fragility:.2f})")
+        self.logger.info(f"[Consensus-V9.5] Initiating Swarm Election (Size: {len(outputs)}, Fragility: {fragility:.2f})")
 
-        # 1. Consensus Analysis & Conflict detection
+        # 1. Consensus Analysis & Intersection Detection
         analysis_raw = await self._analyze_consensus(query, outputs)
         
-        # 2. Extract Metrics
+        # 2. Extract Metrics & Weighted Confidence
         conflicts = analysis_raw.get("conflicts", [])
-        agreement_level = analysis_raw.get("agreement_score", 0.5) # 0.0 to 1.0
-        
-        # 3. High-Fidelity Reconciliation
-        # If agreement is low and fragility is high, we trigger an 'Exhaustive Debate' synthesis
-        strategy = "exhaustive_debate" if (agreement_level < 0.6 and fragility > 0.5) else "unified_synthesis"
-        
+        agreement_level = analysis_raw.get("agreement_score", 0.5)
+        # v9.5: Confidence weighting based on fragility and swarm density
+        weighted_confidence = agreement_level * (1.0 - (fragility * 0.5))
+
+        # 3. Dynamic Strategy Selection
+        if weighted_confidence < 0.4:
+            strategy = "adversarial_audit" # Highest rigor for high-risk divergence
+        elif agreement_level < 0.7:
+            strategy = "exhaustive_debate"
+        else:
+            strategy = "unified_synthesis"
+            
+        self.logger.info(f"[Consensus-V9.5] Strategy: {strategy} (Confidence: {weighted_confidence:.2f})")
+
+        # 4. Multi-Model Synthesis Wave
         reconciled_response = await self._reconcile_outputs(query, outputs, conflicts, strategy)
         
         return AgentResult(
@@ -48,53 +57,57 @@ class ConsensusAgentV8(BaseV8Agent[ConsensusInput]):
             data={
                 "swarm_size": len(outputs),
                 "agreement_score": agreement_level,
+                "weighted_confidence": weighted_confidence,
                 "conflicts_detected": len(conflicts),
                 "strategy": strategy,
-                "fragility_at_execution": fragility
+                "v9_status": "synced"
             }
         )
 
     async def _analyze_consensus(self, query: str, outputs: Dict[str, str]) -> Dict[str, Any]:
-        """Performs a structured cross-analysis of swarm outputs."""
+        """Performs a deep logical audit of swarm outputs."""
         prompt = (
-            f"MISSION OBJECTIVE: {query}\n\n"
-            "SWARM OUTPUTS:\n" + "\n".join([f"[{k}]: {v[:500]}..." for k, v in outputs.items()]) + "\n\n"
-            "Analyze the swarm for:\n"
-            "1. Logical Intersection (shared correct points)\n"
-            "2. Critical Contradictions (conflicting facts)\n"
-            "3. Agreement Score (0.0: total chaos, 1.0: perfect consensus)\n\n"
-            "Respond in JSON format: {'conflicts': [], 'agreement_score': 0.0}"
+            f"MISSION: {query}\n\n"
+            "SWARM AGENT OUTPUTS:\n" + "\n".join([f"[{k}]: {v[:800]}..." for k, v in outputs.items()]) + "\n\n"
+            "LEVI CONSENSUS v2.0 AUDIT:\n"
+            "1. Identify the 'CORE TRUTH' (points agreed upon by >70% of the swarm).\n"
+            "2. Identify 'CRITICAL DIVERGENCE' (conflicting facts or logic).\n"
+            "3. Score the Agreement (0.0 to 1.0).\n\n"
+            "Respond ONLY with a JSON object: {'conflicts': [], 'agreement_score': 0.0, 'core_truth': ''}"
         )
         
         res_raw = await self.generator.council_of_models([
-            {"role": "system", "content": "You are the LEVI Swarm Analyst. Perform a logical intersection and conflict audit."},
+            {"role": "system", "content": "You are the LEVI Swarm Election Auditor. Detect logical divergence."},
             {"role": "user", "content": prompt}
-        ], temperature=0.2)
+        ], temperature=0.1)
         
         try:
-            # Clean JSON if necessary
+            import json
             json_str = res_raw.strip().replace("```json", "").replace("```", "")
             return json.loads(json_str)
         except:
-            self.logger.warning("[Consensus-V8] Failed to parse analysis JSON. Falling back to defaults.")
-            return {"conflicts": ["Potential logical divergence detected"], "agreement_score": 0.5}
+            return {"conflicts": ["High-risk logical divergence"], "agreement_score": 0.4}
 
     async def _reconcile_outputs(self, query: str, outputs: Dict[str, str], conflicts: List[str], strategy: str) -> str:
-        """Synthesizes the final response by resolving conflicts and merging insights."""
-        context_str = "Perform an EXHAUSTIVE DEBATE reconciliation. Scrutinize every contradiction." if strategy == "exhaustive_debate" else "Synthesize a unified high-fidelity response."
+        """Synthesizes the final high-fidelity response."""
+        rigor_map = {
+            "adversarial_audit": "Perform an ADVERSARIAL audit. Challenge every assertion.",
+            "exhaustive_debate": "Examine every contradiction with scientific rigor.",
+            "unified_synthesis": "Merge insights into a single high-fidelity response."
+        }
         
         prompt = (
             f"QUERY: {query}\n\n"
-            "SWARM FINDINGS:\n" + "\n".join([f"[{k}]: {v}" for k, v in outputs.items()]) + "\n\n"
-            "RECONCILIATION TASK: " + context_str + "\n\n"
-            "CONFLICTS TO RESOLVE:\n" + ("\n".join(conflicts) if conflicts else "None detected.") + "\n\n"
-            "Final Response Requirements:\n"
-            "- Grounded in the logical intersection of the swarm.\n"
-            "- Filtered for hallucinations.\n"
-            "- Unified voice."
+            "SWARM INPUTS:\n" + "\n".join([f"[{k}]: {v}" for k, v in outputs.items()]) + "\n\n"
+            "RECONCILIATION STRATEGY: " + rigor_map.get(strategy, "Standard Synthesis") + "\n\n"
+            "DIVERGENCE LOG:\n" + ("\n".join(conflicts) if conflicts else "None.") + "\n\n"
+            "OUTPUT REQUIREMENTS:\n"
+            "- Filter for systemic bias.\n"
+            "- Maximize information density.\n"
+            "- Finality and clarity."
         )
         
         return await self.generator.council_of_models([
-            {"role": "system", "content": "You are the LEVI Swarm Swarm Consensus (v8.7). Resolve and synthesize."},
+            {"role": "system", "content": f"You are the LEVI Swarm Consensus Controller {strategy.upper()}. Finalize the mission."},
             {"role": "user", "content": prompt}
-        ], temperature=0.3)
+        ], temperature=0.2)
