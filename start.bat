@@ -1,48 +1,62 @@
 @echo off
-REM start.bat — full system bootstrap for Windows (Native)
+REM start.bat — Sovereign OS v13.1.0 "Absolute Monolith" Graduation Launcher
+setlocal
 
-echo ==> Synthesizing Neural Frontend (Phase 2)...
-cd levi-frontend
-if exist node_modules (
-    echo [OK] Dependencies loaded.
-) else (
-    echo [📦] Installing dependencies...
-    call npm install
+echo [🚀] Initializing LEVI-AI v13.1.0 Graduation Tier...
+
+REM 1. Infrastructure Checks
+echo [🏗️] Starting Core Infrastructure (Postgres, Redis, Neo4j, Ollama)...
+docker compose up -d postgres redis neo4j ollama
+if %errorlevel% neq 0 (
+    echo [ERROR] Docker infrastructure failed to start.
+    pause
+    exit /b %errorlevel%
 )
-echo [🏗️] Building v13 artifacts...
-call npm run build
-cd ..
 
-echo ==> Starting infrastructure (Postgres, Redis, Neo4j)...
-docker compose up -d postgres redis neo4j
+REM 2. Environment Validation
+if not exist .env (
+    echo [⚠️] .env missing. Creating from graduation defaults...
+    copy .env.example .env
+)
 
-echo ==> Waiting for Postgres to be ready...
+REM 3. Service Readiness
+echo [⏳] Waiting for Postgres SQL Fabric...
 :WAITPOSTGRES
 docker compose exec postgres pg_isready -U levi >nul 2>&1
 if errorlevel 1 (
-    echo Postgres is unavailable - sleeping
     timeout /t 2 /nobreak >nul
     goto WAITPOSTGRES
 )
+echo [OK] SQL Fabric Ready.
 
-echo ==> Running v13 migrations...
-docker compose exec postgres psql -U levi -d levi_db -f /docker-entrypoint-initdb.d/init.sql
+REM 4. Graduation Initialization
+echo [🧬] Running Genesis Seed (Standard Agents & Admin)...
+docker compose exec api python backend/scripts/seed_sovereign.py
+if %errorlevel% neq 0 (
+    echo [⚠️] Genesis seed already initialized or failed. Continuing...
+)
 
-echo ==> Starting Ollama
-docker compose up -d ollama
-echo ==> Waiting for Ollama models...
-docker compose run --rm ollama-init
+echo [📦] Generating Software Bill of Materials (SBOM)...
+docker compose exec api python backend/scripts/generate_sbom.py
 
-echo ==> Starting API, Workers, and Nginx...
-docker compose up -d api worker nginx
+REM 5. Neural Verification
+echo [🛡️] Executing Graduation Audit (28-Point Suite)...
+docker compose exec api pytest tests/v13_hardening_test.py
+if %errorlevel% neq 0 (
+    echo [WARNING] Some graduation tests failed. Check logs for compliance gaps.
+)
 
-echo ==> Starting observability (Prometheus/Grafana)...
-docker compose up -d prometheus grafana
+REM 6. App Launch
+echo [🏗️] Finalizing Neural Frontend & Worker Swarm...
+docker compose up -d api worker nginx prometheus grafana
 
 echo.
-echo [OK] LEVI-AI is live (v13.0.0 Monolith).
-echo    API:      https://localhost/api/
-echo    Grafana:  http://localhost:3000
-echo    Neo4j UI: http://localhost:7474
-echo    Ollama:   http://localhost:11434
+echo [🎓] LEVI-AI v13.1.0 IS LIVE.
+echo    ------------------------------------------
+echo    Frontend:   http://localhost (Sovereign)
+echo    API Docs:   http://localhost/docs
+echo    Monitoring: http://localhost:3000 (Grafana)
+echo    ------------------------------------------
+echo    Mission Control: Absolute Monolith Status [ACTIVE]
+echo.
 pause

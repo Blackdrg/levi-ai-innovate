@@ -120,41 +120,69 @@ class SovereignAgent(abc.ABC, Generic[T, R]):
             
             latency = (time.perf_counter() - start_time) * 1000
             
-            # 2. Result Normalization
-            if isinstance(result_data, dict):
-                msg = result_data.get("message", "")
-                data = result_data.get("data", {})
-                citations = result_data.get("citations", [])
-            elif isinstance(result_data, AgentResult):
-                return result_data
+            # 2. Result Normalization & Strict Schema Enforcement
+            # We expect _run to return either a dict (to be converted to R or AgentResult) or R/AgentResult directly.
+            
+            if isinstance(result_data, AgentResult):
+                agent_res = result_data
+            elif isinstance(result_data, dict):
+                # Try to cast to the specified result type R if it's not the default AgentResult
+                result_type = self.__orig_bases__[0].__args__[1]
+                try:
+                    if result_type != AgentResult and issubclass(result_type, BaseModel):
+                        validated_data = result_type.model_validate(result_data)
+                        agent_res = AgentResult(
+                            success=True,
+                            message=getattr(validated_data, "message", ""),
+                            data=validated_data.model_dump(),
+                            agent=self.name,
+                            latency_ms=latency,
+                            fidelity_score=getattr(validated_data, "score", 0.0)
+                        )
+                    else:
+                        agent_res = AgentResult(
+                            success=result_data.get("success", True),
+                            message=result_data.get("message", ""),
+                            data=result_data.get("data", {}),
+                            agent=self.name,
+                            latency_ms=latency,
+                            citations=result_data.get("citations", []),
+                            fidelity_score=result_data.get("score", 0.0),
+                            metadata=result_data.get("metadata", {})
+                        )
+                except Exception as ve:
+                    self.logger.error(f"Schema Validation Error: {ve}")
+                    raise ValueError(f"Agent {self.name} returned malformed output for schema {result_type}")
             else:
-                msg = str(result_data)
-                data = {}
-                citations = []
+                # Handle raw string or other types as a fallback message
+                agent_res = AgentResult(
+                    success=True,
+                    message=str(result_data),
+                    agent=self.name,
+                    latency_ms=latency
+                )
 
             # 3. Sovereign Shield: Output Sanitization
-            safe_msg = SovereignSecurity.mask_pii(msg)
+            agent_res.message = SovereignSecurity.mask_pii(agent_res.message)
+            agent_res.agent = self.name
+            agent_res.latency_ms = latency
             
-            agent_res = AgentResult(
-                success=True,
-                message=safe_msg,
-                data=data,
-                agent=self.name,
-                latency_ms=latency,
-                citations=citations,
-                fidelity_score=result_data.get("score", 0.0) if isinstance(result_data, dict) else 0.0,
-                metadata=result_data.get("metadata", {}) if isinstance(result_data, dict) else {}
-            )
-            
-            # Post-execution persistence
-            if session_id:
-                await self.save_state(session_id)
+            # 4. Record Sovereign Metrics
+            from backend.utils.metrics import record_agent_mission
+            tenant_id = getattr(input_data, "tenant_id", "global")
+            record_agent_mission(self.name, "success", latency, tenant_id=tenant_id)
             
             return agent_res
             
         except Exception as e:
             latency = (time.perf_counter() - start_time) * 1000
             self.logger.error(f"Agent {self.name} mission failure: {str(e)}", exc_info=True)
+            
+            # Record Failure Metrics
+            from backend.utils.metrics import record_agent_mission
+            tenant_id = getattr(input_data, "tenant_id", "global")
+            record_agent_mission(self.name, "error", latency, tenant_id=tenant_id)
+            
             return AgentResult(
                 success=False,
                 error=str(e),

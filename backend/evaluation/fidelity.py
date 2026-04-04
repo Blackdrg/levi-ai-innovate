@@ -17,6 +17,49 @@ class FidelityCritic:
     """
 
     @staticmethod
+    async def calculate_s(
+        user_query: str,
+        response: str,
+        goals: List[str],
+        agent_results: List[Any] # List of AgentResult or ToolResult
+    ) -> Dict[str, Any]:
+        """
+        Sovereign v13.0: Formal Fidelity Score S Calculation.
+        S = (0.4 * CriticScore) + (0.4 * MeanAgentFidelity) + (0.2 * MeanAgentConfidence)
+        """
+        # 1. Get Critic Evaluation
+        critic_results = await FidelityCritic.evaluate_mission(user_query, response, goals, [r.dict() if hasattr(r, 'dict') else str(r) for r in agent_results])
+        critic_score = critic_results.get("fidelity_score", 0.0)
+
+        # 2. Aggregate Agent Performance
+        if not agent_results:
+            agent_fidelity = 0.0
+            agent_confidence = 0.0
+        else:
+            fidelities = [getattr(r, "fidelity_score", 0.0) for r in agent_results]
+            confidences = [getattr(r, "confidence", 1.0) for r in agent_results]
+            agent_fidelity = sum(fidelities) / len(fidelities)
+            agent_confidence = sum(confidences) / len(confidences)
+
+        # 3. Final Weighted Score S
+        s_score = (0.4 * critic_score) + (0.4 * agent_fidelity) + (0.2 * agent_confidence)
+        s_score = round(min(max(s_score, 0.0), 1.0), 4)
+
+        # 4. Adjudication Routing
+        requires_manual_audit = s_score < 0.6
+        circuit_break = s_score < 0.3
+        
+        return {
+            "s_score": s_score,
+            "critic": critic_results,
+            "agent_avg_fidelity": agent_fidelity,
+            "agent_avg_confidence": agent_confidence,
+            "requires_manual_audit": requires_manual_audit,
+            "circuit_break": circuit_break,
+            "adjudication": "MANUAL_AUDIT_QUEUE" if requires_manual_audit else "AUTONOMOUS_PROMOTION"
+        }
+
+    @staticmethod
     async def evaluate_mission(
         user_query: str,
         response: str,
@@ -27,9 +70,10 @@ class FidelityCritic:
         Performs a multi-dimensional fidelity audit.
         Dimensions: Goal Alignment, Factual Grounding, Tone Resonance.
         """
+        from backend.core.planner import call_lightweight_llm
         
         critic_prompt = (
-            "You are the Sovereign Critic v8. Audit this LEVI-AI mission response.\n"
+            "You are the Sovereign Critic v13. Audit this LEVI-AI mission response.\n"
             f"User Vision: {user_query}\n"
             f"Mission Goals: {', '.join(goals)}\n"
             f"Specialized Agent Results: {json.dumps(tool_results[:5])}\n"

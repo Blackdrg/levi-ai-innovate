@@ -69,7 +69,7 @@ class SovereignGenerator:
                     f"{base_url}/api/chat",
                     json={
                         "model": model,
-                        "messages": [{"role": "system", "content": system_msg}] + history,
+                        "messages": [{"role": "system", "content": system_msg}] + SovereignSecurity.enforce_boundaries(history),
                         "stream": True,
                         "options": {"temperature": 0.8}
                     }
@@ -140,11 +140,16 @@ class LLMRouter:
         gen = SovereignGenerator()
         return await gen.council_of_models(messages)
 
+from backend.config.prompts import PromptRegistry
+
 # ── Global Pulse Utilities ──────────────────────────────────────────────────
 def _build_dynamic_system_prompt(persona: Dict, user_memory: Optional[str], lang: str = "en") -> str:
     """Sovereign v13.0.0: Dynamics for the Absolute Monolith."""
-    base = SovereignI18n.get_prompt("system_brain", lang) or "You are LEVI, a sovereign AI monolith."
-    if user_memory: base += f"\n\n[USER RESONANCE]:\n{user_memory}"
+    # Use PromptRegistry for versioned templates
+    base = PromptRegistry.get_prompt("the_brain", version="v1.1")
+    
+    if user_memory: 
+        base += f"\n\n[USER RESONANCE]:\n{user_memory}"
     
     base += "\n\n[v13.0 SOVEREIGN PROTOCOL]:\n"
     base += "- Priority 1: DETERMINISTIC ENGINE accuracy.\n"

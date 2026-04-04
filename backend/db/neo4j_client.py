@@ -107,4 +107,16 @@ class Neo4jClient:
         for term in terms[:3]:
             res = await cls.execute_query(cypher, {"user_id": user_id, "term": term})
             results.extend(res)
-        return results
+    @classmethod
+    async def clear_user_data(cls, user_id: str):
+        """Detaches and deletes all nodes associated with a user for absolute privacy."""
+        cypher = """
+        MATCH (u:User {id: $user_id})
+        OPTIONAL MATCH (u)-[r]-(n)
+        DETACH DELETE u, n, r
+        """
+        try:
+            await cls.execute_query(cypher, {"user_id": user_id})
+            logger.info(f"[Neo4j] Absolute wipe complete for user: {user_id}")
+        except Exception as e:
+            logger.error(f"[Neo4j] Wipe failed for user {user_id}: {e}")

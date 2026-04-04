@@ -123,7 +123,42 @@ class DAGPlanner:
                 critical=False
             ))
 
+        # 4. v13.0 Cycle Detection
+        self.validate_graph(graph)
+
         return graph
+
+    def validate_graph(self, graph: Any):
+        """
+        Sovereign v13.0: High-fidelity Cycle Detection.
+        Prevents topological deadlocks in agent coordination.
+        """
+        visited = set()
+        path = set()
+        nodes_map = {n.id: n for n in graph.nodes}
+
+        def has_cycle(node_id):
+            if node_id in path:
+                return True
+            if node_id in visited:
+                return False
+            
+            visited.add(node_id)
+            path.add(node_id)
+            
+            node = nodes_map.get(node_id)
+            if node:
+                for dep in node.dependencies:
+                    if has_cycle(dep):
+                        return True
+            
+            path.remove(node_id)
+            return False
+
+        for node in graph.nodes:
+            if has_cycle(node.id):
+                logger.error(f"[V8 Planner] Critical Failure: Cycle detected in Task Graph at node '{node.id}'")
+                raise ValueError(f"Self-referencing dependency detected in mission plan: {node.id}")
 
     async def refine_plan(self, task_graph: TaskGraph, reflection: Dict[str, Any], goal: Any, perception: Dict[str, Any]) -> TaskGraph:
         """
