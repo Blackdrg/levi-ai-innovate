@@ -110,6 +110,10 @@ celery_app.conf.beat_schedule = {
         "task": "backend.core.learning_tasks.unbound_training_cycle",
         "schedule": crontab(hour=0, minute=0, day_of_week=0), # Weekly on Sunday
     },
+    "survival-hygiene-weekly": {
+        "task": "backend.core.memory_tasks.run_survival_hygiene",
+        "schedule": crontab(hour=0, minute=0, day_of_week=0), # Weekly on Sunday
+    },
     "poll-training-status-4h": {
         "task": "backend.core.learning_tasks.poll_training_status",
         "schedule": 14400.0, # Every 4 hours

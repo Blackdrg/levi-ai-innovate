@@ -370,3 +370,69 @@ def run_global_maintenance(self):
     except Exception as e:
         logger.error(f"[Maintenance] Sweep drift: {e}")
         return {"error": str(e)}
+
+@celery_app.task(
+    name="backend.core.memory_tasks.run_survival_hygiene",
+    bind=True,
+)
+def run_survival_hygiene(self):
+    """
+    Sovereign v9.8.1: Autonomous Survival Gating.
+    Purges low-resonance memories (R < 0.5) to ensure cognitive health.
+    """
+    db = _get_firestore()
+    from backend.utils.vector_db import get_vector_db
+    vector_db = get_vector_db()
+    
+    purged_count = 0
+    try:
+        # 1. Fetch all user facts (Batch processing for scalability)
+        facts_ref = db.collection("user_facts")
+        docs = facts_ref.stream()
+        
+        indices_to_remove = []
+        doc_ids_to_delete = []
+        
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        
+        for doc in docs:
+            data = doc.to_dict()
+            importance = data.get("importance", 0.5)
+            created_at = data.get("created_at")
+            
+            # 2. Calculate Resonance Score (R)
+            if not created_at:
+                resonance = 0.0 # Unknown origin = purge
+            else:
+                # Firestore returns datetimes as timezone-aware
+                age_days = (now - created_at).days
+                resonance = importance / (1 + (age_days * 0.1))
+            
+            # 3. Flag for Purge (Threshold < 0.5)
+            if resonance < 0.5:
+                # We need the vector index (task_id or index)
+                # In v9.8.1, the vector index is mapped 1:1 with doc_id/fact_id
+                indices_to_remove.append(doc.id)
+                doc_ids_to_delete.append(doc.id)
+        
+        # 4. Atomic Vector Purge
+        if indices_to_remove:
+            vector_db.remove_indices(indices_to_remove)
+            
+            # 5. Batch Firestore Cleanup
+            batch = db.batch()
+            for did in doc_ids_to_delete:
+                batch.delete(db.collection("user_facts").document(did))
+                purged_count += 1
+                if purged_count % 500 == 0:
+                    batch.commit()
+                    batch = db.batch()
+            batch.commit()
+            
+        logger.info(f"[SurvivalGater] Hygiene complete. Purged {purged_count} low-resonance memories.")
+        return {"purged_count": purged_count}
+        
+    except Exception as e:
+        logger.error(f"[SurvivalGater] Gating failure: {e}")
+        return {"error": str(e), "purged_count": purged_count}
