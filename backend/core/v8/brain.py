@@ -195,9 +195,10 @@ class LeviBrainCoreController:
             task_graph = await self.planner.build_task_graph(goal, perception)
             broadcast_mission_event(user_id, "planning", {"request_id": request_id, "graph": task_graph.to_dict()})
             
-            # EXECUTION
-            results = await self.executor.run(task_graph, perception)
-            broadcast_mission_event(user_id, "execution", {"request_id": request_id, "results_count": len(results)})
+            # EXECUTION (v9.8.1: Dynamic Concurrency)
+            concurrency = await self._get_concurrency_limit(user_id)
+            results = await self.executor.run(task_graph, perception, concurrency_limit=concurrency)
+            broadcast_mission_event(user_id, "execution", {"request_id": request_id, "results_count": len(results), "concurrency": concurrency})
 
             # 4. FINAL BRAIN SYNTHESIS
             # In v8.12, the Brain synthesizes the structured data from agents
@@ -322,8 +323,11 @@ class LeviBrainCoreController:
                 yield {"event": "graph", "data": task_graph.to_dict()}
                 
                 yield {"event": "activity", "data": "Executing Mission Tasks..."}
-                results = await self.executor.run(task_graph, perception)
-                yield {"event": "results", "data": [r.dict() for r in results]}
+                
+                # v9.8.1: Dynamic Concurrency
+                concurrency = await self._get_concurrency_limit(user_id)
+                results = await self.executor.run(task_graph, perception, concurrency_limit=concurrency)
+                yield {"event": "results", "data": [r.dict() if hasattr(r, "dict") else r for r in results]}
                 
                 yield {"event": "activity", "data": "Synthesizing Final Response..."}
                 from ..engine import synthesize_streaming_response
@@ -337,6 +341,36 @@ class LeviBrainCoreController:
         except Exception as e:
             logger.error("[V8 Brain] Stream anomaly: %s", e)
             yield {"event": "error", "data": f"The neural stream encountered a logic drift: {str(e)}"}
+
+    async def _get_concurrency_limit(self, user_id: str) -> int:
+        """
+        Sovereign v9.8.1: Dynamic Concurrency Discovery.
+        Maps subscription_tier to parallel task semaphore capacity.
+        """
+        from backend.db.postgres import PostgresDB
+        from sqlalchemy import text
+        
+        # Default for guests/failures
+        default_limit = 2
+        if not user_id or user_id.startswith("guest"):
+            return default_limit
+
+        try:
+            # We use the session context manager from PostgresDB
+            async with await PostgresDB.get_session() as session:
+                query = text("SELECT subscription_tier FROM user_profiles WHERE uid = :uid")
+                res = await session.execute(query, {"uid": user_id})
+                tier = res.scalar() or "free"
+                
+                mapping = {
+                    "premium": 10,
+                    "pro": 5,
+                    "free": 2
+                }
+                return mapping.get(tier.lower(), default_limit)
+        except Exception as e:
+            logger.warning(f"[Brain] Failed to fetch concurrency tier for {user_id}: {e}")
+            return default_limit
 
     async def _perceive(self, user_input: str, user_id: str, session_id: str, **kwargs) -> Dict[str, Any]:
         """Extract intent and 4-tier context."""
@@ -438,15 +472,21 @@ class LeviBrainCoreController:
             if outcome["success"] and level < 4:
                 self.evolution_engine.learn(user_input, response)
                 
-            # v9.5 Recursive Patching: If a failure occurs, add to buffer
+            # v9.5 Recursive Patching: Persistent Self-Healing Queue
             if not outcome["success"]:
-                self.failure_buffer.append(outcome)
-                if len(self.failure_buffer) >= 3:
-                     logger.info("[Sovereign-v9.5] Recursive Trigger: Failure threshold reached. Requesting Patch...")
-                     from .critic import ReflectionEngine
-                     critic = ReflectionEngine()
-                     asyncio.create_task(critic.suggest_system_patch(self.failure_buffer[:]))
-                     self.failure_buffer.clear()
+                try:
+                    from backend.db.redis import r as redis_client, HAS_REDIS
+                    if HAS_REDIS:
+                        logger.info("[Sovereign] Logic Failure detected. Pushing to healing queue.")
+                        redis_client.lpush("sovereign:failure_queue", json.dumps(outcome))
+                        # Trigger threshold check (v9.8)
+                        queue_len = redis_client.llen("sovereign:failure_queue")
+                        if queue_len >= 5:
+                             logger.warning(f"[Sovereign] Failure threshold reached ({queue_len}). Alerting Critic...")
+                             from backend.core.critic_tasks import process_failure_queue
+                             process_failure_queue.delay()
+                except Exception as e:
+                    logger.error(f"[Sovereign] Failed to queue failure for healing: {e}")
 
 # Alias for backward compatibility
 LeviBrainV8 = LeviBrainCoreController

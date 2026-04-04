@@ -33,15 +33,40 @@ async def test_v8_phase7_hardening():
     except Exception as e:
         print(f"⚠️ Evaluator error (logic flow): {e}")
 
-    # 3. Test Distiller Postgres Persistence
-    from backend.services.learning.distiller import MemoryDistiller
-    print("\n3. Testing Relational Persistence (Distiller)...")
-    try:
-        print("✅ Distiller relational trait signature verified.")
-    except Exception as e:
-        print(f"⚠️ Distiller error (logic flow): {e}")
+    # 4. Collision & Vault Test
+    from backend.utils.encryption import SovereignVault
+    print("\n4. Testing Sovereign Vault (Deterministic Encryption)...")
+    val = "mission_critical_data"
+    enc1 = SovereignVault.encrypt(val)
+    enc2 = SovereignVault.encrypt(val)
+    
+    if enc1 == enc2:
+        print("✅ Sovereign Vault verified (Deterministic).")
+    else:
+        print("❌ Sovereign Vault failed (Non-deterministic/Collision).")
 
-    print("\n--- Phase 7 Hardening Complete ---")
+    # 5. Survival Simulation
+    from backend.services.learning.hygiene import SurvivalGater
+    from backend.utils.vector_db import VectorDB
+    print("\n5. Testing Survival Gating (Memory Purge)...")
+    
+    test_db = await VectorDB.get_collection("temp_hygiene_test")
+    await test_db.add(
+        ["Short-term test memory"], 
+        [{"survival_score": 0.1, "created_at": "2020-01-01T00:00:00Z"}]
+    )
+    
+    purged = await SurvivalGater.purge_low_fidelity_memories(collection="temp_hygiene_test")
+    print(f"Purged count: {purged}")
+    
+    if purged == 1:
+        print("✅ Survival Gating verified.")
+    else:
+        print("❌ Survival Gating failed to purge low-fidelity memory.")
+    
+    await test_db.clear()
+
+    print("\n--- Phase 7 Hardening & Graduation Complete ---")
 
 if __name__ == "__main__":
     asyncio.run(test_v8_phase7_hardening())

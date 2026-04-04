@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import re
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
@@ -10,9 +11,9 @@ EVOLUTION_FILE = os.path.join(os.path.dirname(__file__), "evolution_engine.json"
 
 class EvolutionEngine:
     """
-    Evolution Engine (v8.15)
-    Upgraded from Rules Engine. Learns repeated patterns and promotes them
-    to deterministic rules to skip LLM processing.
+    Evolution Engine (v9.8)
+    Sovereign Cognitive Optimization.
+    Learns repeated patterns and promotes them to deterministic rules based on high-fidelity scores (>0.9).
     """
 
     def __init__(self):
@@ -35,18 +36,17 @@ class EvolutionEngine:
             logger.error(f"[EvolutionEngine] Failed to save rules: {e}")
 
     def _normalize(self, task: str) -> str:
-        """Normalizes task description for pattern matching."""
-        # Lowercase, strip, and remove extra whitespace
+        """Sovereign Normalization: Canonical intent representation."""
         normalized = task.lower().strip()
         normalized = re.sub(r'\s+', ' ', normalized)
-        # Remove common punctuation that doesn't change intent
         normalized = re.sub(r'[?.!,]', '', normalized)
         return normalized
 
-    def learn(self, task: str, result: Any):
+    def learn(self, task: str, result: Any, quality_score: float = 1.0):
         """
-        Learns from a task/result pair. 
-        Promotes to 'promoted' if count >= 3.
+        LeviBrain v9.8: Qualitative Pattern Promotion.
+        Learns from a task/result pair if the quality score meets the threshold.
+        Promotes to 'promoted' if count >= 3 and average quality > 0.9.
         """
         key = self._normalize(task)
 
@@ -54,35 +54,85 @@ class EvolutionEngine:
             self.rules[key] = {
                 "count": 1,
                 "result": result,
-                "promoted": False
+                "avg_quality": quality_score,
+                "promoted": False,
+                "first_detected": datetime.now(timezone.utc).isoformat()
             }
             logger.info(f"[EvolutionEngine] New pattern detected: {key[:30]}...")
         else:
-            self.rules[key]["count"] += 1
-            # Update result if it's high quality or for consistency
-            self.rules[key]["result"] = result 
+            data = self.rules[key]
+            data["count"] += 1
+            # Update running average quality
+            data["avg_quality"] = (data["avg_quality"] * (data["count"] - 1) + quality_score) / data["count"]
             
-            if self.rules[key]["count"] >= 3 and not self.rules[key].get("promoted"):
-                self.rules[key]["promoted"] = True
-                logger.info(f"[EvolutionEngine] Pattern PROMOTED to rule: {key[:30]}...")
+            # Only update result if quality is better or equal
+            if quality_score >= data.get("avg_quality", 0):
+                data["result"] = result 
+            
+            # PROMOTION CRITERIA: Frequency (>2) and Fidelity (>0.9)
+            if data["count"] >= 3 and data["avg_quality"] >= 0.9 and not data.get("promoted"):
+                data["promoted"] = True
+                data["promoted_at"] = datetime.now(timezone.utc).isoformat()
+                logger.info(f"[EvolutionEngine] Pattern PROMOTED to Sovereign Rule: {key[:30]} (Fidelity: {data['avg_quality']:.2f})")
+                
+                # Check for autonomous transition to Neural Weights
+                self.check_evolution_threshold()
 
         self._save_rules()
 
+    def check_evolution_threshold(self):
+        """
+        Sovereign v9.8.1: Autonomous Transition.
+        Transforms Deterministic Rules into Neural Weights via Together AI fine-tuning.
+        """
+        promoted_count = sum(1 for r in self.rules.values() if r.get("promoted"))
+        threshold = int(os.getenv("EVOLUTION_FT_THRESHOLD", 20))
+        
+        if promoted_count >= threshold:
+            logger.info(f"[Evolution] Threshold reached ({promoted_count}/{threshold}). Triggering Autonomous Fine-tuning...")
+            try:
+                from backend.services.learning.trainer import submit_finetuning_job
+                # In a real system, we'd export the rules to a JSONL first.
+                # For Phase 5, we trigger the automation pulse.
+                asyncio.create_task(self._async_trigger_ft())
+            except Exception as e:
+                logger.error(f"[Evolution] Failed to trigger FT: {e}")
+
+    async def _async_trigger_ft(self):
+        """Background worker for FT submission."""
+        from backend.services.learning.trainer import submit_finetuning_job, upload_training_file
+        # 1. Export rules to temporary training file
+        temp_file = "/tmp/evolution_training.jsonl"
+        with open(temp_file, "w") as f:
+            for key, data in self.rules.items():
+                if data.get("promoted"):
+                    line = {"messages": [
+                        {"role": "system", "content": "You are LEVI, a philosophical AI."},
+                        {"role": "user", "content": key},
+                        {"role": "assistant", "content": data["result"]}
+                    ]}
+                    f.write(json.dumps(line) + "\n")
+        
+        # 2. Upload and Submit
+        file_id = upload_training_file(temp_file)
+        if file_id:
+            submit_finetuning_job(file_id, suffix=f"monolith_v{datetime.now().strftime('%m%d')}")
+            logger.info("[Evolution] Autonomous FT Job submitted successfully.")
+
     def apply(self, task: str) -> Optional[Any]:
         """
-        Checks if a promoted rule exists for the given task.
+        Checks if a promoted Sovereign Rule exists for the given task.
         """
         key = self._normalize(task)
-
         if key in self.rules and self.rules[key].get("promoted"):
-            logger.info(f"[EvolutionEngine] Rule match found for: {key[:30]}...")
+            logger.info(f"[EvolutionEngine] Deterministic Rule Match: {key[:30]}...")
             return self.rules[key]["result"]
-
         return None
 
     def get_stats(self) -> Dict[str, Any]:
         promoted_count = sum(1 for r in self.rules.values() if r.get("promoted"))
         return {
             "total_patterns": len(self.rules),
-            "promoted_rules": promoted_count
+            "promoted_rules": promoted_count,
+            "system_version": "9.8-Sovereign"
         }

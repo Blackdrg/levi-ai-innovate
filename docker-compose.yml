@@ -12,15 +12,28 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - DATABASE_URL=postgresql://levi:levi@postgres:5432/levi_db
     depends_on:
-      - redis
-      - postgres
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
     volumes:
-      - ./backend/data:/app/data
+      - ./backend/data:/app/backend/data
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   postgres:
     image: postgres:15-alpine
@@ -32,6 +45,11 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U levi -d levi_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   worker:
     build:
@@ -40,8 +58,11 @@ services:
     command: celery -A backend.celery_app worker --loglevel=info
     environment:
       - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://levi:levi@postgres:5432/levi_db
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   postgres_data:

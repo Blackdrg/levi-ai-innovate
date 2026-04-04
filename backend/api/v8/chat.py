@@ -13,13 +13,13 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from backend.api.utils.auth import get_current_user
-from backend.engines.chat.generation import SovereignGenerator
-from backend.core.v8.executor import GraphExecutor
-# Import handle_chat logic or define it locally for the V8 standard
-# For now, we bridge to the existing v8-ready logic
+from backend.core.v8.brain import LeviBrainCoreController
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="", tags=["Chat V8"])
+
+# Initialize the v9.8.1 Brain Controller
+brain = LeviBrainCoreController()
 
 class ChatMessage(BaseModel):
     message: str = Field(..., description="The user's conversational input")
@@ -32,29 +32,26 @@ async def conversational_endpoint(
     current_user: Any = Depends(get_current_user)
 ):
     """
-    Standard Sovereign Mission (Blocking).
+    Sovereign Mission: 100% Deterministic-First Cognitive Route.
     """
     user_id = current_user.uid if hasattr(current_user, "uid") else "guest"
-    logger.info(f"[Chat-V8] Mission started for {user_id}")
+    session_id = request.session_id or f"sess_{uuid.uuid4().hex[:8]}"
     
-    # In V8, we use the SovereignGenerator directly for pure chat 
-    # or the GraphExecutor for complex tasks. Pure chat uses Council.
-    generator = SovereignGenerator()
+    logger.info(f"[Chat-V8] Routing mission to Brain: {user_id}")
+    
     try:
-        response = await generator.council_of_models([
-            {"role": "system", "content": "You are the LEVI Sovereign OS. Efficient, philosophical, and powerful."},
-            {"role": "user", "content": request.message}
-        ])
-        
-        return {
-            "response": response,
-            "session_id": request.session_id,
-            "engine": "sovereign_council_v8",
-            "status": "success"
-        }
+        # Route through the Cognitive Monolith
+        response_data = await brain.route(
+            user_input=request.message,
+            user_id=user_id,
+            session_id=session_id,
+            streaming=False,
+            **(request.context or {})
+        )
+        return response_data
     except Exception as e:
-        logger.error(f"[Chat-V8] Generation failure: {e}")
-        return {"status": "error", "message": "Neural resonance failure."}
+        logger.error(f"[Chat-V8] Mission failure: {e}")
+        raise HTTPException(status_code=500, detail="Neural resonance breach.")
 
 @router.post("/stream")
 async def conversational_stream_endpoint(
@@ -62,24 +59,28 @@ async def conversational_stream_endpoint(
     current_user: Any = Depends(get_current_user)
 ):
     """
-    Sovereign Mission Stream (SSE).
+    Sovereign Mission Stream: SSE-based Cognitive Pipeline.
     """
     user_id = current_user.uid if hasattr(current_user, "uid") else "guest"
-    logger.info(f"[Chat-V8] Stream mission started for {user_id}")
+    session_id = request.session_id or f"sess_{uuid.uuid4().hex[:8]}"
+    
+    logger.info(f"[Chat-V8] Routing streaming mission to Brain: {user_id}")
 
     async def _mission_generator():
-        generator = SovereignGenerator()
         try:
-            # Note: Council doesn't natively stream in the same way, but we can simulate/implement
-            # For now, we yield the final result to maintain the SSE interface
-            response = await generator.council_of_models([
-                {"role": "system", "content": "You are the LEVI Sovereign OS."},
-                {"role": "user", "content": request.message}
-            ])
-            yield f"data: {json.dumps({'type': 'token', 'data': response})}\n\n"
+            # Route through the Cognitive Monolith (Streaming Pass)
+            async for chunk in brain.route(
+                user_input=request.message,
+                user_id=user_id,
+                session_id=session_id,
+                streaming=True,
+                **(request.context or {})
+            ):
+                yield f"data: {json.dumps(chunk)}\n\n"
+            
             yield "data: [DONE]\n\n"
         except Exception as e:
             logger.error(f"[Chat-V8] Stream failure: {e}")
-            yield f"event: error\ndata: {json.dumps(str(e))}\n\n"
+            yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
 
     return StreamingResponse(_mission_generator(), media_type="text/event-stream")

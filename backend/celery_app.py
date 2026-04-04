@@ -26,6 +26,7 @@ celery_app = Celery(
         "backend.core.memory_tasks",
         "backend.core.learning_tasks",
         "backend.core.fine_tune_tasks",
+        "backend.core.critic_tasks",
     ]
 )
 
@@ -80,17 +81,21 @@ celery_app.conf.beat_schedule = {
         "task": "backend.core.memory_tasks.flush_all_memory_buffers",
         "schedule": 30.0,
     },
+    "sovereign-dreaming-cycle-4h": {
+        "task": "backend.core.memory_tasks.dream_all_users",
+        "schedule": 14400.0, # Every 4 hours (distillation)
+    },
+    "self-healing-monitor-5m": {
+        "task": "backend.core.critic_tasks.process_failure_queue",
+        "schedule": 300.0, # Every 5 mins
+    },
+    "global-evolution-daily": {
+        "task": "backend.core.learning_tasks.run_autonomous_evolution",
+        "schedule": 86400.0, # Daily (3 AM default)
+    },
     "studio-stuck-job-cleanup-every-hour": {
         "task": "backend.services.studio.tasks.cleanup_stuck_jobs",
         "schedule": 3600.0,
-    },
-    "autonomous-evolution-daily": {
-        "task": "backend.core.learning_tasks.run_autonomous_evolution",
-        "schedule": 86400.0,
-    },
-    "analytics-snapshot-4h": {
-        "task": "backend.core.learning_tasks.update_analytics_snapshot",
-        "schedule": 14400.0,
     },
     "daily-wisdom-dispatch": {
         "task": "backend.services.notifications.tasks.dispatch_daily_emails",

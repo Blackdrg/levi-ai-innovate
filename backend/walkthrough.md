@@ -27,11 +27,11 @@ LEVI-AI v9.8.1 is no longer just an AI wrapper; it is a **Cognitive Operating Sy
 
 ## 🛠️ Infrastructure Finality
 - **API Monolith**: Consolidated 19 legacy files into a single, high-performance FastAPI entry point.
-- **Event Bus**: Kafka-driven telemetry for sub-50ms pulse delivery.
+- **Neural Pulse v4.1**: Redis-driven telemetry providing sub-50ms pulse delivery and mobile zlib compression.
 - **Knowledge Graph**: Neo4j-mapped research artifacts for deep relational context.
 
 ## ✅ Verification Results
-All 6 primary data stores (Postgres, Redis, Kafka, Neo4j, FAISS, Firestore) are successfully synchronized and verified via `verify_v9_8_full.py`.
+All 5 primary cognitive data stores (Postgres, Redis, Neo4j, FAISS, Firestore) are successfully synchronized and verified via `verify_v9_8_full.py`.
 
 > [!IMPORTANT]
 > **LEVI-AI is now 100% research-grade and research-ready.** 🧪🛡️

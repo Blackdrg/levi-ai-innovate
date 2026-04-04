@@ -11,10 +11,9 @@ The complete service set for the graduation to the v9.8.1 "Sovereign Monolith."
 | **Generative Worker** | `sovereign-worker:v9.8` | **The Swarm** (Agent Execution, Distillation) | Active |
 | **Identity DB** | `postgres:15-alpine` | **Identity (Tier 4)** (User traits, Profiles) | Active |
 | **Episodic DB** | `firestore-local` | **Episodic (Tier 2)** (Conversations, Jobs) | Active |
-| **Context Cache** | `redis:7-alpine` | **Working (Tier 1)** (Pulse, Blackboard) | Active |
-| **Semantic Store** | `faiss-service` | **Semantic (Tier 3)** (Vector facts) | Active |
+| **Context Cache** | `redis:7-alpine` | **Working (Tier 1)** (Pulse v4.1, Blackboard) | **Active** |
+| **Semantic Store** | `faiss-service` | **Semantic (Tier 3)** (Vector facts, HNSW) | Active |
 | **Knowledge Graph**| `neo4j:5-community` | **Relational Knowledge** (Research artifacts) | Active |
-| **Event Bus** | `confluentinc/cp-kafka` | **Telemetry Pulse** (Event-driven bus) | Active |
 
 ---
 

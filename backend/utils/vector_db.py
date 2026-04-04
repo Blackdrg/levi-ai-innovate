@@ -133,9 +133,24 @@ class VectorDB:
                 score = float(scores[0][i])
                 if score >= min_score:
                     meta = self.metadata[idx].copy()
+                    if meta.get("deleted"):
+                        continue
                     meta["score"] = score
                     results.append(meta)
         return results
+
+    async def remove_indices(self, indices: List[int]):
+        """
+        Sovereign v9.8.1: Soft Purge.
+        Marks vectors as deleted so they are ignored by the search logic.
+        """
+        if not indices: return
+        async with self._lock:
+            for idx in indices:
+                if 0 <= idx < len(self.metadata):
+                    self.metadata[idx]["deleted"] = True
+            self._save()
+            logger.info(f"Marked {len(indices)} records as purged in '{self.collection_name}'.")
 
     async def clear(self):
         async with self._lock:

@@ -31,8 +31,10 @@ Encryption keys used by `SovereignVault` must be rotated annually via the `scrip
 
 ## 📡 3. Telemetry & Pulse Health
 
-### **Kafka Event Retention**
-- **Recommendation:** Set `log.retention.hours=24` for the Sovereign Telemetry Bus. Detailed mission logs are archived in Postgres, so short Kafka persistence is sufficient for real-time pulse.
+### **Survival Gating (Memory Hygiene)**
+- **System:** `backend.services.learning.hygiene.SurvivalGater`.
+- **Action:** Weekly autonomous purge of low-resonance memories (<0.5) to maintain HNSW index performance in FAISS.
+- **Audit:** Search for "hygiene_cycle" in `learning_worker.py` logs.
 
 ### **Redis Pulse Flush**
 The `sovereign:blackboard:{session_id}` keys are transient. They are cleared automatically upon mission completion, but it is recommended to perform a weekly `redis-cli --scan --pattern "sovereign:blackboard:*" | xargs redis-cli del` to prune any orphaned sessions.

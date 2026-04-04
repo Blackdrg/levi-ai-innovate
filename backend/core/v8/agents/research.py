@@ -40,23 +40,33 @@ class ResearchAgentV8(BaseV8Agent[ResearchInput]):
         topic = input_data.input
         self.logger.info(f"[Research-V8] Initiating structured investigation for: {topic}")
         
-        if not self.tavily_key:
-            self.logger.warning("[Research-V8] Tavily offline. Falling back to Sovereign Vector Intelligence.")
-            return await self._execute_local_fallback(topic, context)
-
-        # 1. Scraper: Multi-vector Discovery
-        discovery_tasks = [
-            self._tavily_search(topic, depth="basic"),
-            self._tavily_search(f"detailed investigative report on {topic}", depth="advanced")
-        ]
-        discovery_results = await asyncio.gather(*discovery_tasks)
+        # 1. Swarm-Aware Discovery: Delegate to Search Agent if possible
+        # This reduces direct API dependency and leverages the common search interface
+        self.logger.info(f"[Research-V8] Delegating primary discovery to Search Agent...")
+        search_res = await self.delegate_to("search_agent", {"query": topic}, context)
         
         all_raw_results = []
-        for res in discovery_results:
-            all_raw_results.extend(res.get("results", []))
+        if search_res.success and isinstance(search_res.data, dict):
+            # Extract results from the search agent's standardized output
+            all_raw_results.extend(search_res.data.get("results", []))
+            self.logger.info(f"[Research-V8] Swarm discovery yielded {len(all_raw_results)} initial vectors.")
+
+        # 1.5. Fallback/Augment with direct Tavily if key exists and swarm was insufficient
+        if not all_raw_results and not self.tavily_key:
+            self.logger.warning("[Research-V8] Swarm discovery failed and Tavily offline. Local fallback.")
+            return await self._execute_local_fallback(topic, context)
+            
+        if self.tavily_key and len(all_raw_results) < 5:
+            self.logger.info(f"[Research-V8] Augmenting swarm data with direct investigative search.")
+            discovery_tasks = [
+                self._tavily_search(topic, depth="basic")
+            ]
+            discovery_results = await asyncio.gather(*discovery_tasks)
+            for res in discovery_results:
+                all_raw_results.extend(res.get("results", []))
 
         if not all_raw_results:
-            return AgentResult(success=False, error="No external data intelligence could be gathered.")
+            return AgentResult(success=False, error="No external or swarm-based intelligence could be gathered for this mission.")
 
         # 2. Ranker: Precision Source Analysis
         # We still use the LLM to Rank, but it returns JSON, not a final answer

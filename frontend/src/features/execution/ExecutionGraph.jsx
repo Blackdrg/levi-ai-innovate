@@ -32,8 +32,9 @@ export const ExecutionGraph = ({ graph, results }) => {
       const result = results?.find(r => r.id === node.id || r.agent === node.agent);
       const isExecuting = !result && results?.length > 0;
       const status = result ? (result.success ? 'success' : 'error') : 'pending';
-      const isConsensus = node.agent === 'consensus_agent';
+      const isConsensus = node.agent === 'consensus_agent' || node.agent === 'swarm_consensus';
       
+      const provider = result?.provider || (result?.local_handoff ? 'Local (Ollama)' : 'Cloud (Sovereign)');
       const borderColor = isConsensus ? '#f59e0b' : (status === 'success' ? '#10b981' : status === 'error' ? '#ef4444' : '#6366f1');
       const glowColor = isConsensus ? 'rgba(245, 158, 11, 0.4)' : (status === 'success' ? 'rgba(16, 185, 129, 0.4)' : status === 'error' ? 'rgba(239, 68, 68, 0.4)' : 'rgba(99, 102, 241, 0.2)');
 
@@ -44,28 +45,44 @@ export const ExecutionGraph = ({ graph, results }) => {
             <div className={`node-content ${isExecuting ? 'pulse' : ''}`}>
               <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '4px', marginBottom: '2px' }}>
                  {isConsensus && <span style={{ color: '#f59e0b', fontSize: '10px' }}>⚡</span>}
+                 {result?.local_handoff && <span style={{ color: '#06b6d4', fontSize: '10px' }}>🏠</span>}
                  <div style={{ fontSize: '9px', opacity: 0.6 }}>{node.id.toUpperCase()}</div>
               </div>
               <div style={{ fontWeight: '800', fontSize: '11px', color: isConsensus ? '#f59e0b' : '#fff' }}>
                 {isConsensus ? 'SWARM CONSENSUS' : node.agent.split('_')[0].toUpperCase()}
               </div>
-              <div style={{ fontSize: '8px', marginTop: '4px', color: borderColor, fontWeight: 'bold' }}>{status.toUpperCase()}</div>
+              
+              {isConsensus && result?.winner && (
+                <div style={{ fontSize: '8px', color: '#f59e0b', marginTop: '2px', fontWeight: 'bold' }}>
+                  WINNER: {result.winner.toUpperCase()} ({Math.round(result.resonance * 100)}%)
+                </div>
+              )}
+
+              <div style={{ fontSize: '8px', marginTop: '4px', color: borderColor, fontWeight: 'bold' }}>
+                {status.toUpperCase()} {status === 'pending' && isExecuting ? '...' : ''}
+              </div>
+              
+              {result && (
+                <div style={{ fontSize: '7px', marginTop: '2px', opacity: 0.5, letterSpacing: '0.05em' }}>
+                  {provider}
+                </div>
+              )}
             </div>
           ) 
         },
-        position: { x: nodeWaves[node.id] * 220, y: (index % 4) * 90 }, // Slightly more spacing for v8.5 waves
+        position: { x: nodeWaves[node.id] * 220, y: (index % 4) * 90 },
         style: { 
-          background: isConsensus ? 'rgba(245, 158, 11, 0.05)' : 'rgba(10, 10, 10, 0.7)', 
-          backdropFilter: 'blur(12px)',
+          background: isConsensus ? 'rgba(245, 158, 11, 0.1)' : 'rgba(10, 10, 10, 0.85)', 
+          backdropFilter: 'blur(16px)',
           color: '#fff', 
           border: `1px solid ${borderColor}`,
-          borderRadius: '14px',
+          borderRadius: '16px',
           padding: '12px',
-          width: 160,
+          width: 170,
           textAlign: 'center',
-          boxShadow: `0 8px 25px ${glowColor}`,
-          transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
-          animation: isConsensus && isExecuting ? 'consensusPulse 2s infinite' : ''
+          boxShadow: `0 8px 30px ${glowColor}`,
+          transition: 'all 0.6s cubic-bezier(0.16, 1, 0.3, 1)',
+          animation: isConsensus && isExecuting ? 'consensusPulse 1.5s infinite' : ''
         },
       };
     });

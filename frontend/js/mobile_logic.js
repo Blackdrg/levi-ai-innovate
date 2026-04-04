@@ -82,59 +82,99 @@ async function confirmLink() {
     }
 }
 
+// --- ADAPTIVE PULSE DECODER (v4.1) ---
+function decodePulse(rawData) {
+    if (!rawData) return null;
+    try {
+        // 1. Try standard JSON first
+        return JSON.parse(rawData);
+    } catch (e) {
+        // 2. Fallback to zlib decompression (Mobile Adaptive Mode)
+        try {
+            const binaryString = window.atob(rawData);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            const decompressed = pako.inflate(bytes, { to: 'string' });
+            return JSON.parse(decompressed);
+        } catch (err) {
+            console.error("[Pulse v4.1] Logic Drift: Decompression failure.", err);
+            return null;
+        }
+    }
+}
+
 // --- TELEMETRY STREAM (SSE) ---
 function initTelemetryStream() {
-    console.log("[Pulse v4] Synchronizing with Sovereign core...");
+    console.log("[Pulse v4.1] Synchronizing Adaptive Mobile Bridge...");
     
-    const eventSource = new EventSource('/api/v8/telemetry/stream');
+    // Request the 'mobile' profile for server-side filtering and compression
+    const eventSource = new EventSource('/api/v8/telemetry/stream?profile=mobile');
 
-    // v4 Handshake
+    // v4.1 Handshake
     eventSource.addEventListener('pulse_handshake', (e) => {
-        const data = JSON.parse(e.data);
-        console.log(`[Pulse v4] Connected. Core Version: ${data.version}`);
-        addEvent('System', `Neural Pulse v${data.version} established.`, 'terminal');
+        const data = decodePulse(e.data);
+        if (!data) return;
+        console.log(`[Pulse v4.1] Linked. Profile: ${data.profile}`);
+        addEvent('System', `Neural Pulse v${data.version} established (Profile: ${data.profile})`, 'terminal');
     });
 
     // Perception & Handoff
     eventSource.addEventListener('perception', (e) => {
-        const event = JSON.parse(e.data);
+        const event = decodePulse(e.data);
+        if (!event) return;
         const { decision, metrics } = event.data;
         
         // Update Handoff UI
         const handoffEl = document.getElementById('handoff-status');
-        if (metrics.handoff_active) {
+        if (metrics.handoff_active || metrics.local_handoff) {
             handoffEl.classList.remove('opacity-0');
-            handoffEl.querySelector('span:last-child').innerText = `Neural Handoff: ${metrics.handoff_provider || 'Local'}`;
+            const provider = metrics.handoff_provider || (metrics.local_handoff ? 'Local' : 'Cloud');
+            handoffEl.querySelector('span:last-child').innerText = `Neural Handoff: ${provider}`;
         } else {
             handoffEl.classList.add('opacity-0');
         }
 
-        addEvent('Brain', `Perception: ${decision} path elected (Fidelity: ${metrics.internal_confidence || 1.0})`, 'visibility');
+        addEvent('Brain', `Perception: ${decision} path elected`, 'visibility');
     });
 
     // Learning & Self-Correction
     eventSource.addEventListener('learning_feedback', (e) => {
-        const outcome = JSON.parse(e.data);
+        const outcome = decodePulse(e.data);
+        if (!outcome) return;
         if (!outcome.success) {
-            addEvent('Evolution', `Failure detected in ${outcome.intent}. Logged for optimization.`, 'build');
+            addEvent('Evolution', `Failure detected in ${outcome.intent}. Healing active.`, 'build');
         }
     });
 
     eventSource.addEventListener('rule_promoted', (e) => {
-        const data = JSON.parse(e.data);
-        addEvent('Evolution', `New deterministic rule promoted for: ${data.query.substring(0, 30)}...`, 'auto_fix_high');
-        loadCrystallizedTraits(); // Refresh traits
+        const data = decodePulse(e.data);
+        if (!data) return;
+        addEvent('Evolution', `New rule promoted: ${data.query.substring(0, 20)}...`, 'auto_fix_high');
+        loadCrystallizedTraits(); 
     });
 
-    // Legacy/General Updates
-    eventSource.addEventListener('mission_update', (e) => {
-        const event = JSON.parse(e.data);
-        handleMissionUpdate(event);
+    // v9.8.1: Mission Events
+    eventSource.addEventListener('mission_start', (e) => {
+        const event = decodePulse(e.data);
+        if (event) handleMissionUpdate({ type: 'mission_start', payload: event.data });
+    });
+
+    eventSource.addEventListener('mission_complete', (e) => {
+        const event = decodePulse(e.data);
+        if (event) handleMissionUpdate({ type: 'mission_complete', payload: event.data });
+    });
+
+    eventSource.addEventListener('mission_error', (e) => {
+        const event = decodePulse(e.data);
+        if (event) handleMissionUpdate({ type: 'mission_error', payload: event.data });
     });
 
     eventSource.onerror = (err) => {
-        console.error("[Pulse] Link severed. Retrying...", err);
-        document.getElementById('link-status').querySelector('div').classList.replace('bg-emerald-500', 'bg-rose-500');
+        console.error("[Pulse v4.1] Bridge Severed. Recalibrating...", err);
+        const statusIcon = document.getElementById('link-status').querySelector('div');
+        statusIcon.classList.replace('bg-emerald-500', 'bg-rose-500');
     };
 }
 

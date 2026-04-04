@@ -23,6 +23,11 @@ PULSE_MISSION_AUDITED  = "mission_audited"
 PULSE_NODE_COMPLETED   = "node_completed"
 PULSE_MISSION_ERROR     = "mission_error"
 
+# v9.8.1: Swarm & Security Pulsar Types
+PULSE_SWARM_CONSENSUS  = "swarm_consensus"
+PULSE_SECURITY_SHIELD   = "security_shield" # PII Masking/Audit events
+PULSE_DREAM_PULSE       = "dream_pulse"     # Cognitive distillation events
+
 
 class SovereignBroadcaster:
     """
@@ -50,24 +55,27 @@ class SovereignBroadcaster:
             logger.error(f"[Pulse] Broadcast failure: {e}")
 
     @staticmethod
-    async def subscribe(user_id: str = "global") -> AsyncGenerator[str, None]:
+    async def subscribe(user_id: str = "global", profile: str = "desktop") -> AsyncGenerator[str, None]:
         """
-        Subscribes a client to the Sovereign Pulse v4 stream.
-        Features: Adaptive Heartbeats, Binary-Ready Payloads, and backpressure handling.
+        Sovereign Pulse v4.1: Adaptive Telemetry Stream.
+        Features: Profile-based filtering and zlib compression for mobile resilience.
         """
+        import zlib
+        import base64
+        
         client = SovereignCache.get_client()
         pubsub = client.pubsub()
         channel = f"{BROADCAST_CHANNEL}:{user_id}"
         
         await asyncio.to_thread(lambda: pubsub.subscribe(channel))
-        logger.info(f"[Pulse v4] New subscriber connected: {user_id}")
+        logger.info(f"[Pulse v4.1] Subscriber connected: {user_id} (Profile: {profile})")
         
         try:
-            # Yield Pulse v4 Handshake
-            yield f"event: pulse_handshake\ndata: {json.dumps({'version': '4.0.0', 'user_id': user_id, 'status': 'connected'})}\n\n"
+            # v4.1 Handshake with compression flag
+            handshake = {"version": "4.1.0", "user_id": user_id, "profile": profile}
+            yield f"event: pulse_handshake\ndata: {json.dumps(handshake)}\n\n"
             
             while True:
-                # Optimized multi-threaded message polling
                 message = await asyncio.to_thread(lambda: pubsub.get_message(ignore_subscribe_messages=True, timeout=0.1))
                 
                 if message and message['type'] == 'message':
@@ -75,19 +83,34 @@ class SovereignBroadcaster:
                     try:
                          data = json.loads(data_raw)
                          event_type = data.get("type", "pulse_update")
-                         # v4: Support for base64 encoded binary payloads if 'binary' flag is set
-                         if data.get("binary"):
-                             logger.debug("[Pulse v4] Processing binary payload...")
-                             
-                         yield f"event: {event_type}\ndata: {data_raw}\n\n"
+                         
+                         # 1. Profile-Based Filtering (Sovereign v9.8.1)
+                         if profile == "mobile":
+                             # Only allow high-level mission events for mobile
+                             allowed = ["mission_start", "mission_complete", "mission_error", "mission_aborted"]
+                             if event_type not in allowed:
+                                 continue
+                         
+                         # 2. Dynamic Compression for Mobile
+                         payload = data_raw
+                         is_compressed = False
+                         if profile == "mobile":
+                             compressed = zlib.compress(data_raw.encode('utf-8'))
+                             payload = base64.b64encode(compressed).decode('utf-8')
+                             is_compressed = True
+                         
+                         yield f"event: {event_type}\ndata: {payload}\n"
+                         if is_compressed:
+                             yield "x-compression: zlib\n"
+                         yield "\n"
+
                     except json.JSONDecodeError:
-                         # Fallback for raw binary/string data
                          yield f"data: {data_raw}\n\n"
                 
-                # Dynamic Heartbeat (Pulse v4)
+                # Dynamic Heartbeat
                 yield f"event: heartbeat\ndata: {json.dumps({'timestamp': asyncio.get_event_loop().time()})}\n\n"
 
-                await asyncio.sleep(0.1) # Higher frequency for v9.5 dashboards
+                await asyncio.sleep(0.1)
                 
         except asyncio.CancelledError:
             logger.info(f"[Pulse v4] Subscriber disconnected: {user_id}")

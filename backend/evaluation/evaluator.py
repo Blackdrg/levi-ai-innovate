@@ -61,7 +61,18 @@ class AutomatedEvaluator:
             "latency_ms": latency_ms
         }
 
-        # 4. Persistence (Self-Evolution Loop)
+        # 4. SELF-EVOLUTION LOOP: Pattern Promotion
+        if total_score >= 0.85 and user_id and not str(user_id).startswith("guest:"):
+            try:
+                from backend.core.v8.evolution_engine import EvolutionEngine
+                evo = EvolutionEngine()
+                # Promote to deterministic rules if fidelity is high
+                evo.learn(user_input, response, quality_score=total_score)
+                logger.info(f"[Evaluator] Mission {session_id} fed to Evolution Engine (Score: {total_score:.2f})")
+            except Exception as e:
+                logger.error(f"[Evaluator] Evolution learning drift: {e}")
+
+        # 5. PERSISTENCE (Audit & Telemetry)
         if user_id and not str(user_id).startswith("guest:"):
             # 4a. Legacy Firestore persistence
             try:

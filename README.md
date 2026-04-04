@@ -1,161 +1,86 @@
 # 🧠 LEVI-AI: Sovereign OS v9.8.1
-### **The Research-Grade Autonomous Cognitive Operating System**
+### **The Research-Grade Autonomous Cognitive Monolith**
 
 > *“Autonomy is not the absence of control, but the presence of a deterministic, audited, and resonant architectural monolith.”*
 
-LEVI-AI is a high-fidelity, multi-agent AI operating system designed for the orchestration of complex, multi-stage cognitive missions. Built on the **LeviBrain Core Controller** architecture, it implements a **Logic-Before-Language** philosophy, a **4-Level Deterministic Priority Stack**, and an **Exact-Match Learning Rule**, transforming standard LLM interactions into a deterministic, engine-first digital intelligence.
+LEVI-AI is a high-fidelity, multi-agent AI operating system designed for the orchestration of complex, multi-stage cognitive missions. Built on the **Sovereign Monolith** v9.8.1 architecture, it implements a **Logic-Before-Language** philosophy, a **4-Level Deterministic Priority Stack**, and **Autonomous Survival Gating**, transforming probabilistic LLM outputs into deterministic, audited digital intelligence.
 
 ---
 
 ## 🧾 1. Project Identity
 - **Name**: LEVI-AI Sovereign OS
-- **Version**: v9.8.1 "Sovereign Monolith: Absolute Autonomy"
-- **Mission**: To provide a deterministic framework for autonomous problem-solving where specialized agents collaborate under a centralized "Brain" orchestrator.
-- **Problem Solved**: Eliminates the "statelessness" of standard LLMs and the "probabilistic drift" of non-deterministic agent frameworks.
-- **Target Users**: Research engineers, enterprise architects, and power users requiring persistent, verifiable, and complex AI orchestration.
+- **Version**: v9.8.1 "Absolute Monolith"
+- **Architecture**: Unified Cognitive Controller (Brain v9.8.1).
+- **Core Pillars**: Swarm Consensus, Sovereign Shield (PII Security), and Adaptive Pulse v4.1 (Mobile Telemetry).
 
 ---
 
-## 🚀 2. Quick Start & Prerequisites
-Before launching the Monolith, ensure your environment meets the minimum cognitive requirements.
+## 🚀 2. Quick Start (The Monolith Boot)
+Launching the Sovereign AI is now a single-command process.
 
-### **Prerequisites**
-- **Docker & Docker Compose**: (v2.20+) for service containerization.
-- **Python**: 3.10+ (for local logic execution).
-- **Node.js**: 18+ (for the Interface).
-- **Environment Keys**: Groq, OpenAI, Tavily, and Pinecone/FAISS.
-
-### **Launch the Monolith**
-1. **Clone & Initialize**:
+### **Launch the Fabric**
+1. **Initialize Environment**:
    ```bash
    git clone https://github.com/Blackdrg/levi-ai-innovate.git
    cd levi-ai-innovate
-   cp .env.example .env
+   cp .env.example .env && nano .env
    ```
-2. **Boot the Fabric**:
+2. **Boot the Monolith**:
    ```bash
    docker-compose up -d --build
    ```
 3. **Verify Sovereign Health**:
    ```ps1
-   ./migrate.bat
-   python verify_v9_8_full.py
+   ./launch.bat --verify
    ```
 
 ---
 
-## 🧠 3. Core Philosophy / Architecture Vision
-LEVI-AI is built on the philosophy of **Cognitive Persistence**. 
-- **Logic-Before-Language**: LLMs are treated as a *Last Resort Fallback*. Internal engines, rule-based logic, and memory retrieval take absolute precedence.
-- **Monolith Architecture**: The cognitive core is a unified, deterministic controller that eliminates probabilistic drift via a strict execution priority stack.
-- **4-Level Priority Stack**:
-    1. **LEVEL 1**: Internal Brain Logic (**RulesEngine**, **PatternRegistry**, Memory Retrieval).
-    2. **LEVEL 2**: Engine Execution (**Math**, **PythonREPL**, **Document RAG**).
-    3. **LEVEL 3**: Agent Tool Usage (**Tavily**, **FFmpeg**, **Sharp**, Structured Tools).
-    4. **LEVEL 4**: LLM Fallback (Creative/Ambiguous reasoning).
-
----
-
-## ⚙️ 3. Full System Architecture (The Sovereign Monolith)
-The Sovereign Monolith consolidates intelligence while delegating I/O and state to specialized high-performance backends via the **Sovereign Service Fabric**.
+## 🧠 3. Deterministic Architecture (The 8-Step Pipeline)
+LEVI-AI follows a rigorous discipline of execution to ensure mission-deterministic outcomes via the **Unified Brain Controller**.
 
 ```mermaid
 graph TD
     %% Entry Layer
-    User((User Interface)) -->|SSE Protocol v3| Gateway[Sovereign API Gateway]
+    User((User Interface)) -->|Adaptive Pulse v4.1| Gateway[Sovereign Monolith API]
     
-    %% Cognitive Monolith v9.8
-    subgraph "Core Monolith (LeviBrain v9.8)"
-        Gateway --> Perception[Perception Engine]
-        Perception --> Goal[Goal Engine]
-        Goal --> Planner[DAG-based Planner]
-        Planner --> Executor[Graph Executor]
+    %% Cognitive Monolith v9.8.1
+    subgraph "Core Monolith (LeviBrain v9.8.1)"
+        Gateway --> Perception[Perception: Intent Extraction]
+        Perception --> Goal[Goal: Success Criteria]
+        Goal --> Planner[Planner: Dynamic DAG]
+        Planner --> Executor[Executor: Swarm Waves]
         
-        %% Internal Decision Fabric
-        subgraph "Intelligence Cycles"
-            Executor --> Blackboard[Mission Blackboard]
-            Blackboard --> Agents[Agent Swarm: 14 Modules]
-            Agents --> Logic[Logic Guard: RulesEngine]
-            Logic --> Reflection[Reflection Engine: Critic]
+        %% Intelligence Cycles
+        subgraph "Intelligence & Security"
+            Executor --> Shield[Sovereign Shield: PII Scrubber]
+            Shield --> Swarm[Swarm Consensus: Agent Review]
+            Swarm --> Reflection[Reflection: High-Fidelity Audit]
         end
         
-        %% Intelligence Layers
-        Reflection -->|Retry/Correction| Executor
-        Reflection -->|Audit| Learning[Learning Loop: Evolution]
-        Learning -->|Self-Correction| Planner
+        Reflection -->|Retry| Executor
+        Reflection -->|Finalize| Synthesis[Mission Synthesis]
     end
     
-    %% Messaging & Event Bus
-    Executor -->|Neural Pulse| Kafka[Kafka: Event Bus]
-    Kafka -->|Broadcaster| Redis_P[Redis: Pulse SSE]
-
     %% Resonant Memory Fabric
-    subgraph "Sovereign Data Fabric"
-        Executor --> Memory[Memory Manager]
-        Memory -->|Tier 1| Redis[(Redis: Working Pulse)]
-        Memory -->|Tier 2| Firestore[(Firestore: Episodic Ledger)]
-        Memory -->|Tier 3| FAISS[[FAISS: Semantic Intelligence]]
-        Memory -->|Tier 4| Postgres[(Postgres: Sovereign Identity)]
-        Memory -->|Knowledge| Neo4j[(Neo4j: Knowledge Graph)]
+    subgraph "Sovereign Data Fabric (5-Tier)"
+        Synthesis --> Memory[Memory Manager]
+        Memory -->|Tier 1| Redis[(Redis: Pulse v4.1)]
+        Memory -->|Tier 2| Firestore[(Firestore: Episodic)]
+        Memory -->|Tier 3| FAISS[[FAISS: Semantic / Survival Gated]]
+        Memory -->|Tier 4| Postgres[(Postgres: Vaulted Identity)]
+        Memory -->|Tier 5| Neo4j[(Neo4j: Relational Knowledge)]
     end
-    
-    %% External Ecosystem
-    Agents -->|Research| Tavily[Tavily Search API]
-    Agents -->|Execution| Sandbox[Secure Python Sandbox]
 ```
 
 ---
 
-## ⚙️ 3.5 Hardware Matrix Recommendations (v8.11.1)
-LEVI-AI requires coherent architecture for high-fidelity reasoning passes and embedding-heavy context windows.
-
-| Node Type | Minimum Spec | Recommended Spec | Primary Role |
-| :--- | :--- | :--- | :--- |
-| **Monolith API** | 4 vCPU, 8GB RAM | 8 vCPU, 16GB RAM | 8-Step Pipeline & SSE Pulse. |
-| **Neural Worker**| 4 vCPU, 8GB RAM | 16 vCPU, 32GB RAM | Swarm Logic & Trait Distillation. |
-| **Memory Bus** | 2 vCPU, 2GB RAM | 4 vCPU, 4GB RAM | Kafka/Redis telemetry distribution. |
-
----
-
-## 🔄 4. Execution Pipeline (The 8-Step Mission Cycle)
-LEVI-AI follows a rigorous discipline of execution to ensure mission deterministic outcomes.
-
-### **Detailed Sequence Diagram**
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant G as Gateway
-    participant P as Perception Engine
-    participant D as Decision Logic
-    participant PL as DAG Planner
-    participant EX as Graph Executor
-    participant RF as Reflection (Critic)
-    participant ML as Memory & Learning
-
-    U->>G: Mission Request (v3 SSE)
-    G->>P: Vision Intake & Intent Extraction
-    P-->>D: IntentResult (Intent, Entities, Style)
-    D->>D: Compute Decision Metrics (Confidence, Capability)
-    
-    alt Level 1/2 (Logic/Engine)
-        D->>ML: Direct Rule/Memory Execution
-    else Level 3/4 (Agent/LLM)
-        D->>PL: Construct TaskGraph (Waves & Dependencies)
-        PL-->>EX: TaskNode[] (Neural Contracts)
-        loop wave_execution
-            EX->>EX: Resolve Inputs (Neural Resolver)
-            EX->>ML: Hydrate Context (T1-T4)
-            EX->>EX: Dispatch Swarm Waves
-            EX-->>EX: Sync Mission Blackboard
-        end
-        EX->>RF: Fidelity Audit (S > 0.85)
-        RF-->>EX: Validation Status
-    end
-    
-    EX->>ML: Distill Mission Results
-    ML->>ML: Trait Crystallization (f > 0.95)
-    ML-->>U: Final Aggregated Response
-```
+## 🛡️ 4. Sovereign Shield & Security
+Sovereign intelligence requires architectural isolation.
+- **Sovereign Shield**: Mandatory NER sanitization (PII Masking) before any cloud-bound neural inference.
+- **SovereignVault (AES-256)**: All identity-tier data in Postgres is encrypted at rest.
+- **Swarm Consensus**: Aggregates reasoning from multiple agents (Research, Critic, Code) into a single, high-fidelity conclusion via the `ConsensusAgentV8`.
+- **Survival Gating**: Weekly autonomous hygiene that purges low-resonance memories (<0.5 score).
 
 ---
 
@@ -226,6 +151,7 @@ $$Resonance = \frac{Importance}{1 + (AgeDays \times 0.1)}$$
 | **T2: Episodic** | Firestore | Relational ledger. | Interaction history with metadata. |
 | **T3: Semantic**| Vector Store | High-speed semantic facts. | Persistent; searchable via HNSW Index. |
 | **T4: Identity**| Postgres | Distilled Traits. | Core personality weights ($\text{Importance} \times 0.95$). |
+| **T5: Knowledge**| Neo4j | Relational context. | Research artifact mapping & relational facts. |
 
 ---
 
@@ -249,7 +175,7 @@ The system autonomously improves its own cognitive performance over time.
 
 ---
 
-## ⚡ 9. Streaming & Telemetry (Neural Pulse v3)
+## ⚡ 9. Streaming & Telemetry (Neural Pulse v4.1)
 High-Fidelity SSE Telemetry provides 360-degree observability of the cognitive mission.
 
 - **SSE Event Manifest**:
@@ -302,10 +228,10 @@ CREATE TABLE intelligence_traits (
 ## 🔌 12. API Documentation (High-Fidelity)
 | Endpoint | Method | Purpose | Key Params |
 | :--- | :--- | :--- | :--- |
-| `/api/v1/orchestrator/chat/stream` | `POST` | Execute 8-step mission pipeline. | `input`, `session_id`, `context` |
-| `/api/v1/memory/history/{id}` | `GET` | Fetch Episodic interactions. | `session_id` |
+| `/api/v8/orchestrator/chat/stream` | `POST` | Execute 8-step mission pipeline. | `prompt`, `session_id` |
+| `/api/v8/memory/history/{id}` | `GET` | Fetch Episodic interactions. | `session_id` |
 | `/api/v8/telemetry/traits` | `GET` | Fetch distilled Identity traits. | `user_id` |
-| `/api/v1/studio/generate` | `POST` | Trigger multi-modal generation. | `type`, `prompt` |
+| `/api/v8/studio/generate` | `POST` | Trigger multi-modal generation. | `type`, `prompt` |
 
 ---
 
@@ -322,12 +248,10 @@ Ensure your `.env` contains the v9.8.1 Sovereign URI set for full cognitive reso
 
 ---
 
-## 🚀 13. Deployment & Infrastructure
-LEVI-AI is deployed as a resilient, multi-service architecture.
-- **Stack**: Docker Compose (7 Core Services: API, Postgres, Redis, FAISS, Neo4j, Kafka, Worker).
-- **Messaging**: Kafka for high-throughput telemetry event distribution.
-- **Scaling**: K8s-ready with vertical auto-scaling for memory-intensive agents.
-- **Sync**: `MIGRATE_SOVEREIGN.ps1` for automated database alignment.
+- **Stack**: Docker Compose (6 Core Services: API Monolith, Postgres, Redis, FAISS, Neo4j, Firestore).
+- **Messaging**: Redis Pulse v4.1 for low-latency mission telemetry.
+- **Scaling**: K8s-ready with vertical auto-scaling for memory-heavy agents.
+- **Boot**: `launch.bat` (Windows) or `launch.sh` (Linux/WSL) for environment verification.
 
 ---
 
@@ -346,20 +270,21 @@ LEVI-AI is deployed as a resilient, multi-service architecture.
 
 ---
 
-## 📖 15.5 Recent Evolution (v8.11.1)
-The evolution from v7 to v8.11.1 focuses on absolute architectural finality.
+## 📖 15.5 Recent Evolution (v9.8.1 Graduation)
+The evolution to v9.8.1 focuses on absolute architectural finality.
 
-- **Swarm Intelligence 2.0**: Integrated the **Mission Blackboard** for cross-agent collaboration.
-- **Hardened Security**: Deployed the **SovereignVault** (AES-256 identity encryption).
-- **Advanced Orchestration**: Implemented the **Neural Resolver** for dynamic cross-node dependency resolution.
-- **Resonant Memory**: Mathematically codified the **Survival Score** and 90-day decay window.
+- **Sovereign Monolith Graduation**: Unified all fragmented cognitive pipelines into a single, deterministic Brain Controller.
+- **Swarm Consensus**: Integrated the **ConsensusAgentV8** for mission-aware reasoning aggregation.
+- **Sovereign Shield**: Implemented mandatory PII sanitization (NER-based) across the entire cognitive core.
+- **Survival Gating**: Mathematically codified the **Survival Score** hygiene cycle for autonomous memory pruning.
+- **Adaptive Pulse v4.1**: Optimized telemetry for mobile visual sovereignty with binary `zlib` compression.
 
 ---
 
 ## 📂 16. Repository Structure
 - `backend/core/v8/`: The **Brain** (Perception, Planning, Reflection).
 - `backend/agents/`: **Delegates** (14 Autonomous Agents).
-- `backend/memory/`: The **Psyche** (4-tier resonance).
+- `backend/memory/`: The **Psyche** (5-tier resonance).
 - `backend/db/`: **Ledgers** (Postgres, Redis, FAISS, Neo4j, Firestore).
 - `frontend/`: **Interface** (React/Zustand/Tailwind).
 
@@ -368,8 +293,8 @@ The evolution from v7 to v8.11.1 focuses on absolute architectural finality.
 ## 🩺 16.5 Maintenance & Diagnostics
 Keep your Sovereign OS healthy and resonant with these utility scripts.
 
-- **Integrity Check**: `python verify_v8_master.ps1` -- Validates all 6 core data stores.
-- **Identity Sync**: `./MIGRATE_SOVEREIGN.ps1` -- Aligns Postgres schema with the latest v8.11.1 specs.
+- **Integrity Check**: `./launch.bat --verify` -- Validates all 5 core cognitive stores.
+- **Identity Sync**: `python backend/core/v8/db_init.py` -- Aligns schemas for the v9.8.1 Monolith graduation.
 - **Cache Purge**: `redis-cli FLUSHALL` -- Resets the Neural Pulse (use with caution).
 - **Log Audit**: View `logs/sovereign_core.log` for real-time mission error tracking.
 

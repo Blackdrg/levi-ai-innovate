@@ -256,13 +256,72 @@ class MemoryManager:
         distill_key = f"user:{user_id}:opts:distill_count"
         try:
             count = redis_client.incr(distill_key)
-            if count >= 20: 
-                logger.info(f"[MemoryManager] Triggering silent distillation for {user_id}...")
+            if count >= 15: # Trigger more frequently in v9.8
+                logger.info(f"[MemoryManager] Triggering cognitive distillation for {user_id}...")
                 asyncio.create_task(self.distiller.distill_user_memory(user_id))
                 redis_client.set(distill_key, 0)
+                
+                # V9.8: Signal Dreaming Readiness
+                redis_client.set(f"user:{user_id}:dream_ready", 1)
 
         except Exception as e:
             logger.error(f"Distillation trigger failed: {e}")
+
+    async def dream(self, user_id: str):
+        """
+        LeviBrain v9.8: Dreaming Phase.
+        Autonomous deep-distillation that runs when the user is inactive.
+        Crystallizes mid-term session patterns into permanent Tier 4 Postgres traits.
+        """
+        logger.info(f"[MemoryManager] {user_id} is entering the Dreaming Phase...")
+        
+        # 1. Gather all recent context (No trimming)
+        mid_term = await self.get_mid_term(user_id, limit=50)
+        long_term = await self.get_long_term(user_id)
+        
+        if len(mid_term) < 5:
+            logger.info(f"[MemoryManager] Not enough mental material for {user_id} to dream.")
+            return False
+
+        # 2. Crystallize Traits (Episodic -> Identity)
+        # We use the resonance engine for the psychological formula
+        from .resonance import MemoryResonance
+        new_traits = await MemoryResonance.distill_traits(user_id, mid_term + long_term.get("raw", []))
+        
+        if new_traits:
+            logger.info(f"[MemoryManager] Dream successful. Crystallized {len(new_traits)} new core traits for {user_id}.")
+            # Store in Tier 4 (Permanent Identity)
+            for trait in new_traits:
+                await self._store_tier4_trait(user_id, trait)
+            return True
+            
+        return False
+
+    async def _store_tier4_trait(self, user_id: str, trait_data: Dict[str, Any]):
+        """Persists a crystallized trait into the Postgres Identity store."""
+        try:
+            async with PostgresDB._session_factory() as session:
+                # Upsert trait logic
+                from backend.db.models import UserTrait
+                stmt = select(UserTrait).where(UserTrait.user_id == user_id, UserTrait.trait == trait_data["fact"])
+                res = await session.execute(stmt)
+                existing = res.scalar_one_or_none()
+                
+                if existing:
+                    existing.weight = (existing.weight + trait_data.get("importance", 0.5)) / 2
+                    existing.last_reinforced = datetime.now(timezone.utc)
+                else:
+                    new_trait = UserTrait(
+                        user_id=user_id,
+                        trait=trait_data["fact"],
+                        weight=trait_data.get("importance", 0.5),
+                        category="crystallized"
+                    )
+                    session.add(new_trait)
+                
+                await session.commit()
+        except Exception as e:
+            logger.error(f"Tier 4 persistence failure during dream: {e}")
 
     async def distill_legacy_core(self, user_id: str) -> None:
         """DEPRECATED: Use MemoryDistiller.distill_user_memory instead."""
