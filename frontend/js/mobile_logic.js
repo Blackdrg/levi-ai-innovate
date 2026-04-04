@@ -59,7 +59,8 @@ async function confirmLink() {
     if (!token) return;
 
     try {
-        const response = await fetch('/api/v8/mobile/link/confirm?token=' + token, {
+        // v13.0.0 Absolute Monolith Link
+        const response = await fetch('/api/v1/mobile/link/confirm?token=' + token, {
             method: 'POST'
         });
         
@@ -72,13 +73,13 @@ async function confirmLink() {
             togglePairing(false);
             checkLinkStatus();
             initTelemetryStream();
-            addEvent('System', 'Sovereign Link established successfully.', 'settings_input_antenna');
+            addEvent('System', 'Sovereign Link v13.0.0 Established.', 'settings_input_antenna');
         } else {
-            alert('Pairing Failed: Link rejected by core.');
+            alert('Pairing Failed: Link rejected by Monolith.');
         }
     } catch (err) {
         console.error('Pairing Error:', err);
-        alert('Pairing Error: Network anomaly detected.');
+        alert('Pairing Error: Neural synchronization anomaly.');
     }
 }
 
@@ -107,20 +108,20 @@ function decodePulse(rawData) {
 
 // --- TELEMETRY STREAM (SSE) ---
 function initTelemetryStream() {
-    console.log("[Pulse v4.1] Synchronizing Adaptive Mobile Bridge...");
+    console.log("[Pulse v4.1] Synchronizing v13.0.0 Monolith Bridge...");
     
-    // Request the 'mobile' profile for server-side filtering and compression
-    const eventSource = new EventSource('/api/v8/telemetry/stream?profile=mobile');
+    // Request the graduated v1 telemetry stream
+    const eventSource = new EventSource('/api/v8/telemetry/stream?profile=mobile&version=v13.0.0');
 
-    // v4.1 Handshake
+    // v13.0 Handshake
     eventSource.addEventListener('pulse_handshake', (e) => {
         const data = decodePulse(e.data);
         if (!data) return;
-        console.log(`[Pulse v4.1] Linked. Profile: ${data.profile}`);
-        addEvent('System', `Neural Pulse v${data.version} established (Profile: ${data.profile})`, 'terminal');
+        console.log(`[Pulse v4.1] v13.0 Linked. Profile: ${data.profile}`);
+        addEvent('System', `Absolute Monolith Pulse v${data.version} established.`, 'terminal');
     });
 
-    // Perception & Handoff
+    // Perception & Handoff (v13.0)
     eventSource.addEventListener('perception', (e) => {
         const event = decodePulse(e.data);
         if (!event) return;
@@ -130,13 +131,13 @@ function initTelemetryStream() {
         const handoffEl = document.getElementById('handoff-status');
         if (metrics.handoff_active || metrics.local_handoff) {
             handoffEl.classList.remove('opacity-0');
-            const provider = metrics.handoff_provider || (metrics.local_handoff ? 'Local' : 'Cloud');
+            const provider = metrics.handoff_provider || (metrics.local_handoff ? 'Local' : 'Swarm');
             handoffEl.querySelector('span:last-child').innerText = `Neural Handoff: ${provider}`;
         } else {
             handoffEl.classList.add('opacity-0');
         }
 
-        addEvent('Brain', `Perception: ${decision} path elected`, 'visibility');
+        addEvent('Brain', `Perception: ${decision} path elected (v13.0)`, 'visibility');
     });
 
     // Learning & Self-Correction
@@ -169,6 +170,34 @@ function initTelemetryStream() {
     eventSource.addEventListener('mission_error', (e) => {
         const event = decodePulse(e.data);
         if (event) handleMissionUpdate({ type: 'mission_error', payload: event.data });
+    });
+
+    eventSource.addEventListener('activity', (e) => {
+        const event = decodePulse(e.data);
+        if (event) addEvent('Brain', event.data, 'bolt');
+    });
+
+    eventSource.addEventListener('graph', (e) => {
+        const event = decodePulse(e.data);
+        if (event && event.data) {
+             const graphSize = Object.keys(event.data.nodes || {}).length;
+             handleMissionUpdate({ type: 'mission_start', payload: { graph_size: graphSize } });
+        }
+    });
+
+    eventSource.addEventListener('results', (e) => {
+        const event = decodePulse(e.data);
+        if (event) handleMissionUpdate({ type: 'mission_complete', payload: event.data });
+    });
+
+    // v9.8.1: Dreaming Phase Logs
+    eventSource.addEventListener('MEMORY_DREAMING_START', (e) => {
+        addEvent('Evolution', 'Sovereign Dreaming initiated: Consolidating episodic fragments...', 'psychology');
+    });
+
+    eventSource.addEventListener('MEMORY_DREAMING_COMPLETE', (e) => {
+        addEvent('Evolution', 'Dreaming Phase successful. Traits crystallized.', 'auto_fix_high');
+        loadCrystallizedTraits();
     });
 
     eventSource.onerror = (err) => {

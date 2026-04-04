@@ -10,7 +10,7 @@ The LEVI-AI "Sovereign Monolith" architecture exposes a high-fidelity cognitive 
 Executes a full 8-step cognitive mission with real-time SSE telemetry.
 
 - **Request Headers:**
-    - `Authorization: Bearer <FirebaseID>`
+    - `Authorization: Bearer <SovereignToken>`
     - `Content-Type: application/json`
 
 - **Request Body (JSON):**

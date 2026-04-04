@@ -97,16 +97,32 @@ export const apiPostStream = async (path, body, { onToken, onEvent, onError }) =
 /**
  * Standard GET SSE Streamer
  * Uses Native EventSource for simpler GET streams (Neural Status, Stats).
+ * v4.1 Adaptive Pulse: Supports both JSON and Binary pulses (pako).
  */
 export const apiStream = (path, onMessage) => {
   const eventSource = new EventSource(`${BASE_URL}${path}`);
   
   eventSource.onmessage = (event) => {
+    if (!event.data) return;
     try {
+      // 1. Try standard JSON first
       const data = JSON.parse(event.data);
       onMessage(data);
     } catch (e) {
-      console.warn("SSE parse error", e);
+      // 2. Fallback to Binary Pulse decoding (pako)
+      try {
+        import("pako").then((pako) => {
+           const binaryString = window.atob(event.data);
+           const bytes = new Uint8Array(binaryString.length);
+           for (let i = 0; i < binaryString.length; i++) {
+               bytes[i] = binaryString.charCodeAt(i);
+           }
+           const decompressed = pako.inflate(bytes, { to: "string" });
+           onMessage(JSON.parse(decompressed));
+        }).catch(err => console.error("Pako dynamic import failure", err));
+      } catch (err) {
+        console.warn("[Pulse v4.1] Logic Drift: Decoding failure.", err);
+      }
     }
   };
 

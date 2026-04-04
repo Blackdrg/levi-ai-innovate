@@ -85,6 +85,7 @@ class ToolResult(BaseModel):
     error: Optional[str] = None
     agent: str = "unknown"
     latency_ms: int = 0
+    confidence: float = Field(1.0, ge=0.0, le=1.0)
     cost_score: int = 0
     total_tokens: int = 0
     retryable: bool = True
@@ -138,6 +139,7 @@ class AgentResult(BaseModel, Generic[DataT]):
     agent: str = "unknown"
     error: Optional[str] = None
     latency_ms: float = 0.0
+    confidence: float = Field(1.0, ge=0.0, le=1.0)
     citations: List[str] = Field(default_factory=list)
     metadata: Dict[str, Any] = Field(default_factory=dict)
 

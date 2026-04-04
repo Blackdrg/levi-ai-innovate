@@ -3,6 +3,7 @@ version: '3.8'
 services:
 
   api:
+    container_name: levi_monolith_api
     build:
       context: ./
       dockerfile: backend/Dockerfile.v8
@@ -11,6 +12,8 @@ services:
     environment:
       - REDIS_URL=redis://redis:6379/0
       - DATABASE_URL=postgresql://levi:levi@postgres:5432/levi_db
+      - DCN_SYNC_HUB=https://sync.levi-ai.com
+      - SWARM_SYNC_KEY=graduated_v13_resonance
     depends_on:
       redis:
         condition: service_healthy
@@ -21,37 +24,14 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '2.0'
-          memory: 4G
+          cpus: '4.0' # Increased for v13.0 Parallel Consensus
+          memory: 8G
     restart: unless-stopped
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  postgres:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_USER: levi
-      POSTGRES_PASSWORD: levi
-      POSTGRES_DB: levi_db
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U levi -d levi_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+  # ... other services ...
 
   worker:
+    container_name: levi_monolith_worker
     build:
       context: ./
       dockerfile: backend/Dockerfile.v8

@@ -31,6 +31,8 @@ from backend.api.v8.telemetry import broadcast_mission_event
 from backend.memory.cache import MemoryCache
 from backend.memory.vector_store import SovereignVectorStore
 from backend.memory.resonance import MemoryResonance
+from backend.db.neo4j_client import Neo4jClient
+from backend.memory.bm25_retriever import BM25Retriever
 
 logger = logging.getLogger(__name__)
 
@@ -79,26 +81,34 @@ class MemoryManager:
     # ── Tier 3/4: Semantic & Identity Retrieval ──────────────────────────────
 
     async def get_long_term(self, user_id: str, query: str = "") -> Dict[str, Any]:
-        """Categorized semantic facts from vector store with resonant decay logic."""
+        """Hybrid retrieval: Categorized semantic facts (FAISS) + Keyword (BM25) + Graph (Neo4j)."""
         if not user_id: return {}
         
         try:
-            # 1. Semantic Vector Search
-            relevant_facts = await SovereignVectorStore.search_facts(user_id, query, limit=15)
+            # 1. Semantic Vector Search (FAISS)
+            vector_facts = await SovereignVectorStore.search_facts(user_id, query, limit=15)
             
-            # 2. Resonance Decay Application
-            decayed = MemoryResonance.apply_decay(relevant_facts)
+            # 2. Keyword Search (BM25)
+            # Re-rank local vectors using BM25 for keyword precision
+            bm25 = BM25Retriever()
+            keyword_facts = bm25.compute_bm25_scores(query, vector_facts)
             
-            # 3. Cognitive Categorization
+            # 3. Graph Resonance (Neo4j)
+            graph_resonance = await Neo4jClient.get_resonance_entities(user_id, query)
+            
+            # 4. Resonance Decay Application (v11.0 4-Factor)
+            decayed = MemoryResonance.apply_decay(keyword_facts)
+            
+            # 5. Hybrid Merge & Cognitive Categorization
             return {
                 "preferences": [f["fact"] for f in decayed if f["category"] == "preference" and f.get("survival_score", 0) > 0.5],
                 "traits":      [f["fact"] for f in decayed if f["category"] == "trait"],
                 "history":     [f["fact"] for f in decayed if f["category"] == "history" and f.get("survival_score", 0) > 0.6],
-                "other":       [f["fact"] for f in decayed if f["category"] == "factual" and f.get("survival_score", 0) > 0.6],
+                "graph_resonance": graph_resonance,
                 "raw":         decayed
             }
         except Exception as e:
-            logger.error(f"[MemoryV8] Long-term retrieval failed: {e}")
+            logger.error(f"[MemoryV8] Hybrid long-term retrieval failed: {e}")
             return {}
 
     # ── Orchestration: Combined Context ─────────────────────────────────────
@@ -141,6 +151,7 @@ class MemoryManager:
             "interaction_pulse": pulse,
             "preferences":       preferences,
             "traits":            long_term.get("traits", []),
+            "identity_insights": [f["fact"] for f in long_term.get("raw", []) if f.get("category") == "insight"],
             "user_id":           user_id,
             "session_id":        session_id,
             "context_drift":     context_drift,

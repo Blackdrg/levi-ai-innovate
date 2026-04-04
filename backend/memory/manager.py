@@ -87,14 +87,20 @@ class MemoryManager:
         total_chars = 0
         char_limit = max_tokens * 4
         
-        priority = ["prototypes", "traits", "preferences", "long_term", "mid_term", "history"]
+        # Priority Stack: Identity (T4) -> Knowledge (T5) -> Semantic (T3) -> Episodic (T2)
+        priority = ["tier4_traits", "graph_resonance", "preferences", "long_term", "mid_term", "history"]
         pruned = {k: facts.get(k, []) for k in facts.keys() if k not in priority}
         for k in priority: pruned[k] = []
 
         for cat in priority:
             items = facts.get(cat, [])
-            if isinstance(items, dict): # Handle long_term dict
-                items = items.get("raw", [])
+            if not items: continue
+
+            if isinstance(items, dict):
+                # Handle dictionary structures (like T4 traits or Graph resonance)
+                pruned[cat] = items
+                total_chars += len(str(items))
+                continue
             
             for item in items:
                 text = str(item.get("fact", "")) if isinstance(item, dict) else str(item)
@@ -163,6 +169,8 @@ class MemoryManager:
 
         try:
             from sqlalchemy.orm import selectinload
+            if PostgresDB._session_factory is None:
+                PostgresDB.get_engine()
             async with PostgresDB._session_factory() as session:
                 query = select(UserProfile).options(
                     selectinload(UserProfile.traits),
@@ -249,53 +257,77 @@ class MemoryManager:
             logger.error(f"Memory extraction anomaly: {e}")
 
     async def _trigger_distillation(self, user_id: str):
-        """Periodic trait consolidation logic using Redis interaction counters."""
+        """Periodic trait consolidation and rule promotion logic."""
         from backend.db.redis import r as redis_client, HAS_REDIS
         if not HAS_REDIS: return
         
         distill_key = f"user:{user_id}:opts:distill_count"
         try:
             count = redis_client.incr(distill_key)
-            if count >= 15: # Trigger more frequently in v9.8
+            if count >= 15:
                 logger.info(f"[MemoryManager] Triggering cognitive distillation for {user_id}...")
-                asyncio.create_task(self.distiller.distill_user_memory(user_id))
+                asyncio.create_task(self.distill_user_memory(user_id))
                 redis_client.set(distill_key, 0)
-                
-                # V9.8: Signal Dreaming Readiness
                 redis_client.set(f"user:{user_id}:dream_ready", 1)
 
         except Exception as e:
             logger.error(f"Distillation trigger failed: {e}")
 
+    async def distill_user_memory(self, user_id: str):
+        """Bridge to MemoryDistiller."""
+        await self.distiller.distill_user_memory(user_id)
+
     async def dream(self, user_id: str):
         """
-        LeviBrain v9.8: Dreaming Phase.
-        Autonomous deep-distillation that runs when the user is inactive.
-        Crystallizes mid-term session patterns into permanent Tier 4 Postgres traits.
+        LeviBrain v9.8.1: Enhanced Dreaming.
+        Crystallizes patterns into Tier 4 Identity and promotes JSON rules.
         """
-        logger.info(f"[MemoryManager] {user_id} is entering the Dreaming Phase...")
+        logger.info(f"[Dreaming] {user_id} is entering high-fidelity state...")
         
-        # 1. Gather all recent context (No trimming)
         mid_term = await self.get_mid_term(user_id, limit=50)
         long_term = await self.get_long_term(user_id)
         
         if len(mid_term) < 5:
-            logger.info(f"[MemoryManager] Not enough mental material for {user_id} to dream.")
             return False
 
-        # 2. Crystallize Traits (Episodic -> Identity)
-        # We use the resonance engine for the psychological formula
         from .resonance import MemoryResonance
+        # 1. Distill Core Traits
         new_traits = await MemoryResonance.distill_traits(user_id, mid_term + long_term.get("raw", []))
         
-        if new_traits:
-            logger.info(f"[MemoryManager] Dream successful. Crystallized {len(new_traits)} new core traits for {user_id}.")
-            # Store in Tier 4 (Permanent Identity)
-            for trait in new_traits:
-                await self._store_tier4_trait(user_id, trait)
-            return True
+        # 2. Identify Rule Candidates (Frequent high-fidelity patterns)
+        # For Phase 2, we simulate rule promotion from high-importance traits
+        rule_candidates = [t for t in new_traits if t.get("importance", 0) > 0.95]
+        
+        for trait in new_traits:
+            await self._store_tier4_trait(user_id, trait)
             
-        return False
+        for rule in rule_candidates:
+            await self._promote_to_rule(user_id, rule)
+            
+        return True
+
+    async def _promote_to_rule(self, user_id: str, rule_data: Dict[str, Any]):
+        """Promotes a pattern to a Level 1 Deterministic Rule (JSON Intent Logic)."""
+        logger.info(f"[RulePromotion] Promoting pattern to JSON rule for {user_id}: {rule_data['fact'][:50]}")
+        try:
+            async with PostgresDB._session_factory() as session:
+                from backend.db.models import UserTrait
+                # Rules are stored as traits with category 'rule_logic'
+                new_rule = UserTrait(
+                    user_id=user_id,
+                    trait=rule_data["fact"],
+                    weight=1.0,
+                    category="rule_logic",
+                    metadata_json=json.dumps({
+                        "type": "intent_logic",
+                        "promoted_at": datetime.now(timezone.utc).isoformat(),
+                        "version": "1.0"
+                    })
+                )
+                session.add(new_rule)
+                await session.commit()
+        except Exception as e:
+            logger.error(f"Rule promotion failed: {e}")
 
     async def _store_tier4_trait(self, user_id: str, trait_data: Dict[str, Any]):
         """Persists a crystallized trait into the Postgres Identity store."""

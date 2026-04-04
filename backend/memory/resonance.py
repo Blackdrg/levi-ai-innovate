@@ -17,41 +17,69 @@ class MemoryResonance:
     """
 
     @staticmethod
-    def apply_decay(facts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def calculate_resonance(importance: float, created_at: Optional[datetime], access_count: int = 1, success_impact: float = 0.5) -> float:
         """
-        LeviBrain v9.8: Resonance Survival Formula.
-        Calculates a 'survival_score' based on importance, recency, and Frequency of Access (F.O.A).
+        Primary Resonance Formula v11.0:
+        R = (importance * 0.4) + (recency * 0.2) + (usage_frequency * 0.2) + (success_impact * 0.2)
         """
         now = datetime.now(timezone.utc)
+        
+        # 1. Recency Calculation (0.0 to 1.0)
+        if not created_at:
+            recency = 0.5
+        else:
+            if created_at.tzinfo is None:
+                created_at = created_at.replace(tzinfo=timezone.utc)
+            age_days = max(0, (now - created_at).days)
+            recency = 1.0 / (1.0 + (age_days * 0.05)) # Decay over 20 days to 0.5
+            
+        # 2. Usage Frequency (0.0 to 1.0)
+        # Normalize access count, assuming 20 hits is 'high frequency'
+        usage_frequency = min(1.0, access_count / 20.0)
+        
+        # 3. 4-Factor Weighted Calculation
+        resonance = (
+            (importance * 0.4) + 
+            (recency * 0.2) + 
+            (usage_frequency * 0.2) + 
+            (success_impact * 0.2)
+        )
+        
+        return round(resonance, 4)
+
+    @staticmethod
+    def apply_decay(facts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        LeviBrain v9.8.1: Resonance Survival Filter.
+        Calculates survival scores and filters out memories below threshold.
+        """
         decayed_facts = []
+        SURVIVAL_THRESHOLD = 0.35 # Standard v9.8 Threshold
         
         for f in facts:
             try:
-                # 1. Recency Factor (90-day linear decay)
-                created_at_str = f.get("created_at")
-                if created_at_str:
-                    created_at = datetime.fromisoformat(created_at_str)
-                    age_days = (now - created_at).days
-                    recency_factor = max(0, (90 - age_days) / 90)
-                else:
-                    recency_factor = 0.5
-                
-                # 2. Importance (Core weight)
                 importance = f.get("importance", 0.5)
-                
-                # 3. Frequency of Access (v9.8 Neural Resonance)
+                created_at_str = f.get("created_at")
                 access_count = f.get("access_count", 1)
-                access_factor = min(1.0, access_count / 15)
+                success_impact = f.get("success_impact", 0.5)
                 
-                # Survival Formula: Importance (50%) + Access (30%) + Recency (20%)
-                survival_score = (importance * 0.5) + (access_factor * 0.3) + (recency_factor * 0.2)
+                created_at = None
+                if created_at_str:
+                    try:
+                        created_at = datetime.fromisoformat(str(created_at_str).replace('Z', '+00:00'))
+                    except Exception:
+                        created_at = None
                 
-                # Keep if survival is high enough or it's a critical core trait
-                if survival_score > 0.35 or importance > 0.85:
-                    f["survival_score"] = survival_score
+                resonance = MemoryResonance.calculate_resonance(importance, created_at, access_count, success_impact)
+                f["survival_score"] = resonance
+                
+                # Persistence Logic: Keep if resonant or high-importance
+                if resonance >= SURVIVAL_THRESHOLD or importance >= 0.9:
                     decayed_facts.append(f)
+                    
             except Exception as e:
                 logger.warning(f"Resonance decay anomaly: {e}")
+                f["survival_score"] = f.get("importance", 0.5)
                 decayed_facts.append(f)
                 
         return sorted(decayed_facts, key=lambda x: x.get("survival_score", 0), reverse=True)

@@ -26,7 +26,17 @@ class CodeAgent(SovereignAgent[CodeInput, AgentResult]):
     """
     
     def __init__(self):
-        super().__init__("CodeArchitect")
+        super().__init__("CodeArchitect", profile="The Architect")
+        self.system_prompt_template = (
+            "You are the LEVI Sovereign Code Architect (The Architect).\n"
+            "Mission: Generate high-fidelity, secure, and modular code structures.\n"
+            "Rules:\n"
+            "1. Security First: No hardcoded secrets, use environment variables.\n"
+            "2. Modular Architecture: Use Clean Architecture patterns.\n"
+            "3. Performance: Optimize for O(n) or better, avoid redundant loops.\n"
+            "4. Persona: Maintain the LEVI minimalist, philosophical, and anti-cliché tone.\n"
+            "Output: Return ONLY the code block, no conversational filler."
+        )
 
     async def _run(self, input_data: CodeInput, lang: str = "en", **kwargs) -> Dict[str, Any]:
         """
@@ -58,19 +68,17 @@ class CodeAgent(SovereignAgent[CodeInput, AgentResult]):
 
     async def generate_code(self, task: str, lang: str, blackboard_context: str = "") -> str:
         """Generates high-fidelity code solutions."""
-        system_prompt = (
-            f"You are the LEVI Sovereign Code Architect. Create elegant, high-fidelity {lang} solutions.\n"
-            "Technical Requirements: Modular, Resilient, Performance-First.\n"
-            "Return ONLY the code block without markdown wrappers."
-        )
         generator = SovereignGenerator()
         code = await generator.council_of_models([
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"{blackboard_context}\n\nTask: {task}"}
+            {"role": "system", "content": self.system_prompt_template.replace("{lang}", lang)},
+            {"role": "user", "content": f"Context: {blackboard_context}\n\nTask: {task}"}
         ])
         # Clean markdown if model ignored the instruction
         if "```" in code:
-            code = code.split("```python")[-1].split("```")[0].strip()
+            if f"``` {lang.lower()}" in code.lower():
+                code = code.split(f"``` {lang.lower()}")[-1].split("```")[0].strip()
+            elif "```" in code:
+                code = code.split("```")[-1].split("```")[0].strip()
         return code
 
     def execute_code(self, code: str) -> str:

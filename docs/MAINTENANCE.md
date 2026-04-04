@@ -14,7 +14,7 @@ The dreaming phase is triggered automatically every 5 missions.
 ### **Trait Distillation (Automatic)**
 Fragmented episodic facts are distilled into permanent traits.
 - **Action:** Background process that checks facts with **Importance > 0.8**.
-- **Service:** `backend.core.memory.manager._trigger_distillation()`.
+- **Service:** `backend.core.v8.memory_manager._trigger_distillation()`. (v13 SQL Resonance).
 
 ---
 

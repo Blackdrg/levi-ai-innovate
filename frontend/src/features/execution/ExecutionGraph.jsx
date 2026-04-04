@@ -31,12 +31,13 @@ export const ExecutionGraph = ({ graph, results }) => {
     const initialNodes = graph.nodes.map((node, index) => {
       const result = results?.find(r => r.id === node.id || r.agent === node.agent);
       const isExecuting = !result && results?.length > 0;
+      const isSafeMode = result?.provider === 'DETERMINISTIC_SAFE_MODE';
       const status = result ? (result.success ? 'success' : 'error') : 'pending';
       const isConsensus = node.agent === 'consensus_agent' || node.agent === 'swarm_consensus';
       
-      const provider = result?.provider || (result?.local_handoff ? 'Local (Ollama)' : 'Cloud (Sovereign)');
-      const borderColor = isConsensus ? '#f59e0b' : (status === 'success' ? '#10b981' : status === 'error' ? '#ef4444' : '#6366f1');
-      const glowColor = isConsensus ? 'rgba(245, 158, 11, 0.4)' : (status === 'success' ? 'rgba(16, 185, 129, 0.4)' : status === 'error' ? 'rgba(239, 68, 68, 0.4)' : 'rgba(99, 102, 241, 0.2)');
+      const provider = result?.provider || (result?.local_handoff ? 'Local (Ollama)' : isSafeMode ? 'SOVEREIGN SAFE MODE 🛡️' : 'Cloud (Sovereign)');
+      const borderColor = isSafeMode ? '#06b6d4' : isConsensus ? '#f59e0b' : (status === 'success' ? '#10b981' : status === 'error' ? '#ef4444' : '#6366f1');
+      const glowColor = isSafeMode ? 'rgba(6, 182, 212, 0.4)' : isConsensus ? 'rgba(245, 158, 11, 0.4)' : (status === 'success' ? 'rgba(16, 185, 129, 0.4)' : status === 'error' ? 'rgba(239, 68, 68, 0.4)' : 'rgba(99, 102, 241, 0.2)');
 
       return {
         id: node.id,
@@ -45,11 +46,12 @@ export const ExecutionGraph = ({ graph, results }) => {
             <div className={`node-content ${isExecuting ? 'pulse' : ''}`}>
               <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '4px', marginBottom: '2px' }}>
                  {isConsensus && <span style={{ color: '#f59e0b', fontSize: '10px' }}>⚡</span>}
+                 {isSafeMode && <span style={{ color: '#06b6d4', fontSize: '10px' }}>🛡️</span>}
                  {result?.local_handoff && <span style={{ color: '#06b6d4', fontSize: '10px' }}>🏠</span>}
                  <div style={{ fontSize: '9px', opacity: 0.6 }}>{node.id.toUpperCase()}</div>
               </div>
-              <div style={{ fontWeight: '800', fontSize: '11px', color: isConsensus ? '#f59e0b' : '#fff' }}>
-                {isConsensus ? 'SWARM CONSENSUS' : node.agent.split('_')[0].toUpperCase()}
+              <div style={{ fontWeight: '800', fontSize: '11px', color: isSafeMode ? '#06b6d4' : isConsensus ? '#f59e0b' : '#fff' }}>
+                {isSafeMode ? 'SAFE MODE' : isConsensus ? 'SWARM CONSENSUS' : node.agent.split('_')[0].toUpperCase()}
               </div>
               
               {isConsensus && result?.winner && (
@@ -59,7 +61,7 @@ export const ExecutionGraph = ({ graph, results }) => {
               )}
 
               <div style={{ fontSize: '8px', marginTop: '4px', color: borderColor, fontWeight: 'bold' }}>
-                {status.toUpperCase()} {status === 'pending' && isExecuting ? '...' : ''}
+                {isSafeMode ? 'DETERMINISTIC' : status.toUpperCase()} {status === 'pending' && isExecuting ? '...' : ''}
               </div>
               
               {result && (

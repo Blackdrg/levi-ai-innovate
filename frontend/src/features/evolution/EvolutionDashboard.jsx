@@ -19,8 +19,8 @@ export const EvolutionDashboard = () => {
     };
     init();
 
-    // 2. Real-time Subscription (The Brain Pulse)
-    const cleanup = apiStream("/learning/stream", (update) => {
+    // 2. Real-time Subscription (The Brain Pulse v4.1)
+    const cleanup = apiStream("/api/v8/telemetry/stream", (update) => {
       setData(prev => ({ ...prev, ...update }));
     });
 
@@ -97,7 +97,7 @@ export const EvolutionDashboard = () => {
                 <Shield size={14} className="text-emerald-500" /> AES-256 Memory Hardened
               </div>
               <div className="flex items-center gap-2 px-4 py-2 glass-pill rounded-xl text-[10px] uppercase font-bold text-white/40 border border-white/5">
-                <Sparkles size={14} className="text-purple-500" /> v6.0-PRO Architecture
+                <Sparkles size={14} className="text-purple-500" /> v13.0.0 Monolith Architecture
               </div>
             </div>
           </div>

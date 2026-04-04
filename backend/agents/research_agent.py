@@ -1,18 +1,12 @@
-"""
-Sovereign Deep Research Agent v8.
-Performs recursive multi-step analysis and recursive sub-query branching.
-Refactored into Autonomous Agent Ecosystem.
-"""
-
 import os
 import asyncio
 import logging
+import json
 from typing import Dict, Any, List, Optional
 from pydantic import BaseModel, Field
 from backend.agents.base import SovereignAgent, AgentResult
 from backend.engines.chat.generation import SovereignGenerator
-from backend.engines.utils.i18n import SovereignI18n
-from backend.core.v8.blackboard import MissionBlackboard
+from backend.broadcast_utils import SovereignBroadcaster
 
 logger = logging.getLogger(__name__)
 
@@ -24,8 +18,8 @@ class ResearchInput(BaseModel):
 
 class ResearchAgent(SovereignAgent[ResearchInput, AgentResult]):
     """
-    Sovereign Research Architect.
-    Executes discovery pulses and recursive parallel deep dives.
+    Sovereign Research Architect (v13.0.0).
+    Executes binary discovery pulses and SQL-backed recursive branching.
     """
     
     def __init__(self):
@@ -34,71 +28,66 @@ class ResearchAgent(SovereignAgent[ResearchInput, AgentResult]):
 
     async def _run(self, input_data: ResearchInput, lang: str = "en", **kwargs) -> Dict[str, Any]:
         """
-        Research Protocol v8 Upgrade: Mini-System Orchestration.
+        Research Protocol v13.0: Unified Cognitive Discovery.
         """
         topic = input_data.input
-        self.logger.info(f"Initiating Research Mission: '{topic[:40]}'")
+        session_id = input_data.session_id or "research_v13"
         
+        # Emit Pulse: Mission Start
+        SovereignBroadcaster.broadcast({
+            "type": "AGENT_RESEARCH_START",
+            "agent": self.id,
+            "topic": topic
+        })
+
         if not self.tavily_key:
             return {"message": "Tavily Pulse is currently offline.", "success": False}
 
-        # 1. Pipeline: Search -> Rank -> Summarize
-        discovery_results = await self.search(topic, depth="basic")
+        # 1. Discovery Pulse (Basic)
+        discovery_results = await self.search(topic, depth="basic", session_id=session_id)
         
-        # 2. Analysis & Sub-query Generation (Self-Expansion)
+        # 2. Branching Logic (Sovereign Expansion)
         sub_questions = await self._generate_sub_queries(topic, discovery_results)
         
+        # Emit Pulse: Branching Vector
+        if sub_questions:
+            SovereignBroadcaster.broadcast({
+                "type": "AGENT_BRANCHING",
+                "agent": self.id,
+                "vectors": len(sub_questions),
+                "data": {"queries": sub_questions}
+            })
+
         # 3. Parallel Deep Dives
-        self.logger.info(f"Branching Discovery into {len(sub_questions)} vectors.")
-        tasks = [self.search(q, depth="advanced") for q in sub_questions]
+        tasks = [self.search(q, depth="advanced", session_id=session_id) for q in sub_questions]
         deep_data = await asyncio.gather(*tasks)
         
-        # 4. Aggregation & Ranking
+        # 4. Aggregation
         all_results = discovery_results.copy()
-        for data in deep_data:
-            all_results.extend(data)
-            
-        ranked_results = self.rank(all_results)
+        for data in deep_data: all_results.extend(data)
+        ranked = sorted(all_results, key=lambda x: x.get("score", 0), reverse=True)
         
-        # 5. Final Synthesis
-        summary = await self.summarize(topic, ranked_results, lang=lang)
+        # 5. SQL Persistence (Absolute Monolith v13)
+        summary = await self.summarize(topic, ranked, lang=lang)
+        await self._persist_insight(session_id, topic, {"summary": summary, "vectors": len(sub_questions)})
 
-        # 6. Swarm Integration: Post to Blackboard
-        if input_data.session_id:
-            blackboard = MissionBlackboard(input_data.session_id)
-            await blackboard.post_insight(
-                self.id, 
-                f"Completed deep research on '{topic}'. Key findings: {summary[:500]}...",
-                tag="research_summary"
-            )
-
-        # 7. Collaborative Debate: Send to Critic via Agent Bus
-        await self.send_message("critic", {
-            "from": "research",
-            "goal": topic,
-            "data": summary
-        })
+        # 6. Critic Bridge (Consensus)
+        await self.send_message("critic", {"from": "research", "goal": topic, "data": summary})
         
-        # Wait for feedback from Critic
-        self.logger.info("ResearchArchitect is waiting for Critic feedback...")
-        feedback_msg = await self.receive_message()
-        
-        if feedback_msg and feedback_msg.get("success") is False:
-            self.logger.warning(f"Critic requested refinement: {feedback_msg.get('feedback')}")
-            # In a real scenario, we would refine here. For now, we append the feedback.
-            summary = f"{summary}\n\n[Critic Feedback]: {feedback_msg.get('feedback')}"
+        # Synchronous Handshake for finality
+        feedback = await self.receive_message()
+        if feedback and feedback.get("success") is False:
+             summary = f"{summary}\n\n[REFINEMENT]: {feedback.get('feedback')}"
 
         return {
             "message": summary,
-            "citations": list(set([r.get("url") for r in ranked_results if r.get("url")])),
-            "data": {
-                "depth_reached": len(sub_questions) + 1,
-                "sources_analyzed": len(ranked_results)
-            }
+            "citations": list(set([r.get("url") for r in ranked if r.get("url")])),
+            "data": {"sources": len(ranked), "v13_trace": True}
         }
 
-    async def search(self, query: str, depth: str = "basic") -> List[Dict[str, Any]]:
-        """Integrates search API (Tavily)."""
+    async def search(self, query: str, depth: str = "basic", session_id: str = "v13") -> List[Dict[str, Any]]:
+        """Integrated Search with Discovery Pulse."""
+        SovereignBroadcaster.broadcast({"type": "AGENT_SEARCH_RESULT", "agent": self.id, "query": query})
         import aiohttp
         try:
             async with aiohttp.ClientSession() as session:
@@ -107,41 +96,34 @@ class ResearchAgent(SovereignAgent[ResearchInput, AgentResult]):
                 }) as resp:
                     data = await resp.json()
                     return data.get("results", [])
-        except Exception as e:
-            self.logger.error(f"Search failure for '{query}': {e}")
+        except Exception:
             return []
 
-    def rank(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Ranks results based on relevance score (dummy or logic)."""
-        # Tavily provides score, we use it for sorting
-        return sorted(results, key=lambda x: x.get("score", 0), reverse=True)
+    async def _persist_insight(self, session_id: str, topic: str, data: Dict[str, Any]):
+        """Saves research to SQL agent_insights fabric."""
+        try:
+            from backend.db.postgres_db import get_write_session
+            from sqlalchemy import text
+            async with get_write_session() as session:
+                await session.execute(
+                    text("INSERT INTO agent_insights (session_id, agent_id, topic, data, tag) VALUES (:sid, :aid, :top, :data, 'discovery')"),
+                    {"sid": session_id, "aid": self.id, "top": topic, "data": json.dumps(data)}
+                )
+        except Exception as e:
+            logger.error(f"[Research-v13] SQL Insight failure: {e}")
 
     async def summarize(self, topic: str, results: List[Dict[str, Any]], lang: str = "en") -> str:
-        """Synthesizes high-fidelity reports from ranked data."""
-        context = "\n\n".join([f"### {r.get('title')}\nSource: {r.get('url')}\nContent: {r.get('content')[:500]}" for r in results[:10]])
-        
-        synthesis_prompt = (
-            f"Mission Topic: {topic}\n\n"
-            f"Aggregated Pulse Data:\n{context}\n\n"
-            "Synthesize a professional, high-fidelity report."
-        )
-        
+        context = "\n".join([f"### {r.get('title')}\nSource: {r.get('url')}\nContent: {r.get('content')[:500]}" for r in results[:5]])
         generator = SovereignGenerator()
         return await generator.council_of_models([
-            {"role": "system", "content": "You are the LEVI Research Architect."},
-            {"role": "user", "content": synthesis_prompt}
+            {"role": "system", "content": "You are the LEVI v13 Research Architect."},
+            {"role": "user", "content": f"Synthesize v13 report on: {topic}\n\n{context}"}
         ])
 
-    async def _generate_sub_queries(self, topic: str, discovery_results: List[Dict[str, Any]]) -> List[str]:
-        """Heuristic for branching research vectors."""
-        discovery_context = "\n".join([f"- {r.get('title')}: {r.get('content')[:200]}" for r in discovery_results[:5]])
-        analysis_prompt = (
-            f"Topic: '{topic}'\nContext: {discovery_context}\n\n"
-            "Identify 2 critical sub-questions for high-fidelity research."
-        )
+    async def _generate_sub_queries(self, topic: str, results: List[Dict[str, Any]]) -> List[str]:
         generator = SovereignGenerator()
         raw = await generator.council_of_models([
-            {"role": "system", "content": "You are the LEVI Research Architect."},
-            {"role": "user", "content": analysis_prompt}
+            {"role": "system", "content": "You are the LEVI v13 Research Architect."},
+            {"role": "user", "content": f"Topic: '{topic}'\nIdentify 2 sub-questions."}
         ])
         return [q.strip() for q in raw.split("\n") if q.strip() and "?" in q][:2]

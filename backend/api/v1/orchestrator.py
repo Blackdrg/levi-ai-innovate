@@ -1,7 +1,6 @@
 """
-Sovereign Orchestration Gateway v8.
-Primary interface for the LEVI-AI OS Brain.
-Bridges REST/SSE requests to the production-grade LeviBrainV8.
+Sovereign Orchestration Gateway v13.0.0.
+Primary v1 REST/SSE interface for the Absolute Monolith.
 """
 
 import logging
@@ -12,84 +11,83 @@ from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from backend.api.orchestrator import handle_chat, stream_chat, brain
+# Graduated v13.0 Core & Identity
+from backend.auth.logic import get_current_user as get_sovereign_identity
+from backend.core.v8.brain import LeviBrainCoreController
 from backend.engines.utils.security import SovereignSecurity
 
-
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="", tags=["Orchestrator V8"])
+router = APIRouter(prefix="", tags=["Orchestrator v13"])
 
-# Using the centralized brain instance from the v8 orchestrator
+# Unified v13.0.0 Brain Monolith
+brain_v13 = LeviBrainCoreController()
 
-
-class ChatRequest(BaseModel):
-    message: str = Field(..., description="User's query")
+class MissionRequest(BaseModel):
+    message: str = Field(..., description="Absolute Monolith query")
     session_id: Optional[str] = None
-    mood: str = "philosophical"
+    context: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
 @router.post("/chat")
-async def orchestrate_vision(
-    request: ChatRequest,
-    identity: UserIdentity = Depends(get_sovereign_identity)
+async def orchestrate_mission_v13(
+    request: MissionRequest,
+    identity: Any = Depends(get_sovereign_identity)
 ):
     """
-    Standard AI mission (v8 Blocking).
-    Dispatches the vision to the finalized v8 brain.
+    Standard Sovereign Mission (v13.0.0) - Synchronous.
     """
-    logger.info(f"[Gateway-V8] Mission started for {identity.user_id}")
+    uid = getattr(identity, "uid", "guest")
+    logger.info(f"[Orchestrator-v13] Synchronous mission started: {uid}")
     
     if SovereignSecurity.detect_injection(request.message):
-        raise HTTPException(status_code=400, detail="Neural protocol violation detected.")
+        raise HTTPException(status_code=400, detail="Neural protocol violation.")
 
     try:
-        # Unified v8 Cognitive Mission
-        res = await handle_chat(
-            user_input=request.message,
-            user_id=identity.uid if hasattr(identity, "uid") else identity.user_id
+        res = await brain_v13.run_mission_sync(
+            input_text=request.message,
+            user_id=uid,
+            session_id=request.session_id,
+            context=request.context
         )
         
-        # Strategic insight (merged from v1/brain.py logic)
         return {
             "response": res.get("response", ""),
-            "intent": res.get("intent", "chat"),
-            "strategy": res.get("intent", "chat"), # For compatibility with brain.py
-            "confidence": res.get("audit", {}).get("total_score", 0.9),
-            "session_id": request.session_id,
+            "intent": res.get("decision", "chat"),
+            "fidelity": res.get("fidelity_score", 1.0),
             "status": "success",
-            "audit": res.get("audit", {}),
-            "graph": res.get("graph", [])
+            "metadata": {
+                 "engine": "sovereign_monolith_v13.0.0",
+                 "latency_ms": res.get("latency_ms")
+            }
         }
     except Exception as e:
-        logger.error(f"[Gateway-V8] Orchestration failure: {e}")
-        return {"status": "error", "message": "The finalized v8 brain encountered a cognitive resonance failure."}
+        logger.error(f"[Orchestrator-v13] Anomaly: {e}")
+        return {"status": "error", "message": "Monolith synchronization drift."}
 
 @router.post("/chat/stream")
-async def orchestrate_stream(
-    request: ChatRequest,
-    identity: UserIdentity = Depends(get_sovereign_identity)
+async def orchestrate_stream_v13(
+    request: MissionRequest,
+    identity: Any = Depends(get_sovereign_identity)
 ):
     """
-    Streaming AI mission (v8 SSE).
-    Real-time neural synthesis with multi-event pulses.
+    Streaming Sovereign Mission (v13.0.0 SSE).
     """
-    logger.info(f"[Gateway-V8] Stream mission started for {identity.user_id}")
+    uid = getattr(identity, "uid", "guest")
+    logger.info(f"[Orchestrator-v13] SSE mission started: {uid}")
 
-    async def _brain_stream():
+    async def _monolith_stream():
         try:
-            # Engage the v8 unified cognitive stream
-            async for event in stream_chat(
+            async for event in brain_v13.run_mission_stream(
                 user_input=request.message,
-                user_id=identity.uid if hasattr(identity, "uid") else identity.user_id
+                user_id=uid,
+                session_id=request.session_id,
+                context=request.context
             ):
-                # Standardized v8.3 SSE Protocol
-                if event["type"] == "token":
-                    yield f"event: choice\ndata: {json.dumps(event['data'])}\n\n"
-                elif event["type"] == "activity":
-                    yield f"event: activity\ndata: {json.dumps(event['data'])}\n\n"
+                event_type = event.get("event", "data")
+                yield f"event: {event_type}\ndata: {json.dumps(event.get('data', event))}\n\n"
             
             yield f"event: done\ndata: {json.dumps('[MISSION_COMPLETE]')}\n\n"
         except Exception as e:
-            logger.error(f"[Gateway-V8] Stream failure: {e}")
-            yield f"event: error\ndata: {json.dumps('Cosmic synchronization failed (v8).')}\n\n"
+            logger.error(f"[Orchestrator-v13] Stream drift: {e}")
+            yield f"event: error\ndata: {json.dumps('Absolute Monolith flux.')}\n\n"
 
-    return StreamingResponse(_brain_stream(), media_type="text/event-stream")
+    return StreamingResponse(_monolith_stream(), media_type="text/event-stream")

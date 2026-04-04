@@ -10,80 +10,16 @@ import re
 from typing import List, Dict, Any, Optional
 from .orchestrator_types import IntentResult
 from .task_graph import TaskGraph, TaskNode
+from .intent_classifier import HybridIntentClassifier
+from .intent_rules import INTENT_RULES
 from backend.utils.llm_utils import call_lightweight_llm
 
 logger = logging.getLogger(__name__)
 
-# --- Intent Rules (High Speed) ---
-INTENT_RULES: List[Dict[str, Any]] = [
-    {
-        "intent": "greeting",
-        "complexity_level": 0,
-        "cost_weight": "low",
-        "patterns": [
-            r"^\s*(hi|hello|hey|howdy|sup|what'?s up|greetings|good\s+(morning|afternoon|evening|night))\s*[!?.]*\s*$",
-            r"^\s*yo\s*$",
-            r"^\s*hiya\s*$",
-        ],
-    },
-    {
-        "intent": "image",
-        "complexity_level": 3,
-        "cost_weight": "high",
-        "patterns": [
-            r"\b(generate|create|draw|make|show|paint)\b.*\b(image|picture|photo|illustration|art|portrait)\b",
-            r"\b(visualize|render)\b",
-            r"\b(imagine|wallpaper)\b",
-        ],
-    },
-    {
-        "intent": "code",
-        "complexity_level": 3,
-        "cost_weight": "high",
-        "patterns": [
-            r"\b(write|create|generate|fix|debug|refactor|explain|architect)\b.*\b(code|script|program|function|algorithm|class|logic|snippet)\b",
-            r"\b(python|javascript|html|css|cpp|java|rust|golang|sql|typescript|react|nextjs)\b",
-            r"```[\s\S]*?```",
-        ],
-    },
-    {
-        "intent": "search",
-        "complexity_level": 2,
-        "cost_weight": "medium",
-        "patterns": [
-            r"\b(search|find|google|look up|research|who is|what is the latest|where is)\b",
-            r"\b(news on|information about|check the status of|real-time data|current events)\b",
-        ],
-    },
-    {
-        "intent": "math",
-        "complexity_level": 1,
-        "cost_weight": "low",
-        "patterns": [
-            r"^\s*[\d\.\+\-\*\/\(\)\^ \t]+\s*[=|\?]?\s*$",
-            r"\b(calculate|solve|what is|compute)\b.*\b([\d\.\+\-\*\/\^]+)\b",
-            r"(sin|cos|tan|log|sqrt)\(.*\)"
-        ],
-    },
-    {
-        "intent": "document",
-        "complexity_level": 2,
-        "cost_weight": "medium",
-        "patterns": [
-            r"\b(summarize|read|analyze|extract)\b.*\b(pdf|document|file|paper|text)\b",
-            r"\b(rag|vector|knowledge base)\b",
-        ],
-    },
-    {
-        "intent": "knowledge",
-        "complexity_level": 2,
-        "cost_weight": "medium",
-        "patterns": [
-            r"\b(relation|graph|neo4j|connection|link)\b",
-            r"\b(how is .* related to .*)\b",
-        ],
-    }
-]
+# Global Hybrid Intent Classifier
+_INTENT_CLASSIFIER = HybridIntentClassifier()
+
+# --- Intent Parsing Logic ---
 
 def detect_sensitivity(user_input: str) -> bool:
     """Sovereign Shield: Detects PII and sensitive information."""
@@ -100,30 +36,8 @@ def detect_sensitivity(user_input: str) -> bool:
     return False
 
 async def detect_intent(user_input: str) -> IntentResult:
-    """Unified intent detection for Perception Layer."""
-    text = user_input.lower().strip()
-    is_sensitive = detect_sensitivity(user_input)
-
-    # 1. Rules Match
-    for rule in INTENT_RULES:
-        for pattern in rule["patterns"]:
-            if re.search(pattern, text, re.IGNORECASE):
-                return IntentResult(
-                    intent_type=rule["intent"],
-                    complexity_level=rule["complexity_level"],
-                    estimated_cost_weight=rule["cost_weight"],
-                    confidence_score=0.95,
-                    is_sensitive=is_sensitive
-                )
-
-    # 2. Default Fallback (Chat)
-    return IntentResult(
-        intent_type="chat",
-        complexity_level=1,
-        estimated_cost_weight="low",
-        confidence_score=0.7,
-        is_sensitive=is_sensitive
-    )
+    """Unified intent detection for Perception Layer via Hybrid Classifier."""
+    return await _INTENT_CLASSIFIER.classify(user_input)
 
 class DAGPlanner:
     """
@@ -155,14 +69,23 @@ class DAGPlanner:
                  id="t_search",
                  agent="search_agent",
                  description=f"Retrieve latest data for: {user_input}",
-                 inputs={"query": user_input}
+                 inputs={"query": user_input},
+                 retry_count=3,
+                 fallback_node_id="t_internal_kb" # Fallback to internal KB if search fails
+             ))
+             graph.add_node(TaskNode(
+                 id="t_internal_kb",
+                 agent="knowledge_agent",
+                 description="Internal Knowledge Base fallback",
+                 inputs={"query": user_input},
+                 critical=False
              ))
              graph.add_node(TaskNode(
                  id="t_synth",
                  agent="chat_agent",
                  description="Synthesize search results",
-                 inputs={"input": user_input, "context": "{{t_search.result}}"},
-                 dependencies=["t_search"]
+                 inputs={"input": user_input, "context": "{{t_search.result or t_internal_kb.result}}"},
+                 dependencies=["t_search", "t_internal_kb"]
              ))
              
         elif intent_type == "code":

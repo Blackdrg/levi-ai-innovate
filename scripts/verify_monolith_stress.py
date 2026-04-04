@@ -35,9 +35,15 @@ async def simulate_mission(brain: LeviBrainCoreController, user_id: str, tier: s
         )
         
         latency = time.time() - start_time
+        decision = response.get('decision')
+        
+        # v13.0 Verification: Check if complex missions trigger EXPERT_REVIEW
+        is_consensus = (decision == "EXPERT_REVIEW")
+        
         logger.info(
             f"[{mission_id}] SUCCESS. Latency: {latency:.2f}s. "
-            f"Decision: {response.get('decision')}. Nodes: {len(response.get('results', []))}"
+            f"Decision: {decision}{' (Consensus)' if is_consensus else ''}. "
+            f"Nodes: {len(response.get('results', []))}"
         )
         return True
     except Exception as e:
@@ -46,10 +52,10 @@ async def simulate_mission(brain: LeviBrainCoreController, user_id: str, tier: s
 
 async def run_stress_wave():
     """
-    Sovereign v9.8.1: Production Stress Wave.
-    Verifies that the System can handle concurrent waves across multiple tiers.
+    Sovereign v13.0.0: Production Stress Wave.
+    Verifies that the System can handle concurrent missions across the Absolute Monolith.
     """
-    logger.info("=== LEVI-AI Sovereign Monolith Stress Test v9.8.1 ===")
+    logger.info("=== LEVI-AI Sovereign OS Stress Test v13.0.0 ===")
     brain = LeviBrainCoreController()
     
     # Mixed Tier Payload
@@ -66,19 +72,36 @@ async def run_stress_wave():
     for i, (uid, tier) in enumerate(wave_payload):
         tasks.append(simulate_mission(brain, uid, tier, f"WAVE-1-M{i}"))
     
-    logger.info(f"Dispatching Stress Wave (Size: {len(tasks)})...")
+    logger.info(f"Dispatching v13.0 Stress Wave (Size: {len(tasks)})...")
     results = await asyncio.gather(*tasks)
     
     total_latency = time.time() - start_wave
     success_count = sum(1 for r in results if r)
     
-    logger.info("=== Wave Analytics ===")
+    logger.info("=== v13 Wave Analytics ===")
     logger.info(f"Total Successful Missions: {success_count}/{len(wave_payload)}")
     logger.info(f"Total Wave Time: {total_latency:.2f}s")
     logger.info(f"Average Throughput: {len(wave_payload) / total_latency:.2f} missions/sec")
     
     if success_count == len(wave_payload):
-        logger.info("RESULT: PASS - Sovereign Monolith Resilience Verified.")
+        logger.info("RESULT: PASS - Sovereign Absolute Monolith Resilience Verified.")
+        
+        # v13.0 HNSW Latency Probe
+        from backend.memory.vector_store import SovereignVectorStore
+        start = time.time()
+        await SovereignVectorStore.search_raw("neural resonance optimization", limit=5)
+        hnsw_lat = (time.time() - start) * 1000
+        logger.info(f"HNSW Sub-30ms Probe: {hnsw_lat:.2f}ms {'[PASS]' if hnsw_lat < 30 else '[FAIL]'}")
+        
+        # v13.0 Postgres SQL Resonance Probe
+        try:
+            from backend.db.postgres_db import get_read_session
+            from sqlalchemy import text
+            async with get_read_session() as session:
+                await session.execute(text("SELECT 1"))
+            logger.info("Postgres SQL Resonance Probe: [PASS]")
+        except Exception as e:
+            logger.error(f"Postgres SQL Resonance Probe: [FAIL] - {e}")
     else:
         logger.warning(f"RESULT: DEGRADED - {len(wave_payload) - success_count} failures detected.")
 

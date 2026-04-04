@@ -32,11 +32,13 @@ class SovereignGraph:
     async def get_async_driver(cls):
         if cls._async_driver is None:
             try:
-                cls._async_driver = AsyncGraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
-                await cls._async_driver.verify_connectivity()
+                driver = AsyncGraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
+                await driver.verify_connectivity()
+                cls._async_driver = driver
                 logger.info(f"[GraphDB] Neo4j Async Driver Initialized at {NEO4J_URI}")
             except Exception as e:
                 logger.error(f"[GraphDB] Async Connectivity failure: {e}")
+                return None
         return cls._async_driver
 
     @classmethod

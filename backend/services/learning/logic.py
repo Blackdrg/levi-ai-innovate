@@ -19,6 +19,8 @@ from backend.utils.encryption import SovereignVault
 from backend.utils.llm_utils import call_lightweight_llm
 from backend.core.planner import detect_sensitivity
 from backend.core.local_engine import handle_local_sync, is_locally_handleable
+from backend.db.vector_store import SovereignVectorStore
+from backend.memory.resonance import MemoryResonance
 
 logger = logging.getLogger(__name__)
 
@@ -384,18 +386,58 @@ class AdaptivePromptManager:
 # ─────────────────────────────────────────────
 # 4. EXPORT & ANALYTICS
 # ─────────────────────────────────────────────
-def export_training_data(output_path: str = "/tmp/levi_training.jsonl", min_rating: int = 4, limit: int = 2000) -> Tuple[str, int]:
-    """Production-grade training data export for fine-tuning."""
-    samples_docs = firestore_db.collection("training_data").where("rating", ">=", min_rating).where("is_exported", "==", False).limit(limit).get()
-    if not samples_docs: return output_path, 0
-
+async def export_training_data(output_path: str = "/tmp/levi_training.jsonl", min_rating: int = 4, limit: int = 2000) -> Tuple[str, int]:
+    """
+    Sovereign v9.8.1: Unbound Training Array Export.
+    Merges high-fidelity Firestore samples with Crystallized (Tier 4) memories.
+    """
     count = 0
+    # 1. Fetch High-Quality Firestore Samples
+    samples_docs = await asyncio.to_thread(
+        lambda: firestore_db.collection("training_data")
+        .where("rating", ">=", min_rating)
+        .where("is_exported", "==", False)
+        .limit(limit // 2)
+        .get()
+    )
+    
     with open(output_path, "w", encoding="utf-8") as f:
+        # Export Firestore Samples
         for doc in samples_docs:
             s = doc.to_dict()
             f.write(json.dumps({"text": f"<human>: {s.get('user_message')}\n<bot>: {s.get('bot_response')}"}) + "\n")
             doc.reference.update({"is_exported": True})
             count += 1
+            
+        # 2. Fetch Crystallized Memories (Tier 4) from Vector Store
+        # These are high-fidelity distilled patterns (I > 0.95)
+        # We query the vector store for 'prototype' and 'trait' categories
+        try:
+            v_store = SovereignVectorStore()
+            # This is a simplified fetch; in production, we iterate through recent vector clusters
+            memories = await v_store.search_global("prototype", limit=limit // 2)
+            
+            for mem in memories:
+                # Resonance check (only export high-resonance survivors)
+                # Note: Memories in vector store already have importance, but we check decay
+                res = MemoryResonance.calculate_resonance(
+                    importance=mem.get("importance", 0.9),
+                    age_days=0, # Crystallized is considered fresh or permanent
+                    foa=1.0
+                )
+                
+                if res >= 0.8:
+                    # Map crystallized fact back to a training pair if possible, 
+                    # or use the fact as a 'knowledge' sample.
+                    text = mem.get("text", "")
+                    if "]: " in text:
+                        parts = text.split("]: ", 1)
+                        f.write(json.dumps({"text": f"<concept>: {parts[0]}\n<wisdom>: {parts[1]}"}) + "\n")
+                        count += 1
+        except Exception as e:
+            logger.warning(f"[Unbound Export] Vector export failed: {e}")
+
+    logger.info(f"[Unbound Export] Successfully prepared {count} samples for fine-tuning.")
     return output_path, count
 
 def update_system_analytics(metric: str, value: Any = 1):

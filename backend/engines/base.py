@@ -14,6 +14,19 @@ class EngineResult(BaseModel):
     metadata: Dict[str, Any] = {}
     error: Optional[str] = None
     latency_ms: float = 0.0
+    confidence: float = 1.0
+
+    def to_tool_result(self, agent_name: str = "unknown") -> Any:
+        """Converts engine output to a standardized ToolResult contract."""
+        from backend.core.orchestrator_types import ToolResult
+        return ToolResult(
+            success=(self.status == "success"),
+            data=self.data if isinstance(self.data, dict) else {"result": self.data},
+            message=self.error or "Success",
+            latency_ms=int(self.latency_ms),
+            confidence=self.confidence,
+            agent=agent_name
+        )
 
 class EngineBase(abc.ABC):
     """
@@ -43,10 +56,17 @@ class EngineBase(abc.ABC):
             result_data = await self._run(**kwargs)
             
             latency = (time.perf_counter() - start_time) * 1000
+            
+            # Handle dictionary returns for confidence propagation
+            conf = 1.0
+            if isinstance(result_data, dict):
+                conf = result_data.get("confidence", 1.0)
+            
             return EngineResult(
                 status="success",
                 data=result_data,
                 latency_ms=latency,
+                confidence=conf,
                 metadata={"engine": self.name}
             )
             

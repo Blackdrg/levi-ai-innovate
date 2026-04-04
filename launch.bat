@@ -1,8 +1,8 @@
 @echo off
 setlocal
 echo --------------------------------------------------
-echo    🧠 LEVI-AI Sovereign OS v9.8.1 Launcher        
-echo    Engineered for Absolute Autonomy (Windows)     
+echo    🧠 LEVI-AI Sovereign OS v13.0.0 Launcher        
+echo    Engineered for Absolute Autonomy (v13.0 Monolith)     
 echo --------------------------------------------------
 
 :: 1. Environment Verification
@@ -23,5 +23,8 @@ echo ✅ MISSION_ACTIVE: The Monolith is rising.
 echo 🔗 API Gateway: http://localhost:8000
 echo 📊 Telemetry: http://localhost:8000/telemetry
 echo --------------------------------------------------
-echo Use 'docker-compose logs -f api' to track the Brain Pulse.
+echo 🩺 Running Graduation Audit...
+python tests/verify_v13_monolith.py
+
+echo Use 'docker-compose logs -f api' to track the v13 Brain Pulse.
 pause

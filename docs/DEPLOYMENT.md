@@ -17,11 +17,10 @@ graph TD
     HTTPS --> V8[LeviBrain v9.8.1 Monolith API]
     
     %% Service Fabric
-    V8 -->|Identity & Audit| Postgres[(Postgres: Sovereignty Store)]
+    V8 -->|Identity & Audit| Postgres[(Postgres: SQL Fabric)]
     V8 -->|Pulse & Blackboard| Redis[(Redis: Neural Pulse v4.1)]
     V8 -->|Relational Knowledge| Neo4j[(Neo4j: Resonant Graph)]
-    V8 -->|Cognitive Memory| FAISS[[FAISS: Semantic Vault]]
-    V8 -->|Session Context| Firestore[(Firestore: Rapid Memory)]
+    V8 -->|Cognitive Memory| FAISS[[HNSW Vault: Semantic Vault]]
     
     %% Async Loops
     Redis --> Worker[Background Dreaming & Evolution]

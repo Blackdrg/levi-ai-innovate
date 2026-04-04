@@ -1,41 +1,46 @@
-import React, { useState, useEffect } from 'react';
+import { apiStream } from '../../services/apiClient';
 import './MobileDashboard.css';
 
 /**
- * LeviBrain v8.9: Mobile Sovereign Dashboard
+ * LeviBrain v13.0: Mobile Sovereign Dashboard (React)
  * High-fidelity system oversight for the autonomous cognitive monolith.
  */
 const MobileDashboard = () => {
   const [telemetry, setTelemetry] = useState({
-    fidelity: 0.85,
-    neural_load: 12,
-    evolution_progress: 45,
-    active_agents: 4,
-    status: 'OPTIMAL'
+    fidelity: 0.98,
+    neural_load: 8,
+    evolution_progress: 100,
+    active_agents: 5,
+    status: 'ONLINE'
   });
 
   const [events, setEvents] = useState([
-    { id: 1, title: 'Knowledge Sync', detail: 'KnowledgeNexus reconciled 12 facts.', time: '2m ago', type: 'sync' },
-    { id: 2, title: 'Memory Pruning', detail: 'Cleared 4.2MB of low-significance nodes.', time: '15m ago', type: 'prune' },
-    { id: 3, title: 'Trait Evolution', detail: 'Hybrid Reasoning v2 promoted.', time: '1h ago', type: 'evolution' }
+    { id: 1, title: 'Neural Pulse', detail: 'Sovereign Bridge v13.0.0 established.', time: 'Now', type: 'sync' },
+    { id: 2, title: 'Memory Distillation', detail: 'Dreaming Phase successful. Traits crystallized.', time: '15m ago', type: 'evolution' }
   ]);
 
-  // Connect to real-time evolution pulse
+  // Connect to real-time evolution pulse v4.1
   useEffect(() => {
-    const eventSource = new EventSource('/api/v8/telemetry/stream');
-    
-    eventSource.onmessage = (event) => {
-      const data = JSON.parse(event.data);
+    // profile=mobile triggers server-side filtering and zlib compression
+    const cleanup = apiStream('/api/v8/telemetry/stream?profile=mobile', (data) => {
       if (data.type === 'evolution_update') {
         setTelemetry(prev => ({
           ...prev,
           evolution_progress: data.progress,
           fidelity: data.fidelity
         }));
+      } else if (data.type === 'perception') {
+          setEvents(prev => [{
+              id: Date.now(),
+              title: 'Brain Perception',
+              detail: `Decision: ${data.data.decision} path elected.`,
+              time: 'Now',
+              type: 'sync'
+          }, ...prev.slice(0, 9)]);
       }
-    };
+    });
 
-    return () => eventSource.close();
+    return () => cleanup();
   }, []);
 
   return (
@@ -43,7 +48,7 @@ const MobileDashboard = () => {
       <header className="dash-header">
         <div>
           <p className="vital-label">Sovereign OS</p>
-          <h1>LEVI-AI v8.9</h1>
+          <h1>LEVI-AI v13.0.0</h1>
         </div>
         <div className="status-badge">{telemetry.status}</div>
       </header>
