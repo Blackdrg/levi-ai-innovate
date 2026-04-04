@@ -12,6 +12,7 @@ from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from backend.db.redis import r as redis_client, HAS_REDIS
 
 from backend.api.utils.auth import get_current_user
 from backend.core.v8.brain import LeviBrainCoreController
@@ -97,3 +98,39 @@ async def orchestrate_mission_stream_endpoint(
             yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
 
     return StreamingResponse(sse_generator(), media_type="text/event-stream")
+
+class ApprovalRequest(BaseModel):
+    mission_id: str
+    node_id: str
+    decision: str = Field(..., description="Either 'approved' or 'rejected'")
+    feedback: Optional[str] = None
+
+@router.post("/mission/approve")
+async def approve_mission_node(
+    request: ApprovalRequest,
+    current_user: Any = Depends(get_current_user)
+):
+    """
+    Sovereign HITL: Human Approval Signal (v13.0.0).
+    Signals the paused Graph Executor to resume or abort.
+    """
+    if not HAS_REDIS:
+        raise HTTPException(status_code=500, detail="Sovereign Redis Link unavailable.")
+    
+    approval_key = f"hitl:approval:{request.mission_id}:{request.node_id}"
+    
+    # 1. Verify existence
+    if not redis_client.exists(approval_key):
+        raise HTTPException(status_code=404, detail="Pending approval pulse not found or expired.")
+    
+    # 2. Set Signal
+    decision = request.decision.lower()
+    if decision not in ["approved", "rejected"]:
+        raise HTTPException(status_code=400, detail="Invalid decision pulse.")
+        
+    redis_client.set(approval_key, decision)
+    if request.feedback:
+        redis_client.set(f"{approval_key}:feedback", request.feedback)
+    
+    logger.info(f"[HITL] Decision '{decision}' received for mission {request.mission_id}")
+    return {"status": "success", "message": f"Mission node {decision}."}

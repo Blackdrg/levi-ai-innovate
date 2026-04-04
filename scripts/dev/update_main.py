@@ -3,7 +3,7 @@ import sys
 import re
 import os
 
-script_dir = r"c:\Users\mehta\Desktop\New folder\LEVI-AI"
+script_dir = r"d:\LEVI-AI"
 sys.path.append(script_dir)
 import learning_routes  # type: ignore
 

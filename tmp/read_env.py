@@ -1,6 +1,8 @@
 import os
 def read_env_full():
-    path = r"c:\Users\mehta\Desktop\New folder\LEVI-AI\.env"
+    # Path relative to project root (.env is in root, this script is in tmp/)
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    path = os.path.join(project_root, ".env")
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
             lines = f.readlines()

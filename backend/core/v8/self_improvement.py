@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from .learning import LearningLoopV8, FragilityTracker
 from backend.pipelines.learning import learning_system
 from backend.api.v8.telemetry import broadcast_mission_event
+from backend.services.analytics import record_mission_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,9 @@ class SelfImprovementLoop:
         # 1. Real-time In-Memory Learning (v8.12 logic)
         # This handles Rule Promotion and Fragility tracking
         await LearningLoopV8.process_mission_outcome(user_id, outcome)
+
+        # 1.5. Sovereign Persistence: Postgres Analytics (v13.0)
+        asyncio.create_task(record_mission_metrics(user_id, outcome))
 
         # 2. Long-term Structural Optimization (v8.14 logic)
         if not success:

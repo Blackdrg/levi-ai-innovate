@@ -5,6 +5,7 @@ import uuid
 from typing import Dict, Any, List, Set, Coroutine, Optional
 from ..orchestrator_types import ToolResult, IntentResult
 from ..tool_registry import call_tool
+from backend.db.redis import r as redis_client, HAS_REDIS
 from ...utils.network import ai_service_breaker
 
 # V8. bridge: Telemetry & Swarm Intelligence
@@ -122,6 +123,10 @@ class GraphExecutor:
         }
         
         try:
+            # 1.5. HITL: Human Approval Gate (v13.0)
+            if agent_name == "human_approval":
+                return await self._handle_human_approval(node, merged_params, perception)
+
             # 2. Secure Call via AI Service Breaker
             raw_res = await ai_service_breaker.async_call(
                 call_tool, 
@@ -142,6 +147,54 @@ class GraphExecutor:
         except Exception as e:
             logger.exception("[V9 Executor] Execution drift for %s: %s", agent_name, e)
             return ToolResult(success=False, error=str(e), agent=agent_name)
+
+    async def _handle_human_approval(self, node: Any, params: Dict[str, Any], perception: Dict[str, Any]) -> ToolResult:
+        """
+        Suspends the mission and waits for a human approval signal via Redis.
+        """
+        user_id = perception.get("user_id")
+        mission_id = perception.get("mission_id", str(uuid.uuid4()))
+        node_id = node.id
+        
+        logger.info(f"[HITL] Node {node_id} requires human approval for mission {mission_id}")
+        
+        # 1. Register Pending Approval in Redis
+        if HAS_REDIS:
+            approval_key = f"hitl:approval:{mission_id}:{node_id}"
+            redis_client.setex(approval_key, 3600, "pending") # 1 hour TTL
+            
+            # 2. Broadcast Event to UI
+            broadcast_mission_event(user_id, "approval_required", {
+                "mission_id": mission_id,
+                "node_id": node_id,
+                "prompt": params.get("prompt", "Approval required to proceed."),
+                "context": params.get("context", {})
+            })
+            
+            # 3. Wait for Signal (Polling for simplicity in this version, can be optimized with PubSub)
+            start_wait = asyncio.get_event_loop().time()
+            timeout = 3600 # 1 hour
+            
+            while (asyncio.get_event_loop().time() - start_wait) < timeout:
+                signal = redis_client.get(approval_key)
+                if signal:
+                    signal = signal.decode() if isinstance(signal, bytes) else signal
+                    if signal == "approved":
+                        logger.info(f"[HITL] Node {node_id} APPROVED.")
+                        feedback = redis_client.get(f"{approval_key}:feedback")
+                        return ToolResult(
+                            success=True, 
+                            message="Human Approved.", 
+                            data={"feedback": feedback.decode() if feedback else ""},
+                            agent="human_approval"
+                        )
+                    elif signal == "rejected":
+                        logger.warning(f"[HITL] Node {node_id} REJECTED.")
+                        return ToolResult(success=False, message="Human Rejected Mission.", agent="human_approval", retryable=False)
+                
+                await asyncio.sleep(2) # Poll every 2 seconds
+                
+        return ToolResult(success=False, message="HITL System Unavailable or Timeout.", agent="human_approval")
 
     async def _compensate(self, node: Any, result: ToolResult, graph: Any, perception: Dict[str, Any]) -> bool:
         """

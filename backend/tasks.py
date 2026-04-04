@@ -15,6 +15,9 @@ from backend.core.memory_tasks import (
     run_global_maintenance
 )
 
+from backend.services.scheduling import trigger_scheduled_missions
+import asyncio
+
 logger = logging.getLogger(__name__)
 
 @celery_app.task(name="backend.core.memory_tasks.flush_all_memory_buffers")
@@ -49,3 +52,13 @@ def cleanup_stuck_jobs():
     """Stale job cleanup for the Visual/Motion Studio."""
     logger.info("[Task] Cleaning stale jobs from Sovereign Studio.")
     return {"status": "cleaned", "jobs_removed": 5}
+@celery_app.task(name="backend.services.scheduling.trigger_scheduled_missions")
+def trigger_scheduled_missions_task():
+    """
+    Periodic task to check and run scheduled missions.
+    Runs every 60 seconds.
+    """
+    logger.info("[Task] Pulse: Checking for scheduled missions.")
+    # Use sync wrapper for async function
+    loop = asyncio.get_event_loop()
+    return loop.run_until_complete(trigger_scheduled_missions())
