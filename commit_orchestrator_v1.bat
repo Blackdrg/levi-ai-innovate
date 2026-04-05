@@ -2,7 +2,7 @@
 echo ============================================
 echo  LEVI AI Brain - Orchestrator v1.0 Commit
 echo ============================================
-cd /d "C:\Users\mehta\Desktop\New folder\LEVI-AI"
+cd /d "D:\LEVI-AI"
 
 echo.
 echo [1/3] Staging files...

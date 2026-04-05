@@ -5,7 +5,7 @@ services:
     ports:
       - "11434:11434"
     volumes:
-      - ollama_data:/root/.ollama
+      - ./data/ollama:/root/.ollama
     # deploy:
     #   resources:
     #     reservations:
@@ -35,7 +35,7 @@ services:
       POSTGRES_PASSWORD: sovereign_pass
       POSTGRES_DB: levi_db
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ./data/postgres:/var/lib/postgresql/data
       - ./backend/migrations/v13_migration.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
       - "5432:5432"
@@ -46,7 +46,7 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - redis_data:/data
+      - ./data/redis:/data
     command: redis-server --appendonly yes
     restart: unless-stopped
 
@@ -59,7 +59,7 @@ services:
       - "7474:7474" # browser UI
       - "7687:7687" # bolt
     volumes:
-      - neo4j_data:/data
+      - ./data/neo4j:/data
     restart: unless-stopped
 
   # ── App ────────────────────────────────────────────────
@@ -137,8 +137,5 @@ services:
     depends_on:
       - prometheus
 
-volumes:
-  postgres_data:
-  redis_data:
-  neo4j_data:
-  ollama_data:
+
+# 🏛️ Volume Finalization: All data now localized to D:\LEVI-AI\data

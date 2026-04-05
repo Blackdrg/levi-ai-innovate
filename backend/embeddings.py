@@ -1,5 +1,6 @@
 # embeddings.py
 from sentence_transformers import SentenceTransformer
+import os
 import numpy as np
 import logging
 import asyncio
@@ -28,6 +29,28 @@ class LocalEmbedder:
 
 async def embed(text: Union[str, List[str]]) -> Union[List[float], List[List[float]]]:
     """Generates normalized semantic vectors for input text or list of texts."""
+    
+    # 1. Prioritize Local Ollama (v13 Sovereign Graduation)
+    ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    if ollama_url:
+        try:
+            import requests # type: ignore
+            model = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
+            inputs = [text] if isinstance(text, str) else text
+            
+            embeddings = []
+            for inp in inputs:
+                # Ollama embeddings are typically synchronous/fast enough for thread offloading
+                res = await asyncio.to_thread(
+                    lambda: requests.post(f"{ollama_url}/api/embeddings", json={"model": model, "prompt": inp}).json()
+                )
+                embeddings.append(res["embedding"])
+            
+            return embeddings[0] if isinstance(text, str) else embeddings
+        except Exception as e:
+            logger.warning(f"[Embedder] Ollama fallback to LocalEmbedder: {e}")
+
+    # 2. Fallback to Local SentenceTransformers
     model = await LocalEmbedder.get_instance()
     
     # Offload encoding to a thread
@@ -36,3 +59,7 @@ async def embed(text: Union[str, List[str]]) -> Union[List[float], List[List[flo
     )
     
     return embeddings.tolist()
+
+async def embed_text(text: Union[str, List[str]]) -> Union[List[float], List[List[float]]]:
+    """v13.0 Bridge: Shared alias for common Brain components."""
+    return await embed(text)

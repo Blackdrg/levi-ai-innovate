@@ -244,6 +244,25 @@ class LearningLoopV13:
         if success and outcome.get("total_score", 0.0) >= 0.95:
             await CrystallizationEngine.crystallize_prototype(user_id, outcome)
             
+            # Tier 5: Autonomous Knowledge Graph Extraction (v13 Graduation)
+            from backend.services.knowledge_extractor import KnowledgeExtractor
+            from backend.memory.graph_engine import GraphEngine
+            
+            logger.info(f"[Evolution] Distilling relational knowledge from mission...")
+            extractor = KnowledgeExtractor()
+            graph = GraphEngine()
+            
+            triplets = await extractor.distill_triplets(
+                outcome.get("query", ""), 
+                outcome.get("response", ""),
+                tenant_id=outcome.get("tenant_id", "default")
+            )
+            
+            for t in triplets:
+                await graph.store.upsert_triplet(t)
+            
+            broadcast_mission_event(user_id, "knowledge_graph_updated", {"count": len(triplets)})
+            
         # 4. Archive Failures for Cluster Analysis
         if not success:
             logger.warning(f"[V8 Evolution] Fragile pattern detected in domain: {intent}")
@@ -268,3 +287,8 @@ class LearningLoopV13:
             resonance = importance / (1 + age_days * 0.1)
             if resonance > 0.5: survivors.append(mem)
         return survivors
+
+# Graduation Alias for the Absolute Monolith (v13.0)
+LearningLoopV8 = LearningLoopV13
+
+from backend.services.learning.logic import UserPreferenceModel

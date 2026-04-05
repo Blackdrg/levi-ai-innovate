@@ -3,7 +3,7 @@
 
 > *“Autonomy is not the absence of control, but the presence of a deterministic, audited, and resonant architectural monolith.”*
 
-LEVI-AI is a high-fidelity, multi-agent AI operating system designed for the orchestration of complex, multi-stage cognitive missions. Built on the **Absolute Monolith** v13.1.0 architecture, it implements a **Logic-Before-Language** philosophy, a **4-Level Deterministic Priority Stack**, and **Autonomous Survival Gating**, transforming probabilistic LLM outputs into deterministic, production-grade digital intelligence.
+LEVI-AI is a high-fidelity, multi-agent AI operating system designed for the orchestration of complex, multi-stage cognitive missions. Built on the **Absolute Monolith v13.1.0** architecture, it implements a **Logic-Before-Language** philosophy, a **4-Level Deterministic Priority Stack**, and **Autonomous Survival Gating**, transforming probabilistic LLM outputs into deterministic, production-grade digital intelligence.
 
 ---
 
@@ -50,24 +50,26 @@ For global scale, LEVI-AI requires a hardened production fabric.
 - **CPU**: 4 Cores (x86_64 or ARM64).
 - **RAM**: 8GB.
 ### **2.3 Local Sovereign Infrastructure (D: Drive)**
-- **Modular Drive Mapping**: The entire v13 fabric is localized to **D:\LEVI-AI** to ensure disk isolation and high-speed I/O.
-- **Volume Isolation**: All Docker data volumes (Postgres, Redis, Neo4j, Vault) are mounted directly to `D:\LEVI-AI\data`.
+- **Modular Drive Mapping**: The entire v13.1.0 fabric is localized to **D:\LEVI-AI** to ensure disk isolation and high-speed I/O.
+- **Volume Isolation**: All Docker data volumes (Postgres, Redis, Neo4j, HNSW Vault) are mounted directly to `D:\LEVI-AI\data` to bypass OS-drive latency.
 - **In-Memory Pulse**: Redis (Tier 1) operates with AOF (Append Only File) to ensure zero-loss during power cycles.
 
-### Recommended (Sovereign Node)
-- **CPU**: 8–16 Cores.
-- **RAM**: 32GB+.
-- **GPU**: Optional (Mandatory for Local-First LLM / GGUF).
+### **2.4 Modular Sovereignty: Data Volume Strategy**
+To ensure absolute sovereignty, all persistence layers are partitioned via physical volume mounts:
+- `/var/lib/postgresql/data` -> `D:\LEVI-AI\data\postgres`
+- `/data` -> `D:\LEVI-AI\data\neo4j`
+- `/usr/share/elasticsearch/data` -> `D:\LEVI-AI\data\vector`
+- `/data/vault` -> `D:\LEVI-AI\data\vault` (HNSW Semantic Vault)
 
 ### Global Scale (Distributed)
-- **Distributed Cluster**: Kubernetes-managed nodes.
-- **Accelerator Nodes**: GPU-equipped (A100 / L4) for neural inference waves.
+- **Distributed Cluster**: Kubernetes-managed nodes via `scripts/deploy/backend.yaml`.
+- **Accelerator Nodes**: GPU-equipped (A100 / L4) for neural inference waves in the cloud-fallback tier.
 
 ---
 
 ---
 
-## 🗺️ 3. Master Architectural Blueprint: The Absolute Monolith (v13.0)
+## 🗺️ 3. Master Architectural Blueprint: The Absolute Monolith (v13.1.0)
 The following diagram represents the exhaustive architectural mapping of the LEVI-AI Sovereign OS, from global visual ingress to the resonant persistence fabric.
 
 ```mermaid
@@ -84,7 +86,7 @@ graph TD
     end
 
     %% The Cognitive Monolith (Core)
-    subgraph "Absolute Brain Monolith (v13.0.0)"
+    subgraph "Absolute Brain Monolith (v13.1.0)"
         Vault --> Brain[LeviBrainCoreController]
         
         subgraph "Cognitive Pipeline"
@@ -108,23 +110,25 @@ graph TD
             Reflection -->|Fidelity > 0.95| Evolution[Evolution Engine]
             Evolution -->|Crystallization| Prototype[Reasoning Prototypes]
             Evolution -->|Neural Synk v13| Synk[Sync Engine: HMAC-SHA256]
+            Evolution -->|Learning| Loop[LearningLoopV13]
+            Loop -->|Throttling| Shield
         end
     end
 
     %% Swarm Consensus Logic (v13)
     subgraph "Swarm Adjudication Protocol"
-        Adjudicator[Expert Review: ConsensusAgentV13]
+        Adjudicator[Expert Review: ConsensusAgentV11]
         Adjudicator -->|Score > 0.85| Final_Approval[Commit to Resilience]
         Adjudicator -->|Score < 0.85| Human_Review[Request Manual Audit]
     end
 
     %% Persistent Fabric (SQL Resonance)
     subgraph "Sovereign Persistence Fabric (100% Local)"
-        Prototype --> |Commit| SQL_Fabric[Memory Manager]
-        SQL_Fabric -->|Priority 1| Redis[(Redis: Pulse v4.1 & State)]
-        SQL_Fabric -->|Priority 2| HNSW[[HNSW: Neural Vector Vault]]
-        SQL_Fabric -->|Priority 3| Postgres[(Postgres: SQL Core Fabric)]
-        SQL_Fabric -->|Priority 4| Neo4j[(Neo4j: Knowledge Graph)]
+        Prototype --> |Commit| MemoryManager[Memory Manager]
+        MemoryManager -->|Priority 1| Redis[(Redis: Pulse v4.1 & State)]
+        MemoryManager -->|Priority 2| HNSW[[HNSW: Neural Vector Vault]]
+        MemoryManager -->|Priority 3| Postgres[(Postgres: SQL Core Fabric)]
+        MemoryManager -->|Priority 4| Neo4j[(Neo4j: Knowledge Graph)]
     end
 
     %% External Network
@@ -133,6 +137,14 @@ graph TD
     %% Final Action
     Reflection -->|Synthesis| Mobile
 ```
+
+### **3.2 Topological Wave Execution (v9.8.1)**
+The "Absolute Monolith" core coordinates agent execution via a high-performance **Topological Wave** mechanism.
+- **Semaphore-Governed Concurrency**: All agent waves are executed within an `asyncio.Semaphore` (Default: 5), protecting system resources from task-bursting.
+- **Mission Blackboard**: A transient, per-session context layer that allows agents to share immediate insights and tool-artifacts without database round-trips.
+- **Retry + Compensate**: Critical DAG nodes utilize a recursive recovery loop:
+    1. **Exponential Backoff**: 2nd/3rd attempts with jitter.
+    2. **Strategic Compensation**: If a critical path fails, the `ReflectionEngine` attempts a "Branch Patch" to route around the error.
 
 ### **3.1 Cognitive Pulse Sequence (v13.0)**
 The following sequence defines the lifecycle of a high-fidelity mission.
@@ -165,9 +177,9 @@ sequenceDiagram
 | :--- | :--- | :--- | :--- |
 | **Interface** | **Pulse Interface** | React 18, Zustand, Pako (zlib decoding) | Mobile Visual Sovereignty |
 | **Security** | **Sovereign Shield** | NER Sanitization, AES-256 Sovereign Vault | Total Identity Protection |
-| **Cognitive** | **Master Monolith** | Unified Brain v13.0, Deterministic DAG | Absolute Reasoning Logic |
-| **Execution** | **Swarm Appraisal** | Swarm Consensus (Council of Models) | Multi-Agent Finality |
-| **Memory** | **SQL Resonance** | 4-Store SQL Fabric (Postgres + HNSW Vault) | Zero-Cloud Loyalty |
+| **Cognitive** | **Master Monolith** | Unified Brain v13.1.0, Deterministic DAG | Absolute Reasoning Logic |
+| **Execution** | **Swarm Appraisal** | Swarm Consensus v11 (Council of Models) | Multi-Agent Finality |
+| **Memory** | **SQL Resonance** | 5-Store SQL Fabric (Postgres + HNSW Vault) | Zero-Cloud Loyalty |
 
 ---
 
@@ -190,10 +202,10 @@ The Sovereign Monolith enforces a strict execution hierarchy to ensure determini
 
 | Level | Type | Resolution Logic | Fallback Condition |
 | :--- | :--- | :--- | :--- |
-| **Level 1** | **Internal Logic** | Direct rule-based intent triggering. | If no static rule matches intent. |
-| **Level 2** | **Cognitive Engines**| Direct execution of specialized engines (e.g. Memory, Calc). | If intent requires multi-step reasoning. |
-| **Level 3** | **Agent Tool Usage** | Structured tool execution by the Agent Swarm. | If tools are insufficient. |
-| **Level 4** | **LLM Fallback** | Generative neural reasoning (Cloud Acceleration). | Absolute last resort. |
+| **Level 1** | **Internal Logic** | Direct rule-based intent triggering + Graph Resonance. | If no static rule matches intent. |
+| **Level 2** | **Engine Registry**| Specialized Deterministic Engines (Code, Data, Knowledge). | If intent requires multi-step reasoning. |
+| **Level 3** | **Agent Swarm** | Parallel tool execution with Consensus Adjudication. | If tool paths fail fidelity audit. |
+| **Level 4** | **Neural Fallback** | Local Inference (Ollama) vs Cloud (Neural Handoff). | Absolute last resort. |
 
 ---
 
@@ -213,10 +225,16 @@ The **Sovereign Shield** is a mandatory sanitization layer that performs real-ti
 - **SovereignVault**: All identity-tier data in Postgres is encrypted at rest via AES-256.
 
 ### **7.3 Sovereign Shield: Neural PII Masking Patterns**
-The v13 shield employs high-fidelity regex-based and transformer-based NER masking.
-- **Identity**: `[A-Z][a-z]+ [A-Z][a-z]+` → `[IDENTITY_MASKED]`
-- **End Points**: `[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}` → `[LINK_MASKED]`
-- **Finance**: `\$[0-9]+(\.[0-9]{2})?` → `[QUANT_MASKED]`
+The v13.1.0 shield employs high-fidelity regex-based and transformer-based NER masking.
+- **Identity**: `[A-Z][a-z]+ [A-Z][a-z]+` → `[NAME_HASH]`
+- **Email**: `[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}` → `[LINK_HASH]`
+- **Finance**: `\$[0-9]+(\.[0-9]{2})?` → `[QUANT_HASH]`
+- **Credit Card**: `\b(?:\d[ -]*?){13,16}\b` → `[CARD_HASH]`
+
+### **7.4 Persistent De-identification & Boundaries**
+To prevent instruction hijack, LEVI-AI enforces strict mission boundaries.
+- **Persistent Masking**: Placeholders are generated via `MD5(UserID:OriginalValue)`. This ensures that a masked entity (e.g. `[NAME_A1B2]`) remains consistent throughout a multi-turn mission without exposing raw PII to the model.
+- **Mission Enforcement**: All user inputs are wrapped in `<USER_MISSION>` tags. The core logic forbids the mission layer from using `SYSTEM_INSTRUCTION` or `OS_OVERRIDE` tokens.
 
 ---
 
@@ -228,9 +246,22 @@ The "Brain" is a symphony of specialized engines, each with a strict contract.
 | **Perception** | `perception.py` | Intent detection & extraction. | Uses **Intent Multiplexing** to achieve >95% accuracy. |
 | **Goal** | `goal_engine.py` | Objective formalization. | Translates user visions into structured `GoalObject`. |
 | **Planner** | `planner.py` | DAG Generation. | Detects **Fragility** (>0.6) to trigger Swarm Review. |
-| **Executor** | `executor.py` | Topological Wave Execution. | Resolves `{{task_id.result}}` dependencies. |
-| **Reflection** | `critic.py` | Fidelity Audit. | Multi-model consensus to audit outcomes. |
-| **Evolution** | `learning.py` | Self-Optimization. | Promotes recurring patterns to deterministic rules. |
+| **Executor** | `executor.py` | Topological Wave Execution. | Resolves `{{task_id.result}}` dependencies via **Semaphore v9.8**. |
+| **Reflection** | `critic.py` | Fidelity Audit & Self-Correction. | Multi-model consensus to audit outcomes ($S < 0.6$ triggers retry). |
+| **Evolution** | `learning.py` | Self-Optimization & Rule Promotion. | Promotes recurring patterns to deterministic rules. |
+| **Registry** | `engine_registry.py`| Pluggable Deterministic Engines. | Level 2 routing for Code/Data/Knowledge. |
+| **Handoff** | `handoff.py` | Neural Handoff Management. | Routes between Local (Ollama) and Cloud (Groq). |
+
+### **8.1 Cognitive Fidelity Mathematics ($S$)**
+The **Fidelity Score ($S$)** is the definitive arbiter of mission success, calculated with a multi-dimensional weighted average.
+
+$$S = (0.4 \times CriticScore) + (0.4 \times MeanAgentFidelity) + (0.2 \times MeanAgentConfidence)$$
+
+#### **Critic Score Component**
+The system logic performs a secondary audit pass on three primary vectors:
+- **Goal Alignment (50%)**: Direct coverage of perceived intent.
+- **Factual Grounding (30%)**: Evidence-based attribution to agent findings.
+- **Tone Resonance (20%)**: Adherence to the philosophical monolith voice.
 
 ---
 
@@ -289,14 +320,25 @@ $$Resonance = \frac{Importance}{1 + (AgeDays \times 0.1)}$$
 | **T5: Knowledge**| Neo4j | Relational Knowledge Graph. | Research artifact mapping (T5). |
 
 ### **10.2 Persistence Logic (Tier 4 & 5)**
-- **Tier 4 (Crystallization)**: If a mission outcome achieves a Fidelity Score ($S$) > 0.90, the interaction is autonomously serialized to `crystallized_wisdom.jsonl` for future local model quantization.
+- **Tier 4 (Crystallization)**: If a mission outcome achieves a Fidelity Score ($S$) > 0.90, the interaction is autonomously serialized to `crystallized_wisdom.jsonl`.
 - **Tier 5 (Graph Synergy)**: Relationship triplets (`Entity`-[`Relation`]->`Entity`) are extracted and stored in Neo4j to build long-term ontological resonance.
+
+### **10.3 Absolute Memory Erasure & GDPR (Audit Point 14)**
+The Sovereign Monolith implements a hardened "Memory Wipe" protocol to ensure zero semantic residue.
+- **5-Tier Atomic Purge**: Triggered via `DELETE /api/facts/clear-all`.
+  1. **Redis**: Immediate session pulse and interaction history destruction.
+  2. **Firestore**: Episodic event cluster and summary erasure.
+  3. **Postgres**: Profile, trait, and preference record deletion.
+  4. **HNSW Vault**: Semantic fact extraction and index optimization.
+  5. **Neo4j**: Relational knowledge node and edge pruning.
+- **Selective Forgetting**: `DELETE /api/facts/{fact_id}` allows for precision removal of single cognitive shards.
 
 ### **10.2 Advanced Resonance Mathematics**
 The cognitive core implements a high-fidelity **Importance-Decay** model to manage context resonance.
 
 - **Decay Constant ($\lambda$)**: Default is `0.1`, representing a 90-day sovereign window.
 - **Survival Threshold ($T_s$)**: Default is `0.5`. If $R < T_s$, the memory is flagged for **Soft Purge** during the weekly hygiene cycle.
+- **Survival Hygiene**: Autonomous background sweep every 7 days; facts with Resonance $R < 0.5$ are permanently purged from the HNSW Vault to maintain semantic clarity.
 - **Crystallization Trigger**: If $I > 0.95$ and $R$ remains stable for 5 cycles, the fact is promoted to Tier 4 (Identity).
 
 ---
@@ -309,10 +351,10 @@ High-Fidelity SSE Telemetry provides 360-degree observability.
 - **Binary Pulse**: JSON → **zlib (70% Compression)** → **Base64** → SSE for mobile visual sovereignty.
 
 ### **11.2 Adaptive Pulse v4.1: Compression Metrics**
-To ensure mobile fluidity, the v13 pulse employs aggressive zlib-based serialization.
-- **Header Enrichment**: HMAC signature + Session Nonce.
-- **Payload Ratio**: 3.4:1 (Original to Encoded).
-- **Latency Threshold**: < 50ms pulse delivery over 4G/LTE.
+To ensure mobile fluidity, the v13.1.0 pulse employs aggressive **Sovereign-Binary** serialization.
+- **Serialization Flow**: `JSON` → `zlib (70% Compression)` → `Base64` → `HMAC-SHA256 Signature`.
+- **Latency Threshold**: < 50ms pulse delivery over 4G/LTE protocols.
+- **Header Enrichment**: Every pulse includes a `X-Sovereign-Status` and `X-Resonance-Fidelity` header.
 
 ### **11.1 Event Payload Specification**
 | Event Type | Payload Key Content | Purpose |
@@ -352,7 +394,7 @@ For v13.0, the semantic resonance layer is tuned for extreme high-speed retrieva
 
 ---
 
-## 🗄️ 12. Integrated Database Schema (Postgres v13.0.0)
+## 🗄️ 12. Integrated Database Schema (Postgres v13.1.0)
 The **SovereignIdentity** layer is managed via a hardened Postgres instance.
 
 ```sql
@@ -412,11 +454,22 @@ In a Sovereign Monolith, total system failure is unacceptable.
 
 ---
 
-## 💰 13.7 Cost Model & Efficiency
-Sovereignty includes economic optimization.
-- **LLM Cost**: Token Usage $\times$ Provider Rate (Minimized via Level 1-2 logic).
-- **Local Models**: Zero API cost; balanced by higher memory/CPU residency requirements.
-- **Weighted Units**: Agent execution is tracked in **Cognitive Units (CU)** to optimize token-to-result density.
+## 💰 13.7 Cost Model & Efficiency: Cognitive Units (CU)
+Sovereignty includes economic optimization via the **Cognitive Unit (CU)** ledger.
+
+### **13.7.1 The CU Consumption Formula**
+The consumption of cognitive resources is calculated using the following high-fidelity formula:
+
+$$CU = \left( \frac{Tokens}{1000} \times W \right) + (Agents \times 0.5) + \left( \frac{LatencyMS}{100} \times 0.01 \right)$$
+
+| Model Tier | Identifier | Weight ($W$) | Description |
+| :--- | :--- | :--- | :--- |
+| **Local** | `ollama / local` | **0.5** | 100% Zero-API Sovereign Inference. |
+| **Instant** | `llama-3.1-8b` | **1.0** | High-speed generative reasoning. |
+| **Versatile** | `llama-3.1-70b`| **5.0** | Complex multi-stage synthesis. |
+
+- **Agent Surcharge**: 0.5 CU per successful agent tool execution.
+- **Compute Surcharge**: 0.01 CU per 100ms of system execution time.
 - **Memory Overhead**: Efficient relational normalization in Postgres reduces storage bloating compared to flat JSONB.
 
 ---
@@ -474,23 +527,21 @@ event: final       | data: {"message": "Mission Success. Files staged."}
 ---
 
 ## 📈 14.7 Scaling Limits (Reality Check)
-The v13.0.0 Monolith is optimized for horizontal scalability across distributed cognitive networks.
+The v13.1.0 Monolith is optimized for horizontal scalability across distributed cognitive networks.
 
 - **Single Node (8-Core)**:
   - ~50–100 Concurrent Active Missions.
 - **Cluster Tier (Redis + 5 Workers)**:
   - ~500–800 Concurrent Missions.
-- **Global DCN (Kubernetes Fabric)**:
-  - 10k+ Concurrent Users via geographically distributed Pulse nodes.
+- **High-Concurrency Mode**: Enabled via `SovereignThrottler` (Tiered worker mapping).
 
 ---
 
 ## ⚠️ 14.8 Known Issues & Technical Gaps
 Honesty is the foundation of Sovereign Intelligence.
-- **Relational Mapping**: Neo4j link requires a manual Bolt driver configuration for non-standard ports.
-- **SQL Fragments**: Some identity traits from legacy tests require manual migration to the v13 Postgres Schema.
-- **Local LLM**: Integrated via **Ollama** (v13.0.0). Local GGUF support remains via `llama-cpp-python` as a secondary fallback.
-- **Learning Loop**: Performance may degrade under extreme concurrency (>200 simultaneous waves) due to Redis PubSub backpressure.
+- **D-Drive I/O Optimization**: High-concurrency database writes to partitioned D: drive volumes require further OS-level tuning.
+- **Memory Rollback**: Atomic rollback of Neo4j fragments during terminal mission failure remains experimental.
+- **Learning Loop**: Performance stability confirmed via `SovereignThrottler` (v13.1.0).
 
 ---
 

@@ -92,3 +92,6 @@ class ConsensusAgentV13(SovereignAgent[ConsensusInput, AgentResult]):
                 "data": input_data.candidates[0].dict(),
                 "score": 0.5
             }
+
+# Graduation Alias for the Absolute Monolith (v13.0)
+ConsensusAgentV11 = ConsensusAgentV13

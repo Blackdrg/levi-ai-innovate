@@ -13,7 +13,7 @@ from backend.broadcast_utils import SovereignBroadcaster
 
 logger = logging.getLogger(__name__)
 
-class SovereignHandoffV13:
+class SovereignHandoff:
     """
     Sovereign Hybrid Controller (v13.0.0).
     Optimizes for Privacy, Intelligence, and Speed.
@@ -84,4 +84,4 @@ class SovereignHandoffV13:
         return provider
 
 # Singleton graduation
-handoff = SovereignHandoffV13()
+handoff = SovereignHandoff()

@@ -11,6 +11,7 @@ from typing import Dict, Any, Optional, List, AsyncGenerator, Union
 
 from .v8.brain import LeviBrainCoreController
 from .v8.learning import UserPreferenceModel
+from .orchestrator_types import ToolResult
 
 logger = logging.getLogger(__name__)
 
