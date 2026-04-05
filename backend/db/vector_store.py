@@ -97,3 +97,6 @@ class SovereignVectorStore:
         """Standard v8 absolute memory wipe bridge."""
         db = await VectorDB.get_user_collection(user_id, "memory")
         await db.clear()
+
+# Graduation Alias for the Absolute Monolith v13
+VectorStoreV13 = SovereignVectorStore

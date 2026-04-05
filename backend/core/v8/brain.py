@@ -9,7 +9,7 @@ from .goal_engine import GoalEngine
 from .planner import DAGPlanner
 from .executor import GraphExecutor
 from .critic import ReflectionEngine
-from .learning import LearningLoopV8
+from .learning import LearningLoopV13, LearningLoopV8
 from .decision_engine import DecisionEngine
 from .llm_guard import LLMGuard
 from .engines.deterministic_engine import DeterministicEngine

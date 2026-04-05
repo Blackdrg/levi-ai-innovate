@@ -1,6 +1,6 @@
 @echo off
 echo Committing orchestrator stability fixes...
-cd /d "C:\Users\mehta\Desktop\New folder\LEVI-AI"
+cd /d "D:\LEVI-AI"
 git add backend/services/orchestrator/planner.py backend/services/orchestrator/memory_manager.py
 git commit -m "fix(brain): harden detect_intent and prune_task against LLM/async failures
 

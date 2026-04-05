@@ -233,7 +233,8 @@ class MemoryManager:
             if triplets:
                 for t in triplets:
                     asyncio.create_task(self.graph.upsert_triplet(
-                        user_id, t["subject"], t["relation"], t["object"]
+                        user_id, t["subject"], t["relation"], t["object"],
+                        tenant_id=extraction.get("tenant_id", "default")
                     ))
 
             # 2. Store Atomic Facts (FAISS/Mongo)

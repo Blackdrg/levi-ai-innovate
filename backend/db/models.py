@@ -1,7 +1,8 @@
-from sqlalchemy import Column, String, Float, DateTime, JSON, ForeignKey, Text, Integer
+from sqlalchemy import Column, String, Float, DateTime, JSON, ForeignKey, Text, Integer, Boolean
 from sqlalchemy.orm import relationship
 from backend.db.postgres import Base
 from datetime import datetime, timezone
+import os
 
 class UserProfile(Base):
     """

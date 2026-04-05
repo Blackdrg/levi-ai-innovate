@@ -4,7 +4,14 @@ setlocal
 
 echo [🚀] Initializing LEVI-AI v13.1.0 Graduation Tier...
 
-REM 1. Infrastructure Checks
+REM 1. Infrastructure Infrastructure Checks
+echo [🏗️] Initializing D-Drive Data Fabric (100% Isolation)...
+if not exist data mkdir data
+if not exist data\postgres mkdir data\postgres
+if not exist data\redis mkdir data\redis
+if not exist data\neo4j mkdir data\neo4j
+if not exist data\ollama mkdir data\ollama
+
 echo [🏗️] Starting Core Infrastructure (Postgres, Redis, Neo4j, Ollama)...
 docker compose up -d postgres redis neo4j ollama
 if %errorlevel% neq 0 (

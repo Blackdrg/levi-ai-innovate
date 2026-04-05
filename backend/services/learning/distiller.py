@@ -95,3 +95,6 @@ class MemoryDistillerV13:
 
 # Singleton instance
 distiller = MemoryDistillerV13()
+
+# Versioned Alias for System Orchestration (v13.0)
+MemoryDistiller = MemoryDistillerV13

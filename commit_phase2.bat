@@ -2,7 +2,7 @@
 echo ============================================================
 echo  LEVI AI - Phase 2 Commit: Test Fix + Chat Enhancements
 echo ============================================================
-cd /d "C:\Users\mehta\Desktop\New folder\LEVI-AI"
+cd /d "D:\LEVI-AI"
 
 git add tests/test_orchestrator.py
 git add backend/services/chat/router.py
