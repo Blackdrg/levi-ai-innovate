@@ -123,7 +123,7 @@ class VectorDB:
         # 32 = M (Max Connections), defaults to L2 if not specified.
         new_index = faiss.IndexHNSWFlat(self.dimension, 32, faiss.METRIC_INNER_PRODUCT)
         new_index.hnsw.efConstruction = 200
-        new_index.hnsw.efSearch = 100 # High-recall production floor
+        new_index.hnsw.efSearch = 64 # Optimized for real-time latency (v1.0.0-RC1)
         new_index.add(emb_np)
         
         async with self._lock:
@@ -132,10 +132,10 @@ class VectorDB:
         logger.info(f"[VectorDB] Rebuild complete for {self.collection_name}.")
         
         if self.index is None:
-            # v13.1 Upgrade: HNSW + Inner Product
+            # v1.3.1 Upgrade: HNSW + Inner Product
             self.index = faiss.IndexHNSWFlat(self.dimension, 32, faiss.METRIC_INNER_PRODUCT)
             self.index.hnsw.efConstruction = 200
-            self.index.hnsw.efSearch = 100
+            self.index.hnsw.efSearch = 64
             self.metadata = []
             logger.info(f"Initialized new collection '{self.collection_name}' (HNSW Cosine v13.1).")
 

@@ -5,10 +5,11 @@ from typing import Dict, Any, List, Optional
 
 logger = logging.getLogger(__name__)
 
-class DeterministicValidator:
+class HardRuleValidator:
     """
     Non-probabilistic validation suite for agentic outputs.
     Provides a "ground truth" score component to break LLM circularity.
+    Renamed from 'DeterministicValidator' to reflect its rule-based nature.
     """
 
     @staticmethod
@@ -24,31 +25,40 @@ class DeterministicValidator:
         }
 
         if intent == "code":
-            scores["syntax"] = DeterministicValidator._check_code_syntax(content)
+            scores["syntax"] = HardRuleValidator._check_code_syntax(content)
         elif intent == "research":
-            scores["grounding"] = DeterministicValidator._check_links(content)
+            scores["grounding"] = HardRuleValidator._check_links(content)
         
         # General checks
-        scores["logic"] = DeterministicValidator._check_json_integrity(content)
-        scores["resonance"] = DeterministicValidator._check_forbidden_patterns(content)
+        scores["logic"] = HardRuleValidator._check_json_integrity(content)
+        scores["resonance"] = HardRuleValidator._check_forbidden_patterns(content)
 
         return scores
 
     @staticmethod
     def _check_code_syntax(content: str) -> float:
-        """Regex-based verification of code block completeness."""
+        """AST-based and regex verification of code block completeness."""
+        import ast
+        
         # Check for open/close triple backticks
-        blocks = re.findall(r"```[a-zA-Z]*\n?([\s\S]*?)```", content)
+        blocks = re.findall(r"```(?:python|py)?\n?([\s\S]*?)```", content)
         if not blocks:
             # If no blocks but intent is code, penalize heavily
             return 0.2 if "def " in content or "class " in content else 0.5
         
-        # Basic balance check for braces/parens in blocks
         score = 1.0
         for block in blocks:
-            if block.count("{") != block.count("}"): score -= 0.2
+            # 1. Basic balance check
+            if block.count("{") != block.count("}"): score -= 0.1
             if block.count("(") != block.count(")"): score -= 0.1
-            if block.count("[") != block.count("]"): score -= 0.1
+            
+            # 2. Python AST Validation (if applicable)
+            try:
+                ast.parse(block)
+            except SyntaxError:
+                # Penalize but don't fail, as it might be a snippet or non-python
+                if "def " in block or "import " in block:
+                    score -= 0.3
         
         return max(0.0, score)
 
@@ -88,6 +98,7 @@ class DeterministicValidator:
         # Common local-path or internal-key leak patterns
         forbidden = [
             r"C:\\Users\\[a-zA-Z0-9]+", # Windows paths
+            r"/home/[a-zA-Z0-9]+",       # Linux paths
             r"sk-[a-zA-Z0-9]{32,}",      # Potential OpenAI keys
             r"gsk_[a-zA-Z0-9]{32,}"      # Potential Groq keys
         ]

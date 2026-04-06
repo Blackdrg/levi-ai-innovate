@@ -11,7 +11,7 @@ from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 from backend.agents.base import SovereignAgent, AgentResult, T, R
 from backend.engines.chat.generation import SovereignGenerator
-from backend.utils.validators import DeterministicValidator
+from backend.utils.validators import HardRuleValidator
 from backend.utils.grounding import FactualGroundingHub
 
 logger = logging.getLogger(__name__)
@@ -28,16 +28,16 @@ class FidelityRubric(BaseModel):
     def calculate_fidelity(self, content: str, intent: str = "general") -> float:
         """
         v1.0.0-RC1: Deterministic Weighted Aggregator.
-        Combines neural scores with a hard-coded DeterministicValidator [40% weight].
+        Combines neural scores with a hard-coded HardRuleValidator [50% weight].
         """
         weights = self.get_weight_profile(intent)
-        det_scores = DeterministicValidator.validate(content, intent)
+        det_scores = HardRuleValidator.validate(content, intent)
 
-        # Synthesis: LLM-Appraisal (60%) + DeterministicTruth (40%)
-        final_syntax = (self.syntax_correctness * 0.6) + (det_scores["syntax"] * 0.4)
-        final_logic = (self.logical_consistency * 0.6) + (det_scores["logic"] * 0.4)
-        final_grounding = (self.factual_grounding * 0.6) + (det_scores["grounding"] * 0.4)
-        final_resonance = (self.sovereign_resonance * 0.6) + (det_scores["resonance"] * 0.4)
+        # Synthesis: LLM-Appraisal (50%) + Hard-Rule Truth (50%)
+        final_syntax = (self.syntax_correctness * 0.5) + (det_scores["syntax"] * 0.5)
+        final_logic = (self.logical_consistency * 0.5) + (det_scores["logic"] * 0.5)
+        final_grounding = (self.factual_grounding * 0.5) + (det_scores["grounding"] * 0.5)
+        final_resonance = (self.sovereign_resonance * 0.5) + (det_scores["resonance"] * 0.5)
 
         return (
             (final_syntax * weights["syntax"]) +
@@ -90,7 +90,7 @@ class ConsensusAgentV13(SovereignAgent[ConsensusInput, AgentResult]):
         rubric_summaries = ""
         if input_data.rubrics:
             for i, r in enumerate(input_data.rubrics):
-                # Now passing content to include DeterministicValidator
+                # Now passing content to include HardRuleValidator
                 obj_score = r.calculate_fidelity(input_data.candidates[i].message, intent)
                 rubric_summaries += f"Candidate [{i}] Ground-Truth Score: {obj_score:.2f}\n"
 
@@ -128,7 +128,7 @@ class ConsensusAgentV13(SovereignAgent[ConsensusInput, AgentResult]):
             candidate_fidelity = data.get("fidelity", 0.9)
             if input_data.rubrics and winner_idx < len(input_data.rubrics):
                 obj_score = input_data.rubrics[winner_idx].calculate_fidelity(best_result.message, intent)
-                final_fidelity = (candidate_fidelity * 0.6) + (obj_score * 0.4)
+                final_fidelity = (candidate_fidelity * 0.5) + (obj_score * 0.5)
             else:
                 final_fidelity = candidate_fidelity
 

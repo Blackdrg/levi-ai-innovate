@@ -22,7 +22,7 @@ class GraphExecutor:
     Implements topological parallel execution with 'Retry + Compensate' logic.
     """
 
-    async def run(self, graph: Any, perception: Dict[str, Any], concurrency_limit: int = 5) -> List[ToolResult]:
+    async def run(self, graph: Any, perception: Dict[str, Any], concurrency_limit: int = 4) -> List[ToolResult]:
         logger.info("[V9 Executor] Initiating Robust Topological Wave Execution (Concurrency: %d)...", concurrency_limit)
         user_id = perception.get("user_id", "default_user")
         session_id = perception.get("session_id", "default_session")
