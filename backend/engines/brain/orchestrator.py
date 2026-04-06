@@ -26,7 +26,7 @@ class BrainOrchestrator:
         logger.info(f"Sovereign Mission initiated: {user_id}")
         
         # 1. Security Input Scrubbing
-        query = SovereignSecurity.mask_pii(query)
+        query = SovereignSecurity.mask_pii(query, user_id=user_id)
         if SovereignSecurity.detect_injection(query):
             yield {"event": "error", "data": "Security violation detected."}
             return

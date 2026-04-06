@@ -24,31 +24,56 @@ class SovereignSecurity:
     @classmethod
     def mask_pii(cls, text: str, user_id: str = "global") -> str:
         """
-        Sovereign Shield v9.8.1: Advanced PII Redaction.
-        Finds and masks PII using high-fidelity regex (NER-Lite).
+        Sovereign Shield v1.0.0-RC1: Hardened PII Encryption.
+        Encrypts sensitive facts using AES-256 GCM before model handoff.
         """
         return cls.deidentify(text, user_id)
 
     @classmethod
     def deidentify(cls, text: str, user_id: str) -> str:
         """
-        Replaces sensitive facts with persistent placeholders.
-        Example: 'John Doe lives in New York' -> '[NAME_M_1] lives in [LOC_M_1]'
+        Replaces sensitive facts with AES-encrypted persistent placeholders.
         """
+        from backend.utils.kms import SovereignKMS
+        
         masked_text = text
         for pii_type, pattern in cls.PII_PATTERNS.items():
             matches = list(re.finditer(pattern, masked_text))
             for match in reversed(matches):
                 raw_val = match.group()
-                # Create a persistent hash for this user/value pair
-                import hashlib
-                val_hash = hashlib.md5(f"{user_id}:{raw_val}".encode()).hexdigest()[:4]
-                placeholder = f"[{pii_type.upper()}_{val_hash}]"
+                # Encrypt the raw value with user_id context
+                payload = f"{user_id}:{raw_val}"
+                val_cipher = SovereignKMS.encrypt(payload)
+                placeholder = f"[{pii_type.upper()}_KMS_{val_cipher}]"
                 
                 start, end = match.span()
                 masked_text = masked_text[:start] + placeholder + masked_text[end:]
         
         return masked_text
+
+    @classmethod
+    def demask_pii(cls, text: str) -> str:
+        """
+        Restores original values from KMS-encrypted placeholders.
+        """
+        from backend.utils.kms import SovereignKMS
+        
+        demasked_text = text
+        # Pattern to find our KMS placeholders
+        kms_pattern = r"\[[A-Z]+_KMS_([a-zA-Z0-9+/=]+)\]"
+        
+        matches = list(re.finditer(kms_pattern, demasked_text))
+        for match in reversed(matches):
+            cipher = match.group(1)
+            decrypted = SovereignKMS.decrypt(cipher)
+            
+            # Decrypted value is "user_id:raw_val"
+            if ":" in decrypted:
+                _, raw_val = decrypted.split(":", 1)
+                start, end = match.span()
+                demasked_text = demasked_text[:start] + raw_val + demasked_text[end:]
+        
+        return demasked_text
 
     @classmethod
     def detect_injection(cls, query: str) -> bool:

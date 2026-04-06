@@ -57,18 +57,54 @@ class PromptSanitizer:
         return shielded_messages
 
     @classmethod
-    def mask_pii(cls, text: str) -> str:
+    def mask_pii(cls, text: str, user_id: str = "global") -> str:
         """
-        Sovereign Shield NER: Masks persistent identifiers.
+        Sovereign Shield v1.0.0-RC1: Hardened PII Encryption.
+        Encrypts sensitive vectors using AES-256 GCM before model handoff.
         """
+        from backend.utils.kms import SovereignKMS
         if not text: return ""
-        # Simplified regex-based masking
+        
         email_pattern = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
         phone_pattern = r"\b\d{3}[-.]?\d{3}[-.]?\d{4}\b"
         
-        masked = re.sub(email_pattern, "[REDACTED_EMAIL]", text)
-        masked = re.sub(phone_pattern, "[REDACTED_PHONE]", masked)
+        masked = text
+        # Process Emails
+        for match in reversed(list(re.finditer(email_pattern, masked))):
+            val = match.group()
+            cipher = SovereignKMS.encrypt(f"{user_id}:{val}")
+            placeholder = f"[EMAIL_KMS_{cipher}]"
+            masked = masked[:match.start()] + placeholder + masked[match.end():]
+            
+        # Process Phones
+        for match in reversed(list(re.finditer(phone_pattern, masked))):
+            val = match.group()
+            cipher = SovereignKMS.encrypt(f"{user_id}:{val}")
+            placeholder = f"[PHONE_KMS_{cipher}]"
+            masked = masked[:match.start()] + placeholder + masked[match.end():]
+            
         return masked
+
+    @classmethod
+    def demask_pii(cls, text: str) -> str:
+        """
+        Restores original values from encrypted placeholders.
+        """
+        from backend.utils.kms import SovereignKMS
+        if not text: return ""
+        
+        demasked = text
+        # Pattern for KMS placeholders: [TYPE_KMS_...]
+        kms_pattern = r"\[[A-Z]+_KMS_([a-zA-Z0-9+/=]+)\]"
+        
+        for match in reversed(list(re.finditer(kms_pattern, demasked))):
+            cipher = match.group(1)
+            decrypted = SovereignKMS.decrypt(cipher)
+            if ":" in decrypted:
+                _, raw_val = decrypted.split(":", 1)
+                demasked = demasked[:match.start()] + raw_val + demasked[match.end():]
+                
+        return demasked
 
 class ResultSanitizer:
     """

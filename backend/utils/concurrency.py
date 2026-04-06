@@ -12,7 +12,7 @@ class SovereignThrottler:
     Limits background learning tasks to prevent CPU/IO exhaustion.
     """
     _semaphore: Optional[asyncio.BoundedSemaphore] = None
-    _MAX_CONCURRENT = 10
+    _MAX_CONCURRENT = 4
 
     @classmethod
     def get_semaphore(cls) -> asyncio.BoundedSemaphore:
