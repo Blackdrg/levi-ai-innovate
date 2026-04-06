@@ -1,38 +1,38 @@
-# 🛡️ The Sovereign Security Framework (v9.8.1)
+# 🛡️ System Security Framework (v1.0.0-RC1)
 
-Architectural isolation relies fundamentally on Identity, Encryption, and Sanitization. LEVI-AI v9.8.1 implements a multi-layered security mesh to protect user-specific cognitive traits.
+Architectural isolation relies fundamentally on Identity, Encryption, and Sanitization. LEVI-AI v1.0.0-RC1 implements a multi-layered security mesh to protect user-specific data and cognitive agents.
 
 ---
 
-## 🔐 1. Identity & Encryption (SovereignVault)
+## 🔐 1. Identity & Encryption (Vault Service)
 
-LEVI-AI v9.8.1 graduates beyond simple plaintext storage for user identity.
-- **SovereignVault (AES-256):** All Tier 4 Identity traits in Postgres are encrypted at rest via `SovereignVault.encrypt()`. Decryption only occurs during authorized context hydration.
-- **Sovereign Identity Layer:** Routes strictly validate the system-issued `SovereignToken` against the local SQL identity store.
+LEVI-AI v1.0.0-RC1 uses production-grade encryption for all sensitive data.
+- **Vault Service (AES-256):** All sensitive user identity traits in Postgres are encrypted at rest. Decryption only occurs during authorized session hydration.
+- **Identity Middleware:** All API routes strictly validate JWT sessions and RBAC roles (GUEST, PRO, CREATOR) against the local user store.
 
-## ⚖️ 2. Transaction Integrity (Redis Atomic Locks)
+## ⚖️ 2. Transaction Integrity & Sync
 
-Mission execution and high-compute tasks are protected by a distributed locking mechanism.
-- **Distributed Locking:** Prevents race conditions during credit deductions and agent commissions.
-- **Webhook Cryptography:** Razorpay/Stripe payloads are mathematically verified using `hashlib.sha256` HMAC validation against `RAZORPAY_KEY_SECRET`.
+Mission execution and high-compute tasks are protected by a distributed integrity layer.
+- **Distributed Locking:** Uses Redis to prevent race conditions during mission state transitions and credit deductions.
+- **DCN Integrity:** Inter-node pulses are HMAC-SHA256 signed using a 32-byte `DCN_SECRET`. Unsigned or tampered pulses are rejected.
 
-## 👁️ 3. Sovereign Shield & NER Sanitization
+## 👁️ 3. Security Middleware & PII Masking
 
-The v9.8.1 "Cognitive Monolith" implements a dual-layer sanitization model.
+The v1.0.0-RC1 stack implements a production-ready sanitization model.
 
-1.  **Input Sanitization (Sovereign Shield):**
-    - **NER PII Masking:** Automatically detects and masks sensitive entities before hitting external inference (Groq, OpenAI). Protected entities: `PERSON`, `ORG`, `LOC`, `PERCENT`, `MONEY`, `EMAIL`, `PHONE`.
-    - **Hijack Protection:** The **Perception Engine** filters for "ignore previous instructions" injection patterns.
+1.  **PII Masking (SHA-256):**
+    - **Deterministic De-identification:** Automatically detects and masks sensitive entities (EMAIL, PHONE, PERSON) via `SHA256(val)[:8]` before model handoff.
+    - **Instruction Boundary Guard:** Enforces strict `<USER_MISSION>` and `<SYSTEM_OVERRIDE>` tags to prevent prompt injection.
 
-2.  **Output Auditing (Sovereign Auditor):**
-    - **Mission Fidelity (0.85):** Every mission is audited by the **CriticAgentV8**. If the **Fidelity Score** falls below 0.85, a **Correction Wave** is triggered.
-    - **Logic Grounding:** The auditor explicitly checks for grounding against the Knowledge Graph (Neo4j) and Semantic Store (FAISS).
+2.  **Fidelity Adjudication (Deterministic):**
+    - **Graduation Fidelity (S):** Missions are audited using a 60/40 weighted formula: 60% from neural appraisal and 40% from rule-based **Deterministic Validation** (syntax, logic, JSON integrity).
+    - **Grounding Hub:** Validates all factual claims against the Relational Graph (Neo4j) and Semantic Memory (FAISS).
 
-## 🧩 4. Execution Sandbox
+## 🧩 4. Execution Sandbox (Docker)
 
-The `CodeAgent` executes all generated Python artifacts in an isolated, zero-host-access sandbox.
-- **Resource Limits:** CPU and Memory caps are enforced per execution block.
-- **Network Isolation:** No external internet access from within the PythonREPL sandbox.
+The `CodeAgent` executes all generated Python artifacts in an isolated Docker container.
+- **Resource Limits:** CPU (0.5) and Memory (512MB) caps are enforced per execution block.
+- **Network Isolation:** Zero internet access is permitted from within the code sandbox by default (Egress Proxy allowlist restricted).
 
 ---
 

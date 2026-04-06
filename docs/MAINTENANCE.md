@@ -1,52 +1,53 @@
-# 🛠️ LEVI-AI Sovereign Maintenance Guide (v9.8.1)
+# 🛠️ Maintenance Guide (v1.0.0-RC1)
 
-Ensuring the absolute fidelity of the LEVI-AI v9.8.1 "Sovereign Monolith" requires periodic maintenance of the cognitive data fabric.
+Ensuring the stability and fidelity of the LEVI-AI v1.0.0-RC1 Distributed Stack requires periodic maintenance of the quad-persistence memory fabric.
 
 ---
 
 ## 🧠 1. Cognitive Memory Maintenance
 
-### **Dreaming Phase (Automatic)**
-The dreaming phase is triggered automatically every 5 missions.
-- **Action:** Monitors the `sovereign:internal:mission_count` key in Redis.
-- **Manual Trigger:** Use `DreamingTask.trigger_force(user_id)` for manual memory crystallization.
+### **Memory Crystallization (Automatic)**
+The crystallization phase is triggered automatically every 10 missions.
+- **Action:** Monitors the mission ledger in Postgres.
+- **Manual Trigger:** Use `MemoryManager.force_crystallization(user_id)` for manual fact distillation.
 
-### **Trait Distillation (Automatic)**
-Fragmented episodic facts are distilled into permanent traits.
-- **Action:** Background process that checks facts with **Importance > 0.8**.
-- **Service:** `backend.core.v8.memory_manager._trigger_distillation()`. (v13 SQL Resonance).
+### **Fact Distillation (Automatic)**
+Fragmented episodic facts are distilled into permanent relational knowledge triplets.
+- **Action:** Background Celery process that checks facts with **Importance > 0.8**.
+- **Service:** `backend.core.memory_manager.trigger_distillation()`.
 
 ---
 
 ## 🗄️ 2. Persistence Layer Maintenance
 
 ### **FAISS Index Sync**
-Semantic memory is stored in a partitioned FAISS index.
-- **Recommendation:** Perform a weekly `SovereignVectorStore.rebuild_index()` for users with >10,000 interactions to optimize `HNSW` performance.
+Semantic memory is stored in a localized FAISS index.
+- **Recommendation:** Perform a periodic `VectorStore.rebuild_index()` for heavy-usage tenants to optimize retrieval accuracy.
 
-### **Postgres Identity Cleanup**
-Encryption keys used by `SovereignVault` must be rotated annually via the `scripts/rotate_vault_keys.py` utility.
+### **Vault Key Rotation**
+Encryption keys used by the Vault Service should be rotated periodically via the `backend/auth/logic.py` internal API.
 
 ---
 
-## 📡 3. Telemetry & Pulse Health
+## 📡 3. Resource Hygiene
 
-### **Survival Gating (Memory Hygiene)**
-- **System:** `backend.services.learning.hygiene.SurvivalGater`.
-- **Action:** Weekly autonomous purge of low-resonance memories (<0.5) to maintain HNSW index performance in FAISS.
-- **Audit:** Search for "hygiene_cycle" in `learning_worker.py` logs.
+### **Memory Pruning**
+- **System:** `backend.core.memory_tasks.MemoryPruner`.
+- **Action:** Weekly autonomous purge of low-importance memories (<0.5) to manage the local FAISS index footprint.
+- **Audit:** Search for "pruning_cycle" in the Celery worker logs.
 
-### **Redis Pulse Flush**
-The `sovereign:blackboard:{session_id}` keys are transient. They are cleared automatically upon mission completion, but it is recommended to perform a weekly `redis-cli --scan --pattern "sovereign:blackboard:*" | xargs redis-cli del` to prune any orphaned sessions.
+### **Redis Queue Flush**
+Mission state keys are transient. They are cleared automatically upon completion. To prune orphaned keys:
+- **Command:** `redis-cli --scan --pattern "mission:blackboard:*" | xargs redis-cli del`
 
 ---
 
 ## 📈 4. Performance Diagnostics
-Use `scripts/verify_v9_8_full.py` to perform a 360-degree connectivity and fidelity audit.
-- **Thresholds:**
-    - **TTFT:** < 400ms.
-    - **Memory Hydration:** < 200ms.
-    - **Fidelity Score:** > 0.85 average.
+Use `pytest tests/v1_graduation_suite.py` to perform a 360-degree connectivity and fidelity audit.
+- **KPI Thresholds:**
+    - **API Latency:** < 500ms.
+    - **Memory Retrieval:** < 100ms.
+    - **Fidelity Score (S):** > 0.90 average.
 
 ---
 

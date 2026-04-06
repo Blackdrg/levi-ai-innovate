@@ -1,35 +1,35 @@
-# 🧠 LEVI-AI Sovereign Documentation (v13.0.0)
+# 🧠 LEVI-AI Documentation (v1.0.0-RC1)
 
-Welcome to the technical hub for the LEVI-AI v9.8.1 graduate architecture.
+Welcome to the technical hub for the LEVI-AI Distributed Stack (v1.0.0-RC1).
 
 ---
 
 ## 🗂️ 1. Technical Manuals
 | Manual | Description |
 | :--- | :--- |
-| **[MASTERS](file:///d:/LEVI-AI/docs/MASTERS.md)** | Absolute technical finality for the cognitive core. |
-| **[SECURITY](file:///d:/LEVI-AI/docs/SECURITY.md)** | SovereignVault, AES-256, and NER sanitization. |
-| **[INTEGRATION](file:///d:/LEVI-AI/docs/INTEGRATION.md)** | API contracts, SSE schemas, and telemetry formats. |
-| **[MAINTENANCE](file:///d:/LEVI-AI/docs/MAINTENANCE.md)** | Dreaming Tasks and Trait Distillation maintenance. |
+| **[MASTERS](file:///d:/LEVI-AI/docs/MASTERS.md)** | Technical specifications for the cognitive core. |
+| **[SECURITY](file:///d:/LEVI-AI/docs/SECURITY.md)** | Security Middleware, SHA-256 PII Masking, and Docker Sandboxing. |
+| **[INTEGRATION](file:///d:/LEVI-AI/docs/INTEGRATION.md)** | API contracts, SSE schemas, and X-Sovereign-Version headers. |
+| **[MAINTENANCE](file:///d:/LEVI-AI/docs/MAINTENANCE.md)** | Background tasks, Memory Pruning, and DB Maintenance. |
 
 ---
 
 ## 🏗️ 2. Operational Framework
 | Manual | Description |
 | :--- | :--- |
-| **[DEPLOYMENT](file:///d:/LEVI-AI/docs/DEPLOYMENT.md)** | Infra topology (Postgres, Redis, Kafka, Neo4j, FAISS). |
-| **[RUNBOOK](file:///d:/LEVI-AI/docs/RUNBOOK.md)** | Cold start and emergency recovery procedures. |
-| **[DIAGNOSTICS](file:///d:/LEVI-AI/docs/DIAGNOSTICS_MASTER.md)** | 360-degree cognitive health monitoring. |
-| **[CHECKLIST](file:///d:/LEVI-AI/docs/DEPLOYMENT_CHECKLIST.MD)** | 10 pre-launch verification checkpoints. |
+| **[DEPLOYMENT](file:///d:/LEVI-AI/docs/DEPLOYMENT.md)** | Service topology (Postgres, Redis, Neo4j, FAISS, Ollama). |
+| **[RUNBOOK](file:///d:/LEVI-AI/docs/RUNBOOK.md)** | Cold start, Local Backup, and emergency recovery procedures. |
+| **[DIAGNOSTICS](file:///d:/LEVI-AI/docs/DIAGNOSTICS_MASTER.md)** | 360-degree health monitoring and Telemetry Pulse logs. |
+| **[CHECKLIST](file:///d:/LEVI-AI/docs/DEPLOYMENT_CHECKLIST.MD)** | Pre-launch verification and Graduation Audit checkpoints. |
 
 ---
 
 ## 🗺️ 3. Project Soul
 | Manual | Description |
 | :--- | :--- |
-| **[CHANGELOG](file:///d:/LEVI-AI/docs/CHANGELOG.md)** | Evolution history from v7 to v13.0.0. |
-| **[MANIFEST](file:///d:/LEVI-AI/docs/LAUNCH_MANIFEST.md)** | The complete v13.0.0 graduate service set. |
-| **[TODO](file:///d:/LEVI-AI/docs/TODO.md)** | Global Hive v14.0 roadmap sync. |
+| **[CHANGELOG](file:///d:/LEVI-AI/docs/CHANGELOG.md)** | Evolution history from v13 to v1.0.0-RC1. |
+| **[MANIFEST](file:///d:/LEVI-AI/docs/LAUNCH_MANIFEST.md)** | The complete v1.0.0-RC1 production service set. |
+| **[TODO](file:///d:/LEVI-AI/docs/TODO.md)** | Roadmap for v1.1.0 P2P Swarm expansion. |
 
 ---
 

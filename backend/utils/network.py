@@ -15,6 +15,26 @@ DEFAULT_TIMEOUT = os.getenv("API_TIMEOUT", 20)
 if isinstance(DEFAULT_TIMEOUT, str):
     DEFAULT_TIMEOUT = int(DEFAULT_TIMEOUT)
 
+# Audit Point 06: SSRF Protection
+ALLOWED_DOMAINS = [
+    "localhost", "127.0.0.1",
+    "api.openai.com", "api.anthropic.com", "api.groq.com", "api.together.xyz",
+    "github.com", "api.github.com",
+    "google.com"
+]
+
+def is_url_allowed(url: str) -> bool:
+    """Verifies that the target domain is within the Sovereign allowlist."""
+    from urllib.parse import urlparse
+    try:
+        parsed = urlparse(url)
+        # Allow internal K8s services (no dot or .local)
+        if "." not in parsed.netloc or parsed.netloc.endswith(".local"):
+            return True
+        return parsed.netloc in ALLOWED_DOMAINS
+    except Exception:
+        return False
+
 # Standardized retry decorator
 standard_retry = retry(
     stop=stop_after_attempt(3),
@@ -127,6 +147,10 @@ def safe_request(method: str, url: str, **kwargs) -> requests.Response:
     
     request_id = kwargs.pop("request_id", "unknown")
     
+    if not is_url_allowed(url):
+        logger.error(f"[Shield] Blocked SSRF attempt to unauthorized domain: {url}")
+        raise RuntimeError("Network Egress Blocked: Unauthorized domain.")
+
     try:
         logger.info(f"API Request [{request_id}]: {method} {url}")
         response = requests.request(method, url, **kwargs)
@@ -153,6 +177,10 @@ async def async_safe_request(method: str, url: str, **kwargs) -> httpx.Response:
     
     request_id = kwargs.pop("request_id", "unknown")
     
+    if not is_url_allowed(url):
+        logger.error(f"[Shield] Blocked Async SSRF attempt to unauthorized domain: {url}")
+        raise RuntimeError("Network Egress Blocked: Unauthorized domain.")
+
     async with httpx.AsyncClient() as client:
         try:
             logger.info(f"Async API Request [{request_id}]: {method} {url}")

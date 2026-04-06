@@ -12,16 +12,40 @@ from backend.redis_client import cache as sovereign_cache
 
 logger = logging.getLogger(__name__)
 
+class PatternPromotionGate:
+    """
+    Sovereign v13.1.0: Human-in-the-loop (HITL) Gate.
+    Prevents unreviewed patterns from being promoted to L1 (Deterministic Rules).
+    """
+    
+    @staticmethod
+    async def stage_rule_candidate(pattern: str, intent: str, confidence: float):
+        """Stages a recurring pattern for human review in the Postgres ledger."""
+        from backend.db.postgres import PostgresDB
+        from backend.db.models import UserPreference # Reusing preference as a proxy or using a dedicated table
+        
+        logger.info(f"[Learning] Staging Rule Candidate (HITL Required): {intent} (Conf: {confidence})")
+        # In a full implementation, we'd use a 'pending_rules' table
+        # For now, we log it as a high-significance preference for review
+        async with PostgresDB._session_factory() as session:
+            pref = UserPreference(
+                user_id="system_admin",
+                category="pending_rule_l1",
+                value=f"Intent: {intent} | Pattern: {pattern[:100]}",
+                resonance_score=confidence
+            )
+            session.add(pref)
+            await session.commit()
+
 class AutonomousLearner:
     """
-    Sovereign Evolution Engine.
+    Sovereign Evolution Engine v13.1.0.
     Observes neural pulses and adjusts model routing parameters.
-    Hardened for autonomous feedback loops.
     """
     
     @staticmethod
     async def log_evolution_pulse(agent: str, query: str, score: float, metadata: Dict[str, Any]):
-        """Logs a single neural pulse for historical analysis."""
+        """Logs a single neural pulse and checks for Rule Promotion candidates."""
         pulse_data = {
             "agent": agent,
             "query": query,
@@ -30,13 +54,15 @@ class AutonomousLearner:
             "timestamp": time.time()
         }
         
-        # Persistence in the Global Ledger
-        await sovereign_db.save_document("neural_pulses", f"{agent}_{int(time.time())}", pulse_data)
+        # 1. Persistence in the Sovereign Ledger (Redis)
+        if HAS_REDIS:
+            pulse_list = eval(sovereign_cache.get("recent_pulses") or "[]")
+            pulse_list.append(pulse_data)
+            sovereign_cache.set("recent_pulses", str(pulse_list[-50:]))
         
-        # Real-time caching for the Evolution Dashboard
-        pulse_list = eval(sovereign_cache.get("recent_pulses") or "[]")
-        pulse_list.append(pulse_data)
-        sovereign_cache.set("recent_pulses", str(pulse_list[-50:]))
+        # 2. Rule Promotion Analysis (Level 1 Crystallization)
+        if score > 0.98 and metadata.get("is_recurring", False):
+            await PatternPromotionGate.stage_rule_candidate(query, metadata.get("intent", "unknown"), score)
         
         logger.info(f"[Evolution] Pulse recorded for {agent}: Score {score}")
 
@@ -58,7 +84,8 @@ class AutonomousLearner:
         else:
             new_weight = current_weight
             
-        sovereign_cache.set(weight_key, str(new_weight))
+        if HAS_REDIS:
+            sovereign_cache.set(weight_key, str(new_weight))
         logger.info(f"[Evolution] Weight transition for {agent}: {current_weight} -> {new_weight}")
 
 # Global Accessor

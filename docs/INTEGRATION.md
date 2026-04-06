@@ -1,22 +1,23 @@
-# 🔌 LEVI-AI v9.8.1 Integration Master Spec
+# 🔌 System Integration Master Spec (v1.0.0-RC1)
 
-The LEVI-AI "Sovereign Monolith" architecture exposes a high-fidelity cognitive API for real-time mission orchestration via the Unified Brain Controller.
+The LEVI-AI Distributed Stack exposes a production-ready API for real-time mission orchestration via the central Brain Controller.
 
 ---
 
-## ⚡ 1. Primary Entry Point (v8/v9 Stream)
+## ⚡ 1. Primary Execution Endpoint
 
-### **POST `/api/v8/orchestrator/chat/stream`**
-Executes a full 8-step cognitive mission with real-time SSE telemetry.
+### **POST `/api/v1/orchestrator/mission`**
+Executes a cognitive mission with real-time SSE telemetry pulses.
 
 - **Request Headers:**
-    - `Authorization: Bearer <SovereignToken>`
+    - `Authorization: Bearer <JWT_TOKEN>`
+    - `X-Sovereign-Version: v1.0.0-RC1`
     - `Content-Type: application/json`
 
 - **Request Body (JSON):**
 ```json
 {
-  "prompt": "Analyze the technical impact of v8 cognitive monoliths.",
+  "objective": "Analyze the technical impact of distributed AI stacks.",
   "user_id": "user_123",
   "session_id": "sess_456"
 }
@@ -24,31 +25,30 @@ Executes a full 8-step cognitive mission with real-time SSE telemetry.
 
 ---
 
-## 📡 2. Neural Pulse Telemetry (SSE)
+## 📡 2. Telemetry Pulse (SSE)
 
-Every mission emits a sequence of SSE Neural Pulse events for real-time observability.
+Every mission emits a sequence of SSE Telemetry Pulse events for real-time observability.
 
 | Event Type | Description | Schema / Payload |
 | :--- | :--- | :--- |
-| `metadata` | Mission ID and Version. | `{request_id: "v9_...", status: "pulsing"}` |
-| `activity` | Human-readable status updates. | `"Research Agent: Searching Tavily..."` |
+| `metadata` | Mission ID and Stack Version. | `{request_id: "m-...", version: "v1.0.0-RC1"}` |
+| `activity` | Human-readable service updates. | `"Scout Agent: Searching Tavily API..."` |
 | `graph` | The full DAG-based TaskGraph. | `TaskGraph.to_dict()` (JSON) |
-| `results` | Raw compiled agent outputs. | `[ToolResult, ...]` |
-| `choice` | Token-by-token neural synthesis. | `{token: "The", delta: 124}` |
-| `audit` | Final mission fidelity score. | `{request_id: "...", score: 0.94}` |
+| `results` | Sanitized agent execution outputs. | `[AgentResult, ...]` |
+| `fidelity` | Final mission fidelity score (S). | `{request_id: "...", score: 0.94}` |
 
 ---
 
 ## 🧠 3. Memory & Context Retrieval
 
-### **GET `/api/v8/telemetry/crystallized-traits`**
-Fetches the user's crystallized identity traits (Tier 4 Memory).
+### **GET `/api/v1/memory/profile`**
+Fetches the user's persistent cognitive memory profile.
 
 - **Response:**
 ```json
 {
-  "traits": [
-    {"trait": "Values deterministic architecture", "crystallized_at": "..."}
+  "memories": [
+    {"content": "Values deterministic architecture", "type": "trait"}
   ]
 }
 ```
@@ -57,9 +57,10 @@ Fetches the user's crystallized identity traits (Tier 4 Memory).
 
 ## 🛠️ 4. Tool Registry Integration
 
-To integrate a third-party API into the LEVI-AI fabric, use the **Sovereign Tool Factory**:
-1.  **Ingest OpenAPI**: `DynamicToolFactory.ingest_openapi(url)`.
-2.  **Generate Wrapper**: Generates typed Python execution code for the `TaskExecutor`.
+To integrate a third-party API into the LEVI-AI fabric, use the **Agent Tool Registry**:
+1.  **Define Tool Metadata**: Provide the OpenAPI specification or function signature.
+2.  **Generate Wrapper**: The system generates the execution wrapper for the `WorkerQueue`.
+3.  **Sandbox Execution**: The tool is executed within an isolated Docker container with strict egress controls.
 
 ---
 

@@ -25,10 +25,17 @@ class SovereignShieldMiddleware(BaseHTTPMiddleware):
         # 2. Sequential Call
         response = await call_next(request)
         
-        # 3. Post-processing (Latency injection & Logging)
+        # 3. Post-processing (Audit Point 25: Security Headers)
         process_time = (time.perf_counter() - start_time) * 1000
         response.headers["X-Process-Time-Ms"] = str(int(process_time))
-        response.headers["X-Sovereign-Shield"] = "v8.active"
+        response.headers["X-Sovereign-Shield"] = "v13.1.0-active"
+        
+        # Hardened Perimeter Headers
+        response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline'; frame-ancestors 'none';"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         
         # 4. Global Logging
         if request.url.path not in ("/health", "/metrics", "/favicon.ico"):

@@ -7,7 +7,6 @@ import os
 import json
 import logging
 import hashlib
-import threading
 import numpy as np  # type: ignore
 from typing import List, Dict, Any, Optional
 
@@ -17,55 +16,39 @@ from backend.utils.encryption import SovereignVault
 
 logger = logging.getLogger(__name__)
 
-# Environment check
-RENDER = os.getenv("RENDER") == "true"
-
-HAS_MODEL = False
-_model = None
-_model_lock = threading.Lock()
-
 def embed_text(text: str) -> list:
     """
-    Returns a 384-dim vector for the given text.
-    On Render Free Tier, we skip the heavy model to save RAM.
+    Returns a 768-dim vector for the given text using local Ollama.
     """
-    global _model, HAS_MODEL
+    import httpx
+    import hashlib
     
-    # 0. v10.0 Local Sovereignty Override
-    OFFLINE = os.getenv("OFFLINE_MODE") == "true"
-
-    # 1. Skip if on Render Free Tier OR in Offline Mode (if we want to use hash-fallback)
-    # However, for Local Sovereignty, we PREFER the actual local model over hashes.
-    if RENDER and not OFFLINE:
-        # Deterministic hash-seeded random so the same text always gets the same vector
+    # Sovereign v13.1: High-fidelity Local Embeddings
+    base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    model = os.getenv("OLLAMA_MODEL_EMBED", "nomic-embed-text")
+    
+    try:
+        # We use a synchronous request here because the caller (VectorDB)
+        # currently wraps this in asyncio.to_thread.
+        with httpx.Client(timeout=30.0) as client:
+            response = client.post(
+                f"{base_url}/api/embeddings",
+                json={
+                    "model": model,
+                    "prompt": text
+                }
+            )
+            response.raise_for_status()
+            return response.json()["embedding"]
+    except Exception as e:
+        logger.error(f"[VectorStore] Ollama Embedding Error: {e}")
+        
+        # 4. Deterministic fallback (same text = same vector) if local engine is down
+        # Warning: Fallback uses 768-dim to match nomic-embed-text
+        dim = 768
         seed = int(hashlib.md5(text.encode()).hexdigest(), 16) % (2**32)
         rng = np.random.default_rng(seed)
-        return rng.uniform(-1, 1, 384).tolist()
-
-    # 2. Lazy load model if not on Render
-    if _model is None and not HAS_MODEL:
-        with _model_lock:
-            if _model is None: # Double check pattern
-                try:
-                    from sentence_transformers import SentenceTransformer  # type: ignore
-                    logger.info("Lazy-loading sentence-transformer model...")
-                    _model = SentenceTransformer("paraphrase-MiniLM-L6-v2", device="cpu")
-                    HAS_MODEL = True
-                except Exception as e:
-                    logger.warning(f"Failed to load model: {e}")
-                    HAS_MODEL = False
-
-    # 3. Use model if available
-    if HAS_MODEL and _model is not None:
-        try:
-            return _model.encode(text).tolist()
-        except Exception as e:
-            logger.error(f"Embedding error: {e}")
-
-    # 4. Deterministic fallback (same text = same vector)
-    seed = int(hashlib.md5(text.encode()).hexdigest(), 16) % (2**32)
-    rng = np.random.default_rng(seed)
-    return rng.uniform(-1, 1, 384).tolist()
+        return rng.uniform(-1, 1, dim).tolist()
 
 # Legacy Class for backward compatibility (Optional)
 class VectorIndex:

@@ -27,7 +27,7 @@ async def call_lightweight_llm(messages: List[Dict]) -> str:
     if os.getenv("OLLAMA_BASE_URL"):
         return await _async_call_llm_api(
             messages=messages,
-            model=os.getenv("OLLAMA_MODEL", "llama3"),
+            model=os.getenv("OLLAMA_MODEL_GENERAL", "llama3.1:8b"),
             provider="ollama",
             temperature=0.3
         )
@@ -40,7 +40,7 @@ async def call_lightweight_llm(messages: List[Dict]) -> str:
 
 async def call_ollama_llm(
     messages: List[Dict],
-    model: str = "llama3",
+    model: str = "llama3.1:8b",
     temperature: float = 0.7
 ) -> str:
     """

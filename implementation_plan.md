@@ -1,11 +1,11 @@
-# Absolute Monolith Hardening: v13.0.0 Production Graduation
+# Local-First Distributed AI Stack: v1.0.0-RC1 Production Graduation
 
-This plan outlines the technical implementation for fixing 28 identified critical, high, and medium-level issues to graduate LEVI-AI to a production-ready Sovereign OS.
+This plan outlines the technical implementation for fixing 28 identified critical, high, and medium-level issues to graduate LEVI-AI to a production-ready Distributed AI Stack.
 
 ## User Review Required
 
 > [!IMPORTANT]
-> This is a massive overhaul of the system's core. Some changes (including Multi-tenant isolation and HNSW migration) will require database migrations and potential re-indexing of existing data.
+> This is a massive overhaul of the system's core. Some changes (including Multi-tenant isolation and FAISS migration) will require database migrations and potential re-indexing of existing data.
 
 > [!WARNING]
 > **Code Sandboxing** requires Docker to be running on the host machine to provide real isolation. If Docker is not available, we will implement the strictest possible local process isolation as a fallback.
@@ -41,10 +41,10 @@ The implementation is divided into four main thrusts: **Security**, **Architectu
 
 #### [MODIFY] [models.py](file:///d:/LEVI-AI/backend/db/models.py)
 - Update models to support Row Level Security (RLS) hooks.
-- Implement `system_audit` cryptographic chaining.
+- Implement system-audit cryptographic chaining.
 
 #### [MODIFY] [vector_store.py](file:///d:/LEVI-AI/backend/db/vector_store.py)
-- Add `model_metadata` header to HNSW index file.
+- Add `model_metadata` header to FAISS index file.
 - Implement tenant-scoped partitioning for vector searches.
 
 #### [NEW] [ontology.py](file:///d:/LEVI-AI/backend/db/ontology.py)
@@ -58,10 +58,10 @@ The implementation is divided into four main thrusts: **Security**, **Architectu
 ### Phase 3: Reliability & Operations (CI/CD & Recovery)
 
 #### [NEW] [deploy.yml](file:///d:/LEVI-AI/.github/workflows/deploy.yml)
-- Full CI/CD pipeline: Build, Tag, K8s Deploy, Canary rollout.
+- Full CI/CD pipeline: Build, Tag, Local Deploy, Canary rollout.
 
 #### [NEW] [backup_policy.py](file:///d:/LEVI-AI/backend/scripts/backup_policy.py)
-- Automated backup orchestration for Postgres (pg_dump), Neo4j (dump), and HNSW.
+- Automated backup orchestration for Postgres (pg_dump), Neo4j (dump), and FAISS.
 
 #### [MODIFY] [celery_app.py](file:///d:/LEVI-AI/backend/celery_app.py)
 - Implement mission cancellation protocol via Redis signals.
@@ -88,9 +88,7 @@ The implementation is divided into four main thrusts: **Security**, **Architectu
 ## Verification Plan
 
 ### Automated Tests
-- `pytest tests/security/test_injection.py`
-- `pytest tests/architecture/test_tenancy.py`
-- `pytest tests/agents/test_outputs.py`
+- `pytest tests/v1_graduation_suite.py`
 
 ### Manual Verification
 - Trigger a mission and attempt to cancel it mid-stream via the API.

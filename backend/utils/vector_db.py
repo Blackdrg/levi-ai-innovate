@@ -16,7 +16,7 @@ class VectorDB:
     _instances: Dict[str, 'VectorDB'] = {}
     _lock = asyncio.Lock()
 
-    def __init__(self, collection_name: str, dimension: int = 384, user_id: Optional[str] = None):
+    def __init__(self, collection_name: str, dimension: int = 768, user_id: Optional[str] = None):
         self.collection_name = collection_name
         self.user_id = user_id
         self.dimension = dimension
@@ -40,7 +40,7 @@ class VectorDB:
         os.makedirs(self.storage_dir, exist_ok=True)
 
     @classmethod
-    async def get_collection(cls, name: str, dimension: int = 384) -> 'VectorDB':
+    async def get_collection(cls, name: str, dimension: int = 768) -> 'VectorDB':
         """Get or create a global collection."""
         async with cls._lock:
             if name not in cls._instances:
@@ -50,7 +50,7 @@ class VectorDB:
             return cls._instances[name]
 
     @classmethod
-    async def get_user_collection(cls, user_id: str, name: str = "memory", dimension: int = 384) -> 'VectorDB':
+    async def get_user_collection(cls, user_id: str, name: str = "memory", dimension: int = 768) -> 'VectorDB':
         """Get or create a user-specific collection."""
         instance_key = f"user_{user_id}_{name}"
         async with cls._lock:
@@ -97,30 +97,33 @@ class VectorDB:
 
     async def rebuild_index(self):
         """
-        Sovereign v13.0: High-fidelity deterministic re-indexing.
-        Re-embeds all texts in the metadata to match the current system model.
+        Sovereign v13.1.0: High-fidelity deterministic re-indexing.
+        Applies L2-normalization for METRIC_INNER_PRODUCT (Cosine Similarity).
         """
         if not self.metadata: return
         
         texts = [m["text"] for m in self.metadata if "text" in m]
         if len(texts) != len(self.metadata):
             raise ValueError("Cannot rebuild index: Partial text availability.")
-            
-        logger.info(f"[VectorDB] Commencing rebuild for {len(texts)} vectors...")
+        
+        logger.info(f"[VectorDB] Commencing rebuild for {len(texts)} vectors with L2-normalization...")
         
         from backend.db.vector_store import embed_text
         new_embeddings = []
         for text in texts:
             emb = await asyncio.to_thread(embed_text, text)
-            new_embeddings.append(emb)
+            # L2-normalization for Cosine Similarity equivalence
+            norm_emb = emb / np.linalg.norm(emb)
+            new_embeddings.append(norm_emb)
             
         emb_np = np.array(new_embeddings).astype('float32')
         self.dimension = emb_np.shape[1]
         
-        # Build new HNSW index
-        new_index = faiss.IndexHNSWFlat(self.dimension, 32)
-        new_index.hnsw.efConstruction = 40
-        new_index.hnsw.efSearch = 16
+        # Build new HNSW index with Inner Product (Cosine)
+        # 32 = M (Max Connections), defaults to L2 if not specified.
+        new_index = faiss.IndexHNSWFlat(self.dimension, 32, faiss.METRIC_INNER_PRODUCT)
+        new_index.hnsw.efConstruction = 200
+        new_index.hnsw.efSearch = 100 # High-recall production floor
         new_index.add(emb_np)
         
         async with self._lock:
@@ -129,13 +132,12 @@ class VectorDB:
         logger.info(f"[VectorDB] Rebuild complete for {self.collection_name}.")
         
         if self.index is None:
-            # v10.0 Upgrade: Use HNSW for sub-30ms retrieval at scale
-            # M=32 for high-speed production performance
-            self.index = faiss.IndexHNSWFlat(self.dimension, 32)
-            self.index.hnsw.efConstruction = 40
-            self.index.hnsw.efSearch = 16
+            # v13.1 Upgrade: HNSW + Inner Product
+            self.index = faiss.IndexHNSWFlat(self.dimension, 32, faiss.METRIC_INNER_PRODUCT)
+            self.index.hnsw.efConstruction = 200
+            self.index.hnsw.efSearch = 100
             self.metadata = []
-            logger.info(f"Initialized new collection '{self.collection_name}' (HNSW v10.0).")
+            logger.info(f"Initialized new collection '{self.collection_name}' (HNSW Cosine v13.1).")
 
     async def add(self, texts: List[str], metadatas: List[Dict[str, Any]]):
         if not texts: return
@@ -144,7 +146,9 @@ class VectorDB:
         from backend.db.vector_store import embed_text
         for text in texts:
             emb = await asyncio.to_thread(embed_text, text)
-            embeddings.append(emb)
+            # L2-normalization for Inner Product (Cosine)
+            norm_emb = emb / np.linalg.norm(emb)
+            embeddings.append(norm_emb)
         
         emb_np = np.array(embeddings).astype('float32')
         
@@ -180,7 +184,9 @@ class VectorDB:
     async def search(self, query: str, limit: int = 5, min_score: float = 0.4, tenant_id: Optional[str] = None) -> List[Dict[str, Any]]:
         from backend.db.vector_store import embed_text
         query_emb = await asyncio.to_thread(embed_text, query)
-        query_np = np.array([query_emb]).astype('float32')
+        # L2-normalization for Inner Product (Cosine)
+        norm_query = query_emb / np.linalg.norm(query_emb)
+        query_np = np.array([norm_query]).astype('float32')
         
         if self.index.ntotal == 0: return []
         
@@ -218,6 +224,7 @@ class VectorDB:
 
     async def clear(self):
         async with self._lock:
+            # Using Inner Product for v13.1 finality
             self.index = faiss.IndexFlatIP(self.dimension)
             self.metadata = []
             self._save()

@@ -9,7 +9,8 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
 
 from backend.db.vector_store import embed_text
-from backend.db.firestore_db import db as firestore_db
+from backend.db.postgres import PostgresDB
+from backend.db.models import UserFact, Mission
 from backend.db.vector_store import VectorDB
 from backend.db.vector_store import SovereignVault
 
@@ -78,7 +79,7 @@ async def extract_memory_graph(user_input: str, bot_response: str) -> Dict[str, 
 
 async def store_facts(user_id: str, new_facts: List[Dict[str, Any]]):
     """
-    Sovereign Fact Storage with FAISS deduplication.
+    Sovereign Fact Storage with FAISS deduplication and Postgres persistence.
     """
     if not user_id or not new_facts: return
 
@@ -89,49 +90,47 @@ async def store_facts(user_id: str, new_facts: List[Dict[str, Any]]):
         if not fact_text: continue
 
         try:
-            # 1. Access Vector Store
+            # 1. Access Vector Store (Tier 3: HNSW/FAISS)
             user_memory = await get_user_memory(user_id)
             
-            # 2. Local Deduplication
+            # 2. Local FAISS Deduplication
             existing = await user_memory.search(fact_text, limit=1)
             if existing and existing[0]["score"] > FACT_DEDUPLICATION_THRESHOLD:
                 if existing[0].get("user_id") == user_id:
                     logger.info(f"FAISS: Deduplicated fact '{fact_text[:30]}...'")
                     continue
 
-            # 3. Create Record
-            fact_id = hashlib.md5(fact_text.encode()).hexdigest()
-            
-            # LEVI v6: Encrypt fact for cloud backup
+            # 3. Encrypt and persist to Postgres (Tier 3: SQL Resonance)
+            # We keep the raw text for the local FAISS index but encrypt metadata for sovereignty
             encrypted_fact = SovereignVault.encrypt(fact_text)
             
-            doc_data = {
-                "user_id": user_id,
-                "fact": encrypted_fact, # Encrypted for cloud
-                "category": category,
-                "fact_id": f"{user_id}_{fact_id}", 
-                "importance": importance,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            }
+            async with PostgresDB._session_factory() as session:
+                new_fact = UserFact(
+                    user_id=user_id,
+                    fact=encrypted_fact,
+                    category=category,
+                    importance=importance
+                )
+                session.add(new_fact)
+                await session.commit()
+                await session.refresh(new_fact)
+                fact_id = new_fact.id
 
-            # 4. Add to Local VM (Keep raw text for local vector search index, but encrypt metadata)
-            meta_data = doc_data.copy()
+            # 4. Add to Local Vector Index (Tier 3: HNSW / Tier 4: Identity)
+            meta_data = {
+                "user_id": user_id,
+                "fact": encrypted_fact,
+                "category": category,
+                "importance": importance,
+                "db_id": fact_id,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
             await user_memory.add([fact_text], [meta_data])
             
-            # 5. Backup to MongoDB (Production Memory Engine)
-            from backend.db.mongo import MongoDB
-            db = await MongoDB.get_db()
-            if db is not None:
-                asyncio.create_task(db.user_facts.insert_one(doc_data))
-                logger.info(f"Fact backed up to MongoDB for user {user_id}")
-            
-            # 6. Legacy Backup to Firestore (Async Non-Blocking)
-            asyncio.create_task(asyncio.to_thread(
-                lambda: firestore_db.collection("user_facts").document(doc_data["fact_id"]).set(doc_data)
-            ))
+            logger.info(f"Fact '{fact_text[:20]}...' synchronized: Postgres ({fact_id}) + Vector Store")
 
         except Exception as e:
-            logger.error(f"Error storing fact: {e}")
+            logger.error(f"Error storing fact for user {user_id}: {e}")
 
 async def search_relevant_facts(user_id: str, query: str, limit: int = 5) -> List[Dict[str, Any]]:
     """
@@ -226,7 +225,7 @@ async def garbage_collect_index(user_id: str):
         logger.info(f"FAISS GC Complete: Pruned {len(user_memory.metadata) - len(new_metadata)} records.")
 
 async def store_global_wisdom(input_text: str, output_text: str, mood: str):
-    """Stores a successful pattern in the Global FAISS Index."""
+    """Stores a successful pattern in the Global FAISS Index and Postgres."""
     try:
         data = {
             "input": input_text[:300],
@@ -236,11 +235,9 @@ async def store_global_wisdom(input_text: str, output_text: str, mood: str):
         }
         global_memory = await get_global_memory()
         await global_memory.add([input_text], [data])
-        # Backup to Firestore
-        pid = hashlib.md5(input_text.encode()).hexdigest()
-        asyncio.create_task(asyncio.to_thread(
-            lambda: firestore_db.collection("global_wisdom").document(pid).set(data)
-        ))
+        
+        # In v13.1, global wisdom can be tracked via a public missions/patterns table if needed.
+        # For now, we stop using Firestore.
     except Exception as e:
         logger.error(f"Global wisdom storage failed: {e}")
 

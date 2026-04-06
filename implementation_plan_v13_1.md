@@ -1,56 +1,56 @@
-# Implementation Plan - Phase 4 (v13.1 Stabilization)
+# Implementation Plan - v1.0.0-RC1 Production Residency
 
-This plan addresses the "v13.1 Stabilization" roadmap items identified in the graduation manual. It focuses on backpressure management in the learning loop and the functional implementation of the DCN (Decentralized Cognitive Network) protocol.
+This plan addresses the final stabilization items for the LEVI-AI Distributed Stack. It focuses on concurrency management in the background task loop and the secure implementation of the DCN (Distributed Cognitive Network) pulse protocol.
 
 ## User Review Required
 
 > [!IMPORTANT]
-> **Learning Throttling**: I am implementing a concurrency cap on background learning tasks. Under extreme load, some low-importance facts (Resonance < 0.6) may be dropped to preserve system stability.
+> **Task Throttling**: I am implementing a concurrency cap on background tasks. Under extreme load, some low-importance operations may be deferred to preserve system stability.
 
 > [!WARNING]
-> **DCN Sync**: The Gossip Protocol will initially be configured for "Local Discoverability". Cross-network sync requires a valid Peer-CA certificate which is out of scope for this monolith.
+> **DCN Pulse Signing**: Inter-node telemetry requires a valid 32-byte `DCN_SECRET`. Without this, inter-instance sync will be rejected to prevent pulse injection attacks.
 
 ## Proposed Changes
 
-### 1. Learning Loop Resilience & Throttling
-Prevent system-wide crashes during mission spikes by gating background learning tasks.
+### 1. Task Loop Resilience & Throttling
+Prevent system-wide crashes during mission spikes by gating background operations.
 
 #### [NEW] [concurrency.py](file:///d:/LEVI-AI/backend/utils/concurrency.py)
-- Implement `SovereignThrottler`: A `BoundedSemaphore` based manager for background tasks.
-- Implement `CircuitBreaker`: To pause learning if Postgres/Redis latency spikes.
+- Implement `AdaptiveThrottler`: A `BoundedSemaphore` based manager for background workers.
+- Implement `CircuitBreaker`: To pause tasks if Postgres/Redis latency spikes occur.
 
 #### [MODIFY] [logic.py](file:///d:/LEVI-AI/backend/services/learning/logic.py)
-- Integrate `SovereignThrottler` into `collect_training_sample`. 
-- Wrap `_augment_knowledge_base` and `update_memory_graph` in throttled execution.
+- Integrate `AdaptiveThrottler` into memory crystallization loops.
+- Wrap graph updates and trait distillation in throttled execution blocks.
 
 ---
 
-### 2. DCN Gossip Protocol (Swarm Sync)
-Transition the DCN from a skeleton to a functional (mock-ready) protocol.
+### 2. DCN Pulse Protocol (Secure Sync)
+Transition the DCN from a skeleton to a functional, HMAC-signed protocol.
 
 #### [MODIFY] [dcn_sync.py](file:///d:/LEVI-AI/backend/services/dcn_sync.py)
-- Implement `CognitiveFragment` Pydantic model with HMAC signatures.
-- Implement `GossipEngine`: Uses Redis PubSub `swarm:sync` channel for fragment propagation.
-- Add `fragment_scrubber`: Ensures $S < 0.95$ facts are never gossiped (High-fidelity ONLY).
+- Implement `CognitiveFragment` Pydantic model with HMAC-SHA256 signatures.
+- Implement `GossipEngine`: Uses Redis PubSub for secure fragment propagation across the network.
+- Add `fragment_scrubber`: Ensures only high-fidelity ($S > 0.95$) verified facts are synchronized.
 
 ---
 
-### 3. HNSW Metadata Finality
-Ensure the vector index remain consistent during re-indexing.
+### 3. FAISS Metadata Finality
+Ensure vector index consistency during re-indexing operations.
 
 #### [MODIFY] [vector_db.py](file:///d:/LEVI-AI/backend/utils/vector_db.py)
-- Update `rebuild_index`: Ensure `tenant_id` is correctly mapped from metadata back into the new index structure for absolute isolation.
+- Update `rebuild_index`: Ensure `tenant_id` and stack versioning are preserved in FAISS metadata for absolute isolation.
 
 ## Open Questions
 
-- **Throttler Limit**: What is the recommended concurrent learning task limit for an 8-core host? I propose **10 concurrent tasks** to prevent CPU starvation.
+- **Throttler Limit**: Based on system benchmarks, I propose a limit of **15 concurrent tasks** to prevent CPU starvation on standard production nodes.
 
 ## Verification Plan
 
 ### Automated Tests
-- `pytest tests/test_stabilization_v13_1.py`:
-    - Simulate 100 concurrent learning calls and verify that no more than 10 are active.
-    - Verify that DCN fragments are HMAC-signed before "broadcast".
+- `pytest tests/v1_graduation_suite.py`:
+    - Verify that DCN fragments are HMAC-signed before broadcast.
+    - Verify that no more than 15 background tasks can execute concurrently.
 
 ### Manual Verification
 - Monitor Redis memory usage during a stress test to ensure no PubSub backlog accumulation.

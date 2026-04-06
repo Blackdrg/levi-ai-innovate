@@ -1,35 +1,36 @@
-# ✅ LEVI-AI Sovereign Deployment Checklist (v13.0.0)
+# ✅ Production Deployment Checklist (v1.0.0-RC1)
 
-Ensure all checkpoints are verified before graduating the v13.0.0 Absolute Monolith to production.
+Ensure all checkpoints are verified before graduating the v1.0.0-RC1 Distributed Stack to production.
 
 ---
 
-## 🏗️ 1. Infrastructure (4-Store SQL Fabric)
-- [ ] **Postgres:** `DATABASE_URL` connectivity and v13 SQL resonance confirmed.
-- [ ] **Redis:** `REDIS_URL` connectivity and Adaptive Pulse v4.1 buffer active.
+## 🏗️ 1. Infrastructure (Quad-Persistence Layer)
+- [ ] **Postgres:** `DATABASE_URL` connectivity and episodic memory schema confirmed.
+- [ ] **Redis:** `REDIS_URL` connectivity and working memory pulse active.
 - [ ] **Neo4j:** `NEO4J_URI` connectivity and Knowledge Graph synchronization confirmed.
-- [ ] **HNSW Vault:** Local vector indexing online and persistent.
+- [ ] **FAISS:** Local vector indexing online and persistent semantic memory verified.
 
 ---
 
-## 🧠 2. Cognitive Fabric
-- [ ] **Brain Monolith:** LeviBrainCoreController v13.0 instance verified.
-- [ ] **Planning:** Topological Wave Parallelization confirmed via `verify_v13_monolith.py`.
-- [ ] **Swarm Appraisal:** Consensus Agent (Council of Models) enabled.
-- [ ] **Neural Synk:** HMAC-SHA256 inter-instance sync established.
+## 🧠 2. Cognitive Layer
+- [ ] **Brain Controller:** Service-oriented mission orchestration instance verified.
+- [ ] **Inference:** Local-first Ollama connectivity (llama3.1:8b) confirmed.
+- [ ] **Planning:** DAG-based mission waves parallelization verified via `v1_graduation_suite.py`.
+- [ ] **DCN Sync:** HMAC-signed inter-node pulse telemetry established.
 
 ---
 
 ## 🔐 3. Security Hardening
-- [ ] **SovereignVault:** AES-256 identity encryption confirmed.
-- [ ] **PII Masking:** NER protection active across all telemetry streams.
-- [ ] **Neural Handoff:** Privacy-gated deterministic safe-mode verified.
+- [ ] **Vault Service:** AES-256 identity encryption and role-based access confirmed.
+- [ ] **PII Masking:** SHA-256 de-identification active across telemetry streams.
+- [ ] **Sandboxing:** Docker-based code execution isolation verified for `CodeAgent`.
+- [ ] **RBAC:** Permission Matrix (GUEST/PRO/CREATOR) enforced on all endpoints.
 
 ---
 
 ## 📡 4. Telemetry & Observability
-- [ ] **Adaptive Pulse v4.1:** Binary/zlib compression confirmed for mobile profiles.
-- [ ] **Fidelity Audit:** Average Mission Fidelity Score > 0.90 confirmed.
+- [ ] **Telemetry Pulse:** SSE stream activity pulses and versioned headers confirmed.
+- [ ] **Graduation Audit:** **28/28 Audit Points** verified via `pytest tests/v1_graduation_suite.py`.
 
 ---
 

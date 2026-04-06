@@ -1,45 +1,47 @@
-# 🏃 LEVI-AI Sovereign Runbook (v9.8.1)
+# 🏃 Operational Runbook (v1.0.0-RC1)
 
-Operations and cognitive maintenance procedures for the LEVI-AI v9.8.1 "Sovereign Monolith."
-
----
-
-## 🚀 1. Cold Start Procedure
-1.  **Orchestration Initializer:** Initialize the service fabric.
-    ```bash
-    docker-compose up -d postgres redis neo4j
-    ```
-2.  **Cognitive Migration:** Apply the v9.8.1 schema.
-    ```bash
-    python backend/core/v8/db_init.py
-    ```
-3.  **Monolith Boot:** Launch the API and Worker.
-    ```bash
-    uvicorn backend.api.main:app --host 0.0.0.0 --port 8000
-    python backend/workers/generative_worker.py
-    ```
+Operations and maintenance procedures for the LEVI-AI v1.0.0-RC1 Local-First Distributed Stack.
 
 ---
 
-## 🩺 2. Diagnostic Verifications
-Perform a 360-degree cognitive health check.
-```bash
-python tests/verify_v13_monolith.py
+## 🚀 1. Boot Procedure
+
+1.  **Service Fabric:** Launch the core service infrastructure.
+    ```powershell
+    docker-compose up -d
+    ```
+2.  **Health Audit:** Perform the 28-point graduation verification.
+    ```powershell
+    pytest tests/v1_graduation_suite.py
+    ```
+3.  **Local Inference:** Ensure Ollama is running and models are pulled.
+    ```powershell
+    ollama list
+    ```
+
+---
+
+## 🩺 2. System Health Audit
+
+Perform a full connectivity and fidelity check across the quad-persistence layer.
+```powershell
+pytest tests/v1_graduation_suite.py -v
 ```
-- **Checks:** Redis context pulse, Postgres traits connection, Neo4j knowledge graph, and FAISS vector retrieval.
+- **Checks:** Redis (Working Memory), Postgres (Episodic Memory), Neo4j (Knowledge Graph), and FAISS (Semantic Memory).
 
 ---
 
 ## 🛠️ 3. Emergency Recovery
-### **"Quantum Misalignment" (State Sync Failure)**
-If the brain enters an inconsistent state:
-1.  **Flush Pulse Cache:** `redis-cli flushall`.
-2.  **Restart Monolith:** Restart the API container to re-initialize the `MemoryManager`.
 
-### **Agent Tool Latency High**
-If agent execution waves exceed 15 seconds:
-- **Action:** Check **Tavily/OpenAI** API health.
-- **Circuit Breaker:** The `sovereign-breaker` should trigger automatically, but if it fails, manually set `ROUTING_OVERRIDE=local` in `.env` for zero-latency survival.
+### **State Sync Failure**
+If the system enters an inconsistent state or mission blackboard is corrupted:
+1.  **Flush Transient State:** `redis-cli flushall`.
+2.  **Restart Services:** `docker-compose restart`. This re-initializes the Brain Controller mission loop.
+
+### **Inference Latency Spikes**
+If local inference waves exceed 15 seconds:
+- **Action:** Check GPU utilization and system temperature.
+- **Failover:** If local inference is stalled, ensure `CLOUD_FALLBACK_ENABLED=true` in `.env` if third-party inference is permissible.
 
 ---
 

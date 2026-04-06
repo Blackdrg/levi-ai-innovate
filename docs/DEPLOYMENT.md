@@ -1,81 +1,78 @@
-# 🚢 LEVI-AI Sovereign Monolith Deployment Architecture (v9.8.1)
+# 🚢 LEVI-AI: Local-First Distributed Stack (v1.0.0-RC1)
 
 > [!IMPORTANT]
-> **LeviBrain v9.8.1 "Sovereign Monolith" Specification**
-> LEVI-AI has transitioned to a High-Fidelity **Unified Cognitive Monolith**. The distributed microservice architecture (Kafka/Zookeeper) is deprecated. All cognitive operations (Perception, Planning, Execution, Reflection) now occur within a single high-performance **API Container** backed by a **Redis Pulse Bus** and **Postgres Sovereignty Store**.
+> **LEVI-AI v1.0.0-RC1 Production Specification**
+> LEVI-AI has transitioned to a **Local-First Distributed Stack**. This architecture coordinates five primary services (FastAPI, Redis, Postgres, Neo4j, and Celery) to ensure absolute data residency and high-performance mission orchestration.
 
 ---
 
-## 🏗️ 1. Infrastructure Topology (v9.8.1)
+## 🏗️ 1. Service Topology (v1.0.0-RC1)
 
-The v9.8.1 Monolith uses a topological wave execution model with a simplified, low-latency service fabric.
+The v1.0.0-RC1 stack uses a service-oriented model with a low-latency local fabric.
 
 ```mermaid
 graph TD
-    LB[Sovereign Load Balancer] --> HTTPS
-    HTTPS --> Web[React / SPA Frontend]
-    HTTPS --> V8[LeviBrain v9.8.1 Monolith API]
+    User((User/Client)) -->|HTTPS/SSE| Gateway[FastAPI Gateway]
     
-    %% Service Fabric
-    V8 -->|Identity & Audit| Postgres[(Postgres: SQL Fabric)]
-    V8 -->|Pulse & Blackboard| Redis[(Redis: Neural Pulse v4.1)]
-    V8 -->|Relational Knowledge| Neo4j[(Neo4j: Resonant Graph)]
-    V8 -->|Cognitive Memory| FAISS[[HNSW Vault: Semantic Vault]]
+    subgraph "Core Stack"
+        Gateway -->|Identity & Audit| Postgres[(Postgres: Episodic Memory)]
+        Gateway -->|Task Queue| Redis[(Redis: Working Memory)]
+        Gateway -->|Relational Graph| Neo4j[(Neo4j: Knowledge Graph)]
+        Gateway -->|Semantic Search| FAISS[[FAISS: Semantic Memory]]
+        Gateway -->|Local Inference| Ollama[Ollama: Inference Layer]
+    end
     
-    %% Async Loops
-    Redis --> Worker[Background Dreaming & Evolution]
-    Worker --> V8
+    subgraph "Background Layer"
+        Redis --> Worker[Celery: Background Workers]
+        Worker --> Postgres
+        Worker --> Neo4j
+    end
 ```
 
 ---
 
-## ⚙️ 2. Hardware Matrix Recommendations (v9.8.1)
+## ⚙️ 2. Hardware Matrix Recommendations
 
-Unified specs for the monolithic container.
+Optimized for the distributed stack with local inference.
 
-| Node Type | Minimum Spec | Recommended Spec | Primary Role |
-|-----------|--------------|------------------|--------------|
-| **Sovereign Monolith** | 8 vCPU, 16GB RAM | 16 vCPU, 32GB RAM | Perception, DAG Execution, Swarm Consensus, and Dreaming. |
-| **Sovereignty Store** | 2 vCPU, 4GB RAM | 4 vCPU, 8GB RAM | Postgres persistent rules and user identity. |
-| **Neural Pulse Bus** | 1 vCPU, 2GB RAM | 2 vCPU, 4GB RAM | Redis-backed SSE telemetry and Mission Blackboard. |
-| **Semantic Vault** | 2GB RAM | 8GB RAM | FAISS vector indices and trait crystallization. |
+| Service | Minimum Spec | Recommended Spec | Primary Role |
+| :--- | :--- | :--- | :--- |
+| **API Gateway** | 4 vCPU, 8GB RAM | 8 vCPU, 16GB RAM | Orchestration & Mission Planning. |
+| **Persistence Hub**| 2 vCPU, 4GB RAM | 4 vCPU, 8GB RAM | Postgres & Neo4j data storage. |
+| **Memory Bus** | 1 vCPU, 2GB RAM | 2 vCPU, 4GB RAM | Redis Working Memory & Task Queue. |
+| **Inference Layer**| 12GB VRAM | 24GB VRAM | Local LLM Inference (llama3.1:8b). |
 
 ---
 
-## ☁️ 3. Deployment & Monolith Boot
+## ☁️ 3. Deployment & Boot Sequence
 
-### Unified Container Graduation (Docker)
-The v9.8.1 deployment is streamlined into a single backend image:
-1. **Initialize Core:** Run the `backend/core/v8/db_init.py` migration.
-2. **Boot Monolith:** 
+### Production Stack (Docker Compose)
+The v1.0.0-RC1 deployment is managed via a unified compose file:
+1. **Prepare Environment:** Configure `.env` with `DCN_SECRET` and `SOVEREIGN_VERSION`.
+2. **Launch Services:**
    ```bash
    docker compose up -d --build
    ```
-3. **Verify Resonance:** Use `python verify_v8_master.py` to confirm all 5 cognitive stores are linked.
-
-### 📱 4. Mobile Adaptive Telemetry (Pulse v4.1)
-Deployment supports high-fidelity mobile monitoring via the `?profile=mobile` SSE hook. This enables:
-- **Event Filtering:** Only critical mission pulses are dispatched.
-- **zlib Compression:** Payloads are compressed for cellular efficiency.
+3. **Verify Health:** Use `pytest tests/v1_graduation_suite.py` to confirm all 28 audit points are verified.
 
 ---
 
-## 🔐 5. Environmental Configuration Validation
+## 🔐 4. Environmental Configuration Validation
 
 ```env
-# ── Sovereign Monolith v9.8.1 ──
+# ── LEVI-AI v1.0.0-RC1 ──
+SOVEREIGN_VERSION=v1.0.0-RC1
+ENVIRONMENT=production
+
+# ── Service Connectivity ──
 DATABASE_URL=postgresql+asyncpg://user:pass@postgres:5432/levidb
 REDIS_URL=redis://redis:6379/0
 NEO4J_URI=bolt://neo4j:7687
 
-# ── Cognitive Acceleration ──
-GROQ_API_KEY=gsk_...
-TAVILY_API_KEY=tvly-...
-OPENAI_API_KEY=sk-... 
+# ── Sovereign Defaults ──
+CLOUD_FALLBACK_ENABLED=false
+DCN_SECRET=64_character_hex_signing_secret
 ```
-
-> [!CAUTION]
-> **Monolith Resource Limits:** Ensure the API container has at least 12GB of addressable memory to support complex 30-node DAG executions without OOM-kills.
 
 ---
 

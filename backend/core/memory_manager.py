@@ -23,7 +23,8 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
 
 from backend.db.redis import r as redis_client, HAS_REDIS
-from backend.db.firestore_db import db as firestore_db
+from backend.db.postgres import PostgresDB
+from backend.db.models import Mission, Message, UserFact, UserProfile, UserTrait, UserPreference, MissionMetric, CreationJob
 from backend.services.learning.logic import UserPreferenceModel
 from backend.api.v8.telemetry import broadcast_mission_event
 
@@ -53,7 +54,7 @@ class MemoryManager:
         return await asyncio.to_thread(MemoryCache.get_session_history, session_id)
 
     async def get_mid_term(self, user_id: str, limit: int = 5) -> List[Dict[str, Any]]:
-        """Recent interaction history pulse from Firestore with Redis caching."""
+        """Recent interaction history pulse from Postgres with Redis caching."""
         if not user_id: return []
         
         cache_key = f"mid_term:{user_id}:{limit}"
@@ -61,17 +62,20 @@ class MemoryManager:
         if cached: return cached
 
         try:
-            def _fetch():
-                docs = (
-                    firestore_db.collection("conversations")
-                    .where("user_id", "==", user_id)
-                    .order_by("updated_at", direction="DESCENDING")
-                    .limit(limit)
-                    .get()
-                )
-                return [doc.to_dict() for doc in docs]
-
-            data = await asyncio.wait_for(asyncio.to_thread(_fetch), timeout=_MIDTERM_TIMEOUT)
+            from sqlalchemy import select
+            async with PostgresDB._session_factory() as session:
+                stmt = select(Mission).where(Mission.user_id == user_id).order_by(Mission.updated_at.desc()).limit(limit)
+                result = await session.execute(stmt)
+                missions = result.scalars().all()
+                data = [
+                    {
+                        "mission_id": m.mission_id,
+                        "objective": m.objective,
+                        "status": m.status,
+                        "updated_at": m.updated_at.isoformat()
+                    } for m in missions
+                ]
+            
             MemoryCache.set_cached_context(cache_key, data, ttl=600)
             return data
         except Exception as e:
@@ -300,7 +304,7 @@ class MemoryManager:
     # ── Utilities ────────────────────────────────────────────────────────────
 
     async def _get_creation_context(self, user_id: str) -> List[Dict[str, Any]]:
-        """Fetch recent Studio/Gallery activity with cache synchronization."""
+        """Fetch recent CreationJob activity from Postgres (Zero-Cloud)."""
         if not user_id or str(user_id).startswith("guest:"): return []
         
         cache_key = f"creation_ctx:{user_id}"
@@ -308,41 +312,70 @@ class MemoryManager:
         if cached: return cached
 
         try:
-            def _fetch():
-                jobs = firestore_db.collection("jobs") \
-                    .where("user_id", "==", user_id) \
-                    .where("status", "==", "completed") \
-                    .order_by("completed_at", direction="DESCENDING") \
-                    .limit(3).get()
+            from sqlalchemy import select
+            async with PostgresDB._session_factory() as session:
+                stmt = select(CreationJob).where(
+                    CreationJob.user_id == user_id,
+                    CreationJob.status == "completed"
+                ).order_by(CreationJob.completed_at.desc()).limit(3)
                 
-                return [{
-                    "service": "studio", "type": d.get("type"), "prompt": d.get("prompt"), "url": d.get("result_url")
-                } for doc in jobs if (d := doc.to_dict())]
-
-            creations = await asyncio.to_thread(_fetch)
-            MemoryCache.set_cached_context(cache_key, creations, ttl=900)
-            return creations
-        except Exception: return []
+                result = await session.execute(stmt)
+                jobs = result.scalars().all()
+                
+                creations = [{
+                    "service": "studio", 
+                    "type": "asset", 
+                    "prompt": j.objective, 
+                    "url": j.result_url
+                } for j in jobs]
+                
+                MemoryCache.set_cached_context(cache_key, creations, ttl=900)
+                return creations
+        except Exception as e: 
+            logger.error(f"[MemoryV8] Creation context retrieval failed: {e}")
+            return []
 
     async def clear_all_user_data(self, user_id: str) -> int:
-        """Hardened absolute memory wipe for privacy/compliance."""
+        """Hardened absolute memory wipe for privacy/compliance (GDPR)."""
         logger.warning(f"SOVEREIGN WIPE: Purging all cognitive data for {user_id}")
         
-        # 1. Vector Purge (Tier 3/4)
+        # 1. Vector Purge (Tier 4: HNSW / Tier 3: BM25)
         await SovereignVectorStore.clear_user_memory(user_id)
         
-        # 2. Firestore Fact Purge (Tier 2/3)
-        def _purge_firestore():
-            batch = firestore_db.batch()
-            docs = firestore_db.collection("user_facts").where("user_id", "==", user_id).limit(500).get()
-            count = 0
-            for doc in docs:
-                batch.delete(doc.reference)
-                count += 1
-            if count > 0: batch.commit()
-            return count
-
-        cleared_count = await asyncio.to_thread(_purge_firestore)
+        # 2. Postgres Absolute SQL Purge (Tiers 2, 3, 4)
+        from sqlalchemy import delete
+        cleared_count = 0
+        
+        try:
+            async with PostgresDB._session_factory() as session:
+                async with session.begin():
+                    # Order matters for foreign keys
+                    # Wipe Tier 3: Learned Facts
+                    res = await session.execute(delete(UserFact).where(UserFact.user_id == user_id))
+                    cleared_count += res.rowcount
+                    
+                    # Wipe Tier 2: Episodic (Missions & Messages)
+                    # Need to subquery for mission_messages if not cascade delete at DB level
+                    mission_ids_stmt = select(Mission.mission_id).where(Mission.user_id == user_id)
+                    mission_ids_res = await session.execute(mission_ids_stmt)
+                    mission_ids = mission_ids_res.scalars().all()
+                    
+                    if mission_ids:
+                        await session.execute(delete(Message).where(Message.mission_id.in_(mission_ids)))
+                    
+                    await session.execute(delete(Mission).where(Mission.user_id == user_id))
+                    
+                    # Wipe Tier 4: Identity (Traits, Preferences, Profile)
+                    await session.execute(delete(UserTrait).where(UserTrait.user_id == user_id))
+                    await session.execute(delete(UserPreference).where(UserPreference.user_id == user_id))
+                    await session.execute(delete(MissionMetric).where(MissionMetric.user_id == user_id))
+                    await session.execute(delete(CreationJob).where(CreationJob.user_id == user_id))
+                    await session.execute(delete(UserProfile).where(UserProfile.user_id == user_id))
+                    
+                await session.commit()
+            logger.info(f"[Postgres] Absolute SQL resonance purge complete for user: {user_id}")
+        except Exception as e:
+            logger.error(f"Postgres purge failed for {user_id}: {e}")
 
         # 3. Neo4j Graph Purge (Relationships & Nodes)
         try:
@@ -350,25 +383,7 @@ class MemoryManager:
         except Exception as e:
             logger.error(f"Neo4j purge failed for {user_id}: {e}")
 
-        # 4. Postgres SQL Purge (Traits, Preferences, Metrics)
-        from backend.db.postgres import PostgresDB
-        from sqlalchemy import delete
-        from backend.db.models import UserProfile, UserTrait, UserPreference, MissionMetric
-        
-        try:
-            async with PostgresDB._session_factory() as session:
-                async with session.begin():
-                    # Order matters for foreign keys if not CASCADE
-                    await session.execute(delete(UserTrait).where(UserTrait.user_id == user_id))
-                    await session.execute(delete(UserPreference).where(UserPreference.user_id == user_id))
-                    await session.execute(delete(MissionMetric).where(MissionMetric.user_id == user_id))
-                    await session.execute(delete(UserProfile).where(UserProfile.user_id == user_id))
-                await session.commit()
-            logger.info(f"[Postgres] Absolute SQL purge complete for user: {user_id}")
-        except Exception as e:
-            logger.error(f"Postgres purge failed for {user_id}: {e}")
-
-        # 5. Redis Cache Purge (Tier 1)
+        # 4. Redis Cache Purge (Tier 1)
         if HAS_REDIS:
             try:
                 keys = redis_client.keys(f"*:{user_id}*")
@@ -377,7 +392,7 @@ class MemoryManager:
             except Exception as e:
                 logger.error(f"Redis purge failed: {e}")
 
-        # 4. Mission Telemetry
+        # 5. Mission Telemetry
         broadcast_mission_event(user_id, "memory_wipe_complete", {
             "facts_cleared": cleared_count
         })

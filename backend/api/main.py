@@ -1,7 +1,6 @@
 """
-LEVI-AI Sovereign OS v13.0.0: Absolute Monolith.
-Central API Heart & Master Entry Point.
-Synchronized for SQL Resonance, HNSW Vault Recall, and Adaptive Pulse v4.1.
+LEVI-AI: Local-First Distributed AI Stack v1.0.0-RC1.
+Central Gateway & Service Orchestrator.
 """
 
 import os
@@ -13,110 +12,107 @@ from fastapi import FastAPI, Request, Response, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
-# Graduated v13.0 Monolith Routers
-from backend.api.v8.orchestrator import router as orchestrator_v13
-from backend.api.v8.telemetry import router as telemetry_v13
-from backend.api.v8.memory import router as memory_v13
-from backend.api.v8.search import router as search_v13
-from backend.api.v1.payments import router as payments_v13
-from backend.api.v8.auth import router as auth_v13
-from backend.api.billing import router as billing_v13
-from backend.api.analytics import router as analytics_v13
-from backend.api.agents import router as agents_v13
-from backend.api.marketplace import router as marketplace_v13
-from backend.api.compliance import router as compliance_v13
-from backend.api.scheduling import router as scheduling_v13
+from backend.config.system import SOVEREIGN_VERSION, CLOUD_FALLBACK_ENABLED, CORS_ORIGINS
 
-# New v13 Sovereign Cognition (SSE Stream)
-from app.routes.chat import router as chat_v13_stream
-from app.routes.auth import router as auth_v13_monolith
+# Service Routers
+from backend.api.v8.orchestrator import router as orchestrator_v1
+from backend.api.v8.telemetry import router as telemetry_v1
+from backend.api.v8.memory import router as memory_v1
+from backend.api.v8.search import router as search_v1
+from backend.api.v1.payments import router as payments_v1
+from backend.api.v8.auth import router as auth_v1
+from backend.api.billing import router as billing_v1
+from backend.api.analytics import router as analytics_v1
+from backend.api.agents import router as agents_v1
+from backend.api.marketplace import router as marketplace_v1
+from backend.api.compliance import router as compliance_v1
+from backend.api.scheduling import router as scheduling_v1
 
-# Sovereign Core
+# Core Logic
 from backend.db.postgres_db import verify_resonance
 from backend.broadcast_utils import SovereignBroadcaster
 
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
-    title="LEVI-AI Absolute Monolith",
-    version="13.0.0",
-    description="Sovereign AI Operating System Graduate"
+    title="LEVI-AI Distributed Stack",
+    version=SOVEREIGN_VERSION,
+    description="Local-First Agentic Infrastructure (v1.0.0-RC1 Graduation)"
 )
 
-# 1. Monolith Hardening (CORS)
+# 1. Security Hardening (CORS)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Tighten in production swarm
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 2. Adaptive Pulse v4.1 Middleware (Binary Compression Sync)
+# 2. Global Versioning & Telemetry Middleware
 @app.middleware("http")
-async def pulse_middleware(request: Request, call_next):
+async def global_sovereign_middleware(request: Request, call_next):
     start_time = time.time()
+    
+    # Process Request
     response = await call_next(request)
+    
+    # Inject Production Headers (RC1)
+    response.headers["X-Sovereign-Version"] = SOVEREIGN_VERSION
+    response.headers["X-Cloud-Fallback"] = str(CLOUD_FALLBACK_ENABLED).lower()
+    
     latency_ms = (time.time() - start_time) * 1000
     
-    # Emit Neural Pulse for every cognitive request
+    # Emit Telemetry Pulse
     SovereignBroadcaster.broadcast({
-        "type": "NEURAL_PULSE",
+        "type": "TELEMETRY_PULSE",
         "path": request.url.path,
         "latency_ms": latency_ms,
         "status": response.status_code,
+        "version": SOVEREIGN_VERSION,
         "ts": datetime.now(timezone.utc).isoformat()
     })
     return response
 
-# 3. Mount Graduated v13.0 Monolith Routers
-app.include_router(orchestrator_v13, prefix="/api/v13/orchestrator", tags=["Orchestrator v13"])
-app.include_router(telemetry_v13, prefix="/api/v13/telemetry", tags=["Telemetry v13"])
-app.include_router(memory_v13, prefix="/api/v13/memory", tags=["Memory v13"])
-app.include_router(search_v13, prefix="/api/v13/search", tags=["Search v13"])
-app.include_router(payments_v13, prefix="/api/v13/payments", tags=["Payments v13"])
-app.include_router(auth_v13, prefix="/api/v13/auth", tags=["Auth v13"])
-app.include_router(billing_v13, prefix="/api/v13/billing", tags=["Sovereign Billing"])
-app.include_router(analytics_v13, prefix="/api/v13/analytics", tags=["Sovereign Analytics"])
-app.include_router(agents_v13, prefix="/api/v13/agents", tags=["Custom Agents"])
-app.include_router(marketplace_v13, prefix="/api/v13/marketplace", tags=["Sovereign Marketplace"])
-app.include_router(compliance_v13, prefix="/api/v13/compliance", tags=["Sovereign Compliance"])
-app.include_router(scheduling_v13, prefix="/api/v13/scheduling", tags=["Scheduled Missions"])
-app.include_router(chat_v13_stream, tags=["Sovereign Cognition v13"])
-app.include_router(auth_v13_monolith)
+# 3. Service Router Registration
+app.include_router(orchestrator_v1, prefix="/api/v1/orchestrator", tags=["Orchestration"])
+app.include_router(telemetry_v1, prefix="/api/v1/telemetry", tags=["Telemetry"])
+app.include_router(memory_v1, prefix="/api/v1/memory", tags=["Memory"])
+app.include_router(search_v1, prefix="/api/v1/search", tags=["Search"])
+app.include_router(payments_v1, prefix="/api/v1/payments", tags=["Payments"])
+app.include_router(auth_v1, prefix="/api/v1/auth", tags=["Identity"])
+app.include_router(billing_v1, prefix="/api/v1/billing", tags=["Billing"])
+app.include_router(analytics_v1, prefix="/api/v1/analytics", tags=["Analytics"])
+app.include_router(agents_v1, prefix="/api/v1/agents", tags=["Agents"])
+app.include_router(marketplace_v1, prefix="/api/v1/marketplace", tags=["Marketplace"])
+app.include_router(compliance_v1, prefix="/api/v1/compliance", tags=["Compliance"])
+app.include_router(scheduling_v1, prefix="/api/v1/scheduling", tags=["Scheduling"])
 
-# 4. Monolith Startup Integrity Audit
+# 4. Startup Health & Integrity Audit
 @app.on_event("startup")
-async def monolith_audit():
-    logger.info("🛡️ Initiating Absolute Monolith Graduation Audit (v13.0.0)...")
+async def graduation_audit():
+    logger.info(f"🛡️ Validating LEVI-AI Stack Graduation ({SOVEREIGN_VERSION})...")
+    logger.info(f"☁️ Cloud Fallback: {'ENABLED' if CLOUD_FALLBACK_ENABLED else 'DISABLED (Local-Only Mode)'}")
+    
     try:
-        # Check SQL Resonance
         if await verify_resonance():
-            logger.info("✅ SQL Fabric resonance confirmed. Zero-cloud persistence active.")
+            logger.info("✅ Database resonance confirmed. Local persistence active.")
         else:
-            logger.warning("⚠️ SQL Fabric sync drift. Running in failover mode.")
+            logger.warning("⚠️ Database sync drift detected.")
     except Exception as e:
-        logger.error(f"❌ Graduation Audit failed: {e}")
+        logger.error(f"❌ Startup Audit failed: {e}")
 
 @app.get("/")
-async def monolith_status():
-    """Definitive Pulse of the Absolute Monolith."""
+@app.get("/health")
+async def health_status():
+    """Official Pulse of the Distributed AI Stack."""
     return {
         "status": "online",
-        "version": "13.0.0",
-        "codename": "Absolute Monolith",
-        "mission": "Global Technical Finality",
+        "version": SOVEREIGN_VERSION,
+        "environment": os.getenv("ENVIRONMENT", "production"),
+        "cloud_fallback": CLOUD_FALLBACK_ENABLED,
         "resonance": "GRADUATED"
     }
-
-# --- Legacy Bridges (v1 Compatibility) ---
-@app.get("/api/v1/pulse")
-async def legacy_pulse(request: Request):
-    """Graduated Bridge for legacy SSE subscribers."""
-    return StreamingResponse(
-        SovereignBroadcaster.subscribe(user_id="global"),
-        media_type="text/event-stream"
-    )
 
 if __name__ == "__main__":
     import uvicorn

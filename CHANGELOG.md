@@ -1,18 +1,24 @@
+## [1.0.0-RC1] - 2026-04-06 (Graduation Candidate)
+### **Local-First Distributed Stack Graduation**
+- **RC Certification**: Finalized the 28-point graduation audit for technical finality.
+- **Architectural Realism**: Transitioned from "Monolith" to a service-oriented Distributed Stack (Postgres, Redis, Neo4j, Celery, FastAPI).
+- **Deterministic Fidelity**: Integrated non-probabilistic rule-based validation (40% weight) into the Consensus protocol.
+- **Global Versioning**: Implemented `X-Sovereign-Version` middleware and centralized RC1 branding.
+- **DCN Gossip**: Hardened the HMAC-SHA256 inter-node pulse for peer-to-peer telemetry sync.
+
 ## [13.1.0] - 2026-04-05 (Stabilization)
-### **Sovereign Monolith Stabilization**
-- **Learning Loop Resilience**: Implemented `SovereignThrottler` and `CircuitBreaker` for high-load waves.
-- **Swarm Sync (DCN)**: Deployed the functional HMACS-signed Gossip Protocol via Redis PubSub.
+### **Distributed Stack Stabilization**
+- **Learning Loop Resilience**: Implemented Throttling and Circuit Breaker logic for high-load waves.
+- **Swarm Sync (DCN)**: Deployed HMACS-signed Gossip Protocol via Redis PubSub.
 - **HNSW Alignment**: Synchronized `efSearch` and `efConstruction` for sub-30ms performance finality.
-- **Hardening 28/28**: Finalized the complete 28-point technical audit for Absolute Graduation.
 
 ## [13.0.0] - 2026-04-05 (Technical Graduation)
-### **The Absolute Monolith Graduation**
-- **Sovereign Graduation**: Finalized the 10-step mission to achieve technical finality.
+### **Distributed Stack Architecture**
 - **Drive Localization**: 100% Moved projects, databases, and dependencies to the **D: drive**.
-- **Neural Backbone**: Replaced cloud dependencies with **100% Local Ollama** (llama3.1:8b) fabric.
-- **Unified Cognition**: Integrated the **BrainCoreController** v13.0 and the 5-Tier Memory manager.
+- **Local Inference**: Replaced cloud dependencies with **Local Ollama** (llama3.1:8b) fabric.
+- **Unified Logic**: Integrated the **BrainCoreController** and the 5-Tier Memory manager.
 - **Premium Interface**: Deployed the **React + Zustand** Mission Controller for real-time telemetry.
-- **SSE Power**: Implementation of end-to-end streaming through the Nginx/FastAPI gateway.
+- **SSE Telemetry**: Implementation of end-to-end streaming through the Nginx/FastAPI gateway.
 
 ## [9.8.1] - 2026-04-04
 - Unified the v8 Monolith architecture.

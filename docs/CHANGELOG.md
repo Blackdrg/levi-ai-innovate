@@ -1,15 +1,23 @@
-# 📖 LeviBrain Evolution Log (v12 ➡️ v13 Graduation)
+# 📖 System Evolution Log (v1.0.0-RC1 Graduation)
 
-The repository has graduated to the **v13.0.0 Sovereign OS: Absolute Monolith**. This version represents the total technical finalization of the cognitive core, memory fabric, and distributed intelligence synchronization.
+The project has graduated to the **v1.0.0-RC1: Local-First Distributed Stack**. This version represents the production-ready transition of the cognitive core, memory fabric, and service-oriented infrastructure.
 
-## [13.0.0] - 2026-04-05 (Technical Graduation)
-### **The Absolute Monolith Graduation**
-- **Sovereign Graduation**: Finalized the 10-step mission to achieve total technical finality.
-- **Drive Localization**: 100% Migrated all projects, databases, and neural caches to the **D drive**.
-- **Neural Backbone**: Replaced all cloud dependencies with a **100% Local Ollama** (llama3.1:8b) fabric.
-- **Unified Cognition**: Integrated the **BrainCoreController** v13.0 and the 5-Tier Memory manager.
-- **Premium Interface**: Deployed the **React + Zustand** Mission Controller for real-time telemetry.
-- **SSE Power**: Implementation of end-to-end streaming through the Nginx/FastAPI gateway.
+## [1.0.0-RC1] - 2026-04-06 (Production Graduation)
+### **Production Readiness & Security Hardening**
+- **RC1 Reset**: Transitioned from experimental v13 to professional v1.0.0-RC1 semantic versioning.
+- **Security Middleware**: Implemented SHA-256 PII masking, global instruction boundaries, and RBAC roles.
+- **Deterministic Fidelity**: Integrated a 40% weighted non-probabilistic validator to break LLM circularity.
+- **DCN Gossip Protocol**: Hardened inter-node telemetry with 32-byte HMAC-SHA256 pulse signing.
+- **Zero-Cloud Residency**: Purged all remaining Firestore references; 100% data residency in local Postgres.
+- **Audit Verification**: Passed all 28 technical audit points via the `v1_graduation_suite.py`.
+
+## [1.0.0-Beta] (Legacy v13.0.0) - 2026-04-05
+### **Distributed Stack Framework**
+- **Architecture Shift**: Transitioned from a "Monolith" concept to a 5-service coordinated stack (FastAPI, Redis, Postgres, Neo4j, Celery).
+- **Drive Localization**: Migrated the entire workspace and all database volumes to the **D: drive**.
+- **Local Inference Layer**: Established **Ollama** as the primary local inference engine (llama3.1:8b).
+- **Service Orchestration**: Integrated the central **Brain Controller** and Quad-Persistence memory manager.
+- **Telemetry Stream**: Deployed the **React + Zustand** dashboard with real-time SSE telemetry pulses.
 
 # 🚀 Sovereign OS v13.0: Deployment Guide (Absolute Monolith)
 
