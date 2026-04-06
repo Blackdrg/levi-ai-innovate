@@ -3,12 +3,14 @@
 
 ---
 
-## 📜 GRADUATION CERTIFICATE (v1.0.0-RC1)
+## 📜 PRODUCTION READINESS CHECKLIST (v1.0.0-RC1)
 **Date**: 2026-04-06  
-**Status**: **TECHNICAL FINALITY REACHED**  
-**Audit Score**: **28 / 28 (100% Core Clearance)**  
+**Status**: **INTERNAL COVERAGE ACHIEVED**  
+**Readiness Coverage Score**: **28 / 28 (Internal Core Coverage)**  
 
-LEVI-AI has officially graduated from experimental "Sovereign Monolith" status to a stabilized, professional-grade **Local-First Distributed AI Stack**. This version (RC1) enforces absolute local data residency, zero-cloud dependency by default, and a multi-agent swarm architecture audited against the NIST AI RMF and OWASP LLM Top 10.
+> [!WARNING]
+> **No Third-Party Compliance Statement**: 
+> LEVI-AI is designed for alignment with the **NIST AI RMF** and **OWASP LLM Top 10** standards. However, the 28/28 score represents an **internal self-certification** via the `production_readiness_suite.py`. This system has NOT undergone a formal third-party independent audit or government-certified penetration test.
 
 ---
 
@@ -26,11 +28,9 @@ LEVI-AI v1.0.0-RC1 is a high-fidelity, service-oriented multi-agent operating sy
 ---
 
 ## 🔍 1.0 Current System Reality (Live Status)
-| Layer | Status | Technical Context |
-| :--- | :--- | :--- |
 | **Brain Core** | ✅ Active | v1.0.0-RC1 Distributed Orchestrator. |
-| **Vector Memory**| ✅ Active | HNSW (Cosine Similarity / efSearch: 100). |
-| **Inference** | ✅ Active | Local-First (llama3.1:8b) with Managed Fallback. |
+| **Vector Memory**| ✅ Active | HNSW (efSearch: 64 | efConstruction: 200). |
+| **Inference** | ✅ Active | Local-First (llama3.1:8b) | GPU Semaphore: 4. |
 
 ---
 
@@ -64,19 +64,21 @@ graph TD
     
     subgraph "Sovereign Shield Cluster (Security)"
         Gateway --> RBAC[RBACMiddleware: G/P/C]
-        RBAC --> Masker[SHA256PIIMasker]
-        Masker --> Boundary[InstructionBoundary]
+        RBAC --> KMS[SovereignKMS: AES-256-GCM]
+        KMS --> Boundary[InstructionBoundary]
         Boundary --> Auth[AuthRegistry]
-        Auth --> JWT[JWTRotator]
+        Auth --> Secrets[SecretManager: Vaulted]
+        Secrets --> JWT[JWTRotator]
     end
     
     subgraph "Cognitive Core (Orchestration)"
         JWT --> Brain[BrainController]
         Brain --> Goal[GoalEngine]
         Goal --> Planner[MissionPlanner]
-        Planner --> Executor[GraphExecutor]
+        Planner --> Executor[GraphExecutor: Wave]
         Executor --> Wave[WaveScheduler]
         Wave --> Blackboard[(Redis: MissionBlackboard)]
+        Brain --> Circuit[CircuitBreaker: Resilient]
     end
     
     subgraph "Swarm Layer (14 Specialized Agents)"
@@ -87,6 +89,7 @@ graph TD
         Executor --> Coder[Coder: Logic]
         Executor --> Researcher[Researcher: Web]
         Executor --> Analyst[Analyst: Data]
+        Executor --> SwarmAPI[SwarmControl: API]
     end
     
     subgraph "Local-First Inference Stack"
@@ -95,26 +98,29 @@ graph TD
         Ollama --- L33[Llama 3.3: 70b - Reasoning]
         Ollama --- P3[Phi-3: Mini - Logic]
         Ollama --- Nomic[Nomic-Embed: Vector]
-        Ollama --- Proxy[CloudFallbackProxy: Optional]
+        Ollama --- Proxy[CloudFallbackProxy: Gated]
     end
     
     subgraph "Tooling & Execution Environment"
-        Artisan --> Docker[DockerSandbox]
-        Scout --> WebProxy[EgressProxy]
+        Artisan --> Docker[DockerSandbox: Isolated]
+        Scout --> WebProxy[EgressProxy: Filtered]
         Scout --> LocalFS[Local FileSystem]
-        Scout --> Search[SearchAPI]
-    <ctrl95>
+        Scout --> Search[SearchAPI: Tavily]
+        Scout --> Browser[BrowserSubagent: Playwright]
+        Artisan --> Shell[SecureShell: Restricted]
+    end
     
     subgraph "Fidelity Cluster (Validation & Audit)"
-        Artisan --> DVal[DeterministicValidator]
-        DVal --> Syntax[SyntaxChecker]
-        DVal --> Logic[LogicVerifier]
-        Logic --> Score[FidelityScore S]
+        Artisan --> HardRule[HardRuleValidator: AST]
+        HardRule --> Syntax[SyntaxChecker: PyLint]
+        HardRule --> Logic[LogicVerifier: JSON]
+        Logic --> Score[FidelityScore S > 50/50]
+        Score --> Pulse[TelemetryBroadcaster: zLib]
     end
     
     subgraph "Memory Vault (Quad-Persistence Layer)"
         Brain --> MM[MemoryManager]
-        MM --> Redis[(Redis: Transient State)]
+        MM --> Redis[(Redis: Working State)]
         MM --> Postgres[(Postgres: Episodic Ledger)]
         MM --> Neo4j[(Neo4j: Relational Graph)]
         MM --> FAISS[(FAISS: Semantic Index)]
@@ -122,8 +128,9 @@ graph TD
         Redis --- State[MissionContext]
         Postgres --- Profiles[UserProfile]
         Neo4j --- Triplets[Knowledge Triplets]
-        FAISS --- HNSW[HNSW Index]
+        FAISS --- HNSW[HNSW: efSearch 64]
         Postgres --- Ledger[UserBillingLedger]
+        MM --> Snap[SnapshotOrchestrator: Backup]
     end
     
     Score --> Commit[CommitToMemory]
@@ -141,7 +148,7 @@ graph TD
     style Sovereign Shield Cluster (Security) fill:#fffde7,stroke:#fbc02d
     style Fidelity Cluster (Validation & Audit) fill:#fffde7,stroke:#fbc02d
     style RBAC fill:#fff176,stroke:#fbc02d
-    style Masker fill:#fff176,stroke:#fbc02d
+    style KMS fill:#fff176,stroke:#fbc02d
     style Score fill:#fff176,stroke:#fbc02d
     
     style Swarm Layer (14 Specialized Agents) fill:#e8f5e9,stroke:#4caf50
@@ -157,23 +164,85 @@ graph TD
 ### 4.0.1 Diagram Legend
 | Color | Cluster Type | Purpose |
 | :--- | :--- | :--- |
-| **Purple** | **User / Ingress** | Primary entry, SSE telemetry, and client-side pulses. |
-| **Yellow** | **Security / Validation** | Auth, RBAC, PII masking, and deterministic fidelity gates. |
-| **Green** | **Execution / Swarm** | Specialized multi-agent coordinate and sandboxed execution. |
-| **Blue** | **Persistence / Memory** | Quad-Persistence layer (Episodic, Relational, Semantic, Working). |
-| **White** | **Inference** | Local Ollama model hosting and cloud fallback proxies. |
+| **Purple** | **User / Ingress** | Primary entry, SSE telemetry, and client-side real-time pulses. |
+| **Yellow** | **Security / Validation** | Auth, RBAC, AES-256-GCM encryption, and hard-rule fidelity gates. |
+| **Green** | **Execution / Swarm** | Specialized multi-agent orchestration and sandboxed runtime execution. |
+| **Blue** | **Persistence / Memory** | Quad-Persistence layer (Episodic, Relational, Semantic, Working states). |
+| **White** | **Inference** | Local GGUF model hosting and gated cloud-residency proxies. |
+
+### 4.0.2 Service Interaction Matrix (Core-5)
+| Source | Target | Protocol | Port (Internal) | Logic / Purpose |
+| :--- | :--- | :--- | :--- | :--- |
+| **Gateway** | **Redis** | RESP | 6379 | Working memory, pub/sub telemetry, and mission blackboard. |
+| **Gateway** | **Postgres** | binary | 5432 | ACID-compliant episodic ledger and tenant-isolated RBAC. |
+| **Gateway** | **Neo4j** | Bolt | 7687 | Relational knowledge graph for entity-triplet extraction. |
+| **Worker** | **Ollama** | REST/JSON | 11434 | Local GGUF inference (Llama 3.1, Phi-3) and Nomic embeddings. |
+| **Artisan** | **Docker** | HTTP/Socket | 2375 | Sandboxed code execution and isolated tool runtimes. |
 
 ### 4.1 Master Node Mapping (50+ Detailed Components)
-1.  **FastAPIGateway**: Central orchestration entry point for all REST/SSE traffic.
-2.  **SHA256PIIMasker**: Real-time deterministic de-identification of sensitive variables.
-3.  **BrainController**: The cognitive hub managing mission lifecycles and state.
-4.  **WaveScheduler**: Logic for parallelizing task execution in recursive cognitive waves.
-5.  **Llama 3.1: 8b**: The primary workhorse for general-purpose inference.
-6.  **Phi-3: Mini**: Optimized for logical reasoning and high-fidelity rule auditing.
-7.  **DeterministicValidator**: Non-probabilistic checker for syntax, JSON, and regex patterns.
-8.  **MemoryManager**: Master IO orchestrator for the quad-persistence layer.
-9.  **Relational Knowledge Graph**: Neo4j graph storing entity-relationship triplets.
-10. **SSETelemetryHub**: Compressed (zlib) broadcast of real-time cognitive pulses.
+#### 🔒 Security & Ingress Layer
+1.  **FastAPIGateway**: Central entry point for REST and SSE telemetry streams.
+2.  **RBACMiddleware**: Grade-based (G/P/C) access control for multi-tenant isolation.
+3.  **SovereignKMS**: AES-256-GCM encryption engine for PII pseudonymisation.
+4.  **InstructionBoundary**: Injects `<MISSION_CONTEXT>` walls to prevent prompt leakage.
+5.  **AuthRegistry**: Master store for identity-mission binding.
+6.  **SecretManager**: Vaulted storage for DCN secrets and external API keys.
+7.  **JWTRotator**: Logic for session-bound token refreshing and rotation.
+8.  **EgressProxy**: Gated HTTP client for agents to prevent internal SSRF attacks.
+
+#### 🧠 Cognitive Orchestration Layer
+9.  **BrainController**: The cognitive hub managing mission lifecycles and state loops.
+10. **GoalEngine**: Decomposes natural language queries into executable goal trees.
+11. **MissionPlanner**: Generates a Directed Acyclic Graph (DAG) for swarm execution.
+12. **GraphExecutor**: Orchestrates topological parallel execution of task waves.
+13. **WaveScheduler**: Logic for managing recursion depth and task dependencies.
+14. **MissionBlackboard**: Redis-backed shared memory for inter-agent context.
+15. **CircuitBreaker**: Adaptive gating that pauses tasks if DB latency is too high.
+16. **LearningThrottler**: Limits background self-evolution tasks to preserve VRAM.
+
+#### 🤖 Swarm Agent Layer (Specialized Modules)
+17. **Artisan (CodeGen)**: Specialized in building and testing logic/scripts.
+18. **Scout (Research)**: Multi-threaded web exploration and data scraping.
+19. **Critic (Adjudicator)**: High-fidelity reflection and failure analysis module.
+20. **HardRuleValidator**: Non-probabilistic AST/JSON/Regex verification suite.
+21. **Coder (Logic)**: Core reasoning agent for structural/algorithmic tasks.
+22. **Researcher (Discovery)**: Synthesizes knowledge from multiple information pools.
+23. **Analyst (Quant)**: Processes structured datasets and generates mission insights.
+24. **SwarmControl**: Gateway for agents to trigger sub-missions recursively.
+
+#### 🛠️ Tooling & Sandbox Layer
+25. **DockerSandbox**: Isolated runtime for OCI-compliant code execution.
+26. **SecureShell**: Restricted bash shell for local system interaction (Unix/Git).
+27. **BrowserSubagent**: Playwright-based headless browser for complex navigation.
+28. **SearchAPI**: Tavily/Serp integration for real-time web grounding.
+29. **LocalFS**: Managed interaction with the local host filesystem (Project Drive).
+30. **SyntaxChecker**: PyLint-based static analysis for model-generated code.
+31. **LogicVerifier**: JSON integrity and schema enforcement module.
+
+#### 💾 Memory & Resonance Layer
+32. **MemoryManager**: Master IO orchestrator for the quad-persistence layer.
+33. **EpisodicLedger**: Postgres-backed store for historical mission logs.
+34. **SemanticIndex**: FAISS HNSW store for high-recall RAG operations.
+35. **KnowledgeGraph**: Neo4j hub for relational entity-relationship mapping.
+36. **WorkingState**: Redis transient store for real-time mission variables.
+37. **SnapshotOrchestrator**: Unified backup and disaster recovery logic.
+38. **HNSW Index (efSearch 64)**: Optimized vector search for <100ms recall.
+39. **FidelityScore (S)**: The 50/50 weighted metric for output quality.
+40. **TelemetryBroadcaster**: zLib-compressed SSE stream for the Sovereign UI.
+
+#### 📡 Inference & Flux Layer
+41. **OllamaEngine**: Local interface for GGUF model management.
+42. **Llama 3.1 (8B)**: The primary general-purpose inference model.
+43. **Llama 3.3 (70B)**: The reasoning-heavy "Brain" for complex adjudication.
+44. **Phi-3 (Mini)**: Optimized logic engine for structural validation.
+45. **Nomic-Embed**: Local 768-dim vector model for RAG embeddings.
+46. **CloudFallbackProxy**: Gated redirection to external APIs (Disabled by Default).
+
+#### 🌀 Evolution & Telemetry Layer
+47. **LearningLoop**: Background module for self-refining agent weights.
+48. **TelemetryHub**: Real-time observability for cognitive unit (CU) costs.
+49. **PulseCompressor**: zLib-logic to minimize network overhead for SSE.
+50. **UserBillingLedger**: Permanent ACID records of CU consumption and drift.
 
 ---
 
@@ -185,15 +254,15 @@ graph TD
 | **Neo4j** | Relational Knowledge Graph | < 50ms | Permanent (Local) |
 | **FAISS** | Semantic Vector Memory | < 100ms | Persistent (Index) |
 
-### 4.3 Advanced Flow Control
-- **Wave Concurrency**: `asyncio.Semaphore(15)` manages agent activity to prevent local GPU/CPU thermal throttling.
+### 4.3 Resource & Flow Control
+- **GPU Guard**: `asyncio.Semaphore(4)` manages neural activity to prevent CUDA Out-Of-Memory (OOM) on 24GB hardware.
 - **Circuit Breaker**: If Redis or Postgres latency exceeds 500ms, the system automatically pauses the learning loop (`LearningCircuitBreaker`).
-- **Pulse Broadcast**: Telemetry is streamed via **zlib-compressed SSE**, ensuring real-time UI updates even in low-bandwidth environments.
+- **Pulse Broadcast**: Telemetry is streamed via **zlib-compressed SSE**, ensuring real-time UI updates.
 
 ### 4.4 The Mission Heartbeat (DCN Sync)
 The **Distributed Cognitive Network (DCN)** synchronizes inter-node intelligence via HMAC-signed pulses.
-- **Signature**: `HMAC-SHA256(fragment, DCN_SECRET)`.
-- **Threshold**: Only knowledge fragments with a **Fidelity Score S > 0.95** are gossiped across the network to preserve stack reliability.
+> [!IMPORTANT]
+> **Single-Node Isolation Mode**: In RC1, DCN is configured for local-mesh synchronization within a single host. P2P multi-node expansion and HMAC-pulse broadcasting are in "Preview" status.
 
 ### 4.5 Security Middleware Pipeline
 1.  **PII Reduction**: Deterministic masking of emails, keys, and credentials.
@@ -208,9 +277,9 @@ The **Distributed Cognitive Network (DCN)** synchronizes inter-node intelligence
 ---
 
 ## 🛡️ 6.0 Security & Sanitization Middleware
-### 6.1 PII Masking & De-identification
-- **SHA-256 Masking**: Sensitive variables are masked via `SHA256(val)[:8]` before model handoff.
-- **Managed Fallback**: `CLOUD_FALLBACK_ENABLED=false` (Default). Sends data to 3rd-party servers (Groq/OpenAI) only when explicitly enabled and local resources are exhausted.
+### 6.1 PII Encryption & De-identification
+- **AES-256 GCM**: Sensitive variables are encrypted via `SovereignKMS` before model handoff, ensuring GDPR-compliant pseudonymisation.
+- **Managed Fallback**: `CLOUD_FALLBACK_ENABLED=false` (Default).
 
 ---
 
@@ -240,26 +309,30 @@ async def explore(self, topic: str):
 
 ---
 
-## 🗄️ 9.0 Persistent Memory Architecture
+## 🗄️ 9.0 Persistent Memory & Durability
 | Tier | Backend | Persistence Policy |
 | :--- | :--- | :--- |
 | **T1: Working** | Redis | `appendfsync everysec` |
 | **T2: Episodic** | Postgres | Mission & Message Ledger |
-| **T3: Semantic** | HNSW | METRIC_INNER_PRODUCT (Cosine Similarity) |
+| **T3: Semantic** | FAISS | HNSW (efSearch: 64) |
+
+### 9.1 Backup & Disaster Recovery
+- **Hard-Snap Backups**: Coordinated via `backend/scripts/backup.py` (`SnapshotOrchestrator`).
+- **Policy**: Periodic crystallization of FAISS indices to `/vault/backups`.
 
 ---
 
-## 🏆 10.0 Graduation Audit Record (28/28 Points)
+## 🏆 10.0 Production Readiness Checklist (28/28 Points)
 | Audit Point | Implementation Detail | Status |
 | :--- | :--- | :--- |
 | **01. Prompt Injection** | NER Boundaries + `<SYSTEM_OVERRIDE>` Protection | ✅ |
 | **02. Code Sandboxing** | `DockerSandbox` Resource Isolation | ✅ |
-| **03. Embedding Model** | Local Nomic-Embed-Text (efSearch: 100) | ✅ |
+| **03. Embedding Model** | Local Nomic-Embed-Text (efSearch: 64) | ✅ |
 | **04. Multi-Tenancy** | `tenant_id` RLS Enforcement | ✅ |
 | **05. Output Scrubbing** | Result Sanitization (Markdown/XSS) | ✅ |
 | **06. SSRF Protection** | Tool-Level Egress Allowlist (Egress Proxy) | ✅ |
-| **07. DAG Execution** | Recursive Guard (Max 15 nodes) | ✅ |
-| **08. Fidelity Score S** | Dynamic Intent-Aware Weighting (Deterministic) | ✅ |
+| **07. DAG Execution** | Semaphore(4) Guard | ✅ |
+| **08. Fidelity Score S** | 50/50 Neural/Literal Weighting | ✅ |
 | **09. Grounding** | Neo4j Relationship Cross-Reference | ✅ |
 | **10. Hallucination** | Swarm Consensus Validation (Deterministic 40%) | ✅ |
 | **11. Isolation** | Session-Keyed Blackboard Memory | ✅ |
