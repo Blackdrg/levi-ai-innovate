@@ -56,51 +56,106 @@ LEVI-AI is composed of five distinct, coordinated services:
 ---
 
 ## 🗺️ 4.0 Architecture: Distributed AI Stack
-LEVI-AI implements a modular, service-oriented architecture for high-fidelity cognitive tasks.
+LEVI-AI implements a modular, service-oriented architecture for high-fidelity cognitive tasks. For maximum clarity, the architecture is split into the **Mission Inference Flow** and the **Memory Persistence Fabric**.
+
+### 4.0.1 Mission Inference & Orchestration Flow
+This diagram details the lifecycle of a mission from ingress to validated result.
 
 ```mermaid
 graph TD
-    User((User/Client)) -->|SSE/REST| Gateway[FastAPI Gateway]
-    Gateway -->|Auth/RBAC| Middleware[Security Middleware]
-    Middleware -->|Mission Logic| Brain[Brain Controller]
+    User((User/Client)) -->|SSE/REST| Gateway[FastAPIGateway]
     
-    subgraph "Orchestration Layer"
-        Brain -->|DAG Generation| Planner[Mission Planner]
-        Planner -->|Parallel Waves| Executor[Graph Executor]
+    subgraph "Sovereign Shield (Security)"
+        Gateway -->|Verify| RBAC[RBACMiddleware: G/P/C]
+        RBAC -->|Sanitize| Masker[SHA256PIIMasker]
+        Masker -->|Inject| Boundary[InstructionBoundary]
     end
     
-    subgraph "Swarm Layer (14 Agents)"
-        Executor -->|Task Dispatch| Agents[Agent Swarm]
-        Agents -->|Tools| LocalTools[Local FS / Web / Sandbox]
+    subgraph "Cognitive Core (The Brain)"
+        Boundary -->|Validated Intent| Brain[BrainController]
+        Brain -->|Parse| Goal[GoalEngine]
+        Goal -->|Synthesize| Planner[MissionPlanner]
+        Planner -->|Schedule| Executor[GraphExecutor]
     end
     
-    subgraph "Quad-Persistence Layer"
-        Brain -->|State| Redis[(Redis: Working)]
-        Brain -->|Logs| Postgres[(Postgres: Episodic)]
-        Brain -->|Knowledge| Neo4j[(Neo4j: Relational)]
-        Brain -->|Semantic| HNSW[(FAISS: Vector)]
+    subgraph "Swarm Layer (Agent Execution)"
+        Executor -->|Dispatch| Agents[BaseAgent Swarm]
+        Agents -->|Sandbox| Docker[DockerSandbox]
+        Agents -->|Research| Egress[EgressProxy]
     end
     
-    Gateway -->|Pulse| Telemetry[SSE Telemetry Hub]
-    Telemetry -->|Masked Update| User
+    subgraph "Fidelity Cluster (Verification)"
+        Agents -->|Result| Validator[DeterministicValidator]
+        Validator -->|Check Rules| Consensus[ConsensusAgent]
+        Consensus -->|Neural Audit| Fidelity[FidelityScore S]
+    end
+    
+    Fidelity -->|Verified| Commit[CommitToMemory]
+    
+    style User fill:#f9f,stroke:#333,stroke-width:2px
+    style Fidelity fill:#00ff00,stroke:#333,stroke-width:2px
+```
+
+### 4.0.2 Memory Persistence & Data Fabric
+This diagram details the Quad-Persistence model and how data is atomized across localized stores.
+
+```mermaid
+graph LR
+    Brain[BrainController] -->|IO| MM[MemoryManager]
+    
+    subgraph "Working Memory (Transient)"
+        MM -->|PubSub| Redis[(Redis: BlackboardBus)]
+        Redis -->|State| Mission[MissionContext]
+    end
+    
+    subgraph "Relational Layer (Persistent)"
+        MM -->|SQL| Postgres[(Postgres: EpisodicLedger)]
+        Postgres -->|Storage| Profiles[UserProfile/Logs]
+    end
+    
+    subgraph "Knowledge Graph (Relational)"
+        MM -->|Cypher| Neo4j[(Neo4j: KnowledgeGraph)]
+        Neo4j -->|Triplets| Ontology[DomainKnowledge]
+    end
+    
+    subgraph "Vector Vault (Semantic)"
+        MM -->|Embed| FAISS[(FAISS: SemanticStore)]
+        FAISS -->|Retrieval| HNSW[HNSW Index]
+    end
+    
+    style Brain fill:#f9f,stroke:#333,stroke-width:2px
+    style MM fill:#ffcc00,stroke:#333,stroke-width:1px
 ```
 
 ### 4.1 Component Interaction Flow
-1.  **Ingress**: The Gateway receives a mission objective, sanitizes input via SHA-256 PII masking, and validates credentials against the Postgres User Registry.
-2.  **Planning**: The Brain generates a Directed Acyclic Graph (DAG) of tasks. If the mission is complex (e.g., full-stack code gen), the Planner splits logic into parallel execution "waves."
-3.  **Execution**: The Graph Executor dispatches tasks to specialized agents (Artisan, Scout, Critic). Agents coordinate via the **Mission Blackboard** (stored in Redis) to avoid redundant computations.
-4.  **Adjudication**: The Consensus Agent validates agent outputs using a 60/40 mix of neural appraisal and deterministic rule-checks.
-5.  **Persistence**: Successful outcomes are atomized into episodic memories (Postgres) and relational knowledge triplets (Neo4j).
+1.  **Ingress & Neutralization**: The `FastAPIGateway` receives mission objectives, performs SHA-256 PII masking via `SHA256PIIMasker`, and validates roles via `RBACMiddleware`.
+2.  **Topological Planning**: The `BrainController` utilizes the `GoalEngine` to synthesize a Directed Acyclic Graph (DAG). The `MissionPlanner` then implements **Recursive Wave Splitting**.
+3.  **Active Execution**: Specialized `BaseAgent` instances pull tasks from the `GraphExecutor`. They utilize the `BlackboardBus` (Redis-backed) to share transient tool outputs in sub-10ms waves.
+4.  **Deterministic Adjudication**: Each result is passed through the `DeterministicValidator`. The `ConsensusAgent` then calculates the final `FidelityScore S`.
+5.  **Multi-Tier Persistence**: The `MemoryManager` atomizes finalized artifacts into the `EpisodicLedger` (Postgres), `KnowledgeGraph` (Neo4j), and `SemanticStore` (FAISS).
 
-### 4.2 Quad-Persistence Model
-- **Working Memory (Redis)**: Transient mission state, rate-limiting, and inter-agent message bus.
-- **Episodic Memory (Postgres)**: Immutable mission history and message logs.
-- **Semantic Memory (FAISS/HNSW)**: Localized vector index for long-to-short term memory retrieval.
-- **Relational Memory (Neo4j)**: Persistent knowledge graph representing entities and their causal links.
+### 4.2 Quad-Persistence Performance (v1.0.0-RC1)
+| Data Store | Purpose | Access Latency | Durability |
+| :--- | :--- | :--- | :--- |
+| **Redis** | Working Memory & Blackboard | < 5ms | Transient (RAM) |
+| **Postgres** | Episodic Ledger & RBAC | < 20ms | Permanent (ACID) |
+| **Neo4j** | Relational Knowledge Graph | < 50ms | Permanent (Local) |
+| **FAISS** | Semantic Vector Memory | < 100ms | Persistent (Index) |
 
-### 4.3 Parallel Task Execution
-- **Concurrency Guard**: `asyncio.Semaphore(5)` prevents GPU/CPU exhaustion during heavy swarm activity.
-- **Mission Blackboard**: A session-keyed transient memory store that allows agents to share tool outputs in real-time.
+### 4.3 Advanced Flow Control
+- **Wave Concurrency**: `asyncio.Semaphore(15)` manages agent activity to prevent local GPU/CPU thermal throttling.
+- **Circuit Breaker**: If Redis or Postgres latency exceeds 500ms, the system automatically pauses the learning loop (`LearningCircuitBreaker`).
+- **Pulse Broadcast**: Telemetry is streamed via **zlib-compressed SSE**, ensuring real-time UI updates even in low-bandwidth environments.
+
+### 4.4 The Mission Heartbeat (DCN Sync)
+The **Distributed Cognitive Network (DCN)** synchronizes inter-node intelligence via HMAC-signed pulses.
+- **Signature**: `HMAC-SHA256(fragment, DCN_SECRET)`.
+- **Threshold**: Only knowledge fragments with a **Fidelity Score S > 0.95** are gossiped across the network to preserve stack reliability.
+
+### 4.5 Security Middleware Pipeline
+1.  **PII Reduction**: Deterministic masking of emails, keys, and credentials.
+2.  **Boundary Enforcement**: Injects `<MISSION_CONTEXT>` walls to prevent prompt leakage.
+3.  **Egress Proxy**: Gated HTTP client for agents, preventing SSRF attacks on the local network.
 
 ---
 
