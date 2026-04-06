@@ -1,27 +1,33 @@
-# 🩺 LEVI-AI Sovereign Diagnostics Master (v13.0.0)
+# 🩺 System Diagnostics Master (v1.0.0-RC1)
 
-Standard health-monitoring and cognitive-fidelity metrics for the v9.8.1 "Sovereign Monolith."
-
----
-
-## 🔍 1. Standard Testing Suite
-LEVI-AI graduates to a 3-tier testing hierarchy:
-1.  **Unit Logic:** `pytest tests/unit/test_brain.py`.
-2.  **Integration Core:** `pytest tests/integration/test_v8_graph.py`.
-3.  **Cognitive Fidelity:** `pytest tests/cognitive/test_mission_accuracy.py`.
+Standard health-monitoring and cognitive-fidelity metrics for the LEVI-AI v1.0.0-RC1 Distributed Stack.
 
 ---
 
-- **Postgres (Identity & Episodic):** `SELECT 1 FROM user_profiles` (Latency < 20ms).
-- **Redis (Context & Pulse):** `PING` (Latency < 5ms).
-- **Neo4j (Knowledge):** `MATCH (n) RETURN n LIMIT 1` (Latency < 50ms).
-- **HNSW Vault (Semantic):** `VectorStoreV13.is_online()` (Retrieval < 30ms).
+## 🔍 1. Standard Testing Hierarchy
+
+LEVI-AI uses a unified testing framework to ensure graduate-level stability:
+1.  **Unit Tests:** `pytest tests/unit/` (Component isolation).
+2.  **Integration Tests:** `pytest tests/integration/` (Service fabric connectivity).
+3.  **Graduation Audit:** `pytest tests/v1_graduation_suite.py` (Full 28-point technical compliance).
 
 ---
 
-## 🛡️ 3. Security Diagnostics (Shield)
-- **NER Masking:** `DiagnosticAgent.verify_masking("My email is me@example.com")` ➔ `[MASKED]`.
-- **Vault Health:** `SovereignVault.test_encryption()` ➔ `Success`.
+## ⚡ 2. Latency & Resource Thresholds
+
+- **Postgres (Episodic):** `SELECT 1` (Latency < 20ms).
+- **Redis (Working Memory):** `PING` (Latency < 5ms).
+- **Neo4j (Knowledge Graph):** `MATCH (n) RETURN n LIMIT 1` (Latency < 50ms).
+- **FAISS (Semantic Memory):** Local vector search (Retrieval < 100ms).
+- **Ollama (Inference):** `phi3:mini` TTFT (Time To First Token) < 500ms.
+
+---
+
+## 🛡️ 3. Security Diagnostics
+
+- **SHA-256 PII Masking:** `SecurityMiddleware.mask_pii(text)` ➔ `SHA256[:8]` de-identification.
+- **Vault Health:** `VaultService.test_encryption()` ➔ `Success`.
+- **Sandbox Health:** `DockerSandbox.is_available()` ➔ `Active`.
 
 ---
 

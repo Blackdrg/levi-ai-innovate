@@ -13,14 +13,16 @@ class NeuralHandoffManager:
     """
 
     def __init__(self):
-        # Local Endpoints (Placeholders)
-        self.llama_cpp_url = os.getenv("LLAMA_CPP_URL", "http://localhost:8080/completion")
-        self.ollama_url = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
+        # Local Configuration (v13.1 Sovereign)
+        self.ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434") + "/api/generate"
+        self.model_fast = os.getenv("OLLAMA_MODEL_FAST", "phi3:mini")
+        self.model_general = os.getenv("OLLAMA_MODEL_GENERAL", "llama3.1:8b")
+        self.model_complex = os.getenv("OLLAMA_MODEL_COMPLEX", "llama3.3:70b")
         
-        # Preferred Local Provider: 'llama.cpp' or 'ollama'
+        # Preferred Local Provider: 'ollama' is the graduation standard
         self.local_provider = os.getenv("LOCAL_INFERENCE_PROVIDER", "ollama")
         
-        # Cloud Configuration
+        # Cloud Configuration (Backup)
         self.cloud_provider = os.getenv("CLOUD_INFERENCE_PROVIDER", "groq")
 
     async def route_inference(self, prompt: str, context: Dict[str, Any], task_type: str = "general") -> Dict[str, Any]:
@@ -33,8 +35,8 @@ class NeuralHandoffManager:
         """
         # Phase 9: Local Sovereignty (Zero-Bandwidth Failover)
         if os.getenv("OFFLINE_MODE") == "true":
-             logger.info("[Sovereign] OFFLINE_MODE Active. Forcing Local Inference (Llama 3).")
-             return await self._call_local(prompt, context, model="llama3:8b")
+             logger.info(f"[Sovereign] OFFLINE_MODE Active. Forcing Local Inference ({self.model_general}).")
+             return await self._call_local(prompt, context, model=self.model_general)
 
         complexity = context.get("complexity", 0.5)
         
@@ -43,19 +45,24 @@ class NeuralHandoffManager:
         
         # v12.0 Routing Logic:
         # A. Intent Detection -> Phi-3 Mini (Ultra Fast)
-        if task_type == "intent" and is_local_healthy:
-            logger.info("[NeuralRouter] Routing INTENT to local Phi-3 Mini.")
-            return await self._call_local(prompt, context, model="phi3:mini")
+        if task_type in ["intent", "fast"] and is_local_healthy:
+            logger.info(f"[NeuralRouter] Routing {task_type.upper()} to local {self.model_fast}.")
+            return await self._call_local(prompt, context, model=self.model_fast)
             
-        # B. Low Complexity -> Mistral 7B (Speed)
+        # B. Low Complexity -> General Llama 3.1 8B (Speed)
         if complexity < 0.4 and is_local_healthy:
-             logger.info("[NeuralRouter] Routing simple task to local Mistral 7B.")
-             return await self._call_local(prompt, context, model="mistral:7b")
+             logger.info(f"[NeuralRouter] Routing simple task to local {self.model_general}.")
+             return await self._call_local(prompt, context, model=self.model_general)
 
-        # C. Moderate Complexity -> Llama 3 8B (Sovereign Reasoning)
-        if complexity < 0.7 and is_local_healthy:
-             logger.info("[NeuralRouter] Routing reasoned task to local Llama 3 8B.")
-             return await self._call_local(prompt, context, model="llama3:8b")
+        # C. Moderate Complexity -> General Llama 3.1 8B (Sovereign Reasoning)
+        if complexity < 0.8 and is_local_healthy:
+             logger.info(f"[NeuralRouter] Routing reasoned task to local {self.model_general}.")
+             return await self._call_local(prompt, context, model=self.model_general)
+ 
+        # D. High Complexity -> Advanced Llama 3.3 70B (Expert Logic)
+        if is_local_healthy:
+             logger.info(f"[NeuralRouter] Routing complex/expert task to local {self.model_complex}.")
+             return await self._call_local(prompt, context, model=self.model_complex)
 
         # D. High Complexity / Local Unhealthy -> Cloud (Groq/OpenAI)
         if not groq_breaker.allow_request():

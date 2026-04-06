@@ -10,30 +10,47 @@ import json
 from typing import Dict, Any, List, Set, Coroutine
 from .orchestrator_types import ToolResult, IntentResult
 from .tool_registry import call_tool
+from .blackboard import MissionBlackboard
 from backend.broadcast_utils import SovereignBroadcaster, PULSE_NODE_COMPLETED
 from ..utils.network import ai_service_breaker
 from ..celery_app import celery_app
 from ..agents.registry import AGENT_REGISTRY
-from ..agents.consensus_agent import ConsensusAgentV8
+from ..agents.consensus_agent import ConsensusAgentV11
 from ..utils.rate_limit import check_agent_limit
+from ..utils.sanitizer import ResultSanitizer
+from ..db.models import CognitiveUsage, Mission
+from ..db.postgres import PostgresDB
+from .dcn_protocol import DCNProtocol
 
 
 logger = logging.getLogger(__name__)
 
 class GraphExecutor:
     """
-    LeviBrain v8: Graph-Aware Executor.
+    LeviBrain v13.1: Graph-Aware Executor.
     Processes task nodes based on topological dependencies.
+    
+    Audit Point 07 Hardening:
+    - MAX_MISSION_NODES: 15 (Increased from 10 per core)
+    - MAX_WAVES: 8
+    - WARNING_THRESHOLD: 8
     """
+    MAX_MISSION_NODES = 15
+    MAX_WAVES = 8
+    WARNING_THRESHOLD = 8
 
     async def execute(self, graph: Any, perception: Dict[str, Any], user_id: str = "global") -> List[ToolResult]:
 
-        logger.info("[V8 Executor] Executing Task Graph...")
+        logger.info("[V13.1 Executor] Executing Task Graph...")
         results: Dict[str, ToolResult] = {}
         completed_ids: Set[str] = set()
-        blackboard: Dict[str, Any] = {} # v8 Swarm Communication
+        
+        mission_id = perception.get("request_id") or "global"
+        blackboard = MissionBlackboard(mission_id)
         
         remaining_nodes = list(graph.nodes)
+        wave_count = 0
+        total_nodes_executed = 0
 
         
         while remaining_nodes:
@@ -55,9 +72,27 @@ class GraphExecutor:
                     logger.error("[V8 Executor] Dependency deadlock in graph.")
                 break
             
-            logger.debug("[V8 Executor] Executing Wave: %s", [n.id for n in executable_nodes])
+            # Audit Point 07: Execution Guards
+            wave_count += 1
+            if wave_count > self.MAX_WAVES:
+                logger.error(f"[Shield] Mission {mission_id} aborted: Wave limit ({self.MAX_WAVES}) exceeded.")
+                SovereignBroadcaster.publish("MISSION_ABORTED", {"reason": "wave_limit_exceeded"}, user_id=user_id)
+                break
+
+            logger.debug("[V13.1 Executor] Executing Wave %d: %s", wave_count, [n.id for n in executable_nodes])
             
             # 2. Parallel Execution of Wave
+            total_nodes_executed += len(executable_nodes)
+            
+            if total_nodes_executed >= self.WARNING_THRESHOLD and total_nodes_executed < self.MAX_MISSION_NODES:
+                logger.warning(f"[V13.1 Executor] Mission {mission_id} reaching complexity threshold ({total_nodes_executed} nodes).")
+                SovereignBroadcaster.publish("MISSION_WARNING", {"nodes_count": total_nodes_executed, "message": "High complexity mission detected. Approaching safety limit."}, user_id=user_id)
+
+            if total_nodes_executed > self.MAX_MISSION_NODES:
+                logger.error(f"[Shield] Mission {mission_id} aborted: Node limit ({self.MAX_MISSION_NODES}) exceeded.")
+                SovereignBroadcaster.publish("MISSION_ABORTED", {"reason": "node_limit_exceeded"}, user_id=user_id)
+                break
+
             tasks = [self._execute_node(n, results, perception, blackboard=blackboard, user_id=user_id) for n in executable_nodes]
             SovereignBroadcaster.publish("WAVE_STARTED", {"nodes": [n.id for n in executable_nodes]}, user_id=user_id)
 
@@ -82,10 +117,16 @@ class GraphExecutor:
             
             if critical_failure:
                 break
+        # 5. DCN Synchrony (Audit Point 12)
+        if all(r.success for r in results.values()):
+            dcn = DCNProtocol()
+            if dcn.is_active:
+                pulse = dcn.sign_pulse(mission_id, json.dumps({k: v.message for k, v in results.items()}))
+                asyncio.create_task(dcn.broadcast_gossip(pulse))
 
         return list(results.values())
 
-    async def _execute_node(self, node: Any, previous_results: Dict[str, ToolResult], perception: Dict[str, Any], blackboard: Dict[str, Any] = None, user_id: str = "global") -> ToolResult:
+    async def _execute_node(self, node: Any, previous_results: Dict[str, ToolResult], perception: Dict[str, Any], blackboard: MissionBlackboard = None, user_id: str = "global") -> ToolResult:
         """Executes a single node with template-resolved inputs, retries and fallbacks."""
         agent_name = node.agent
         start_time = asyncio.get_event_loop().time()
@@ -100,7 +141,7 @@ class GraphExecutor:
             **perception.get("context", {}), 
             **resolved_inputs, 
             "input": perception.get("input"),
-            "__blackboard__": blackboard or {} # Injected swarm state
+            "__blackboard__": blackboard.serialize() if blackboard else "" # Injected compressed swarm state
         }
 
         attempts = 0
@@ -142,12 +183,24 @@ class GraphExecutor:
                         elif isinstance(cr, ToolResult): valid_candidates.append(cr)
                         else: valid_candidates.append(cr) # Assume it's a result object
                     
-                    # 4. Consensus Adjudication
-                    consensus_agent = ConsensusAgentV8()
-                    from ..agents.consensus_agent import ConsensusInput
+                    # 4. Consensus Adjudication (v13.1)
+                    consensus_agent = ConsensusAgentV11()
+                    from ..agents.consensus_agent import ConsensusInput, FidelityRubric
+                    
+                    # Synthesize rubrics from candidates if available
+                    candidate_rubrics = [
+                        FidelityRubric(
+                            syntax_correctness=getattr(c, 'syntax_score', 0.9),
+                            logical_consistency=getattr(c, 'logic_score', 0.8),
+                            factual_grounding=getattr(c, 'grounding_score', 0.85),
+                            sovereign_resonance=getattr(c, 'resonance_score', 0.9)
+                        ) for c in valid_candidates
+                    ]
+
                     consensus_res = await consensus_agent.execute(ConsensusInput(
                         goal=perception.get("input", "Synchronous mission"),
                         candidates=valid_candidates,
+                        rubrics=candidate_rubrics,
                         context=perception.get("context", {})
                     ))
                     
@@ -186,9 +239,38 @@ class GraphExecutor:
                 if result.success:
                     result.latency_ms = int((asyncio.get_event_loop().time() - start_time) * 1000)
                     
+                    # Audit Point 05: Output Sanitization
+                    result.message = ResultSanitizer.sanitize_bot_response(result.message or "")
+                    
+                    # Audit Point 20: CU Billing / Usage Tracking
+                    prompt_tokens = getattr(result, "prompt_tokens", 0)
+                    completion_tokens = getattr(result, "completion_tokens", 0)
+                    # Simplified CU calculation: 1.0 per task + tokens/1000
+                    calculated_cu = 1.0 + (prompt_tokens + completion_tokens) / 1000.0
+                    
+                    try:
+                        async with PostgresDB._session_factory() as session:
+                            usage = CognitiveUsage(
+                                mission_id=mission_id,
+                                user_id=user_id,
+                                agent=agent_name,
+                                prompt_tokens=prompt_tokens,
+                                completion_tokens=completion_tokens,
+                                latency_ms=result.latency_ms,
+                                cu_cost=calculated_cu
+                            )
+                            session.add(usage)
+                            await session.commit()
+                    except Exception as e:
+                        logger.error(f"[V13.1 Executor] Failed to log CU usage: {e}")
+
                     # 5. Blackboard Update
                     if isinstance(result.data, dict) and "blackboard_update" in result.data:
-                        blackboard.update(result.data["blackboard_update"])
+                        for k, v in result.data["blackboard_update"].items():
+                            blackboard.add_artifact(k, v)
+                    
+                    if hasattr(result, "insight") and result.insight:
+                        blackboard.update_insight(agent_name, result.insight)
                     
                     # Telemetry
                     SovereignBroadcaster.publish(PULSE_NODE_COMPLETED, {

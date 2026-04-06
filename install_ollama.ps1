@@ -25,6 +25,7 @@
 
         OLLAMA_VERSION       Target version (default: latest stable)
         OLLAMA_INSTALL_DIR   Custom install directory
+        OLLAMA_MODELS        Custom model storage directory
         OLLAMA_UNINSTALL     Set to 1 to uninstall Ollama
         OLLAMA_DEBUG         Enable verbose output
 
@@ -47,6 +48,7 @@ $ProgressPreference = "SilentlyContinue"
 
 $Version      = if ($env:OLLAMA_VERSION) { $env:OLLAMA_VERSION } else { "" }
 $InstallDir   = if ($env:OLLAMA_INSTALL_DIR) { $env:OLLAMA_INSTALL_DIR } else { "" }
+$ModelsDir    = if ($env:OLLAMA_MODELS) { $env:OLLAMA_MODELS } else { "" }
 $Uninstall    = $env:OLLAMA_UNINSTALL -eq "1"
 $DebugInstall = [bool]$env:OLLAMA_DEBUG
 

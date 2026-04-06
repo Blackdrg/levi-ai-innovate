@@ -10,8 +10,9 @@ from typing import List, Dict, Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from backend.utils.exceptions import LEVIException
-from backend.services.auth.logic import get_current_user
-from backend.db.firestore_db import db as firestore_db
+from backend.auth import get_current_user
+from backend.db.postgres import PostgresDB
+from backend.db.models import UserFact
 from backend.core.memory_utils import prune_old_facts
 from backend.utils.robustness import standard_retry
 
@@ -24,26 +25,22 @@ async def get_my_facts(current_user: dict = Depends(get_current_user)):
     """
     Returns all personalized facts LEVI has learned about the user.
     """
-    user_id = current_user.get("uid")
+    user_id = current_user.get("uid") or current_user.get("user_id")
     try:
-        # Maintenance: Prune facts older than 30 days
-        from backend.core.memory_utils import prune_old_facts
-        await prune_old_facts(user_id)
-        
-        docs = firestore_db.collection("user_facts") \
-            .where("user_id", "==", user_id) \
-            .order_by("created_at", direction="DESCENDING") \
-            .stream()
+        from sqlalchemy import select
+        async with PostgresDB._session_factory() as session:
+            stmt = select(UserFact).where(UserFact.user_id == user_id).order_by(UserFact.created_at.desc())
+            result = await session.execute(stmt)
+            facts_models = result.scalars().all()
             
-        facts = []
-        for doc in docs:
-            data = doc.to_dict()
-            facts.append({
-                "id": doc.id,
-                "fact": data.get("fact"),
-                "category": data.get("category"),
-                "learned_at": data.get("created_at")
-            })
+            facts = [
+                {
+                    "id": f.id,
+                    "fact": f.fact,
+                    "category": f.category,
+                    "learned_at": f.created_at.isoformat()
+                } for f in facts_models
+            ]
             
         return {"user_id": user_id, "facts": facts, "count": len(facts)}
     except Exception as e:
@@ -55,7 +52,7 @@ async def save_fact(payload: dict, current_user: dict = Depends(get_current_user
     """
     Manually saves a fact to the user's cosmic memory.
     """
-    user_id = current_user.get("uid")
+    user_id = current_user.get("uid") or current_user.get("user_id")
     fact = payload.get("fact")
     category = payload.get("category", "general")
     
@@ -63,15 +60,16 @@ async def save_fact(payload: dict, current_user: dict = Depends(get_current_user
         raise LEVIException("Fact content is required.", status_code=400)
     
     try:
-        from datetime import datetime
-        doc_ref = firestore_db.collection("user_facts").document()
-        doc_ref.set({
-            "user_id": user_id,
-            "fact": fact,
-            "category": category,
-            "created_at": datetime.utcnow()
-        })
-        return {"status": "success", "message": "Fact crystallized in memory.", "id": doc_ref.id}
+        async with PostgresDB._session_factory() as session:
+            new_fact = UserFact(
+                user_id=user_id,
+                fact=fact,
+                category=category
+            )
+            session.add(new_fact)
+            await session.commit()
+            await session.refresh(new_fact)
+            return {"status": "success", "message": "Fact crystallized in memory.", "id": new_fact.id}
     except Exception as e:
         logger.error(f"Memory save failure: {e}")
         raise LEVIException("Failed to crystallize memory.", status_code=500)
@@ -84,18 +82,24 @@ async def delete_fact(
     """
     Deletes a specific learned fact from LEVI's memory.
     """
-    user_id = current_user.get("uid")
+    user_id = current_user.get("uid") or current_user.get("user_id")
     try:
-        doc_ref = firestore_db.collection("user_facts").document(fact_id)
-        doc = doc_ref.get()
-        
-        if not doc.exists:
-            raise LEVIException("Fact not found.", status_code=404)
-        
-        if doc.to_dict().get("user_id") != user_id:
-            raise LEVIException("Unauthorized memory access.", status_code=403)
+        from sqlalchemy import delete, select
+        async with PostgresDB._session_factory() as session:
+            # First verify ownership
+            stmt = select(UserFact).where(UserFact.id == int(fact_id))
+            result = await session.execute(stmt)
+            fact_model = result.scalar_one_or_none()
             
-        doc_ref.delete()
+            if not fact_model:
+                raise LEVIException("Fact not found.", status_code=404)
+            
+            if fact_model.user_id != user_id:
+                raise LEVIException("Unauthorized memory access.", status_code=403)
+                
+            await session.delete(fact_model)
+            await session.commit()
+            
         return {"status": "success", "message": "Memory successfully forgotten."}
     except LEVIException:
         raise

@@ -61,11 +61,35 @@ class PromptSanitizer:
         """
         Sovereign Shield NER: Masks persistent identifiers.
         """
-        # (This is already partially in SovereignSecurity, but centralized here for v13)
-        # Simplified regex-based masking for this task
+        if not text: return ""
+        # Simplified regex-based masking
         email_pattern = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
         phone_pattern = r"\b\d{3}[-.]?\d{3}[-.]?\d{4}\b"
         
         masked = re.sub(email_pattern, "[REDACTED_EMAIL]", text)
         masked = re.sub(phone_pattern, "[REDACTED_PHONE]", masked)
         return masked
+
+class ResultSanitizer:
+    """
+    Sovereign v13.1.0: Output scrubbing and XSS neutralization.
+    Ensures model-produced Markdown doesn't contain malicious injection.
+    """
+
+    @classmethod
+    def sanitize_bot_response(cls, text: str) -> str:
+        """Hardens the bot response before user delivery."""
+        if not text: return ""
+        
+        # 1. Neutralize PII Shards
+        scrubbed = PromptSanitizer.mask_pii(text)
+        
+        # 2. XSS / Markdown Injection Neutralization
+        # Prevents <script> or event handlers in markdown-rendered output
+        scrubbed = re.sub(r"<script.*?>.*?</script>", "[SCRIPT_FILTERED]", scrubbed, flags=re.DOTALL | re.IGNORECASE)
+        scrubbed = re.sub(r"on\w+=", "filtered_attr=", scrubbed, flags=re.IGNORECASE)
+        
+        # 3. Instruction Residue Cleanup
+        scrubbed = scrubbed.replace("<USER_MISSION>", "").replace("</USER_MISSION>", "")
+        
+        return scrubbed.strip()

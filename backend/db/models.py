@@ -107,7 +107,7 @@ class MarketplaceAgent(Base):
 
 class SystemAudit(Base):
     """
-    High-fidelity audit ledger for HIPAA/GDPR compliance.
+    Standard audit ledger for HIPAA/GDPR compliance.
     """
     __tablename__ = "system_audit"
 
@@ -125,17 +125,17 @@ class SystemAudit(Base):
     @staticmethod
     def calculate_signature(prev_sig: str, data: str) -> str:
         """
-        Sovereign v13.0: Cryptographic chaining.
+        v1.0.0-RC1: Cryptographic chaining.
         HMAC-SHA256(prev_sig + data)
         """
         import hmac, hashlib
-        secret = os.getenv("AUDIT_CHAIN_SECRET", "sovereign_monolith_genesis")
+        secret = os.getenv("AUDIT_CHAIN_SECRET", "levi_ai_genesis_key")
         msg = f"{prev_sig}:{data}".encode()
         return hmac.new(secret.encode(), msg, hashlib.sha256).hexdigest()
 
 class MissionSchedule(Base):
     """
-    Recurring mission manifests (v13.0.0 Scheduled Missions).
+    Recurring mission manifests.
     """
     __tablename__ = "mission_schedules"
 
@@ -149,3 +149,91 @@ class MissionSchedule(Base):
     next_run_at = Column(DateTime, index=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+class UserFact(Base):
+    """
+    Episodic memory and learned facts.
+    Stored in local Postgres persistent layer.
+    """
+    __tablename__ = "user_facts"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(String, ForeignKey("user_profiles.user_id"), index=True)
+    tenant_id = Column(String, index=True)
+    fact = Column(Text, nullable=False)
+    category = Column(String, default="general")
+    importance = Column(Float, default=0.5)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    profile = relationship("UserProfile")
+
+class Mission(Base):
+    """
+    Distributed Mission Ledger.
+    Records interaction history for local-first cognitive missions.
+    """
+    __tablename__ = "missions"
+
+    mission_id = Column(String, primary_key=True, index=True)
+    user_id = Column(String, ForeignKey("user_profiles.user_id"), index=True)
+    tenant_id = Column(String, index=True)
+    objective = Column(String, nullable=False)
+    intent_type = Column(String)
+    status = Column(String, default="pending")
+    fidelity_score = Column(Float, default=0.0)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    messages = relationship("Message", back_populates="mission", cascade="all, delete-orphan")
+
+class Message(Base):
+    """
+    Individual messages within a mission.
+    """
+    __tablename__ = "mission_messages"
+
+    id = Column(Integer, primary_key=True)
+    mission_id = Column(String, ForeignKey("missions.mission_id"), index=True)
+    role = Column(String) # user, bot, system
+    content = Column(Text)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    mission = relationship("Mission", back_populates="messages")
+
+class CognitiveUsage(Base):
+    """
+    Mission Resource Ledger (v1.0.0-RC1).
+    Tracks token consumption and resource costs for local-first missions.
+    """
+    __tablename__ = "cognitive_usage"
+
+    id = Column(Integer, primary_key=True)
+    mission_id = Column(String, ForeignKey("missions.mission_id"), index=True)
+    user_id = Column(String, index=True)
+    agent = Column(String)
+    prompt_tokens = Column(Integer, default=0)
+    completion_tokens = Column(Integer, default=0)
+    latency_ms = Column(Integer, default=0)
+    cu_cost = Column(Float, default=0.0)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    mission = relationship("Mission")
+
+class CreationJob(Base):
+    """
+    Creation Ledger v1.0.0-RC1.
+    Replaces Firestore 'jobs' with resident SQL persistence for Studio/Gallery.
+    """
+    __tablename__ = "creation_jobs"
+
+    id = Column(Integer, primary_key=True)
+    job_id = Column(String, unique=True, index=True)
+    user_id = Column(String, ForeignKey("user_profiles.user_id"), index=True)
+    tenant_id = Column(String, index=True)
+    objective = Column(Text, nullable=False)
+    status = Column(String, default="pending") # pending, processing, completed, failed
+    result_url = Column(String) # Local artifact path
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    completed_at = Column(DateTime)
+
+    profile = relationship("UserProfile")

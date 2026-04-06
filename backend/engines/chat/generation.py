@@ -57,7 +57,7 @@ class SovereignGenerator:
         Direct Ollama streaming interface.
         """
         import httpx, json
-        base_url = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
+        base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
         
         system_msg = next((m["content"] for m in messages if m["role"] == "system"), SovereignI18n.get_prompt("system_brain", lang))
         history = [m for m in messages if m["role"] != "system"]
@@ -89,7 +89,8 @@ class SovereignGenerator:
         """
         Council of Models (v13.0): Local Multi-Agent Consensus.
         """
-        return await self._single_call(messages, "llama3.1:8b")
+        model = os.getenv("OLLAMA_MODEL_COMPLEX", "llama3.3:70b")
+        return await self._single_call(messages, model)
 
     async def _single_call(self, messages: List[Dict], model: str, provider: Any = None) -> str:
         """Sovereign v13: Fast local generation path."""
