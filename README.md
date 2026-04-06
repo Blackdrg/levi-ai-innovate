@@ -62,7 +62,7 @@ LEVI-AI is built on a 5-service modular architecture optimized for local-first c
 graph TD
     User((User/Client)) --- Gateway[API Gateway: FastAPIGateway]
     
-    subgraph "Sovereign Shield Cluster (Security)"
+    subgraph ShieldCluster ["Sovereign Shield Cluster (Security)"]
         Gateway --> RBAC[RBACMiddleware: G/P/C]
         RBAC --> KMS[SovereignKMS: AES-256-GCM]
         KMS --> Boundary[InstructionBoundary]
@@ -71,7 +71,7 @@ graph TD
         Secrets --> JWT[JWTRotator]
     end
     
-    subgraph "Cognitive Core (Orchestration)"
+    subgraph CognitiveCore ["Cognitive Core (Orchestration)"]
         JWT --> Brain[BrainController]
         Brain --> Goal[GoalEngine]
         Goal --> Planner[MissionPlanner]
@@ -81,7 +81,7 @@ graph TD
         Brain --> Circuit[CircuitBreaker: Resilient]
     end
     
-    subgraph "Swarm Layer (14 Specialized Agents)"
+    subgraph SwarmLayer ["Swarm Layer (14 Specialized Agents)"]
         Executor --> Artisan[Artisan: CodeGen]
         Executor --> Scout[Scout: Research]
         Executor --> Critic[Critic: Adjudicator]
@@ -92,7 +92,7 @@ graph TD
         Executor --> SwarmAPI[SwarmControl: API]
     end
     
-    subgraph "Local-First Inference Stack"
+    subgraph InferenceStack ["Local-First Inference Stack"]
         Artisan --- Ollama[Ollama: Local Engine]
         Ollama --- L31[Llama 3.1: 8b - Primary]
         Ollama --- L33[Llama 3.3: 70b - Reasoning]
@@ -101,7 +101,7 @@ graph TD
         Ollama --- Proxy[CloudFallbackProxy: Gated]
     end
     
-    subgraph "Tooling & Execution Environment"
+    subgraph ToolingEnv ["Tooling & Execution Environment"]
         Artisan --> Docker[DockerSandbox: Isolated]
         Scout --> WebProxy[EgressProxy: Filtered]
         Scout --> LocalFS[Local FileSystem]
@@ -110,7 +110,7 @@ graph TD
         Artisan --> Shell[SecureShell: Restricted]
     end
     
-    subgraph "Fidelity Cluster (Validation & Audit)"
+    subgraph FidelityCluster ["Fidelity Cluster (Validation & Audit)"]
         Artisan --> HardRule[HardRuleValidator: AST]
         HardRule --> Syntax[SyntaxChecker: PyLint]
         HardRule --> Logic[LogicVerifier: JSON]
@@ -118,7 +118,7 @@ graph TD
         Score --> Pulse[TelemetryBroadcaster: zLib]
     end
     
-    subgraph "Memory Vault (Quad-Persistence Layer)"
+    subgraph MemoryVault ["Memory Vault (Quad-Persistence Layer)"]
         Brain --> MM[MemoryManager]
         MM --> Redis[(Redis: Working State)]
         MM --> Postgres[(Postgres: Episodic Ledger)]
@@ -145,16 +145,16 @@ graph TD
     style Gateway fill:#ce93d8,stroke:#333
     style SSE fill:#ce93d8,stroke:#333
     
-    style Sovereign Shield Cluster (Security) fill:#fffde7,stroke:#fbc02d
-    style Fidelity Cluster (Validation & Audit) fill:#fffde7,stroke:#fbc02d
+    style ShieldCluster fill:#fffde7,stroke:#fbc02d
+    style FidelityCluster fill:#fffde7,stroke:#fbc02d
     style RBAC fill:#fff176,stroke:#fbc02d
     style KMS fill:#fff176,stroke:#fbc02d
     style Score fill:#fff176,stroke:#fbc02d
     
-    style Swarm Layer (14 Specialized Agents) fill:#e8f5e9,stroke:#4caf50
-    style Local-First Inference Stack fill:#ffffff,stroke:#333
+    style SwarmLayer fill:#e8f5e9,stroke:#4caf50
+    style InferenceStack fill:#ffffff,stroke:#333
     
-    style Memory Vault (Quad-Persistence Layer) fill:#e3f2fd,stroke:#1e88e5
+    style MemoryVault fill:#e3f2fd,stroke:#1e88e5
     style Redis fill:#64b5f6,stroke:#1e88e5
     style Postgres fill:#64b5f6,stroke:#1e88e5
     style Neo4j fill:#64b5f6,stroke:#1e88e5
