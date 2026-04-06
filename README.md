@@ -59,106 +59,74 @@ LEVI-AI is composed of five distinct, coordinated services:
 LEVI-AI is built on a 5-service modular architecture optimized for local-first cognitive autonomy. The following **Master Topology** visualizes the 50+ technical nodes that orchestrate the stack.
 
 ```mermaid
-graph TD
-    User((User/Client)) --- Gateway[API Gateway: FastAPIGateway]
+graph LR
+    User((User)) -- "HTTPS / SSE" --> Gateway[API Gateway: FastAPI]
     
     subgraph ShieldCluster ["Sovereign Shield Cluster (Security)"]
-        Gateway --> RBAC[RBACMiddleware: G/P/C]
-        RBAC --> KMS[SovereignKMS: AES-256-GCM]
-        KMS --> Boundary[InstructionBoundary]
-        Boundary --> Auth[AuthRegistry]
-        Auth --> Secrets[SecretManager: Vaulted]
-        Secrets --> JWT[JWTRotator]
+        Gateway -- "RBAC G/P/C" --> RBAC[RBAC Middleware]
+        RBAC -- "User Context" --> KMS[SovereignKMS: AES-256]
+        KMS -- "Encrypted Vector" --> Boundary[Mission Boundary]
+        Boundary -- "Sanitized Pulse" --> Auth[Auth Registry]
     end
-    
+
     subgraph CognitiveCore ["Cognitive Core (Orchestration)"]
-        JWT --> Brain[BrainController]
-        Brain --> Goal[GoalEngine]
-        Goal --> Planner[MissionPlanner]
-        Planner --> Executor[GraphExecutor: Wave]
-        Executor --> Wave[WaveScheduler]
-        Wave --> Blackboard[(Redis: MissionBlackboard)]
-        Brain --> Circuit[CircuitBreaker: Resilient]
+        Auth -- "Authorized Mission" --> Brain[Brain Orchestrator]
+        Brain -- "System Intent" --> Goal[Goal Engine]
+        Goal -- "Task Tree" --> Planner[Mission Planner]
+        Planner -- "Topological Wave" --> Executor[Graph Executor]
+        Executor -- "Wave Pulse" --> Blackboard[(Redis: Blackboard)]
     end
-    
+
     subgraph SwarmLayer ["Swarm Layer (14 Specialized Agents)"]
-        Executor --> Artisan[Artisan: CodeGen]
-        Executor --> Scout[Scout: Research]
-        Executor --> Critic[Critic: Adjudicator]
-        Executor --> Consensus[Consensus: Validator]
-        Executor --> Coder[Coder: Logic]
-        Executor --> Researcher[Researcher: Web]
-        Executor --> Analyst[Analyst: Data]
-        Executor --> SwarmAPI[SwarmControl: API]
+        Executor -- "Task Assignment" --> Artisan[Artisan: Code]
+        Executor -- "Research Scan" --> Scout[Scout: Web]
+        Executor -- "Adjudication" --> Critic[Critic: Audit]
+        Executor -- "Logic Check" --> Coder[Coder: Scripts]
     end
-    
+
+    subgraph ToolingEnv ["Tooling & Execution Layer"]
+        Artisan -- "Execute" --> Docker[Docker Sandbox]
+        Scout -- "Query" --> Search[Search API]
+        Scout -- "Browse" --> Browser[Playwright]
+    end
+
     subgraph InferenceStack ["Local-First Inference Stack"]
-        Artisan --- Ollama[Ollama: Local Engine]
-        Ollama --- L31[Llama 3.1: 8b - Primary]
-        Ollama --- L33[Llama 3.3: 70b - Reasoning]
-        Ollama --- P3[Phi-3: Mini - Logic]
-        Ollama --- Nomic[Nomic-Embed: Vector]
-        Ollama --- Proxy[CloudFallbackProxy: Gated]
+        Artisan -- "Predict" --> Ollama[Ollama Engine]
+        Ollama -- "L3.1 / L3.3" --> LLM[Local Models]
+        Ollama -- "768d" --> Nomic[Nomic Embed]
     end
-    
-    subgraph ToolingEnv ["Tooling & Execution Environment"]
-        Artisan --> Docker[DockerSandbox: Isolated]
-        Scout --> WebProxy[EgressProxy: Filtered]
-        Scout --> LocalFS[Local FileSystem]
-        Scout --> Search[SearchAPI: Tavily]
-        Scout --> Browser[BrowserSubagent: Playwright]
-        Artisan --> Shell[SecureShell: Restricted]
+
+    subgraph FidelityCluster ["Fidelity Cluster (Validation)"]
+        Artisan -- "Validation" --> HardRule[HardRule Validator]
+        HardRule -- "AST Check" --> Logic[Logic Verifier]
+        Logic -- "Fidelity Score" --> Score[Fidelity S > 50/50]
     end
-    
-    subgraph FidelityCluster ["Fidelity Cluster (Validation & Audit)"]
-        Artisan --> HardRule[HardRuleValidator: AST]
-        HardRule --> Syntax[SyntaxChecker: PyLint]
-        HardRule --> Logic[LogicVerifier: JSON]
-        Logic --> Score[FidelityScore S > 50/50]
-        Score --> Pulse[TelemetryBroadcaster: zLib]
+
+    subgraph MemoryVault ["Memory Vault (Quad-Persistence)"]
+        Brain -- "State Sync" --> MM[Memory Manager]
+        MM -- "Working State" --> Redis[(Redis)]
+        MM -- "Episodic" --> Postgres[(Postgres)]
+        MM -- "Relational" --> Neo4j[(Neo4j)]
+        MM -- "Semantic" --> FAISS[(FAISS)]
+        MM -- "Backups" --> Snap[Snapshot Orchestrator]
     end
-    
-    subgraph MemoryVault ["Memory Vault (Quad-Persistence Layer)"]
-        Brain --> MM[MemoryManager]
-        MM --> Redis[(Redis: Working State)]
-        MM --> Postgres[(Postgres: Episodic Ledger)]
-        MM --> Neo4j[(Neo4j: Relational Graph)]
-        MM --> FAISS[(FAISS: Semantic Index)]
-        
-        Redis --- State[MissionContext]
-        Postgres --- Profiles[UserProfile]
-        Neo4j --- Triplets[Knowledge Triplets]
-        FAISS --- HNSW[HNSW: efSearch 64]
-        Postgres --- Ledger[UserBillingLedger]
-        MM --> Snap[SnapshotOrchestrator: Backup]
-    end
-    
-    Score --> Commit[CommitToMemory]
-    Commit --> MM
-    
-    Gateway --> SSE[SSETelemetryHub]
-    SSE --> Zlib[zlibCompressor]
-    Zlib --> User
-    
-    %% Color Coding
-    style User fill:#ce93d8,stroke:#333
-    style Gateway fill:#ce93d8,stroke:#333
-    style SSE fill:#ce93d8,stroke:#333
-    
-    style ShieldCluster fill:#fffde7,stroke:#fbc02d
-    style FidelityCluster fill:#fffde7,stroke:#fbc02d
-    style RBAC fill:#fff176,stroke:#fbc02d
-    style KMS fill:#fff176,stroke:#fbc02d
-    style Score fill:#fff176,stroke:#fbc02d
-    
-    style SwarmLayer fill:#e8f5e9,stroke:#4caf50
-    style InferenceStack fill:#ffffff,stroke:#333
-    
-    style MemoryVault fill:#e3f2fd,stroke:#1e88e5
-    style Redis fill:#64b5f6,stroke:#1e88e5
-    style Postgres fill:#64b5f6,stroke:#1e88e5
-    style Neo4j fill:#64b5f6,stroke:#1e88e5
-    style FAISS fill:#64b5f6,stroke:#1e88e5
+
+    Score -- "Verified Results" --> MM
+    Gateway -- "Real-time Pulse" --> SSE[SSE Telemetry Hub]
+    SSE -- "Compressed Data" --> User
+
+    %% Styling with ClassDefs
+    classDef userStyle fill:#ce93d8,stroke:#333,stroke-width:2px;
+    classDef securityStyle fill:#fffde7,stroke:#fbc02d,stroke-width:1px;
+    classDef cognitiveStyle fill:#e3f2fd,stroke:#1e88e5,stroke-width:1px;
+    classDef swarmStyle fill:#e8f5e9,stroke:#4caf50,stroke-width:1px;
+    classDef dbStyle fill:#bbdefb,stroke:#1e88e5,stroke-width:2px;
+
+    class User,Gateway,SSE userStyle;
+    class ShieldCluster,RBAC,KMS,Boundary,Auth,FidelityCluster,HardRule,Logic,Score securityStyle;
+    class CognitiveCore,Brain,Goal,Planner,Executor,MM cognitiveStyle;
+    class SwarmLayer,Artisan,Scout,Critic,Coder,ToolingEnv,Docker,Search,Browser swarmStyle;
+    class MemoryVault,Redis,Postgres,Neo4j,FAISS,Snap,Blackboard dbStyle;
 ```
 
 ### 4.0.1 Diagram Legend
