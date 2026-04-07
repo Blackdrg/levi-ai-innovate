@@ -97,14 +97,19 @@ class VectorDB:
 
     async def rebuild_index(self):
         """
-        Sovereign v13.1.0: High-fidelity deterministic re-indexing.
+        Sovereign v1.0.0-RC1: High-fidelity deterministic re-indexing.
         Applies L2-normalization for METRIC_INNER_PRODUCT (Cosine Similarity).
+        Preserves tenant_id and versioning for absolute isolation.
         """
         if not self.metadata: return
         
         texts = [m["text"] for m in self.metadata if "text" in m]
         if len(texts) != len(self.metadata):
-            raise ValueError("Cannot rebuild index: Partial text availability.")
+             logger.warning(f"[VectorDB] Partial text availability in {self.collection_name}. Skipping missing records.")
+             self.metadata = [m for m in self.metadata if "text" in m]
+             texts = [m["text"] for m in self.metadata]
+
+        if not texts: return
         
         logger.info(f"[VectorDB] Commencing rebuild for {len(texts)} vectors with L2-normalization...")
         
@@ -128,16 +133,11 @@ class VectorDB:
         
         async with self._lock:
             self.index = new_index
+            # Ensure version and tenant mapping is preserved in metadata
+            for m in self.metadata:
+                m["version"] = os.getenv("SOVEREIGN_VERSION", "v1.0.0-RC1")
             self._save()
         logger.info(f"[VectorDB] Rebuild complete for {self.collection_name}.")
-        
-        if self.index is None:
-            # v1.3.1 Upgrade: HNSW + Inner Product
-            self.index = faiss.IndexHNSWFlat(self.dimension, 32, faiss.METRIC_INNER_PRODUCT)
-            self.index.hnsw.efConstruction = 200
-            self.index.hnsw.efSearch = 64
-            self.metadata = []
-            logger.info(f"Initialized new collection '{self.collection_name}' (HNSW Cosine v13.1).")
 
     async def add(self, texts: List[str], metadatas: List[Dict[str, Any]]):
         if not texts: return

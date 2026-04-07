@@ -18,23 +18,24 @@ async def _async_call_llm_api(
     """
     return await call_ollama_llm(messages, model=model, temperature=temperature)
 
-async def call_lightweight_llm(messages: List[Dict]) -> str:
+async def call_lightweight_llm(messages: List[Dict], model: Optional[str] = None) -> str:
     """
     Fast-path internal reasoning call.
     Prioritizes Local Ollama (llama3) for low-latency extraction.
     """
-    # Attempt local first if configured
+    target_model = model or os.getenv("OLLAMA_MODEL_GENERAL", "llama3.1:8b")
+    
     if os.getenv("OLLAMA_BASE_URL"):
         return await _async_call_llm_api(
             messages=messages,
-            model=os.getenv("OLLAMA_MODEL_GENERAL", "llama3.1:8b"),
+            model=target_model,
             provider="ollama",
             temperature=0.3
         )
         
     return await _async_call_llm_api(
         messages=messages,
-        model="llama-3.1-8b-instant",
+        model=target_model if target_model else "llama-3.1-8b-instant",
         temperature=0.3
     )
 

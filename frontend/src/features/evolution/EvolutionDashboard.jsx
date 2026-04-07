@@ -1,51 +1,98 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Activity, Brain, Server, Shield, Sparkles, RefreshCw } from "lucide-react";
+import { Activity, Brain, Server, Shield, Sparkles, RefreshCw, Wind } from "lucide-react";
+import pako from "pako";
 import { evolutionService } from "../../services/evolutionService";
-import { apiStream } from "../../services/apiClient";
+import { API_BASE } from "../../lib/auth";
 import { cn } from "../../utils/styles";
 
 export const EvolutionDashboard = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    // 1. Initial Load
-    const init = async () => {
-      setLoading(true);
+  const loadStats = async () => {
+    setLoading(true);
+    try {
       const stats = await evolutionService.getStatus();
       setData(stats);
+    } catch (err) {
+      console.error("Evolution status sync failed", err);
+    } finally {
       setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadStats();
+
+    // 2. Real-time Subscription (The Brain Pulse v13.1)
+    // We use EventSource with query-param token for hardened auth compatibility
+    const token = localStorage.getItem("token");
+    const url = `${API_BASE}/api/v1/telemetry/stream?profile=mobile${token ? `&token=${token}` : ""}`;
+    
+    const es = new EventSource(url, { withCredentials: true });
+
+    es.onmessage = (e) => {
+      try {
+        let rawData = e.data;
+        let parsedData;
+
+        // Adaptive Pulse Decoder (matches MissionDashboard)
+        if (typeof rawData === "string" && !rawData.startsWith("{")) {
+            const binary = atob(rawData);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            const decompressed = pako.inflate(bytes, { to: "string" });
+            parsedData = JSON.parse(decompressed);
+        } else {
+            parsedData = JSON.parse(rawData);
+        }
+
+        if (parsedData) {
+          setData(prev => ({ ...prev, ...parsedData.data }));
+        }
+      } catch (err) {
+        console.warn("[Evolution] Pulse decode failed", err);
+      }
     };
-    init();
 
-    // 2. Real-time Subscription (The Brain Pulse v4.1)
-    const cleanup = apiStream("/api/v8/telemetry/stream", (update) => {
-      setData(prev => ({ ...prev, ...update }));
-    });
-
-    return () => cleanup();
+    return () => es.close();
   }, []);
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 md:px-12 py-10 relative">
-      <div className="max-w-5xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-12">
-          <div>
-            <h1 className="text-3xl md:text-5xl font-bold font-heading text-gradient mb-2">Global Evolution</h1>
-            <p className="text-xs uppercase tracking-[0.2em] text-white/40">Collective Neural Resonance Status</p>
+    <div className="flex-1 overflow-y-auto custom-scrollbar bg-[#020202]">
+      <div className="max-w-6xl mx-auto px-8 py-12 space-y-12">
+        {/* Header Section */}
+        <header className="flex flex-col md:flex-row md:items-end justify-between gap-8 border-b border-white/5 pb-8">
+          <div className="space-y-2">
+             <div className="flex items-center gap-2">
+                <span className="w-10 h-[1px] bg-blue-500" />
+                <span className="text-[10px] uppercase tracking-[0.3em] text-blue-500 font-bold">Inference & Flux Monitoring</span>
+             </div>
+             <h1 className="text-5xl font-heading font-black tracking-tighter text-white uppercase italic leading-none">
+                Evolution<span className="text-blue-500">.</span>Hub
+             </h1>
+             <p className="text-[11px] text-white/30 font-medium max-w-md">Real-time observability of the collective neural resonance and drift.</p>
           </div>
-          <button 
-            onClick={loadStats}
-            className="p-3 glass rounded-2xl text-white/40 hover:text-white transition-colors"
-          >
-            <RefreshCw size={20} className={cn(loading && "animate-spin")} />
-          </button>
-        </div>
+          
+          <div className="flex items-center gap-4">
+            <div className="px-4 py-2 glass rounded-xl border border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.1)]">
+               <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse shadow-[0_0_8px_#3b82f6]" />
+                  <span className="text-[10px] font-mono text-blue-300 uppercase tracking-widest font-black">Pulse: Active</span>
+               </div>
+            </div>
+            <button 
+              onClick={loadStats}
+              className="p-3.5 glass rounded-2xl text-white/30 hover:text-white hover:border-blue-500/30 transition-all"
+            >
+              <RefreshCw size={20} className={cn(loading && "animate-spin text-blue-500")} />
+            </button>
+          </div>
+        </header>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+        {/* Reactor Modules (Stats) */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <StatCard 
             title="Sovereign Model" 
             value={data?.active_model || "Resonating..."} 
@@ -69,35 +116,45 @@ export const EvolutionDashboard = () => {
           />
         </div>
 
-        {/* Status Section */}
+        {/* Global Integrity Display */}
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="glass p-8 md:p-12 rounded-3xl relative overflow-hidden group"
+          className="glass p-12 rounded-[3rem] relative overflow-hidden group border border-white/5 shadow-2xl"
         >
-          <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none transition-transform group-hover:scale-110 duration-1000">
-             <Brain size={240} />
+          {/* Animated Brain Background */}
+          <div className="absolute top-0 right-0 p-16 opacity-[0.03] pointer-events-none transition-transform group-hover:scale-110 duration-1000 rotate-12">
+             <Brain size={280} />
           </div>
+          <div className="absolute -left-20 -bottom-20 w-80 h-80 bg-blue-500/5 blur-[120px] rounded-full pointer-events-none" />
 
           <div className="relative z-10">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-3 h-3 rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/50 animate-pulse" />
-              <h2 className="text-xl font-bold font-heading uppercase tracking-widest">System Integrity: Stable</h2>
+            <div className="flex items-center gap-4 mb-8">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 shadow-[0_0_20px_rgba(16,185,129,0.1)]">
+                 <Shield className="text-emerald-500" size={24} />
+              </div>
+              <div className="space-y-0.5">
+                 <h2 className="text-xl font-black font-heading uppercase tracking-[0.1em] text-white">System Integrity: Stable</h2>
+                 <p className="text-[10px] uppercase tracking-widest text-white/30 font-bold">Resonance Level Alpha-9 Balanced</p>
+              </div>
             </div>
 
-            <p className="max-w-2xl text-white/60 leading-relaxed mb-8">
-              The LEVI-AI collective brain is currently undergoing real-time optimization. 
+            <p className="max-w-3xl text-sm md:text-base text-white/60 leading-relaxed mb-10 selection:bg-blue-500/30 font-medium">
+              The LEVI-AI collective brain is currently undergoing real-time topological wave optimization. 
               Resonance patterns from decentralized interactions are being crystallized into the global neural model, 
-              enhancing the sovereignty of all connected originator nodes.
+              enhancing the sovereignty of all connected originator nodes via local-mesh synchronization.
             </p>
 
-            <div className="flex flex-wrap gap-4">
-              <div className="flex items-center gap-2 px-4 py-2 glass-pill rounded-xl text-[10px] uppercase font-bold text-white/40 border border-white/5">
-                <Shield size={14} className="text-emerald-500" /> AES-256 Memory Hardened
+            <div className="flex flex-wrap gap-4 pt-10 border-t border-white/5">
+              <div className="flex items-center gap-3 px-5 py-3 glass rounded-2xl text-[10px] uppercase font-black text-white/40 border border-white/5 hover:border-emerald-500/20 transition-all">
+                <Shield size={16} className="text-emerald-500" /> AES-256 Memory Hardened
               </div>
-              <div className="flex items-center gap-2 px-4 py-2 glass-pill rounded-xl text-[10px] uppercase font-bold text-white/40 border border-white/5">
-                <Sparkles size={14} className="text-purple-500" /> v13.0.0 Monolith Architecture
+              <div className="flex items-center gap-3 px-5 py-3 glass rounded-2xl text-[10px] uppercase font-black text-white/40 border border-white/5 hover:border-purple-500/20 transition-all">
+                <Sparkles size={16} className="text-purple-500" /> v13.1.0 Monolith Core
+              </div>
+              <div className="flex items-center gap-3 px-5 py-3 glass rounded-2xl text-[10px] uppercase font-black text-white/40 border border-white/5 hover:border-blue-500/20 transition-all">
+                <Activity size={16} className="text-blue-500" /> DCN Pulse v13.1
               </div>
             </div>
           </div>
@@ -112,12 +169,17 @@ const StatCard = ({ title, value, icon: Icon, color, delay }) => (
     initial={{ opacity: 0, y: 20 }}
     animate={{ opacity: 1, y: 0 }}
     transition={{ delay }}
-    className="glass p-6 rounded-3xl border border-white/5 hover:border-white/10 transition-all group"
+    className="glass p-8 rounded-[2rem] border border-white/5 hover:scale-[1.02] hover:border-white/20 transition-all group relative overflow-hidden shadow-xl"
   >
-    <div className={cn("p-2 rounded-xl mb-4 bg-white/5 w-fit group-hover:scale-110 transition-transform", color)}>
-      <Icon size={20} />
+    <div className={cn("p-4 rounded-2xl mb-6 bg-white/5 w-fit group-hover:scale-110 shadow-lg transition-transform", color)}>
+      <Icon size={24} />
     </div>
-    <div className="text-[10px] uppercase tracking-widest text-white/30 mb-1">{title}</div>
-    <div className="text-xl font-bold font-heading text-white truncate">{value}</div>
+    <div className="space-y-1 relative z-10">
+       <div className="text-[10px] uppercase tracking-[0.2em] text-white/20 font-black">{title}</div>
+       <div className="text-2xl font-black font-heading text-white truncate">{value}</div>
+    </div>
+    <div className={cn("absolute -right-4 -bottom-4 w-16 h-16 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity", color)}>
+       <Icon size={64} />
+    </div>
   </motion.div>
 );

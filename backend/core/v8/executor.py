@@ -14,6 +14,10 @@ from backend.services.push_service import PushService
 from backend.core.v8.blackboard import MissionBlackboard
 from backend.core.v8.dreaming_task import DreamingTask
 
+# Absolute Monolith v13: Global GPU Concurrency Guard
+# Prevents CUDA OOM by limiting parallel neural calls across ALL simultaneous missions.
+GLOBAL_GPU_SEMAPHORE = asyncio.Semaphore(4)
+
 logger = logging.getLogger(__name__)
 
 class GraphExecutor:
@@ -58,6 +62,9 @@ class GraphExecutor:
             # 3. State Update & Failure Handling
             for n, res in zip(executable_nodes, wave_results):
                 graph.mark_complete(n.id, res)
+                
+                # Hybrid Persistence: Checkpoint mission state after each task
+                asyncio.create_task(self._checkpoint(user_id, session_id, perception.get("mission_id"), graph))
                 
                 # Telemetry
                 broadcast_mission_event(user_id, "task_complete", {
@@ -127,13 +134,14 @@ class GraphExecutor:
             if agent_name == "human_approval":
                 return await self._handle_human_approval(node, merged_params, perception)
 
-            # 2. Secure Call via AI Service Breaker
-            raw_res = await ai_service_breaker.async_call(
-                call_tool, 
-                agent_name, 
-                merged_params, 
-                perception.get("context", {})
-            )
+            # 2. Secure Call via Global GPU Semaphore & AI Service Breaker
+            async with GLOBAL_GPU_SEMAPHORE:
+                raw_res = await ai_service_breaker.async_call(
+                    call_tool, 
+                    agent_name, 
+                    merged_params, 
+                    perception.get("context", {})
+                )
             
             # 3. Normalize Result
             if not isinstance(raw_res, ToolResult):
@@ -276,3 +284,54 @@ class GraphExecutor:
             else:
                 resolved[key] = value
         return resolved
+    async def _checkpoint(self, user_id: str, session_id: str, mission_id: str, graph: Any):
+        """
+        LeviBrain v13 Hybrid Persistence Pass.
+        Syncs current mission DAG state to Redis (active) and Postgres (recovery).
+        """
+        if not mission_id: return
+        
+        state = {
+            "mission_id": mission_id,
+            "user_id": user_id,
+            "session_id": session_id,
+            "status": "PROCESSING",
+            "progress": graph.get_progress_percentage(),
+            "completed_nodes": [nid for nid, res in graph.results.items() if res.success],
+            "last_checkpoint": datetime.now(timezone.utc).isoformat()
+        }
+        
+        # 1. Redis (Fast pulse for polling)
+        if HAS_REDIS:
+            try:
+                redis_client.setex(f"mission:{mission_id}", 3600, json.dumps(state))
+            except Exception as e:
+                logger.error(f"[Checkpoint] Redis failure: {e}")
+
+        # 2. Postgres (Hard persistence for graduation readiness)
+        try:
+             from backend.db.postgres import PostgresDB
+             from backend.db.models import Mission
+             async with PostgresDB._session_factory() as session:
+                 from sqlalchemy import update, select
+                 # Check if record exists
+                 stmt = select(Mission).where(Mission.mission_id == mission_id)
+                 res = await session.execute(stmt)
+                 record = res.scalar_one_or_none()
+                 
+                 if record:
+                     record.status = "PROCESSING"
+                     record.payload = state
+                     record.updated_at = datetime.now(timezone.utc)
+                 else:
+                     new_record = Mission(
+                         mission_id=mission_id,
+                         user_id=user_id,
+                         status="PROCESSING",
+                         objective="Async Mission", # Standard objective for async
+                         payload=state
+                     )
+                     session.add(new_record)
+                 await session.commit()
+        except Exception as e:
+             logger.error(f"[Checkpoint] Postgres failure: {e}")

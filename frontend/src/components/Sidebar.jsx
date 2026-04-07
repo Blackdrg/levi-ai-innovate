@@ -9,6 +9,7 @@ export const Sidebar = ({ activeView, onViewChange }) => {
 
   const menuItems = [
     { id: "chat", label: "Core Intelligence", icon: MessageSquare, color: "text-purple-400" },
+    { id: "console", label: "Mission Console", icon: Zap, color: "text-purple-500" },
     { id: "studio", label: "AI Studio", icon: Sparkles, color: "text-amber-400" },
     { id: "memory", label: "Memory Archive", icon: Database, color: "text-blue-400" },
     { id: "evolution", label: "Global Evolution", icon: Brain, color: "text-emerald-400" },

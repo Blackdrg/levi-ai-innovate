@@ -98,3 +98,48 @@ async def get_crystallized_traits(current_user: Any = Depends(get_current_user))
             pass
         
     return {"traits": decrypted_traits, "status": "pulsing_v13"}
+
+
+@router.get("/swarm")
+async def get_swarm_status():
+    """
+    Returns the real-time status of the Sovereign DCN Swarm.
+    """
+    from backend.db.redis import r_async
+    
+    if not r_async:
+        return {"status": "offline", "nodes": []}
+
+    try:
+        raw_nodes = await r_async.hgetall("dcn:swarm:nodes")
+        swarm_nodes = []
+        
+        now = datetime.now(timezone.utc).timestamp()
+        
+        for node_id, data_json in raw_nodes.items():
+            try:
+                node_data = json.loads(data_json)
+                last_seen = node_data.get("last_seen", 0)
+                
+                # Mark as offline if no heartbeats for 90s
+                is_online = (now - last_seen) < 90
+                
+                swarm_nodes.append({
+                    "id": node_id,
+                    "status": "online" if is_online else "offline",
+                    "role": node_data.get("node_role", "unknown"),
+                    "cpu": node_data.get("cpu_percent", 0),
+                    "memory": node_data.get("memory_percent", 0),
+                    "last_seen": datetime.fromtimestamp(last_seen, tz=timezone.utc).isoformat()
+                })
+            except Exception:
+                continue
+
+        return {
+            "status": "active" if swarm_nodes else "standalone",
+            "count": len(swarm_nodes),
+            "nodes": swarm_nodes
+        }
+    except Exception as e:
+        logger.error(f"[DCN] Swarm status retrieval failed: {e}")
+        return {"status": "error", "message": str(e)}

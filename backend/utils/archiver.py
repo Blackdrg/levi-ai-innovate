@@ -34,6 +34,11 @@ class SovereignArchiver:
         Archives a batch of memories to encrypted storage.
         Logic: Serialize -> Encrypt -> Dispatch to Cold Storage.
         """
+        from backend.utils.concurrency import CircuitBreaker
+        if CircuitBreaker.is_open():
+            logger.warning(f"[Archiver] Circuit Breaker OPEN. Deferring archival for {user_id}.")
+            return False
+
         if not memories:
             return True
             

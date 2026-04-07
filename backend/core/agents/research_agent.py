@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from backend.core.agent_base import SovereignAgent, AgentResult
 from backend.engines.chat.generation import SovereignGenerator
 from backend.engines.utils.i18n import SovereignI18n
+from backend.core.egress_proxy import egress_proxy
 
 logger = logging.getLogger(__name__)
 
@@ -95,15 +96,12 @@ class ResearchAgent(SovereignAgent[ResearchInput, AgentResult]):
         }
 
     async def _tavily_search(self, query: str, depth: str = "basic") -> Dict[str, Any]:
-        """Safe Tavily execution helper."""
-        # Using a simplified async request for demonstration
-        import aiohttp
+        """Safe Tavily execution helper via Sovereign Egress Proxy."""
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post("https://api.tavily.com/search", json={
-                    "api_key": self.tavily_key, "query": query, "search_depth": depth
-                }) as resp:
-                    return await resp.json()
+            resp = await egress_proxy.post("https://api.tavily.com/search", json={
+                "api_key": self.tavily_key, "query": query, "search_depth": depth
+            })
+            return resp.json()
         except Exception as e:
-            self.logger.error(f"Search failure for '{query}': {e}")
+            self.logger.error(f"[Research-v13] Search logic flux for '{query}': {e}")
             return {"results": []}

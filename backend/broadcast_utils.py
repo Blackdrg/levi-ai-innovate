@@ -56,6 +56,17 @@ class SovereignBroadcaster:
             logger.error(f"[Pulse] Broadcast failure: {e}")
 
     @staticmethod
+    def broadcast(payload: Dict[str, Any], user_id: str = "global"):
+        """
+        Backward-compatible broadcast for dictionary payloads (v13.0.0).
+        Extracts 'type' from payload and maps it to the publish protocol.
+        """
+        event_type = payload.get("type", "pulse_update")
+        # Clean up data by removing internal 'type' field if present
+        data = {k: v for k, v in payload.items() if k != "type"}
+        SovereignBroadcaster.publish(event_type, data, user_id)
+
+    @staticmethod
     async def subscribe(user_id: str = "global", profile: str = "desktop") -> AsyncGenerator[str, None]:
         """
         Sovereign Pulse v4.1: Adaptive Telemetry Stream.

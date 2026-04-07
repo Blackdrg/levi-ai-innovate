@@ -7,6 +7,7 @@ import redis
 import redis.asyncio as aioredis
 from typing import Optional, Any, Dict
 from dotenv import load_dotenv  # type: ignore
+from backend.utils.network import redis_breaker
 
 load_dotenv()
 
@@ -34,12 +35,15 @@ except Exception as e:
 
 def _get(key):
     if HAS_REDIS:
-        return r.get(key)
+        return redis_breaker.call(r.get, key)
     return _memory_cache.get(key)
 
 def _set(key, value, ex=None):
     if HAS_REDIS:
-        r.set(key, value, ex=ex)
+        if ex:
+             redis_breaker.call(r.setex, key, ex, value)
+        else:
+             redis_breaker.call(r.set, key, value)
     else:
         _memory_cache[key] = value
 

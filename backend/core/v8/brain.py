@@ -88,10 +88,10 @@ class LeviBrainCoreController:
         else:
             return await self.run_mission_sync(user_input, user_id, session_id, **kwargs)
 
-    async def run_mission_sync(self, input_text: str, user_id: str, session_id: str, **kwargs) -> Dict[str, Any]:
+    async def run_mission_sync(self, input_text: str, user_id: str, session_id: str, mission_id: Optional[str] = None, **kwargs) -> Dict[str, Any]:
         """High-fidelity synchronous mission execution (v13.0.0)."""
         user_input = input_text
-        request_id = f"v13_{uuid.uuid4().hex[:8]}"
+        request_id = mission_id or f"v13_{uuid.uuid4().hex[:8]}"
         mission_start = datetime.now(timezone.utc)
         logger.info("[LeviBrain] Starting Cognitive Mission: %s", request_id)
 
@@ -269,13 +269,14 @@ class LeviBrainCoreController:
         user_input: str, 
         user_id: str, 
         session_id: str, 
+        mission_id: Optional[str] = None,
         **kwargs
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         High-Fidelity SSE Streaming Pass (v13.0.0).
         Architecture: Metadata -> Perception -> Activity -> Execution -> Token Stream.
         """
-        request_id = f"v13_stream_{uuid.uuid4().hex[:8]}"
+        request_id = mission_id or f"v13_stream_{uuid.uuid4().hex[:8]}"
         logger.info("[V13 Brain] Starting Streaming Mission: %s", request_id)
 
         yield {"event": "metadata", "data": {"request_id": request_id, "status": "pulsing", "version": "v13.0.0"}}
@@ -414,6 +415,7 @@ class LeviBrainCoreController:
         from ..planner import detect_intent
         intent = await detect_intent(user_input)
         context = await self.memory.get_combined_context(user_id, session_id, user_input)
+        context["mission_id"] = kwargs.get("mission_id") or f"miss_{uuid.uuid4().hex[:8]}"
         context.update(kwargs)
         return {
             "input": user_input,

@@ -39,6 +39,14 @@ CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
+# Disaster Recovery & Backup Settings
+DR_RTO_SECONDS = 300      # Recovery Time Objective: 5 minutes
+DR_RPO_SECONDS = 3600     # Recovery Point Objective: 1 hour
+FAISS_SNAPSHOT_INTERVAL_HOURS = 6
+POSTGRES_WAL_BACKUP_ENABLED = True
+NEO4J_BACKUP_INTERVAL_HOURS = 12
+REDIS_APPENDFSYNC = "everysec"
+
 # Resilience Settings
 FAILURE_THRESHOLD = 5
 RETRY_DELAY = 2.0
