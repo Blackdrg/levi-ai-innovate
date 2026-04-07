@@ -9,10 +9,11 @@ import uuid
 import json
 import asyncio
 from typing import Optional, Dict, Any, List
-from fastapi import APIRouter, Depends, Request, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from backend.db.redis import r as redis_client, HAS_REDIS
+from backend.db.postgres_db import get_read_session
 
 from backend.api.utils.auth import get_current_user
 from backend.core.v8.brain import LeviBrainCoreController
@@ -195,6 +196,7 @@ async def approve_mission_node(
     if request.feedback:
         redis_client.set(f"{approval_key}:feedback", request.feedback)
     
+    user_id = current_user.uid if hasattr(current_user, "uid") else "guest"
     await AuditLogger.log_event(
         event_type="HITL",
         action="Human Decision",

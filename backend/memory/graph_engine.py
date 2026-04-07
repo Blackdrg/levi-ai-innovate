@@ -1,7 +1,6 @@
 import logging
 import asyncio
-from typing import Dict, Any, List, Optional
-from datetime import datetime, timezone
+from typing import Dict, Any, List
 from backend.db.neo4j_connector import Neo4jStore
 from backend.db.ontology import KnowledgeTriplet, Entity, EntityType, Relation, RelationType
 from backend.utils.cypher_sanitizer import CypherSanitizer

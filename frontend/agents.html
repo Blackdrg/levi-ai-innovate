@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+    <title>LEVI-AI Agents Registry | Sovereign Swarm</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="./css/styles.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="js/config.js"></script>
+    <script src="js/levi-api.js"></script>
+    <script src="js/shared.js"></script>
+</head>
+<body class="bg-[#050507] text-slate-200 font-['Outfit'] overflow-x-hidden">
+    <!-- Sovereign Navigation -->
+    <nav class="fixed top-0 left-0 right-0 z-50 p-6">
+        <div class="max-w-6xl mx-auto sovereign-glass px-8 py-4 flex justify-between items-center bg-white/5 border border-white/10">
+            <div class="flex items-center gap-4">
+                <span class="text-2xl font-bold tracking-tighter text-neural">LEVI-AI</span>
+                <span class="text-[10px] uppercase tracking-[0.3em] text-slate-500 font-bold border-l border-white/10 pl-4">Agents Registry</span>
+            </div>
+            <div id="sovereign-nav" class="flex items-center gap-8">
+                <!-- Injected via shared.js -->
+            </div>
+        </div>
+    </nav>
+
+    <main class="relative z-10 pt-32 pb-20 px-6 max-w-7xl mx-auto">
+        <header class="mb-12">
+            <h1 class="text-5xl font-bold tracking-tight text-white mb-4">Sovereign <span class="text-neural">Swarm</span></h1>
+            <p class="text-slate-400 text-lg leading-relaxed">Live registry of the 14-agent collective polling /api/v1/agents/status.</p>
+        </header>
+
+        <div class="sovereign-glass overflow-hidden rounded-[32px] border border-white/10 bg-white/5">
+            <table class="w-full text-left text-sm text-slate-300">
+                <thead class="bg-white/5 text-[10px] uppercase tracking-[0.2em] font-bold text-neural border-b border-white/10">
+                    <tr>
+                        <th class="px-8 py-6">Agent</th>
+                        <th class="px-4 py-6">Tier</th>
+                        <th class="px-4 py-6">Model/Fidelity</th>
+                        <th class="px-4 py-6">Daily Dispatches</th>
+                        <th class="px-4 py-6">Latency</th>
+                        <th class="px-8 py-6 text-right">Status</th>
+                    </tr>
+                </thead>
+                <tbody id="agents-table-body" class="divide-y divide-white/5">
+                    <!-- Agent rows will be injected here -->
+                    <tr><td colspan="6" class="px-8 py-20 text-center text-slate-500 italic">Synchronizing swarm data...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <script>
+        async function fetchAgentStatus() {
+            try {
+                const data = await LeviAPI.get('/api/v1/agents/status');
+                const tbody = document.getElementById('agents-table-body');
+                tbody.innerHTML = '';
+
+                data.agents.forEach(agent => {
+                    const row = document.createElement('tr');
+                    row.className = 'hover:bg-white/2 transition-colors';
+                    row.innerHTML = `
+                        <td class="px-8 py-6">
+                            <div class="flex items-center gap-3">
+                                <div class="w-2 h-2 rounded-full ${agent.certified ? 'bg-emerald-500' : 'bg-slate-700'}"></div>
+                                <div>
+                                    <p class="font-bold text-white">${agent.name}</p>
+                                    <p class="text-[10px] text-slate-500 uppercase tracking-widest">${agent.id}</p>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-4 py-6">
+                            <span class="px-2 py-1 rounded bg-white/5 border border-white/10 text-[10px] font-bold text-neural">TIER ${agent.tier}</span>
+                        </td>
+                        <td class="px-4 py-6">
+                            <p class="text-xs">${agent.model}</p>
+                            <div class="w-32 h-1 bg-white/5 rounded-full mt-2 overflow-hidden">
+                                <div class="h-full bg-neural" style="width: ${agent.fidelity * 100}%"></div>
+                            </div>
+                        </td>
+                        <td class="px-4 py-6 text-xs">${agent.daily_dispatches.toLocaleString()}</td>
+                        <td class="px-4 py-6 text-xs">${agent.avg_latency}ms</td>
+                        <td class="px-8 py-6 text-right">
+                            <span class="text-[10px] font-bold uppercase tracking-widest ${agent.online ? 'text-emerald-500' : 'text-rose-500'}">
+                                ${agent.online ? 'Certified' : 'Offline'}
+                            </span>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            } catch (err) {
+                console.error("[Agents] Sync failed:", err);
+            }
+        }
+
+        setInterval(fetchAgentStatus, 5000);
+        fetchAgentStatus();
+    </script>
+</body>
+</html>

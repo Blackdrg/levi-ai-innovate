@@ -1,5 +1,4 @@
 import math
-import operator
 import re
 import logging
 

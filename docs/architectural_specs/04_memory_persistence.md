@@ -1,5 +1,5 @@
 # LEVI-AI: Memory & Persistence Architecture
-### Specification v13.1.0-Hardened-PROD
+### Specification v14.0.0-Autonomous-SOVEREIGN
 
 ---
 
@@ -111,4 +111,4 @@ async def absolute_wipe(user_id: str):
 
 ---
 
-*© 2026 LEVI-AI Sovereign Hub — Memory Architecture Specification v13.1.0-Hardened-PROD*
+*© 2026 LEVI-AI Sovereign Hub — Memory Architecture Specification v14.0.0-Autonomous-SOVEREIGN*

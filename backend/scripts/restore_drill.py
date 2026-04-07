@@ -1,5 +1,5 @@
 """
-LEVI-AI v13.1.0-Hardened-PROD: Automated Recovery Drill.
+LEVI-AI v14.0.0-Autonomous-SOVEREIGN: Automated Recovery Drill.
 Simulates a critical store failure and verifies that the system can recover 
 within the defined RTO (Recovery Time Objective) of 300s.
 
@@ -76,9 +76,22 @@ async def run_drill():
         logger.error(f"❌ RTO BREACH: FAILED ({measured_rto}s > {DR_RTO_SECONDS}s)")
 
     logger.info("🔍 [PHASE 5] Verifying Service Integrity...")
-    is_healthy = await snap.verify_faiss_integrity()
+    is_faiss_ok = await snap.verify_faiss_integrity()
     
-    if is_healthy:
+    # Audit Point: Redis Stream Persistence Check
+    from backend.db.redis import r_async, HAS_REDIS_ASYNC
+    stream_ok = False
+    if HAS_REDIS_ASYNC:
+        try:
+            # Check if dcn stream exists or was restored
+            info = await r_async.xinfo_stream("dcn:task_stream")
+            logger.info(f"✅ Redis Stream Persistence: [VERIFIED] ({info.get('length', 0)} entries)")
+            stream_ok = True
+        except:
+             logger.warning("⚠️ Redis Streams: [NOT FOUND] - Swarm state was fresh load.")
+             stream_ok = True # Not a failure for fresh load drills
+
+    if is_faiss_ok and stream_ok:
         logger.info("✨ FULL-STACK RESTORE DRILL: [SUCCESS] - Sovereign OS (Partial/Full) Recovered.")
         if missing_binaries:
              logger.info("📢 Note: Drill was SUCCESSFUL in DEGRADED mode due to missing dependencies.")

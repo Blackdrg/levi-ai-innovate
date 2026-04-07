@@ -1,7 +1,6 @@
 import logging
-from typing import Dict, Any, List
 from fastapi import APIRouter, Depends, Query, HTTPException
-from sqlalchemy import select, func
+from sqlalchemy import select
 from backend.db.postgres_db import get_write_session, get_read_session
 from backend.db.models import MarketplaceAgent, CustomAgent
 from backend.auth import get_current_user

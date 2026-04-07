@@ -1,17 +1,13 @@
 # pyright: reportMissingImports=false
 """API Tests."""
-import sys
-import os
 from io import BytesIO
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 
 # conftest.py in the same directory will automatically provide fixtures
 # but we still need basic imports for mocking
 
-from backend.main import app
-from backend.auth import get_current_user  # type: ignore
 
 # Globally mock get_current_user for all tests in this file - now handled by conftest.py's app_client fixture
 @pytest.fixture(autouse=True)

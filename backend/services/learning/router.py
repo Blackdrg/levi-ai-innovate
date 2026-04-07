@@ -10,11 +10,9 @@ Provides endpoints for:
   - POST /model/export     : Trigger training data export (creator/admin)
 """
 import logging
-import hashlib
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
-from pydantic import BaseModel, Field, field_validator
 from backend.services.learning.models import FeedbackRequest
 
 from backend.auth import get_current_user, get_current_user_optional

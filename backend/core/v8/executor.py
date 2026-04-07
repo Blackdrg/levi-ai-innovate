@@ -1,12 +1,15 @@
-import logging
 import asyncio
 import json
 import uuid
-from typing import Dict, Any, List, Set, Coroutine, Optional
-from ..orchestrator_types import ToolResult, IntentResult
+import logging
+from typing import Dict, Any, List, Optional
+from ..orchestrator_types import ToolResult
 from ..tool_registry import call_tool
 from backend.db.redis import r as redis_client, HAS_REDIS
 from ...utils.network import ai_service_breaker
+
+# Initialize Logger (v13.1 Resilience)
+logger = logging.getLogger(__name__)
 
 # V8. bridge: Telemetry & Swarm Intelligence
 from backend.api.v8.telemetry import broadcast_mission_event
@@ -14,14 +17,25 @@ from backend.services.push_service import PushService
 from backend.core.v8.blackboard import MissionBlackboard
 from backend.core.v8.dreaming_task import DreamingTask
 from backend.utils.audit import AuditLogger
-import asyncio
+from backend.core.v13.vram_guard import VRAMGuard, VRAMPool
 
-from backend.config.system import CU_ABORT_THRESHOLD, CU_WARNING_PERCENT, HITL_STRICT_MODE
+from backend.config.system import CU_ABORT_THRESHOLD, CU_WARNING_PERCENT
 from backend.utils.metrics import MISSION_COMPLETED, MISSION_ABORTED, MISSION_CU, GPU_SEMAPHORE_AVAILABLE
 
-# Absolute Monolith v13: Global GPU Concurrency Guard
-# Prevents CUDA OOM by limiting parallel neural calls across ALL simultaneous missions.
-GLOBAL_GPU_SEMAPHORE = asyncio.Semaphore(4)
+# Absolute Monolith v13: Hardware-Aware VRAM Resource Pool
+# Replaced static Semaphore(4) with a model-aware unit allocator.
+GLOBAL_VRAM_GUARD = VRAMGuard()
+GLOBAL_VRAM_POOL = None 
+
+# Compatibility Bridge for legacy telemetry
+class SemaphoreAdapter:
+    def __init__(self, pool): self.pool = pool
+    @property
+    def _value(self): return self.pool.available_mb if self.pool else 4
+    def locked(self): return (self.pool.available_mb < 4096) if self.pool else False
+    async def __aenter__(self): pass # Context support for legacy "async with"
+    async def __aexit__(self, *args): pass
+GLOBAL_GPU_SEMAPHORE = None 
 
 class GraphExecutor:
     """
@@ -29,14 +43,28 @@ class GraphExecutor:
     Implements topological parallel execution with 'Retry + Compensate' logic.
     """
 
-    async def run(self, graph: Any, perception: Dict[str, Any], concurrency_limit: int = 4) -> List[ToolResult]:
-        logger.info("[V9 Executor] Initiating Robust Topological Wave Execution (Concurrency: %d)...", concurrency_limit)
+    async def run(self, graph: Any, perception: Dict[str, Any], concurrency_limit: Optional[int] = None) -> List[ToolResult]:
+        """
+        LeviBrain v13.1: Orchestrates mission execution with Dynamic VRAM Pool Guarding.
+        """
+        global GLOBAL_VRAM_POOL, GLOBAL_GPU_SEMAPHORE
+        if GLOBAL_VRAM_POOL is None:
+            # 🛡️ Graduation Audit: Secure Hardware-Aware Pool Initialization
+            slots = await GLOBAL_VRAM_GUARD.get_device_slots()
+            total_vram_mb = sum(s["vram_total_mb"] for s in slots)
+            
+            # Initial Pool with 15% safety buffer
+            usable_vram_mb = int(total_vram_mb * (1 - 0.15))
+            GLOBAL_VRAM_POOL = VRAMPool(usable_vram_mb)
+            GLOBAL_GPU_SEMAPHORE = SemaphoreAdapter(GLOBAL_VRAM_POOL)
+            
+            logger.info(f"[V13 Executor] Dynamic VRAM Pool Initialized: {usable_vram_mb}MB available across {len(slots)} devices.")
+
+        concurrency_limit = concurrency_limit or 4 # Default if pool logic fails
+        logger.info("[V9 Executor] Initiating Robust Topological Wave Execution...")
         user_id = perception.get("user_id", "default_user")
-        session_id = perception.get("session_id", "default_session")
         
-        broadcast_mission_event(user_id, "mission_start", {"graph_size": len(graph.nodes), "input": perception.get("input")})
-        
-        # v9.8.1 Production Resilience: TaskSemaphore
+        # v9.8.1 Production Resilience: TaskSemaphore (Local concurrency limit)
         semaphore = asyncio.Semaphore(concurrency_limit)
         
         async def _sem_execute(node):
@@ -44,8 +72,34 @@ class GraphExecutor:
                 return await self._execute_node_with_retry(node, graph, perception)
 
         # Swarm Intelligence: Initialize Blackboard
+        session_id = perception.get("session_id", "default_session")
+        mission_id = perception.get("mission_id")
         blackboard = MissionBlackboard(session_id)
-        await blackboard.clear()
+        
+        # 🛡️ v13.2 Resilience: Partial Mission Resume
+        # Check if we are resuming an aborted mission
+        start_wave = 1
+        if mission_id:
+             try:
+                 from backend.db.postgres_db import PostgresDB
+                 from sqlalchemy import select
+                 from backend.db.models import AbortedMission
+                 from backend.core.v8.brain import ToolResult as BrainToolResult
+                 async with PostgresDB._session_factory() as session:
+                     stmt = select(AbortedMission).where(AbortedMission.mission_id == mission_id)
+                     res = await session.execute(stmt)
+                     abortion = res.scalar_one_or_none()
+                     if abortion:
+                         logger.info(f"♻️ [Resilience] Resuming mission {mission_id} from wave {abortion.wave_index}.")
+                         start_wave = abortion.wave_index
+                         # Restore results to graph
+                         for nid, raw_res in abortion.frozen_dag.get("results", {}).items():
+                             graph.mark_complete(nid, BrainToolResult(**raw_res))
+             except Exception as e:
+                 logger.error(f"[Resilience] Failed to fetch abortion record for resume: {e}")
+
+        if start_wave == 1:
+            await blackboard.clear()
         
         # 📊 v13.1 Phase 5: CU Resource Tracking
         total_cu_consumed = 0
@@ -53,13 +107,16 @@ class GraphExecutor:
         ceiling = CU_ABORT_THRESHOLD
         warning_threshold = ceiling * CU_WARNING_PERCENT
         
-        # Monitor Semaphore (v13.1)
+        # Monitor Semaphore (v13.1 / Telemetry Bridge)
         GPU_SEMAPHORE_AVAILABLE.set(GLOBAL_GPU_SEMAPHORE._value)
 
         # 1. Topological Wave Execution Loop
         wave_index = 0
         while not graph.is_complete():
             wave_index += 1
+            if wave_index < start_wave:
+                continue # Skip already completed waves during resume
+                
             executable_nodes = graph.get_ready_tasks()
             
             if not executable_nodes:
@@ -81,7 +138,9 @@ class GraphExecutor:
                 graph.mark_complete(n.id, res)
                 
                 # Hybrid Persistence: Checkpoint mission state after each task
-                asyncio.create_task(self._checkpoint(user_id, session_id, perception.get("mission_id"), graph))
+                try:
+                    asyncio.create_task(self._checkpoint(user_id, session_id, perception.get("mission_id"), graph))
+                except: pass
                 
                 # Telemetry & CU Accounting
                 cu_cost = res.cost_score if hasattr(res, 'cost_score') else 1
@@ -157,7 +216,7 @@ class GraphExecutor:
         return last_result
 
     async def _execute_node(self, node: Any, previous_results: Dict[str, ToolResult], perception: Dict[str, Any]) -> ToolResult:
-        """Single node execution pass."""
+        """Single node execution pass with VRAM Guarding."""
         agent_name = node.agent
         start_time = asyncio.get_event_loop().time()
         session_id = perception.get("session_id", "default_session")
@@ -175,48 +234,76 @@ class GraphExecutor:
             "__node_metadata__": node.metadata
         }
         
+        # 🛠️ Adaptive Backpressure: Mental Compression (v13.2)
+        model_tier = getattr(node, 'tier', "L2")
+        vram_needed = GLOBAL_VRAM_GUARD.get_vram_requirement(model_tier)
+        
+        # If GPU pool is saturated, we attempt 'Mental Compression' for non-critical nodes.
+        if GLOBAL_VRAM_POOL and GLOBAL_VRAM_POOL.available_mb < vram_needed and not getattr(node, 'critical', False):
+             logger.warning(f"🔋 [Backpressure] GPU Saturated for tier {model_tier}. Triggering Mental Compression for {node.id}")
+             agent_name = "mental_compressor"
+             merged_params["original_agent"] = node.agent
+             merged_params["reason"] = "resource_exhaustion"
+             vram_needed = GLOBAL_VRAM_GUARD.get_vram_requirement("L1") # 4GB for compressor
+        
         try:
             # 1.5. HITL: Human Approval Gate (v13.0)
             if agent_name == "human_approval":
                 return await self._handle_human_approval(node, merged_params, perception)
 
-            # 2. Secure Call via Global GPU Semaphore & AI Service Breaker
-            async with GLOBAL_GPU_SEMAPHORE:
-                await AuditLogger.log_event(
-                    event_type="AGENT",
-                    action="Dispatch",
-                    user_id=perception.get("user_id"),
-                    resource_id=agent_name,
-                    metadata={"mission_id": perception.get("mission_id"), "step_id": node.id}
-                )
-                raw_res = await ai_service_breaker.async_call(
-                    call_tool, 
-                    agent_name, 
-                    merged_params, 
-                    perception.get("context", {})
-                )
-                
-                await AuditLogger.log_event(
-                    event_type="AGENT",
-                    action="Result",
-                    user_id=perception.get("user_id"),
-                    resource_id=agent_name,
-                    status="success" if getattr(raw_res, 'success', True) else "failed",
-                    metadata={"mission_id": perception.get("mission_id")}
-                )
+            # 2. Secure Call via Global VRAM Pool & AI Service Breaker
+            if GLOBAL_VRAM_POOL:
+                # v14.0: Burst Mode allowed for L3/L4 tiers or high-load
+                is_local = await GLOBAL_VRAM_POOL.acquire(vram_needed, burst_mode=(model_tier in ["L3", "L4"]))
+                if not is_local:
+                    logger.warning(f"🚀 [Cloud Burst] Routing {agent_name} to cloud for mission {session_id}")
+                    # Transition to Cloud Fallback
+                    from backend.core.v13.cloud_burst_agent import CloudBurstAgent
+                    burst_agent = CloudBurstAgent()
+                    raw_res = await burst_agent.run(agent_name, merged_params, context=perception.get("context", {}))
+                    return raw_res
             
-            # 3. Normalize Result
-            if not isinstance(raw_res, ToolResult):
-                 result = ToolResult(**raw_res) if isinstance(raw_res, dict) else ToolResult(success=True, message=str(raw_res), agent=agent_name)
-            else:
-                 result = raw_res
-                 
-            result.latency_ms = int((asyncio.get_event_loop().time() - start_time) * 1000)
-            return result
+            try:
+                async with ai_service_breaker:
+                    await AuditLogger.log_event(
+                        event_type="AGENT",
+                        action="Dispatch",
+                        user_id=perception.get("user_id"),
+                        resource_id=agent_name,
+                        metadata={"mission_id": perception.get("mission_id"), "step_id": node.id, "vram_mb": vram_needed}
+                    )
+                    raw_res = await call_tool(
+                        agent_name, 
+                        merged_params, 
+                        perception.get("context", {})
+                    )
+                    
+                    await AuditLogger.log_event(
+                        event_type="AGENT",
+                        action="Result",
+                        user_id=perception.get("user_id"),
+                        resource_id=agent_name,
+                        status="success" if getattr(raw_res, 'success', True) else "failed"
+                    )
+
+                # 3. Normalize Result
+                if not hasattr(raw_res, 'success'):
+                    from ..orchestrator_types import ToolResult as OrthoToolResult
+                    result = OrthoToolResult(**raw_res) if isinstance(raw_res, dict) else OrthoToolResult(success=True, message=str(raw_res), agent=agent_name)
+                else:
+                    result = raw_res
+                     
+                result.latency_ms = int((asyncio.get_event_loop().time() - start_time) * 1000)
+                return result
+
+            finally:
+                if GLOBAL_VRAM_POOL:
+                    await GLOBAL_VRAM_POOL.release(vram_needed)
             
         except Exception as e:
             logger.exception("[V9 Executor] Execution drift for %s: %s", agent_name, e)
-            return ToolResult(success=False, error=str(e), agent=agent_name)
+            from ..orchestrator_types import ToolResult as OrthoToolResult
+            return OrthoToolResult(success=False, error=str(e), agent=agent_name)
 
     async def _handle_human_approval(self, node: Any, params: Dict[str, Any], perception: Dict[str, Any]) -> ToolResult:
         """
@@ -411,7 +498,7 @@ class GraphExecutor:
              from backend.db.postgres import PostgresDB
              from backend.db.models import Mission
              async with PostgresDB._session_factory() as session:
-                 from sqlalchemy import update, select
+                 from sqlalchemy import select
                  # Check if record exists
                  stmt = select(Mission).where(Mission.mission_id == mission_id)
                  res = await session.execute(stmt)

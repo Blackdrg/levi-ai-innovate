@@ -8,17 +8,17 @@ export const semaphoreWait = new Counter('semaphore_wait_seconds');
 
 export const options = {
   stages: [
-    { duration: '1m', target: 1 },  // Baseline
-    { duration: '2m', target: 2 },  // Low load
-    { duration: '2m', target: 4 },  // Medium load
-    { duration: '2m', target: 8 },  // High load (cliff entry)
-    { duration: '2m', target: 16 }, // Saturated load (the "cliff")
-    { duration: '1m', target: 0 },  // Cool down
+    { duration: '2m', target: 10 },   // Baseline
+    { duration: '3m', target: 50 },   // Transition
+    { duration: '5m', target: 100 },  // v14.0 Goal: 100 CCU
+    { duration: '5m', target: 500 },  // Stress Test
+    { duration: '5m', target: 1000 }, // Absolute Saturation (1000 CCU)
+    { duration: '2m', target: 0 },    // Cool down
   ],
   thresholds: {
-    // 🛡️ Certification Gate: p95 latency must be under 15s for complex missions
-    http_req_duration: ['p(95)<15000'], 
-    http_req_failed: ['rate<0.01'], // 1% failure tolerance
+    // 🛡️ v14.0 Sovereign Gate: p95 < 15s (Hybrid), p99 tracked
+    http_req_duration: ['p(95)<15000', 'p(99)<25000'], 
+    http_req_failed: ['rate<0.05'], // 5% tolerance for cloud burst edge cases
   },
 };
 

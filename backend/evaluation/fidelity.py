@@ -80,7 +80,6 @@ class FidelityCritic:
         Performs a multi-dimensional fidelity audit.
         Dimensions: Goal Alignment, Factual Grounding, Tone Resonance.
         """
-        from backend.core.planner import call_lightweight_llm
         
         critic_prompt = (
             "You are the Sovereign Critic v13. Audit this LEVI-AI mission response.\n"

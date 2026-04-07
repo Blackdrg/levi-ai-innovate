@@ -3,7 +3,7 @@ import logging
 import subprocess
 import uuid
 import tempfile
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 logger = logging.getLogger(__name__)
 

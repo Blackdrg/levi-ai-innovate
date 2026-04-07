@@ -1,5 +1,4 @@
 # backend/utils/exceptions.py
-from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 from datetime import datetime
 

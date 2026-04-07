@@ -1,7 +1,7 @@
 # backend/services/notifications/email.py
 import os
 import logging
-from typing import Optional, Any
+from typing import Any
 import resend  # type: ignore
 
 logger = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ def send_email_notification(to_email: str, subject: str, html_content: str):
 
 def send_welcome_email(user_email: str, user_name: str):
     subject = f"Welcome to the Sovereign Mind, {user_name} ✨"
-    html = f"<div><h2>Greetings seeker.</h2><p>Your journey with LEVI begins now.</p></div>"
+    html = "<div><h2>Greetings seeker.</h2><p>Your journey with LEVI begins now.</p></div>"
     return send_email_notification(user_email, subject, html)
 
 def send_payment_success_email(user_email: str, plan: str, amount: float):

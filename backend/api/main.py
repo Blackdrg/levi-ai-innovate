@@ -1,16 +1,16 @@
 """
-LEVI-AI: Sovereign OS v13.1.0-Hardened-PROD.
+LEVI-AI: Sovereign OS v14.0.0-Autonomous-SOVEREIGN.
 Central Gateway & Service Orchestrator.
 """
 
 import os
 import logging
 import time
-import json
 from datetime import datetime, timezone
-from fastapi import FastAPI, Request, Response, HTTPException
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from contextlib import asynccontextmanager
+from typing import Dict, Any, List, Optional
 from backend.utils.metrics import MetricsHub
 
 from backend.config.system import SOVEREIGN_VERSION, CLOUD_FALLBACK_ENABLED, CORS_ORIGINS
@@ -44,10 +44,56 @@ from backend.core.model_router import ModelRouter
 
 logger = logging.getLogger(__name__)
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # --- Startup Graduation Audit ---
+    logger.info(f"🛡️ Validating LEVI-AI Stack Graduation ({SOVEREIGN_VERSION})...")
+    logger.info(f"☁️ Cloud Fallback: {'ENABLED' if CLOUD_FALLBACK_ENABLED else 'DISABLED (Local-Only Mode)'}")
+    
+    try:
+        from backend.db.postgres_db import verify_resonance
+        from backend.db.partitions import ensure_audit_partitions
+        if await verify_resonance():
+            logger.info("✅ Database resonance confirmed. Local persistence active.")
+            await ensure_audit_partitions()
+        else:
+            logger.warning("⚠️ Database sync drift detected.")
+    except Exception as e:
+        logger.error(f"❌ Startup Audit failed: {e}")
+
+    # 🛡️ DCN Gossip Layer (v14.0.0-Autonomous)
+    try:
+        import asyncio
+        from backend.core.dcn_protocol import DCNProtocol
+        dcn = DCNProtocol()
+        if dcn.is_active:
+            # 1. Start Listener
+            asyncio.create_task(dcn.start_listener(gossip_handler))
+            
+            # 2. Start Autonomous Heartbeat
+            os.environ["NODE_ROLE"] = os.getenv("NODE_ROLE", "coordinator")
+            asyncio.create_task(dcn.start_heartbeat(interval=30))
+            logger.info(f"[DCN] Swarm Presence: [ESTABLISHED] Mode: {os.environ['NODE_ROLE']}")
+
+            # 3. Start Distributed Worker Loop
+            if os.getenv("DISTRIBUTED_MODE", "false").lower() == "true":
+                from backend.core.executor.distributed import DistributedGraphExecutor
+                from backend.db.redis import r_async as redis_client
+                dist_executor = DistributedGraphExecutor(redis_client)
+                asyncio.create_task(dist_executor.worker_loop())
+                logger.info("[DCN] Distributed Worker Loop: [ACTIVE]")
+    except Exception as e:
+        logger.error(f"[DCN] Failed to initialize gossip/worker: {e}")
+        
+    yield
+    # --- Shutdown logic if needed ---
+    logger.info("🔌 Sovereign OS shutting down...")
+
 app = FastAPI(
     title="LEVI-AI Distributed Stack",
     version=SOVEREIGN_VERSION,
-    description="Sovereign AI Operating System (v13.1.0-Hardened-PROD Graduation)"
+    description="Sovereign AI Operating System (v14.0.0-Autonomous-SOVEREIGN Graduation)",
+    lifespan=lifespan
 )
 
 # 1. Security Hardening (CORS)
@@ -120,44 +166,9 @@ async def gossip_handler(pulse: Dict[str, Any]):
     else:
         logger.warning(f"[DCN] Unknown pulse received from {node}: {pulse_type}")
 
-@app.on_event("startup")
-async def graduation_audit():
-    logger.info(f"🛡️ Validating LEVI-AI Stack Graduation ({SOVEREIGN_VERSION})...")
-    logger.info(f"☁️ Cloud Fallback: {'ENABLED' if CLOUD_FALLBACK_ENABLED else 'DISABLED (Local-Only Mode)'}")
-    
-    try:
-        if await verify_resonance():
-            logger.info("✅ Database resonance confirmed. Local persistence active.")
-            # Ensure Audit Log Partitions (v13.1.0)
-            await ensure_audit_partitions()
-        else:
-            logger.warning("⚠️ Database sync drift detected.")
-    except Exception as e:
-        logger.error(f"❌ Startup Audit failed: {e}")
-
-    # 🛡️ DCN Gossip Layer (v2.0)
-    try:
-        dcn = DCNProtocol()
-        if dcn.is_active:
-            # 1. Start Listener
-            await dcn.start_listener(gossip_handler)
-            
-            # 2. Start Autonomous Heartbeat (Audit Point 27)
-            os.environ["NODE_ROLE"] = os.getenv("NODE_ROLE", "coordinator")
-            await dcn.start_heartbeat(interval=30)
-            logger.info(f"[DCN] Swarm Presence: [ESTABLISHED] Mode: {os.environ['NODE_ROLE']}")
-
-            # 3. Start Distributed Worker Loop (Task Stealing Participator)
-            if os.getenv("DISTRIBUTED_MODE", "false").lower() == "true":
-                from backend.core.executor.distributed import DistributedGraphExecutor
-                from backend.db.redis import r_async as redis_client
-                dist_executor = DistributedGraphExecutor(redis_client)
-                asyncio.create_task(dist_executor.worker_loop())
-                logger.info("[DCN] Distributed Worker Loop: [ACTIVE]")
-    except Exception as e:
-        logger.error(f"[DCN] Failed to initialize gossip/worker: {e}")
 
 @app.get("/")
+@app.get("/api/v1/health")
 @app.get("/health")
 async def health_status():
     """Official Pulse of the Distributed AI Stack."""
@@ -170,7 +181,32 @@ async def health_status():
         "resonance": "GRADUATED"
     }
 
-# --- Prometheus Observability (v13.1) ---
+@app.get("/api/v1/ready")
+@app.get("/ready")
+async def ready_status():
+    """Surgical readiness probe for Docker/K8s."""
+    from backend.db.redis import r_async as redis
+    from backend.db.postgres_db import verify_resonance
+    
+    redis_alive = False
+    try:
+        await redis.ping()
+        redis_alive = True
+    except:
+        pass
+        
+    db_alive = await verify_resonance()
+    
+    status = "ready" if redis_alive and db_alive else "degraded"
+    
+    return {
+        "status": status,
+        "redis": "connected" if redis_alive else "disconnected",
+        "postgres": "resonant" if db_alive else "offline",
+        "ts": datetime.now(timezone.utc).isoformat()
+    }
+
+# --- Prometheus Observability (v14.0) ---
 @app.get("/metrics")
 async def get_metrics():
     """Exposes real-time system and mission telemetry for Prometheus."""

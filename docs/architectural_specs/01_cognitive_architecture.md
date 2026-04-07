@@ -1,5 +1,5 @@
 # LEVI-AI: Cognitive Architecture Deep Dive
-### Architectural Specification v13.1.0-Hardened-PROD
+### Architectural Specification v14.0.0-Autonomous-SOVEREIGN
 
 ---
 
@@ -103,4 +103,4 @@ graph LR
 
 ---
 
-*© 2026 LEVI-AI Sovereign Hub — Architectural Specification v13.1.0-Hardened-PROD*
+*© 2026 LEVI-AI Sovereign Hub — Architectural Specification v14.0.0-Autonomous-SOVEREIGN*

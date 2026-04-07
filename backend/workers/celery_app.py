@@ -4,7 +4,6 @@ Central Celery application for background execution and periodic Cog-Ops.
 """
 
 from celery import Celery # type: ignore
-import logging
 import os
 import sys
 

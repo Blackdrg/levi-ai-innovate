@@ -1,6 +1,6 @@
-# 🚀 Production Launch Manifest (v13.1.0-Hardened-PROD)
+# 🚀 Production Launch Manifest (v14.0.0-Autonomous-SOVEREIGN)
 
-The complete service set for the graduation to the v13.1.0-Hardened-PROD Local-First Distributed Stack.
+The complete service set for the graduation to the v14.0.0-Autonomous-SOVEREIGN Local-First Distributed Stack.
 
 ---
 
@@ -8,8 +8,8 @@ The complete service set for the graduation to the v13.1.0-Hardened-PROD Local-F
 
 | Service | Image/Engine | Role | Status |
 | :--- | :--- | :--- | :--- |
-| **Brain API** | `levi-backend:v13.1.0-Hardened-PROD` | **The Controller** (FastAPI, Mission Orchestrator) | Active |
-| **Task Worker** | `celery:v13.1.0-Hardened-PROD` | **The Swarm** (Agent Execution, Background Tasks) | Active |
+| **Brain API** | `levi-backend:v14.0.0-Autonomous-SOVEREIGN` | **The Controller** (FastAPI, Mission Orchestrator) | Active |
+| **Task Worker** | `celery:v14.0.0-Autonomous-SOVEREIGN` | **The Swarm** (Agent Execution, Background Tasks) | Active |
 | **Episodic Memory** | `postgres:15-alpine` | **Relational Persistence** (Profiles, Mission Logs) | Active |
 | **Working Memory** | `redis:7-alpine` | **Task Queue & Cache** (Mission State, Rate Limiting) | Active |
 | **Semantic Memory** | `faiss-service` | **Vector Vault** (Semantic facts, Embeddings) | Active |

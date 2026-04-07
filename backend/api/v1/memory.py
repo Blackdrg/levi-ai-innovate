@@ -6,8 +6,7 @@ Hardened for identity-aware archival and pruning.
 """
 
 import logging
-from typing import Optional, List, Dict, Any
-from fastapi import APIRouter, Depends, Request, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from backend.auth.logic import get_current_user as get_sovereign_identity

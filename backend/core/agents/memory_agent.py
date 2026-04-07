@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
 from pydantic import BaseModel, Field
 from backend.core.agent_base import SovereignAgent, AgentResult
 from backend.engines.memory.vault import MemoryVault
@@ -33,7 +33,6 @@ class MemoryAgent(SovereignAgent[MemoryInput, AgentResult]):
         self.logger.info(f"Recalling Memory Mission for {user_id}: '{query[:40]}'")
 
         # 1. Engage Memory Vault (FAISS/Firestore Bridge)
-        from backend.engines.memory.vault import MemoryVault
         memory_data = await MemoryVault.get_combined_context(user_id, query)
         
         traits = memory_data.get("long_term", {}).get("traits", [])

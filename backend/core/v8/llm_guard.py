@@ -1,6 +1,6 @@
 import re
 import logging
-from typing import Dict, Any, List
+from typing import Dict, Any
 
 logger = logging.getLogger(__name__)
 
@@ -55,14 +55,14 @@ class LLMGuard:
              return False
              
         if engine_capable:
-             logger.info(f"[LLMGuard] Blocking LLM: Engine Capability Detected.")
+             logger.info("[LLMGuard] Blocking LLM: Engine Capability Detected.")
              return False
 
         if memory_match >= 0.7:
              logger.info(f"[LLMGuard] Blocking LLM: Direct Memory Match ({memory_match}).")
              return False
 
-        logger.info(f"[LLMGuard] Allowing LLM: Neural Fallback required.")
+        logger.info("[LLMGuard] Allowing LLM: Neural Fallback required.")
         return True
 
     @staticmethod

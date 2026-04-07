@@ -9,7 +9,6 @@ import logging
 import time
 import sys
 import os
-from datetime import datetime, timezone
 
 # Ensure we can import from the project root
 sys.path.append(os.getcwd())

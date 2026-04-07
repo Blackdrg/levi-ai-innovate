@@ -7,9 +7,7 @@ In-Context Learning (ICL) to full Parameter-Efficient Fine-Tuning (PEFT).
 """
 
 import logging
-import asyncio
 from datetime import datetime, timedelta
-from typing import Dict, Any, Optional
 
 from backend.db.redis import r as redis_client, HAS_REDIS
 from backend.services.learning.logic import get_learning_stats

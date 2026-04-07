@@ -1,12 +1,11 @@
 import logging
 import uuid
-from typing import Dict, Any, List
-from fastapi import APIRouter, Depends, Query, HTTPException
+from typing import Dict, Any
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from backend.db.postgres_db import get_write_session, get_read_session
 from backend.db.models import CustomAgent
 from backend.auth import get_current_user
-from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/agents", tags=["Custom Agents"])

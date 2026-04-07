@@ -3,9 +3,7 @@
 Sovereign Chat Service Router (v7 Unification).
 Legacy entry point redirected to the production-grade LeviBrain engine.
 """
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import StreamingResponse
-import json
+from fastapi import APIRouter, Depends
 
 from backend.auth import get_current_user_optional
 from backend.api.chat import conversational_stream_endpoint, conversational_endpoint

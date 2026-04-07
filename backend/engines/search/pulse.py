@@ -6,7 +6,7 @@ Deep Research Protocol with Recursive Discovery.
 """
 
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
 from backend.services.orchestrator.agents.research_agent import ResearchAgent
 
 logger = logging.getLogger(__name__)

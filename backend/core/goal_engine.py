@@ -5,7 +5,7 @@ Transforms user intent and perception into a formal cognitive goal.
 
 import logging
 import uuid
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)

@@ -1,13 +1,9 @@
 # backend/services/studio/video_logic.py
-import os
-import uuid
-import logging
 import asyncio
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 
 from backend.db.firestore_db import db as firestore_db
-from backend.db.redis import r as redis_client, HAS_REDIS
 from backend.utils.logger import get_logger
 
 logger = get_logger("studio_video")

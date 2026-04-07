@@ -5,12 +5,11 @@ Bridges to the finalized v13.0 LeviBrainCoreController.
 """
 
 import logging
-import asyncio
 import uuid
-from typing import Dict, Any, Optional, List, AsyncGenerator, Union
+from typing import Dict, Any, Optional, List, AsyncGenerator
 
 from .v8.brain import LeviBrainCoreController
-from .v8.learning import UserPreferenceModel
+from backend.services.learning.logic import UserPreferenceModel
 from .orchestrator_types import ToolResult
 
 logger = logging.getLogger(__name__)

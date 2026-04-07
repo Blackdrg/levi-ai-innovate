@@ -4,7 +4,7 @@ Automates the creation of child tables for the partitioned 'audit_log'.
 """
 
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from sqlalchemy import text
 from backend.db.postgres_db import get_write_session
 

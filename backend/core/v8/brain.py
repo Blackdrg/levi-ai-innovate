@@ -3,13 +3,13 @@ import uuid
 import asyncio
 import json
 from datetime import datetime, timezone
-from typing import Dict, Any, List, Optional, AsyncGenerator, Union
+from typing import Dict, Any, List, Optional, AsyncGenerator, Union, Tuple
 
 from .goal_engine import GoalEngine
 from .planner import DAGPlanner
 from .executor import GraphExecutor
 from .critic import ReflectionEngine
-from .learning import LearningLoopV13, LearningLoopV8
+from .learning import LearningLoopV13
 from .decision_engine import DecisionEngine
 from .llm_guard import LLMGuard
 from .engines.deterministic_engine import DeterministicEngine
@@ -23,7 +23,7 @@ from .evolution_engine import EvolutionEngine
 from .self_improvement import SelfImprovementLoop
 from backend.agents.consensus_agent import ConsensusAgentV11
 from backend.memory.manager import MemoryManager
-from ..orchestrator_types import ToolResult, IntentResult
+from ..orchestrator_types import ToolResult
 from backend.api.v8.telemetry import broadcast_mission_event
 from backend.utils.usage import count_tokens, estimate_cost
 

@@ -7,7 +7,7 @@ Refactored into Autonomous Agent Ecosystem.
 import logging
 import json
 from typing import Dict, Any, Optional, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from backend.agents.base import SovereignAgent, AgentResult
 from backend.engines.chat.generation import SovereignGenerator
 from backend.db.redis import r_async as redis_client

@@ -5,7 +5,6 @@ Enables LEVI to expand its capabilities autonomously by parsing external API con
 """
 
 import logging
-import json
 import httpx
 from typing import Dict, Any, List, Optional
 from pydantic import BaseModel
@@ -63,12 +62,12 @@ class DynamicToolFactory:
         code = f'# Dynamic Wrapper for {contract.name}\n'
         code += f'# Base URL: {contract.base_url}\n\n'
         code += 'import httpx\n\n'
-        code += f'async def execute_tool(endpoint_path, params=None):\n'
+        code += 'async def execute_tool(endpoint_path, params=None):\n'
         code += f'    base_url = "{contract.base_url}"\n'
-        code += f'    async with httpx.AsyncClient() as client:\n'
-        code += f'        # V8 Dynamic Dispatch Logic\n'
-        code += f'        url = f"{{base_url}}{{endpoint_path}}"\n'
-        code += f'        # Logic to match method and inject params...\n'
-        code += f'        return await client.get(url, params=params)\n'
+        code += '    async with httpx.AsyncClient() as client:\n'
+        code += '        # V8 Dynamic Dispatch Logic\n'
+        code += '        url = f"{base_url}{endpoint_path}"\n'
+        code += '        # Logic to match method and inject params...\n'
+        code += '        return await client.get(url, params=params)\n'
         
         return code

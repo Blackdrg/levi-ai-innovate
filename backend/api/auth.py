@@ -6,13 +6,11 @@ Refactored from backend/services/auth/router.py.
 """
 
 import logging
-from typing import Optional
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, Response
 
 from backend.utils.exceptions import LEVIException
-from backend.services.auth.logic import get_current_user, get_current_user_optional
-from backend.utils.robustness import standard_retry
+from backend.services.auth.logic import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="", tags=["Auth"])
@@ -58,7 +56,6 @@ async def login(response: Response, payload: dict):
     Standard login - logic verified via Firebase token or direct credentials.
     Returns success and establishing a handshake.
     """
-    from backend.services.auth.logic import get_current_user # ensure we can use it
     uid = payload.get("uid")
     email = payload.get("email")
     
@@ -105,7 +102,7 @@ async def logout(current_user: dict = Depends(get_current_user)):
     """
     Revokes user sessions.
     """
-    from backend.db.redis_client import HAS_REDIS, r as redis
+    from backend.db.redis_client import HAS_REDIS
     if not HAS_REDIS:
         raise LEVIException("Session revocation requires Redis.", status_code=503, error_code="REDIS_UNAVAILABLE")
     

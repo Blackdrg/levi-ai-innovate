@@ -98,40 +98,76 @@ class GraphExecutor:
             tasks = [self._execute_node(n, results, perception, blackboard=blackboard, user_id=user_id, wave_count=wave_count) for n in executable_nodes]
             SovereignBroadcaster.publish("WAVE_STARTED", {"nodes": [n.id for n in executable_nodes], "current_wave": wave_count}, user_id=user_id)
 
-            # --- Distributed Wave Management (v2.0) ---
-            if os.getenv("DISTRIBUTED_MODE", "false").lower() == "true" and HAS_REDIS:
-                from .distributed import DistributedGraphExecutor
-                dist_executor = DistributedGraphExecutor(redis_client)
-                
-                # 1. Enqueue Wave
-                # Convert results to dict of messages/data for serializability
-                previous_results_serializable = {k: v.dict() for k, v in results.items()}
-                await dist_executor.enqueue_wave(mission_id, executable_nodes, perception, previous_results_serializable)
-                
-                # 2. Wait for Results
-                wave_results = []
-                pending_node_ids = set(n.id for n in executable_nodes)
-                
-                start_time = asyncio.get_event_loop().time()
-                timeout = 120 # 2 minute wave timeout
-                
-                while pending_node_ids and (asyncio.get_event_loop().time() - start_time) < timeout:
+            # --- Distributed Wave Management (v2.0-Hardened) ---
+            try:
+                if os.getenv("DISTRIBUTED_MODE", "false").lower() == "true" and HAS_REDIS:
+                    from .distributed import DistributedGraphExecutor
+                    dist_executor = DistributedGraphExecutor(redis_client)
+                    
+                    # 1. Enqueue Wave
+                    previous_results_serializable = {k: v.dict() for k, v in results.items()}
+                    await dist_executor.enqueue_wave(mission_id, executable_nodes, perception, previous_results_serializable)
+                    
+                    # 2. Reactive Result Management (v2.1-Hardened)
+                    pubsub = redis_client.pubsub()
+                    event_channel = f"dcn:mission:{mission_id}:events"
+                    await pubsub.subscribe(event_channel)
+                    
+                    pending_node_ids = set(n.id for n in executable_nodes)
+                    wave_results_map = {}
+                    
+                    # Audit Point: Pre-check for results before long-wait subscription
                     for node_id in list(pending_node_ids):
                         result_key = f"dcn:mission:{mission_id}:result:{node_id}"
                         cached_res = await redis_client.get(result_key)
                         if cached_res:
-                            res_data = json.loads(cached_res)
-                            wave_results.append(ToolResult(**res_data))
+                            wave_results_map[node_id] = ToolResult(**json.loads(cached_res))
                             pending_node_ids.remove(node_id)
+
+                    # Reactive Wait Loop
+                    start_time = asyncio.get_event_loop().time()
+                    timeout = 120 
+                    
+                    try:
+                        while pending_node_ids and (asyncio.get_event_loop().time() - start_time) < timeout:
+                            message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
+                            if message and message["type"] == "message":
+                                data = json.loads(message["data"])
+                                event_type = data.get("event")
+                                tgt_node_id = data.get("node_id")
+                                
+                                if event_type == "node_complete" and tgt_node_id in pending_node_ids:
+                                    result_key = f"dcn:mission:{mission_id}:result:{tgt_node_id}"
+                                    cached_res = await redis_client.get(result_key)
+                                    if cached_res:
+                                        wave_results_map[tgt_node_id] = ToolResult(**json.loads(cached_res))
+                                        pending_node_ids.remove(tgt_node_id)
+                                
+                                elif event_type == "node_failed" and tgt_node_id in pending_node_ids:
+                                    logger.warning(f"⚠️ [DCN] Node {tgt_node_id} reported failure. Re-evaluating...")
+                                    # For v2.1: Simple reactive retry or fallback can be triggered here
+                                    # Currently, we just let the loop continue or break if critical
+                                    pass
+                    finally:
+                        await pubsub.unsubscribe(event_channel)
+                        await pubsub.close()
                     
                     if pending_node_ids:
-                        await asyncio.sleep(1) # Poll interval
-                
-                if pending_node_ids:
-                    logger.error(f"[DCN Executor] Wave timeout. Missing results for: {pending_node_ids}")
-                    # Fallback or error handled below via wave_results mismatch
-            else:
-                # Standard Parallel Execution (Single-Node)
+                        logger.error(f"🚨 [DCN] Wave timeout. Missing: {pending_node_ids}. Attempting LOCAL FALLBACK...")
+                        # Partial local fallback for timed-out nodes
+                        timeout_nodes = [n for n in executable_nodes if n.id in pending_node_ids]
+                        fallback_tasks = [self._execute_node(n, results, perception, blackboard=blackboard, user_id=user_id, wave_count=wave_count) for n in timeout_nodes]
+                        fallback_results = await asyncio.gather(*fallback_tasks)
+                        for n, res in zip(timeout_nodes, fallback_results):
+                            wave_results_map[n.id] = res
+
+                    wave_results = [wave_results_map.get(n.id, ToolResult(success=False, error="DCN Failure")) for n in executable_nodes]
+                else:
+                    # Explicit Local Execution
+                    wave_results = await asyncio.gather(*tasks)
+            except Exception as e:
+                logger.error(f"🛡️ [Resilience] DCN Error: {e}. Falling back to MONOLITH MODE.")
+                # EMERGENCY LOCAL FALLBACK
                 wave_results = await asyncio.gather(*tasks)
 
 

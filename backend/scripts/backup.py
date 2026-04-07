@@ -1,5 +1,4 @@
 import os
-import subprocess
 import datetime
 import logging
 import asyncio
@@ -8,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 class SnapshotOrchestrator:
     """
-    Sovereign v13.1.0-Hardened-PROD Disaster Recovery Hub.
+    Sovereign v14.0.0-Autonomous-SOVEREIGN Disaster Recovery Hub.
     Orchestrates unified snapshots of Postgres, Neo4j, and FAISS.
     Addresses Warning #8 from the audit.
     """

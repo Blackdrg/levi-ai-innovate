@@ -4,7 +4,7 @@ import asyncio
 import hmac
 import hashlib
 import os
-from typing import List, Dict, Any, Optional
+from typing import Dict, Any, Optional
 from pydantic import BaseModel, Field
 from datetime import datetime, timezone
 from backend.redis_client import r as redis_client, HAS_REDIS
@@ -12,11 +12,11 @@ from backend.redis_client import r as redis_client, HAS_REDIS
 logger = logging.getLogger(__name__)
 
 # Secret for fragment signing (Graduation Tier requirement)
-DCN_SECRET = os.getenv("AUDIT_CHAIN_SECRET", "sovereign_monolith_genesis_v13").encode()
+DCN_SECRET = os.getenv("AUDIT_CHAIN_SECRET", "sovereign_monolith_genesis_v14").encode()
 
 class CognitiveFragment(BaseModel):
     """
-    Sovereign v13.1: DCN Fragment Schema.
+    Sovereign v14.0: DCN Fragment Schema.
     Represents a high-fidelity semantic unit for cross-instance sync.
     """
     fragment_id: str = Field(default_factory=lambda: os.urandom(8).hex())
@@ -40,17 +40,17 @@ class CognitiveFragment(BaseModel):
 
 class GossipEngine:
     """
-    Sovereign DCN Protocol v13.1.0 Stable.
+    Sovereign DCN Protocol v14.0.0 Stable.
     Handles gossip propagation of high-fidelity cognitive fragments via Redis PubSub.
     """
-    CHANNEL = "swarm:sync:v13"
+    CHANNEL = "swarm:sync:v14"
 
     def __init__(self):
         self._sync_task: Optional[asyncio.Task] = None
 
     async def fragment_scrubber(self, fidelity: float) -> bool:
         """
-        Sovereign v13.1.0-Hardened-PROD: Fragment Scrubber.
+        Sovereign v14.0.0-Autonomous-SOVEREIGN: Fragment Scrubber.
         Strictly gates inter-node sync to ensure only the highest fidelity data is gossiped.
         """
         SCRUB_THRESHOLD = 0.95 # Section 15.1 Requirement

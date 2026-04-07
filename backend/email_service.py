@@ -9,7 +9,7 @@ import logging
 import smtplib
 from email.mime.text import MIMEText # type: ignore
 from email.mime.multipart import MIMEMultipart # type: ignore
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
 from backend.engines.utils.i18n import SovereignI18n
 
 logger = logging.getLogger(__name__)

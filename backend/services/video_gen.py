@@ -6,17 +6,11 @@ Sovereign Video Synthesis Engine v7.
 - Coqui TTS Integration with High-Fidelity Narration
 """
 
-import os
 import logging
-import asyncio
-import tempfile
-from io import BytesIO
-from typing import Optional, Any, List, Tuple, Dict
-from pydantic import BaseModel, Field
+from typing import Optional, Any, List, Dict
+from pydantic import BaseModel
 
 from backend.engines.chat.generation import SovereignGenerator
-from backend.engines.utils.security import SovereignSecurity
-from backend.services.image_gen import VisualSynthesisService
 
 logger = logging.getLogger(__name__)
 

@@ -1,7 +1,6 @@
 import logging
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi import Request, Response
-from datetime import datetime
 
 logger = logging.getLogger(__name__)
 

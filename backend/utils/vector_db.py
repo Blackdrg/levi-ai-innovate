@@ -88,7 +88,7 @@ class VectorDB:
                             logger.info(f"[VectorDB] Re-indexing collection {self.collection_name}...")
                             await self.rebuild_index()
                         else:
-                            logger.critical(f"[VectorDB] RE-INDEXING FAILED: No raw text found. Manual intervention required.")
+                            logger.critical("[VectorDB] RE-INDEXING FAILED: No raw text found. Manual intervention required.")
                             raise ValueError("Deterministic re-indexing impossible: Text data missing in metadata.")
                             
                 logger.info(f"Loaded collection '{self.collection_name}' with {len(self.metadata)} records.")
@@ -97,7 +97,7 @@ class VectorDB:
 
     async def rebuild_index(self):
         """
-        Sovereign v13.1.0-Hardened-PROD: High-fidelity deterministic re-indexing.
+        Sovereign v14.0.0-Autonomous-SOVEREIGN: High-fidelity deterministic re-indexing.
         Applies L2-normalization for METRIC_INNER_PRODUCT (Cosine Similarity).
         Preserves tenant_id and versioning for absolute isolation.
         """
@@ -128,14 +128,14 @@ class VectorDB:
         # 32 = M (Max Connections), defaults to L2 if not specified.
         new_index = faiss.IndexHNSWFlat(self.dimension, 32, faiss.METRIC_INNER_PRODUCT)
         new_index.hnsw.efConstruction = 200
-        new_index.hnsw.efSearch = 64 # Optimized for real-time latency (v13.1.0-Hardened-PROD)
+        new_index.hnsw.efSearch = 64 # Optimized for real-time latency (v14.0.0-Autonomous-SOVEREIGN)
         new_index.add(emb_np)
         
         async with self._lock:
             self.index = new_index
             # Ensure version and tenant mapping is preserved in metadata
             for m in self.metadata:
-                m["version"] = os.getenv("SOVEREIGN_VERSION", "v13.1.0-Hardened-PROD")
+                m["version"] = os.getenv("SOVEREIGN_VERSION", "v14.0.0-Autonomous-SOVEREIGN")
             self._save()
         logger.info(f"[VectorDB] Rebuild complete for {self.collection_name}.")
 
@@ -224,7 +224,7 @@ class VectorDB:
 
     async def clear(self):
         async with self._lock:
-            # Using Inner Product for v13.1 finality
+            # Using Inner Product for v14.0 finality
             self.index = faiss.IndexFlatIP(self.dimension)
             self.metadata = []
             self._save()

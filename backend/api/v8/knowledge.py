@@ -5,8 +5,8 @@ Bridges to the Neo4j-powered GraphEngine for entity-relation recall.
 """
 
 import logging
-from typing import Optional, List, Dict, Any
-from fastapi import APIRouter, Depends, Request, HTTPException
+from typing import Any
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from backend.api.utils.auth import get_current_user

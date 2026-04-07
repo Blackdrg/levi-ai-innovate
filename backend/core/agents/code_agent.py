@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 from pydantic import BaseModel, Field
 from backend.core.agent_base import SovereignAgent, AgentResult
 from backend.engines.chat.generation import SovereignGenerator

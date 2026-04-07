@@ -4,12 +4,10 @@ Central entry point for all database connections (Firestore, Redis, Mongo, Vecto
 """
 
 import logging
-import asyncio
-from .firebase import get_db as get_firestore, get_auth as get_firebase_auth
+from .firebase import get_db as get_firestore
 from .redis import get_redis_client
 from .mongo import MongoDB
 from .postgres import PostgresDB
-from .vector import get_vector_index
 
 logger = logging.getLogger(__name__)
 

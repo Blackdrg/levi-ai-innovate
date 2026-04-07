@@ -7,7 +7,6 @@ import os
 import logging
 import firebase_admin # type: ignore
 from firebase_admin import credentials, firestore, auth # type: ignore
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 

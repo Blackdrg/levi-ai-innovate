@@ -1,7 +1,7 @@
 import logging
 import numpy as np
 from typing import List, Dict, Any, Optional
-from backend.engines.base import EngineBase, EngineResult
+from backend.engines.base import EngineBase
 
 logger = logging.getLogger(__name__)
 

@@ -7,10 +7,10 @@ Handles goal decomposition and adaptive strategy selection.
 
 import logging
 import json
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from pydantic import BaseModel, Field
 
-from .orchestrator_types import IntentResult, ExecutionPlan, PlanStep
+from .orchestrator_types import IntentResult
 from backend.generation import _async_call_llm_api
 from .local_engine import handle_local_sync, is_locally_handleable
 
@@ -34,7 +34,6 @@ async def decompose_goal(user_input: str, intent: IntentResult, context: Dict[st
     """
     from backend.db.redis import HAS_REDIS, r as redis_client
     import hashlib
-    import json
 
     # ── 🟢 1. Deterministic Fast-Path (v6 Optimization) ─────────────────────
     if intent.intent in ("greeting", "simple_query"):

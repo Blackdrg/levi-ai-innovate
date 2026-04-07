@@ -5,8 +5,8 @@ Bridges to the FusionEngine for high-fidelity synthesis.
 """
 
 import logging
-from typing import Optional, Dict, Any
-from fastapi import APIRouter, Depends, Request, HTTPException
+from typing import Optional
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from backend.auth.logic import get_current_user as get_sovereign_identity

@@ -6,8 +6,7 @@ Implementation of the 'Self-Improving Brain' loop.
 
 import logging
 import time
-from typing import Dict, Any, List, Optional
-from backend.firestore_db import db as sovereign_db
+from typing import Dict, Any, List
 from backend.redis_client import cache as sovereign_cache
 
 logger = logging.getLogger(__name__)

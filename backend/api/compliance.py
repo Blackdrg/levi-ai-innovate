@@ -1,5 +1,4 @@
 import logging
-from typing import Any
 from fastapi import APIRouter, Depends, Query, HTTPException, Response
 from backend.services.compliance import export_audit_logs_csv
 from backend.auth import get_current_user

@@ -32,14 +32,21 @@ class MissionBlackboard:
             "timestamp": None # In real production, use actual timestamp
         }
         
-        # We store as a list per session
-        self.client.rpush(self.key, json.dumps(insight))
-        logger.debug(f"[Blackboard] Insight posted by {agent_id} (Session {self.session_id})")
+        # 🛡️ Resilience: Graceful fallback for air-gapped or local-only mode
+        try:
+            self.client.rpush(self.key, json.dumps(insight))
+            logger.debug(f"[Blackboard] Insight posted by {agent_id} (Session {self.session_id})")
+        except Exception as e:
+            logger.warning(f"⚠️ [Blackboard] Redis unreachable. Insight from {agent_id} suppressed: {e}")
 
     async def get_insights(self, tag: Optional[str] = None) -> List[Dict[str, Any]]:
         """Retrieves all insights for the current session."""
-        raw_list = self.client.lrange(self.key, 0, -1)
-        insights = [json.loads(r) for r in raw_list]
+        try:
+            raw_list = self.client.lrange(self.key, 0, -1)
+            insights = [json.loads(r) for r in raw_list]
+        except Exception:
+            logger.debug(f"[Blackboard] Switched to offline mode for session {self.session_id}")
+            return []
         
         if tag:
             return [i for i in insights if i.get("tag") == tag]
@@ -47,8 +54,10 @@ class MissionBlackboard:
 
     async def clear(self):
         """Clears the blackboard for this session."""
-        self.client.delete(self.key)
-        logger.info(f"[Blackboard] Session {self.session_id} cleared.")
+        try:
+            self.client.delete(self.key)
+            logger.info(f"[Blackboard] Session {self.session_id} cleared.")
+        except: pass
 
     @classmethod
     async def get_session_context(cls, session_id: str) -> str:

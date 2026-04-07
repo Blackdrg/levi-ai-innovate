@@ -1,9 +1,8 @@
 import logging
-import asyncio
-import json
 import uuid
 from datetime import datetime, timezone, timedelta
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
+from backend.services.learning.logic import UserPreferenceModel
 from backend.api.v8.telemetry import broadcast_mission_event
 from backend.memory.cache import MemoryCache
 from backend.memory.vector_store import SovereignVectorStore
@@ -248,7 +247,7 @@ class LearningLoopV13:
             from backend.services.knowledge_extractor import KnowledgeExtractor
             from backend.memory.graph_engine import GraphEngine
             
-            logger.info(f"[Evolution] Distilling relational knowledge from mission...")
+            logger.info("[Evolution] Distilling relational knowledge from mission...")
             extractor = KnowledgeExtractor()
             graph = GraphEngine()
             
@@ -291,4 +290,3 @@ class LearningLoopV13:
 # Graduation Alias for the Absolute Monolith (v13.0)
 LearningLoopV8 = LearningLoopV13
 
-from backend.services.learning.logic import UserPreferenceModel

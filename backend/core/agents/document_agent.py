@@ -1,8 +1,7 @@
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
 from pydantic import BaseModel, Field
 from backend.core.agent_base import SovereignAgent, AgentResult
-from backend.engines.document.document_engine import DocumentEngine as DocEngineCore
 from backend.engines.chat.generation import SovereignGenerator
 
 logger = logging.getLogger(__name__)

@@ -4,6 +4,7 @@ Validates the Sovereign Shield security logic and model schemas.
 """
 
 import pytest
+from unittest.mock import patch
 from datetime import datetime, timezone
 from backend.auth.models import UserProfile, AuthToken
 from backend.auth.logic import SovereignAuth

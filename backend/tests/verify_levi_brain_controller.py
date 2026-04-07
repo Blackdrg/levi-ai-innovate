@@ -1,8 +1,6 @@
 import asyncio
 import logging
-import json
 from backend.core.v8.brain import LeviBrainCoreController
-from backend.core.orchestrator_types import IntentResult
 
 # Setup basic logging
 logging.basicConfig(level=logging.INFO)

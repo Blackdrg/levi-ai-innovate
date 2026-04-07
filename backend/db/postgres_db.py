@@ -36,6 +36,21 @@ SessionLocal = async_sessionmaker(
     expire_on_commit=False
 ) if engine else None
 
+class PostgresDB:
+    """
+    Sovereign Postgres Compatibility Bridge (v13.0.0).
+    Maps legacy v8 PostgresDB calls to the new v13 SQL Fabric.
+    """
+    @staticmethod
+    def _session_factory():
+        if SessionLocal is None:
+            raise ConnectionError("[Postgres-v13] Session factory not initialized.")
+        return SessionLocal()
+    
+    @classmethod
+    async def get_session(cls) -> AsyncSession:
+        return cls._session_factory()
+
 # --- Session Generators ---
 
 @asynccontextmanager

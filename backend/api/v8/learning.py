@@ -1,9 +1,9 @@
 import os
 import logging
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 from sqlalchemy import func, select
-from backend.db.postgres_db import PostgresDB
-from backend.db.models import TrainingPattern, user_facts # Use existing models
+from backend.db.postgres_db import PostgresDB, get_read_session
+from backend.db.models import TrainingPattern, UserFact # Use existing models
 from backend.config.system import SOVEREIGN_VERSION
 
 router = APIRouter()
@@ -12,17 +12,17 @@ logger = logging.getLogger(__name__)
 @router.get("/metrics")
 async def get_learning_metrics():
     """
-    Sovereign v13.1.0-Hardened-PROD Learning Dashboard API.
+    Sovereign v14.0.0-Autonomous-SOVEREIGN Learning Dashboard API.
     Exposes real-time counts of the training corpus and knowledge base.
     """
     try:
-        async with PostgresDB._session_factory() as session:
+        async with get_read_session() as session:
             # 1. Training Samples (Crystallized Patterns)
             samples_stmt = select(func.count()).select_from(TrainingPattern)
             samples_count = await session.execute(samples_stmt)
             
             # 2. Knowledge Base Entries (Episodic Facts)
-            facts_stmt = select(func.count()).select_from(user_facts)
+            facts_stmt = select(func.count()).select_from(UserFact)
             facts_count = await session.execute(facts_stmt)
             
             return {

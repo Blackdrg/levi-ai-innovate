@@ -1,8 +1,7 @@
 import os
 import logging
 from neo4j import AsyncGraphDatabase
-from typing import List, Dict, Any, Optional
-from datetime import datetime
+from typing import List, Dict, Any
 
 logger = logging.getLogger(__name__)
 

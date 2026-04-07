@@ -1,6 +1,6 @@
-# 🛡️ LEVI-AI: Security Architecture (v13.1.0-Hardened-PROD)
+# 🛡️ LEVI-AI: Security Architecture (v14.0.0-Autonomous-SOVEREIGN)
 
-Architectural isolation relies on Identity, Encryption, Sanitization, and Boundary Enforcement. LEVI-AI v13.1.0-Hardened-PROD implements a multi-layered security mesh to protect all user data and cognitive agents.
+Architectural isolation relies on Identity, Encryption, Sanitization, and Boundary Enforcement. LEVI-AI v14.0.0-Autonomous-SOVEREIGN implements a multi-layered security mesh to protect all user data and cognitive agents.
 
 ---
 
@@ -72,7 +72,7 @@ Enforced on every response via `SecurityHeadersMiddleware`:
 | `Strict-Transport-Security`| `max-age=31536000; includeSubDomains` | HTTPS enforcement |
 | `X-Frame-Options` | `DENY` | Clickjacking prevention |
 | `X-Content-Type-Options` | `nosniff` | MIME-type sniffing prevention |
-| `X-Sovereign-Version` | `v13.1.0-Hardened-PROD` | Audit traceability header |
+| `X-Sovereign-Version` | `v14.0.0-Autonomous-SOVEREIGN` | Audit traceability header |
 | `Referrer-Policy` | `no-referrer` | Data leakage prevention |
 
 ---
@@ -143,4 +143,4 @@ Redis-backed **sliding window** algorithm using sorted sets (ZSETs):
 
 ---
 
-© 2026 LEVI-AI SOVEREIGN HUB — Security Specification v13.1.0-Hardened-PROD
+© 2026 LEVI-AI SOVEREIGN HUB — Security Specification v14.0.0-Autonomous-SOVEREIGN

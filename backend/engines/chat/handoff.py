@@ -7,7 +7,7 @@ Hardened for Adaptive Pulse v4.1 (Binary/zlib) and identity-aware context.
 import logging
 import re
 import os
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from backend.services.local_llm import local_llm
 from backend.broadcast_utils import SovereignBroadcaster
 

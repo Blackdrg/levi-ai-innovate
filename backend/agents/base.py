@@ -6,15 +6,14 @@ security masking, and multi-step recovery.
 
 import abc
 import logging
-import asyncio
 import time
-from typing import Any, Dict, List, Optional, Generic, TypeVar, Type
+from typing import Any, Dict, List, Optional, Generic, TypeVar
 from pydantic import BaseModel, Field
 
 # Local imports from utility layer
 from backend.engines.utils.security import SovereignSecurity
 from backend.engines.utils.i18n import SovereignI18n
-from backend.services.agent_bus import sovereign_bus, AgentBus
+from backend.services.agent_bus import sovereign_bus
 from backend.redis_client import cache
 
 T = TypeVar("T", bound=BaseModel)
@@ -72,7 +71,6 @@ class SovereignAgent(abc.ABC, Generic[T, R]):
         key = self._get_state_key(session_id)
         try:
             # Use json.dumps because cache.set expects a string value
-            import json
             cache.set(key, self.state.model_dump_json(), ex=86400) # 24h
         except Exception as e:
             self.logger.error(f"Failed to save state: {e}")

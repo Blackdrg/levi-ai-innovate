@@ -5,9 +5,6 @@ Synchronized with the HNSW Cognitive Vault.
 """
 
 import logging
-import asyncio
-from datetime import datetime, timedelta, timezone
-from backend.memory.vector_store import SovereignVectorStore
 
 logger = logging.getLogger(__name__)
 

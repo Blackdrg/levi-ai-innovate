@@ -7,8 +7,9 @@ Zero-cost, privacy-first inference for high-fidelity local execution.
 import os
 import logging
 import asyncio
-from typing import Dict, Any, AsyncGenerator, Optional, List
+from typing import Dict, AsyncGenerator, Optional, List
 from backend.engines.utils.security import SovereignSecurity
+from backend.core.v13.vram_guard import VRAMGuard
 
 try:
     from llama_cpp import Llama 
@@ -31,8 +32,10 @@ class LocalLLM:
     Supports dynamic loading of 'Small' vs 'Large' models based on task requirement.
     """
     _instances: Dict[str, Llama] = {}
+    _last_used: Dict[str, float] = {}
     _lock = asyncio.Lock()
     _semaphore: Optional[asyncio.Semaphore] = None
+    _vram_guard = VRAMGuard()
 
     @classmethod
     async def get_instance(cls, model_type: str = "default") -> Optional[Llama]:
@@ -51,6 +54,15 @@ class LocalLLM:
                 return None
 
             try:
+                # v2 Dynamic Unloading: Pre-check VRAM
+                model_size_est_gb = 5 if model_type == "default" else 2
+                stats = await self._vram_guard.get_device_slots()
+                free_vram = sum(s["vram_free_mb"] for s in stats) / 1024.0
+                
+                if free_vram < model_size_est_gb:
+                    logger.warning(f"[DCN v2] VRAM Pressure ({free_vram:.1f}GB free). Evicting least used models...")
+                    await self.unload_least_used()
+
                 logger.info(f"Loading local model [{model_type}]: {model_path}")
                 cls._instances[model_path] = Llama(
                     model_path=model_path,
@@ -59,15 +71,39 @@ class LocalLLM:
                     verbose=False,
                     n_gpu_layers=-1 # Auto-detect GPU
                 )
+                cls._last_used[model_path] = asyncio.get_event_loop().time()
                 
                 if cls._semaphore is None:
                     max_concurrency = int(os.getenv("MAX_LOCAL_CONCURRENCY", "2"))
                     cls._semaphore = asyncio.Semaphore(max_concurrency)
                 
                 return cls._instances[model_path]
-            except Exception as e:
-                logger.error(f"Local LLM initialization failed: {e}")
+            except Exception:
                 return None
+
+    @classmethod
+    async def unload_least_used(cls):
+        """Evicts models to free VRAM for new cognitive tasks."""
+        if not cls._instances: return
+        
+        # Sort by timestamp
+        sorted_models = sorted(cls._last_used.items(), key=lambda x: x[1])
+        for model_path, _ in sorted_models:
+            logger.info(f"[DCN v2] Unloading model to free VRAM: {model_path}")
+            # In llama-cpp-python, we just delete the instance and call GC
+            instance = cls._instances.pop(model_path, None)
+            if instance:
+                del instance
+            cls._last_used.pop(model_path, None)
+            # Give OS time to reclaim VRAM
+            import gc
+            gc.collect()
+            await asyncio.sleep(1)
+            break # Only unload one at a time
+
+    @classmethod
+    def mark_used(cls, model_path: str):
+        cls._last_used[model_path] = asyncio.get_event_loop().time()
 
 async def generate_local_stream(
     messages: List[Dict], 
@@ -83,6 +119,10 @@ async def generate_local_stream(
     if not llm:
         yield "Local intelligence offline. Verify GGUF paths."
         return
+
+    # Update access timestamp for LRU sharding
+    model_path = DEFAULT_MODEL if model_type == "default" else SMALL_MODEL
+    LocalLLM.mark_used(model_path)
 
     # Concurrency Guard
     if LocalLLM._semaphore.locked():

@@ -1,15 +1,13 @@
 import os
-import subprocess
 from sqlalchemy import select, insert, desc, func
 from backend.db.postgres import PostgresDB
 from backend.db.models import TrainingPattern
-from backend.config.system import SOVEREIGN_VERSION
 
 logger = logging.getLogger(__name__)
 
 class LearningLoop:
     """
-    Sovereign v13.1.0-Hardened-PROD: Pattern Crystallization Engine.
+    Sovereign v14.0.0-Autonomous-SOVEREIGN: Pattern Crystallization Engine.
     
     Captures high-fidelity mission results (Score > 0.85) and stores them 
     in the training_corpus for future model fine-tuning (LoRA / RLHF).
@@ -91,21 +89,21 @@ class LearningLoop:
         Executes the LoRA fine-tuning pipeline for the Llama-3 8B model.
         Uses local resources (Unsloth/Axolotl) to optimize the adapter.
         """
-        logger.info("[LearningLoop] Initiating LoRA Pipeline (Llama-3-8B-v13)...")
+        logger.info("[LearningLoop] Initiating LoRA Pipeline (Llama-3-8B-v14)...")
         
         # 1. Export Dataset & Split (90/10)
         raw_export = "backend/data/training_raw.jsonl"
-        train_path = "backend/data/train_v13.jsonl"
-        eval_path = "backend/data/eval_v13.jsonl"
+        train_path = "backend/data/train_v14.jsonl"
+        eval_path = "backend/data/eval_v14.jsonl"
         
         await cls.export_for_finetuning(raw_export, limit=cls.TRAINING_TRIGGER_COUNT)
         await cls._perform_split(raw_export, train_path, eval_path)
         
         # 2. Pre-training Baseline Evaluation
-        baseline_score = await cls._run_eval_harness("sovereign-v13-latest", eval_path)
+        baseline_score = await cls._run_eval_harness("sovereign-v14-latest", eval_path)
         logger.info(f"[LearningLoop] Baseline Eval Score: {baseline_score:.4f}")
         
-        # 3. Trigger Training (v13.1 Hardening: 4-bit/Q4_K_M)
+        # 3. Trigger Training (v14.0 Autonomous: 4-bit/Q4_K_M)
         try:
              # cmd = f"python backend/scripts/train_lora.py --train {train_path} --quantization Q4_K_M"
              from backend.scripts.train_lora import run_training_job
@@ -164,8 +162,8 @@ class LearningLoop:
         with open("Modelfile.lora", "w") as f:
             f.write(modelfile_content)
         
-        # subprocess.run(["ollama", "create", "sovereign-v13", "-f", "Modelfile.lora"])
-        logger.info("[LearningLoop] Model hot-swapped to sovereign-v13 (LoRA Optimized).")
+        # subprocess.run(["ollama", "create", "sovereign-v14", "-f", "Modelfile.lora"])
+        logger.info("[LearningLoop] Model hot-swapped to sovereign-v14 (LoRA Optimized).")
 
     @classmethod
     async def export_for_finetuning(cls, output_path: str, limit: int = 1000):

@@ -5,14 +5,12 @@ Orchestrated by celery_app.py.
 """
 
 import logging
-from typing import Dict, Any, List
 from backend.celery_app import celery_app
 
 # Import autonomous tasks from sub-modules
 from backend.core.memory_tasks import (
     flush_all_memory_buffers, 
-    dream_all_users, 
-    run_global_maintenance
+    dream_all_users
 )
 
 from backend.services.scheduling import trigger_scheduled_missions
@@ -66,7 +64,6 @@ def re_execute_mission_task(mission_id: str):
     from backend.core.v8.executor import GraphExecutor
     from backend.core.v8.planner import TaskGraph, TaskNode
     from sqlalchemy import select
-    import json
     
     async def _run_replay():
         async with PostgresDB._session_factory() as session:
@@ -126,7 +123,6 @@ def trigger_scheduled_missions_task():
     Runs every 60 seconds.
     """
     logger.info("[Task] Pulse: Checking for scheduled missions.")
-    from backend.services.scheduling import trigger_scheduled_missions
     # Use sync wrapper for async function
     loop = asyncio.get_event_loop()
     return loop.run_until_complete(trigger_scheduled_missions())

@@ -5,7 +5,7 @@ Refactored into Autonomous Agent Ecosystem.
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 from pydantic import BaseModel, Field
 from backend.agents.base import SovereignAgent, AgentResult
 

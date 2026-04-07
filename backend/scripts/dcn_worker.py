@@ -64,7 +64,14 @@ async def main():
     except Exception as e:
         logger.error(f"[DCN] Gossip failure: {e}")
 
-    worker = DistributedGraphExecutor(r_async, concurrency_limit=concurrency)
+    # 🚀 Auto-Scaling Monitor (Coordinator Only)
+    if os.getenv("NODE_ROLE") == "coordinator":
+        from backend.services.autoscaler import AutoScaler
+        scaler = AutoScaler()
+        asyncio.create_task(scaler.start())
+        logger.info("📐 Auto-Scaling: [ACTIVE]")
+
+    worker = DistributedGraphExecutor(r_async)
     
     try:
         await worker.worker_loop()

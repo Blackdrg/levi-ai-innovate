@@ -1,7 +1,6 @@
 # embeddings.py
 from sentence_transformers import SentenceTransformer
 import os
-import numpy as np
 import logging
 import asyncio
 from typing import List, Union

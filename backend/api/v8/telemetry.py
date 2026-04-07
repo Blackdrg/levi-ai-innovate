@@ -4,13 +4,12 @@ High-fidelity neural pulse streaming and identity trait retrieval.
 """
 
 import logging
-import asyncio
 import json
 import zlib
 import base64
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import StreamingResponse
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 from datetime import datetime, timezone
 
 from backend.broadcast_utils import SovereignBroadcaster

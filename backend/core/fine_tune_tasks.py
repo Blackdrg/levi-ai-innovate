@@ -8,14 +8,11 @@ LoRA fine-tuning jobs on Together AI.
 
 import os
 import logging
-import json
-import asyncio
 import httpx
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional
 from backend.services.learning.logic import export_training_data, get_learning_stats
 from backend.db.redis import r as redis_client, HAS_REDIS
-from backend.db.firebase import db as firestore_db
 
 logger = logging.getLogger(__name__)
 

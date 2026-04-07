@@ -1,6 +1,6 @@
-# 🛠️ LEVI-AI Maintenance Guide (v13.1.0-Hardened-PROD)
+# 🛠️ LEVI-AI Maintenance Guide (v14.0.0-Autonomous-SOVEREIGN)
 
-Ensuring the stability and fidelity of the LEVI-AI v13.1.0-Hardened-PROD Distributed Stack requires periodic maintenance across the quad-persistence memory fabric and the cognitive evolution pipeline.
+Ensuring the stability and fidelity of the LEVI-AI v14.0.0-Autonomous-SOVEREIGN Distributed Stack requires periodic maintenance across the quad-persistence memory fabric and the cognitive evolution pipeline.
 
 ---
 
@@ -125,4 +125,4 @@ python -m backend.scripts.restore_drill
 
 ---
 
-© 2026 LEVI-AI SOVEREIGN HUB — Maintenance Specification v13.1.0-Hardened-PROD
+© 2026 LEVI-AI SOVEREIGN HUB — Maintenance Specification v14.0.0-Autonomous-SOVEREIGN

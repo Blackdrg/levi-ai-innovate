@@ -7,7 +7,6 @@ Orchestrates Perception, Goal-Setting, Planning, Execution, and Reflection.
 import logging
 import uuid
 import asyncio
-import json
 from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional, AsyncGenerator, Union
 
@@ -19,15 +18,14 @@ from .reflection import ReflectionEngine
 from .workflow_engine import WorkflowEngine
 from .context_manager import ContextManager
 from backend.memory.manager import MemoryManager
-from .orchestrator_types import ToolResult, IntentResult
+from .orchestrator_types import ToolResult
 from ..utils.kafka import SovereignKafka
 from backend.broadcast_utils import (
     SovereignBroadcaster, 
     PULSE_MISSION_STARTED, 
     PULSE_MISSION_PLANNED, 
     PULSE_MISSION_EXECUTED, 
-    PULSE_MISSION_AUDITED,
-    PULSE_MISSION_ERROR
+    PULSE_MISSION_AUDITED
 )
 
 logger = logging.getLogger(__name__)

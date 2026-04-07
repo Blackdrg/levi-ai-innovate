@@ -4,13 +4,11 @@ The autonomous intelligence layer of the LEVI-AI OS.
 Orchestrates the Scrape -> Appraisal -> Crystallization -> Fine-Tuning cycle.
 """
 
-import os
 import json
 import logging
-import asyncio
 from pathlib import Path
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import Dict, Any
 
 from .agents.critic import CriticAgentV8, CriticInput
 from backend.services.learning.scraper import scraper

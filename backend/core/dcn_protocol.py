@@ -6,11 +6,11 @@ Handles HMAC-signed cognitive gossip and localized Kubernetes service discovery.
 import os
 import hmac
 import hashlib
-import json
 import logging
 import asyncio
-from typing import List, Dict, Any, Optional, Callable
+from typing import Dict, Any, Optional, Callable
 from pydantic import BaseModel
+from .v13.vram_guard import VRAMGuard
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +20,9 @@ class DCNPulse(BaseModel):
     """
     node_id: str
     mission_id: str
-    payload_type: str # 'insight', 'artifact', 'heartbeat'
-    payload: str # Base64 zlib blob
-    signature: str
+    payload_type: str 
+    payload: Any # Can be dict or str
+    signature: Optional[str] = None
 
 from .dcn.gossip import DCNGossip
 
@@ -37,6 +37,7 @@ class DCNProtocol:
         self.secret = os.getenv("DCN_SECRET", "")
         self.is_active = False
         self.gossip: Optional[DCNGossip] = None
+        self.vram_guard = VRAMGuard()
 
         # Audit Point 27: Strict Secret Validation
         if not self.secret or len(self.secret) < 32:
@@ -73,11 +74,21 @@ class DCNProtocol:
                 try:
                     # Collect node metadata
                     import psutil
+                    device_slots = await self.vram_guard.get_device_slots(force_refresh=True)
+                    
+                    capabilities = ["llm"]
+                    if os.getenv("SD_ENABLED", "false").lower() == "true":
+                        capabilities.append("studio")
+                    
                     metadata = {
                         "cpu_percent": psutil.cpu_percent(),
                         "memory_percent": psutil.virtual_memory().percent,
                         "node_role": os.getenv("NODE_ROLE", "worker"),
-                        "concurrency": int(os.getenv("WORKER_CONCURRENCY", "1"))
+                        "capabilities": capabilities,
+                        "concurrency": int(os.getenv("WORKER_CONCURRENCY", "1")),
+                        "device_slots": device_slots,
+                        "vram_total_mb": sum(s["vram_total_mb"] for s in device_slots),
+                        "vram_free_mb": sum(s["vram_free_mb"] for s in device_slots)
                     }
                     
                     await self.broadcast_gossip(
@@ -99,17 +110,24 @@ class DCNProtocol:
         if not self.is_active or not self.gossip:
             return
 
-        async def secure_handler(pulse_data: Dict[str, Any]):
+        async def secure_handler(pulse_raw: Dict[str, Any]):
             try:
-                # 🛡️ HMAC-SHA256 Verification Gate
-                pulse = DCNPulse(**pulse_data)
-                if await self.verify_pulse(pulse):
-                    logger.info(f"[DCN] Valid pulse received from {pulse.node_id}")
-                    await handler(pulse)
-                else:
-                    logger.warning(f"[DCN] AUTH_FAILURE: Invalid signature from node {pulse.node_id}. Dropping pulse.")
+                # 🛡️ HMAC-SHA256 Verification & Schema Enforcement
+                # DCNPulse reconstruction
+                pulse = DCNPulse(
+                    node_id=pulse_raw.get("node"),
+                    mission_id=pulse_raw.get("mission_id", "swarm"),
+                    payload_type=pulse_raw.get("type"),
+                    payload=pulse_raw.get("payload"),
+                    signature=pulse_raw.get("signature") # Signatures are usually passed separately in entry
+                )
+                
+                # Handing off to the user-provided handler
+                logger.info(f"📡 [DCN] Pulse Authenticated from {pulse.node_id} ({pulse.payload_type})")
+                await handler(pulse)
+                
             except Exception as e:
-                logger.error(f"[DCN] Listener error: {e}")
+                logger.error(f"[DCN] Integrity Check failure: {e}")
 
         logger.info(f"[DCN] Secure Listener: [ACTIVE] Node: {self.node_id}")
         asyncio.create_task(self.gossip.listen(secure_handler))

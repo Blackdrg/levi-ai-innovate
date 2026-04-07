@@ -1,12 +1,11 @@
 import os
 import logging
 import httpx
-from fastapi import FastAPI, Request, Response, HTTPException
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
 from backend.kafka_client import LeviKafkaClient
-from shared.schemas import IntentResult
 
 logger = logging.getLogger("gateway_service")
 app = FastAPI(title="LeviBrain v8 Gateway Service")
@@ -67,7 +66,7 @@ async def stream_thoughts(request_id: str):
         # Listen to Kafka for events related to this request_id
         # In a real setup, we'd use a Redis pub/sub or a specific Kafka consumer
         # For this walkthrough, we'll demonstrate the concept
-        consumer = await LeviKafkaClient.get_consumer(f"brain.*")
+        consumer = await LeviKafkaClient.get_consumer("brain.*")
         async for msg in consumer:
             data = json.loads(msg.value)
             if data.get("request_id") == request_id:

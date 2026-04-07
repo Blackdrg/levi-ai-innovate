@@ -1,7 +1,6 @@
 import json
 import logging
 import os
-import asyncio
 from typing import Any, Dict, Optional
 try:
     from aiokafka import AIOKafkaProducer # type: ignore

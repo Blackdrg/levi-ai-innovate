@@ -1,6 +1,6 @@
 import logging
-from typing import List, Dict, Any, Optional
-from backend.db.neo4j_db import SovereignGraph, execute_query
+from typing import Dict, Any, Optional
+from backend.db.neo4j_db import execute_query
 
 logger = logging.getLogger(__name__)
 

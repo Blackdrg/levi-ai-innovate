@@ -5,8 +5,7 @@ Distributed cognitive tracing for the LeviBrain DAG.
 
 import logging
 import time
-import uuid
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
 from backend.db.redis import r as redis_client, HAS_REDIS
 
 logger = logging.getLogger(__name__)

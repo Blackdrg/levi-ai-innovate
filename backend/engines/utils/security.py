@@ -1,6 +1,6 @@
 import re
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ class SovereignSecurity:
     @classmethod
     def mask_pii(cls, text: str, user_id: str = "global") -> str:
         """
-        Sovereign Shield v13.1.0-Hardened-PROD: Hardened PII Encryption.
+        Sovereign Shield v14.0.0-Autonomous-SOVEREIGN: Hardened PII Encryption.
         Encrypts sensitive facts using AES-256 GCM before model handoff.
         """
         return cls.deidentify(text, user_id)

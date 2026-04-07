@@ -1,8 +1,7 @@
 import logging
 import os
-import numpy as np
-from typing import List, Dict, Any, Optional
-from backend.engines.base import EngineBase, EngineResult
+from typing import List, Dict, Any
+from backend.engines.base import EngineBase
 from backend.engines.utils.security import SovereignSecurity
 
 logger = logging.getLogger(__name__)
@@ -37,7 +36,7 @@ class DocumentEngine(EngineBase):
         # Placeholder for real vector search logic (matches would come from FAISS/Chroma)
         return [
             f"[Doc Chunk 1] Evidence regarding {query[:20]}... suggests a sovereign alignment.",
-            f"[Doc Chunk 2] System logs indicate high resonance at the neural boundary."
+            "[Doc Chunk 2] System logs indicate high resonance at the neural boundary."
         ]
 
     async def ingest_document(self, user_id: str, file_path: str) -> Dict[str, Any]:

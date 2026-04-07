@@ -1,6 +1,6 @@
 import logging
-from typing import Any, Dict, List, Optional
-from backend.engines.base import EngineBase, EngineResult
+from typing import Any, Dict, List
+from backend.engines.base import EngineBase
 from .vault import MemoryVault
 
 logger = logging.getLogger(__name__)

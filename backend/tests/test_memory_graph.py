@@ -9,7 +9,6 @@ import sys
 import os
 import pytest  # type: ignore
 from unittest.mock import patch, MagicMock
-from typing import Any
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 

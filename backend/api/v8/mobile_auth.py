@@ -1,9 +1,8 @@
 import logging
 import secrets
-import time
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from typing import Dict, Any, Optional
+from typing import Any, Optional
 from datetime import datetime, timedelta
 
 from backend.utils.auth import get_current_user

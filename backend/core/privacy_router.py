@@ -1,6 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends
 from backend.utils.exceptions import LEVIException
-from typing import List, Dict, Any, Optional
 import logging
 
 from backend.auth import get_current_user

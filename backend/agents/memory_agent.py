@@ -8,7 +8,7 @@ Adds Neo4j fallback path:
 import json
 import logging
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 from pydantic import BaseModel, Field
 

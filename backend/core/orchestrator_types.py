@@ -5,9 +5,9 @@ Centralized type definitions for the LEVI AI Brain orchestrator pipeline.
 """
 import uuid
 from enum import Enum
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional, List, Dict, Any, Union, Generic, TypeVar
+from typing import Optional, List, Dict, Any, Generic, TypeVar
 
 
 # ---------------------------------------------------------------------------
@@ -62,6 +62,8 @@ class IntentResult(BaseModel):
     """
     The output of the intent classifier.
     """
+    model_config = {"protected_namespaces": ()}
+    
     intent_type: str = "chat"
     complexity_level: int = Field(2, ge=0, le=3)
     estimated_cost_weight: str = "medium" # low, medium, high
@@ -79,6 +81,8 @@ class ToolResult(BaseModel):
     Ensures every agent/tool returns a predictable structure.
     Strictly prevents "hallucinated actions" by standardized success/failure reporting.
     """
+    model_config = {"protected_namespaces": ()}
+    
     success: bool = True
     data: Dict[str, Any] = Field(default_factory=dict)
     message: str = ""
@@ -92,6 +96,8 @@ class ToolResult(BaseModel):
 
 class PlanStep(BaseModel):
     """A single deterministic step in a brain execution plan."""
+    model_config = {"protected_namespaces": ()}
+    
     step_id: str = Field(default_factory=lambda: f"step_{uuid.uuid4().hex[:6]}")
     description: str
     agent: str  # e.g., 'chat_agent', 'image_agent'
@@ -104,6 +110,8 @@ class ExecutionPlan(BaseModel):
     The 'Deterministic Brain' plan. 
     Removes randomness by forcing the AI to define its path BEFORE execution.
     """
+    model_config = {"protected_namespaces": ()}
+    
     intent: str
     steps: List[PlanStep]
     memory_needed: List[str] = Field(default_factory=list) # e.g., ['user_mood', 'past_topics']
@@ -113,6 +121,8 @@ class ExecutionPlan(BaseModel):
 
 class OrchestratorResponse(BaseModel):
     """Final output payload from the orchestrator."""
+    model_config = {"protected_namespaces": ()}
+    
     response: str
     intent: str
     route: str = EngineRoute.API.value
@@ -133,6 +143,8 @@ class AgentResult(BaseModel, Generic[DataT]):
     Standardized result for all Sovereign v8 Agents.
     Enforces Brain-level validation for mission outputs.
     """
+    model_config = {"protected_namespaces": ()}
+    
     success: bool = True
     message: str = ""
     data: Optional[DataT] = None

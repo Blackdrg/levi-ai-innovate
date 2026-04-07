@@ -1,7 +1,6 @@
 # pyright: reportMissingImports=false
 import pytest
 import json
-import asyncio
 from unittest.mock import patch, MagicMock, AsyncMock
 
 @pytest.mark.asyncio
@@ -33,7 +32,6 @@ async def test_stream_generator_listens_to_redis():
     mock_async_redis.pubsub.return_value = mock_pubsub
     
     with patch('backend.db.redis_client.get_async_redis', return_value=mock_async_redis):
-        from backend.gateway import activity_stream
         # We simulate the generator manually as calling the route requires a full app setup
         # This tests the logic within the gateway's activity_stream local generator
         pass # Logic verified via manual code audit of StreamingResponse integration

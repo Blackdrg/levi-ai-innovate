@@ -7,7 +7,7 @@ PromptShield contract enforced at agent boundary before every inference call.
 import logging
 import base64
 from io import BytesIO
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional
 from pydantic import BaseModel, Field
 
 from backend.agents.base import SovereignAgent, AgentResult

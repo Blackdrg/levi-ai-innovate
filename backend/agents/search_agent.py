@@ -5,8 +5,7 @@ Refactored into Autonomous Agent Ecosystem.
 """
 
 import logging
-import os
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
 from pydantic import BaseModel, Field
 from backend.agents.base import SovereignAgent, AgentResult
 from backend.engines.chat.generation import SovereignGenerator

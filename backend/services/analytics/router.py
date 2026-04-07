@@ -1,10 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, Request # type: ignore
+from fastapi import APIRouter, Depends, Request # type: ignore
 from backend.utils.exceptions import LEVIException
 from typing import Optional
 import numpy as np
 import os
 from datetime import datetime
-import json
 import logging
 
 from backend.auth import verify_admin # type: ignore

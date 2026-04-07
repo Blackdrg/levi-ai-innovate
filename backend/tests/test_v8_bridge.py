@@ -1,6 +1,5 @@
 import pytest
 import asyncio
-import json
 from fastapi.testclient import TestClient
 from backend.api.main import app
 from backend.memory.cache import MemoryCache

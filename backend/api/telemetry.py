@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List
 
 class TelemetryPulse(BaseModel):
     event: str = "mission_update"
@@ -11,4 +11,4 @@ class TelemetryPulse(BaseModel):
     fidelity_score: float
     resource_saturation: str
     latencies: dict
-    version: str = "v13.1.0-Hardened-PROD"
+    version: str = "v14.0.0-Autonomous-SOVEREIGN"

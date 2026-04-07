@@ -5,8 +5,8 @@ Directed factual retrieval and research for the Absolute Monolith.
 
 import logging
 import uuid
-from typing import Optional, Dict, Any, List
-from fastapi import APIRouter, Depends, Request, HTTPException
+from typing import Optional, Any
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from backend.api.utils.auth import get_current_user

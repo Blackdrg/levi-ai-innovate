@@ -1,9 +1,7 @@
 import pytest
-import asyncio
 from backend.core.v8.planner import DAGPlanner, TaskNode
 from backend.core.v8.executor import GraphExecutor
 from backend.core.v8.evolution_engine import EvolutionEngine
-from backend.memory.manager import MemoryManager
 from backend.core.v8.agents.research import ResearchAgentV8, ResearchInput
 from backend.core.orchestrator_types import ToolResult
 

@@ -5,7 +5,7 @@ Autonomous logic for the Weekly Global Evolution Cycle (The Dreaming Loop).
 
 import logging
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime
 from sqlalchemy import text
 from backend.celery_app import celery_app
 from backend.core.v8.learning import PatternRegistry

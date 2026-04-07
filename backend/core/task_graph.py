@@ -20,7 +20,7 @@ class TaskNode(BaseModel):
     retry_policy: str = "exponential_backoff"
     fallback_node_id: Optional[str] = None # ID of the node to run if this fails
     condition: Optional[str] = None # Lambda-like string to evaluate before running
-    model_tier: str = "L2" # L1, L2, L3, L4 (Tiers for resource/model mapping)
+    tier: str = "L2" # L1, L2, L3, L4 (Tiers for resource/model mapping)
     result: Optional[Any] = None # Added for active state tracking
 
     def dict(self, *args, **kwargs):

@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 from pydantic import BaseModel, Field
 from backend.core.agent_base import SovereignAgent, AgentResult
 from backend.core.local_engine import handle_local_task
@@ -30,7 +30,6 @@ class LocalAgent(SovereignAgent[LocalInput, AgentResult]):
         
         # Engage the local engine bridge
         # Directly calling the low-latency handle_local_task
-        from backend.core.local_engine import handle_local_task
         response = await handle_local_task(query, complexity=input_data.complexity)
         
         if response == "FALLBACK":

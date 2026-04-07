@@ -4,8 +4,7 @@ Implements the Agent Heartbeat check for all 17 registered cognitive agents.
 """
 
 import logging
-import asyncio
-from typing import Dict, Any, List
+from typing import Dict, Any
 from backend.agents.registry import AGENT_REGISTRY
 
 logger = logging.getLogger(__name__)

@@ -6,7 +6,6 @@ Calculates survival scores (decay) and manages evolutionary distillation of core
 import logging
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
-from backend.db.firestore_db import db as firestore_db
 
 logger = logging.getLogger(__name__)
 

@@ -6,12 +6,10 @@ Provides real-time transparency into LEVI's adaptive routing.
 """
 
 import logging
-from typing import Dict, Any, List
 from fastapi import APIRouter, Depends
 from backend.services.auth.logic import verify_admin
 from backend.db.redis_client import r as redis_client, HAS_REDIS
 from backend.db.firestore_db import db as firestore_db
-import json
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin/orchestrator", tags=["Monitoring"])

@@ -1,6 +1,5 @@
 # learning_loop.py — simplified but working version (v13.0)
 import asyncio
-from datetime import datetime
 import logging
 
 logger = logging.getLogger(__name__)

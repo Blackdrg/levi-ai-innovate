@@ -7,7 +7,7 @@ Refactored for Tiered Sovereign Architecture.
 import json
 import logging
 import asyncio
-from typing import AsyncGenerator, Dict, Any, Optional
+from typing import AsyncGenerator, Dict, Any
 from backend.db.redis import get_redis_client
 
 logger = logging.getLogger(__name__)

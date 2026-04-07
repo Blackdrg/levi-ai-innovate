@@ -1,6 +1,5 @@
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional
 from sqlalchemy import select, update
 from backend.db.postgres_db import get_write_session, get_read_session
 from backend.db.models import MissionSchedule

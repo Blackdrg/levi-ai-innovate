@@ -6,14 +6,11 @@ Refactored into Autonomous Memory Ecosystem.
 
 import logging
 import hashlib
-import os
 import asyncio
-import numpy as np
-import faiss  # type: ignore
 from datetime import datetime, timezone
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 
-from backend.db.vector_store import embed_text, VectorDB, SovereignVault
+from backend.db.vector_store import VectorDB, SovereignVault
 from backend.db.firestore_db import db as firestore_db
 
 logger = logging.getLogger(__name__)

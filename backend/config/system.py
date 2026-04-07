@@ -1,8 +1,8 @@
 # backend/config/system.py
-"""Centralized configuration for LEVI-AI v13.1.0-Hardened-PROD."""
+"""Centralized configuration for LEVI-AI v14.0.0-Autonomous-SOVEREIGN."""
 import os
 
-SOVEREIGN_VERSION = os.getenv("SOVEREIGN_VERSION", "v13.1.0-Hardened-PROD")
+SOVEREIGN_VERSION = os.getenv("SOVEREIGN_VERSION", "v14.0.0-Autonomous-SOVEREIGN")
 ENVIRONMENT = os.getenv("ENVIRONMENT", "production")
 
 TIERS = {

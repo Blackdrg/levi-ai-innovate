@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 class SovereignKMS:
     """
-    Sovereign Key Management Service (v13.1.0-Hardened-PROD).
+    Sovereign Key Management Service (v14.0.0-Autonomous-SOVEREIGN).
     Provides AES-256 GCM encryption for PII de-identification and Vault storage.
     """
     

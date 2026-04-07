@@ -1,15 +1,14 @@
 """
-Sovereign Consensus Agent v13.0.0.
+Sovereign Consensus Agent v14.0.0.
 The collective adjudicator for the Absolute Monolith.
 Resolves cognitive friction via Collective Resonance (CR) and Swarm Appraisal.
 """
 
 import logging
 import json
-import asyncio
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
-from backend.agents.base import SovereignAgent, AgentResult, T, R
+from backend.agents.base import SovereignAgent, AgentResult
 from backend.engines.chat.generation import SovereignGenerator
 from backend.utils.validators import HardRuleValidator
 from backend.utils.grounding import FactualGroundingHub
@@ -18,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 class FidelityRubric(BaseModel):
     """
-    Objective scoring dimensions for the Swarm Adjudication Protocol (v13.1.0-Hardened-PROD).
+    Objective scoring dimensions for the Swarm Adjudication Protocol (v14.0.0-Autonomous-SOVEREIGN).
     """
     syntax_correctness: float = Field(0.0, ge=0.0, le=1.0)
     logical_consistency: float = Field(0.0, ge=0.0, le=1.0)
@@ -27,7 +26,7 @@ class FidelityRubric(BaseModel):
 
     def calculate_fidelity(self, content: str, intent: str = "general") -> float:
         """
-        v13.1.0-Hardened-PROD: Deterministic Weighted Aggregator.
+        v14.0.0-Autonomous-SOVEREIGN: Deterministic Weighted Aggregator.
         Combines neural scores with a hard-coded HardRuleValidator [50% weight].
         """
         weights = self.get_weight_profile(intent)
@@ -63,9 +62,9 @@ class ConsensusInput(BaseModel):
     rubrics: Optional[List[FidelityRubric]] = Field(None, description="Objective metrics from each agent")
     context: Dict[str, Any] = Field(default_factory=dict)
 
-class ConsensusAgentV13(SovereignAgent[ConsensusInput, AgentResult]):
+class ConsensusAgentV14(SovereignAgent[ConsensusInput, AgentResult]):
     """
-    Sovereign Ensemble Adjudicator v13.1.0.
+    Sovereign Ensemble Adjudicator v14.0.0.
     Calculates the Fidelity Score (S) and Collective Resonance (CR) across parallel outputs.
     """
     
@@ -75,7 +74,7 @@ class ConsensusAgentV13(SovereignAgent[ConsensusInput, AgentResult]):
 
     async def _run(self, input_data: ConsensusInput, lang: str = "en", **kwargs) -> Dict[str, Any]:
         """
-        Consensus Protocol v13.1.0:
+        Consensus Protocol v14.0.0:
         1. Objective Rubric Aggregation.
         2. Swarm appraisal via Council of Models.
         3. Deterministic Winner Selection.
@@ -101,7 +100,7 @@ class ConsensusAgentV13(SovereignAgent[ConsensusInput, AgentResult]):
         ])
         
         system_prompt = (
-            "You are the LEVI Sovereign High Adjudicator (v13.1.0). "
+            "You are the LEVI Sovereign High Adjudicator (v14.0.0). "
             "Select the BEST output by synthesizing objective rubric data with neural appraisal.\n"
             "Formal Rubric:\n1. Correctness (30%)\n2. Logic (30%)\n3. Factual Grounding (20%)\n4. Resonance (20%)\n\n"
             "Output ONLY valid JSON: { \"winner_index\": 0, \"fidelity\": 0.98, \"justification\": \"...\" }"
@@ -149,7 +148,7 @@ class ConsensusAgentV13(SovereignAgent[ConsensusInput, AgentResult]):
                     "fidelity_score": final_fidelity,
                     "justification": data.get("justification", ""),
                     "grounding_report": grounding_res,
-                    "status": "crystallized_v13_1"
+                    "status": "crystallized_v14_0"
                 },
                 "score": final_fidelity
             }
@@ -164,5 +163,6 @@ class ConsensusAgentV13(SovereignAgent[ConsensusInput, AgentResult]):
                 "score": fallback_score
             }
 
-# Graduation Alias for the Absolute Monolith (v13.0)
-ConsensusAgentV11 = ConsensusAgentV13
+# Graduation Alias for the Absolute Monolith (v14.0)
+ConsensusAgentV13 = ConsensusAgentV14
+ConsensusAgentV11 = ConsensusAgentV14

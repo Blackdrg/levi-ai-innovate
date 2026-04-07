@@ -6,7 +6,6 @@ Synchronized with the Absolute Monolith SQL Fabric.
 
 import logging
 import asyncio
-import os
 from backend.celery_app import celery_app
 from backend.pipelines.learning import learning_system
 from backend.services.learning.hygiene import SurvivalGater

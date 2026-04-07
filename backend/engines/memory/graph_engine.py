@@ -1,6 +1,6 @@
 import os
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from neo4j import AsyncGraphDatabase
 from dotenv import load_dotenv
 

@@ -1,8 +1,6 @@
 import time
-import logging
 from fastapi import Request, HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
-from backend.services.memory.vault import MemoryVault
 from backend.core.logger import logger
 from backend.core.v8.llm_guard import PIIScrubber
 

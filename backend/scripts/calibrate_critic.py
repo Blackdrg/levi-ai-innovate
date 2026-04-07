@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from sqlalchemy import select, func, update, insert
+from sqlalchemy import select, func, insert
 from backend.db.postgres import PostgresDB
 from backend.db.models import CriticCalibration, UserCalibration
 from datetime import datetime, timezone

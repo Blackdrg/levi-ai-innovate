@@ -8,11 +8,10 @@ import json
 import hmac
 import hashlib
 import logging
-import asyncio
-import uuid
 from datetime import datetime, timezone
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
 from backend.core.v8.rules_engine import RulesEngine
+from backend.core.dcn.consistency import ConsistencyEngine
 # Legacy Firestore Removed for v13.0.0 SQL Finality
 
 logger = logging.getLogger(__name__)
@@ -129,8 +128,20 @@ class SovereignSync:
             except Exception as e:
                 logger.warning(f"[Sync-v13] Local Broadcast Anomaly: {e}")
 
-        # 2. SQL Audit of Export
-        rules_count = len(json.loads(local_package["payload"]).get("rules", {}).keys())
-        await cls._audit_sync("local_cluster", rules_count, "EXPORT")
+        # 3. Neural Audit (v13.2 Partition Handling)
+        await cls.perform_neural_audit()
         
         logger.info(f"[Sync-v13] Neural Synchrony Pulse Complete. Exported {rules_count} fragments.")
+
+    @classmethod
+    async def perform_neural_audit(cls):
+        """
+        Cross-node Memory Validation (v13.2).
+        Uses ConsistencyEngine to detect and resolve drift in mission state.
+        """
+        node_id = os.getenv("DCN_NODE_ID", "node-alpha")
+        engine = ConsistencyEngine(node_id)
+        
+        logger.info(f"[Sync-v13] Initiating Neural Audit for node: {node_id}")
+        await engine.reconcile()
+        logger.debug("[Sync-v13] Neural Audit Complete.")

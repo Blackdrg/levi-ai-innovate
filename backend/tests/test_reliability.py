@@ -1,4 +1,3 @@
-import pytest  # type: ignore
 import os
 import sys
 
@@ -7,11 +6,8 @@ import sys
 # Ensure project root is in path for local imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from fastapi.testclient import TestClient  # type: ignore
-from backend.main import app # type: ignore
 import hmac
 import hashlib
-import json
 from unittest.mock import patch, MagicMock
 
 def test_health_check_connectivity(app_client, mock_firestore):

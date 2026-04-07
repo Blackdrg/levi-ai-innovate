@@ -2,7 +2,7 @@ import logging
 import os
 import numpy as np
 import asyncio
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -41,7 +41,6 @@ class MemoryVault:
 
     async def store(self, content: str, embedding: List[float], metadata: Dict[str, Any] = None):
         """Append a new memory fragment to the vault."""
-        import faiss
         vector = np.array([embedding]).astype('float32')
         self.index.add(vector)
         
@@ -67,7 +66,6 @@ class MemoryVault:
 
     async def recall_semantic(self, embedding: List[float], top_k: int = 5) -> List[Dict[str, Any]]:
         """Retrieve top-k relevant fragments via vector search."""
-        import faiss
         if self.index.ntotal == 0:
             return []
 

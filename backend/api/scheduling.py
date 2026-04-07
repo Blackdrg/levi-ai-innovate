@@ -1,5 +1,4 @@
 import logging
-from typing import Dict, Any, List
 from fastapi import APIRouter, Depends, Query, HTTPException
 from backend.services.scheduling import schedule_mission
 from backend.auth import get_current_user

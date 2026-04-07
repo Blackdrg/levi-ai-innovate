@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 from pydantic import BaseModel, Field
 from backend.core.agent_base import SovereignAgent, AgentResult
 from backend.engines.studio.sd_logic import StudioGenerator
@@ -32,7 +32,6 @@ class ImageAgent(SovereignAgent[ImageInput, AgentResult]):
         self.logger.info(f"Synthesizing Visual Mission: {prompt[:50]}")
         
         # Engage Studio Logic
-        from backend.engines.studio.sd_logic import StudioGenerator
         studio = StudioGenerator()
         
         # Image Synthesis Execution

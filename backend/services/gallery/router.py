@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, Response # type: ignore
+from fastapi import APIRouter, Depends, Request, Response # type: ignore
 from backend.utils.exceptions import LEVIException
-from typing import Optional, List
+from typing import List
 import hashlib
 import numpy as np # type: ignore
 import logging
 
-from backend.auth import get_current_user, get_current_user_optional # type: ignore
+from backend.auth import get_current_user # type: ignore
 from backend.db.firestore_db import db as firestore_db # type: ignore
 from backend.services.learning.models import Query # type: ignore
 from backend.db.redis import get_cached_search, cache_search, HAS_REDIS # type: ignore
@@ -41,7 +41,7 @@ async def get_daily_quote(response: Response, mood: str = "philosophical"):
         # Fallback to AI generation
         quote_text = generate_quote("existence", mood=mood)
         return {"text": quote_text, "author": "LEVI", "mood": mood}
-    except Exception as e:
+    except Exception:
         # Final fallback
         os_quote = fetch_open_source_quote(mood)
         if os_quote:
@@ -80,7 +80,7 @@ async def get_feed(request: Request, response: Response, limit: int = 20, offset
             
         response.headers["ETag"] = etag
         return results
-    except Exception as e:
+    except Exception:
         return []
 
 @router.post("/like/{item_type}/{item_id}")

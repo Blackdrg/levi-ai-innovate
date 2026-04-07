@@ -1,7 +1,6 @@
 import pytest
 from backend.services.orchestrator.brain import LeviBrain
-from backend.core.memory_manager import MemoryManager
-from backend.services.learning.logic import UserPreferenceModel, AdaptivePromptManager
+from backend.services.learning.logic import AdaptivePromptManager
 
 @pytest.mark.asyncio
 async def test_adaptive_prompt_selection():
@@ -56,7 +55,7 @@ async def test_adaptive_prompt_evolution():
     
     # Check if variant score increased
     from backend.db.redis_client import r as redis
-    score = redis.zscore(f"user:user_123:prompt_scores", "p_stoic_v1")
+    score = redis.zscore("user:user_123:prompt_scores", "p_stoic_v1")
     assert float(score) > 0.0
 
 @pytest.mark.asyncio

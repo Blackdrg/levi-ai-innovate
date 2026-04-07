@@ -11,11 +11,10 @@ import base64
 import logging
 import asyncio
 from io import BytesIO
-from typing import Optional, Any, Tuple, Dict, List
-from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
+from typing import Optional, Tuple
+from PIL import Image, ImageEnhance
 from backend.engines.chat.generation import SovereignGenerator
 from backend.engines.utils.security import SovereignSecurity
-from backend.engines.utils.i18n import SovereignI18n
 
 logger = logging.getLogger(__name__)
 

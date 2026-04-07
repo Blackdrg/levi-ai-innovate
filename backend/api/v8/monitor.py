@@ -5,12 +5,10 @@ Refactored to V8 Sovereign standard.
 """
 
 import logging
-from typing import Dict, Any, List
+from typing import Any
 from fastapi import APIRouter, Depends
 from backend.api.utils.auth import get_current_user
-from backend.db.redis import r as redis_client, HAS_REDIS
-from backend.db.firebase import db as firestore_db
-import json
+from backend.db.redis import HAS_REDIS
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="", tags=["Monitoring V8"])

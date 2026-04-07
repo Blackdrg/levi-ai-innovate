@@ -6,15 +6,12 @@ Refactored from backend/services/orchestrator/privacy_router.py.
 """
 
 import logging
-from typing import List, Dict, Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends
 from backend.utils.exceptions import LEVIException
 from backend.auth import get_current_user
 from backend.db.postgres import PostgresDB
 from backend.db.models import UserFact
-from backend.core.memory_utils import prune_old_facts
-from backend.utils.robustness import standard_retry
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="", tags=["Privacy"])
@@ -84,7 +81,7 @@ async def delete_fact(
     """
     user_id = current_user.get("uid") or current_user.get("user_id")
     try:
-        from sqlalchemy import delete, select
+        from sqlalchemy import select
         async with PostgresDB._session_factory() as session:
             # First verify ownership
             stmt = select(UserFact).where(UserFact.id == int(fact_id))

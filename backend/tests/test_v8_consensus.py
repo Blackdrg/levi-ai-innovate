@@ -2,7 +2,6 @@ import asyncio
 import logging
 from backend.core.v8.agents.consensus import ConsensusAgentV8, ConsensusInput
 from backend.core.v8.planner import DAGPlanner
-from backend.core.v8.executor import GraphExecutor
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

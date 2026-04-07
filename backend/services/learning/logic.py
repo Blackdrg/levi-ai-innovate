@@ -5,7 +5,6 @@ Hardened production implementation for autonomous preference learning
 and critic-driven prompt mutation.
 """
 
-import os
 import json
 import logging
 import hashlib
@@ -66,7 +65,8 @@ async def collect_interaction_log(
             prev_lat = float(redis_client.hget(health_key, "avg_latency") or 0.0)
             new_lat = (prev_lat * 0.9) + (latency_ms * 0.1)
             redis_client.hset(health_key, "avg_latency", str(new_lat))
-        except Exception: pass
+        except Exception:
+            pass
 
 async def collect_training_sample(
     user_message: str,
@@ -232,10 +232,14 @@ class UserPreferenceModel:
 
         lengths = [len(s.get("bot_response", "").split()) for s in samples if s.get("rating", 0) >= 4]
         avg_len = int(sum(lengths) / len(lengths)) if lengths else 40
-        if avg_len < 20:   style = "extremely concise, one-line"
-        elif avg_len < 50: style = "concise, 2-3 sentences"
-        elif avg_len < 100: style = "moderate, 3-5 sentences"
-        else:              style = "detailed and expansive"
+        if avg_len < 20:
+            style = "extremely concise, one-line"
+        elif avg_len < 50:
+            style = "concise, 2-3 sentences"
+        elif avg_len < 100:
+            style = "moderate, 3-5 sentences"
+        else:
+            style = "detailed and expansive"
 
         prof: Dict[str, Any] = {
             "preferred_moods": preferred_moods,
@@ -261,8 +265,10 @@ class UserPreferenceModel:
                 if items:
                     decrypted_items = []
                     for i in items:
-                        try: decrypted_items.append(SovereignVault.decrypt(str(i)))
-                        except: pass
+                        try:
+                            decrypted_items.append(SovereignVault.decrypt(str(i)))
+                        except Exception:
+                            pass
                     if decrypted_items:
                         lines.append(f"User {cat}: {', '.join(decrypted_items)}.")
         
@@ -294,7 +300,8 @@ async def update_memory_graph(user_id: str, text: str):
             messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": text}]
         )
         extracted = _parse_json(raw_json)
-        if not extracted: return
+        if not extracted:
+            return
 
         new_entities = extracted.get("entities", {})
         curr_entities = current.get("entities", {})
@@ -303,11 +310,14 @@ async def update_memory_graph(user_id: str, text: str):
             # Decrypt existing for deduplication
             existing_plain = set()
             for i in curr_entities.get(key, []):
-                try: existing_plain.add(SovereignVault.decrypt(str(i)))
-                except: pass
+                try:
+                    existing_plain.add(SovereignVault.decrypt(str(i)))
+                except Exception:
+                    pass
                 
             for i in new_entities.get(key, []): 
-                if i: existing_plain.add(str(i))
+                if i:
+                    existing_plain.add(str(i))
             
             # Re-encrypt for storage
             updated[key] = [SovereignVault.encrypt(i) for i in list(existing_plain)[:15]]
@@ -320,10 +330,13 @@ async def update_memory_graph(user_id: str, text: str):
 def _parse_json(text: str) -> Optional[Dict]:
     try:
         content = text.strip()
-        if "```json" in content: content = content.split("```json")[1].split("```")[0]
-        elif "```" in content: content = content.split("```")[1].split("```")[0]
+        if "```json" in content:
+            content = content.split("```json")[1].split("```")[0]
+        elif "```" in content:
+            content = content.split("```")[1].split("```")[0]
         return json.loads(content.strip())
-    except: return None
+    except Exception:
+        return None
 
 # ─────────────────────────────────────────────
 # 3. ADAPTIVE PROMPT MANAGER & EVOLUTION
@@ -352,9 +365,11 @@ class AdaptivePromptManager:
         """Autonomous Evolution: Mutates lowest-performing variant using success patterns."""
         try:
             scores = await self._load_scores()
-            if not scores or len(scores) < 3: return
+            if not scores or len(scores) < 3:
+                return
             worst_idx = min(scores.keys(), key=lambda k: scores[k])
-            if scores[worst_idx] > 4.2: return # Performing well enough
+            if scores[worst_idx] > 4.2:
+                return # Performing well enough
 
             mutation_prompt = (
                 f"Evolve this system instruction for depth: '{self.PROMPT_VARIANTS[worst_idx]}'. "
@@ -383,7 +398,8 @@ class AdaptivePromptManager:
                 new_avg = (data["avg_score"] * 0.8) + (rating * 0.2)
                 perf_ref.set({"variant_idx": variant_idx, "avg_score": new_avg, "count": data["count"]+1}, merge=True)
             await asyncio.to_thread(_txn)
-        except: pass
+        except Exception:
+            pass
 
     async def _load_scores(self) -> Dict[int, float]:
         records = await asyncio.to_thread(firestore_db.collection("prompt_performance").get)
@@ -448,8 +464,10 @@ async def export_training_data(output_path: str = "/tmp/levi_training.jsonl", mi
 
 def update_system_analytics(metric: str, value: Any = 1):
     """Atomic update for system metrics."""
-    try: firestore_db.collection("system").document("analytics").update({metric: firestore_db.Increment(value)})
-    except: pass
+    try:
+        firestore_db.collection("system").document("analytics").update({metric: firestore_db.Increment(value)})
+    except Exception:
+        pass
 
 def get_learning_stats():
     """Retrieves real-time evolutionary metrics."""
@@ -468,9 +486,11 @@ def get_learning_stats():
 
 async def collect_global_pattern(user_message: str, bot_response: str, rating: int):
     """Crystallizes perfect interactions into the Collective Mind (FAISS)."""
-    if rating < 5: return
+    if rating < 5:
+        return
     # from backend.core.planner import detect_sensitivity -- already imported at top
-    if detect_sensitivity(user_message) or detect_sensitivity(bot_response): return
+    if detect_sensitivity(user_message) or detect_sensitivity(bot_response):
+        return
     
     from backend.core.memory_utils import store_global_wisdom
     await store_global_wisdom(user_message, bot_response, "philosophical")

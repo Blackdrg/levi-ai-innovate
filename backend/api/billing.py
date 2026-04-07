@@ -1,5 +1,4 @@
 import logging
-from typing import Dict, Any, List
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import text, func, select
 from backend.db.postgres_db import get_read_session

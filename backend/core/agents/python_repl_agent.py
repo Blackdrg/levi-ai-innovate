@@ -3,10 +3,9 @@ import sys
 import io
 import traceback
 import asyncio
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 from pydantic import BaseModel, Field
 from backend.core.agent_base import SovereignAgent, AgentResult
-from backend.engines.utils.security import SovereignSecurity
 
 logger = logging.getLogger(__name__)
 

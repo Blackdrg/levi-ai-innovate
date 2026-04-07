@@ -1,6 +1,5 @@
 # pyright: reportMissingImports=false
 import pytest
-import numpy as np
 from unittest.mock import patch, MagicMock
 from backend.services.analytics.router import get_performance_metrics
 

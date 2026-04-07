@@ -6,8 +6,7 @@ Renamed to resolve directory conflict while preserving v7 API support.
 import os
 import logging
 import jwt
-import time
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 from datetime import datetime, timedelta
 from pydantic import BaseModel, Field
 

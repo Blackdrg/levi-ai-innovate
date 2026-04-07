@@ -3,8 +3,10 @@ import logging
 import threading
 import asyncio
 from io import BytesIO
-from typing import Optional, Any, Dict, Tuple
-from PIL import Image
+import json
+from typing import Optional, Tuple
+from backend.core.executor.streams import StreamManager
+from backend.db.redis import r_async, HAS_REDIS_ASYNC
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +51,8 @@ class StudioGenerator:
         self._pipe = None
         self._lock = threading.Lock()
         self.together_api_key = os.getenv("TOGETHER_API_KEY")
+        self.streams = StreamManager()
+        self.is_distributed = os.getenv("DISTRIBUTED_MODE", "false").lower() == "true"
 
     async def generate_image(
         self,
@@ -59,9 +63,19 @@ class StudioGenerator:
     ) -> Optional[BytesIO]:
         """
         Synthesises an image using the best available backend.
-        Priority: ComfyUI local → SD-WebUI local → Together AI cloud.
+        Hybrid (v2.1): Local Small (Fast) Path <-> DCN Heavy Swarm.
         """
         logger.info("Synthesising visual: %s… [Style: %s, Size: %dx%d]", prompt[:30], style, *size)
+
+        # 🚀 Audit Point: Hybrid Logic (DCN v2.1)
+        is_heavy = (size[0] > 512 or size[1] > 512 or enhance)
+        
+        if self.is_distributed and is_heavy:
+            logger.info("📦 [Studio] Heavy task detected. Offloading to DCN Swarm...")
+            result = await self._offload_to_dcn_studio(prompt, style, size, enhance)
+            if result:
+                return result
+            logger.warning("[Studio] DCN offload returned no result. Falling back to Local Waterfall.")
 
         style_config   = STYLE_PRESETS.get(style, STYLE_PRESETS["cinematic"])
         final_prompt   = f"{prompt}, {style_config['suffix']}"
@@ -91,7 +105,8 @@ class StudioGenerator:
         Submits a simple SDXL prompt to a running ComfyUI instance.
         Uses the /prompt endpoint with a basic latent-image workflow.
         """
-        import aiohttp, uuid, json as _json
+        import aiohttp
+        import uuid
 
         workflow = {
             "3": {
@@ -170,7 +185,8 @@ class StudioGenerator:
         self, prompt: str, negative: str, size: Tuple[int, int]
     ) -> Optional[BytesIO]:
         """Calls the SD-WebUI /sdapi/v1/txt2img endpoint."""
-        import aiohttp, base64
+        import aiohttp
+        import base64
 
         payload = {
             "prompt":          prompt,
@@ -214,7 +230,8 @@ class StudioGenerator:
             return None
 
         try:
-            import requests, base64
+            import requests
+            import base64
             loop = asyncio.get_event_loop()
 
             payload = {
@@ -247,5 +264,62 @@ class StudioGenerator:
         except Exception as exc:
             logger.error("[Together] Studio generation failure: %s", exc)
 
+        return None
+
+    async def _offload_to_dcn_studio(
+        self, prompt: str, style: str, size: Tuple[int, int], enhance: bool
+    ) -> Optional[BytesIO]:
+        """Enqueues image task to specialized DCN Stream and waits for reactive completion."""
+        if not HAS_REDIS_ASYNC: return None
+        
+        mission_id = f"studio_{os.urandom(4).hex()}"
+        task_pkg = {
+            "mission_id": mission_id,
+            "node_id": "studio_task",
+            "type": "studio_generate",
+            "payload": {
+                "prompt": prompt,
+                "style": style,
+                "width": size[0],
+                "height": size[1],
+                "enhance": enhance
+            },
+            "ts": asyncio.get_event_loop().time()
+        }
+        
+        try:
+            # 1. Enqueue to specialized studio stream
+            # We use a dcn:studio_stream to allow workers to specialize
+            await r_async.xadd("dcn:studio_stream", {"payload": json.dumps(task_pkg)}, maxlen=100)
+            
+            # 2. Wait reactively for result (v2.1 PubSub)
+            pubsub = r_async.pubsub()
+            channel = f"dcn:mission:{mission_id}:events"
+            await pubsub.subscribe(channel)
+            
+            logger.info(f"⏳ [Studio] Waiting for swarm node to process {mission_id}...")
+            
+            start = asyncio.get_event_loop().time()
+            while (asyncio.get_event_loop().time() - start) < 60: # 60s timeout for visuals
+                msg = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
+                if msg and msg["type"] == "message":
+                    data = json.loads(msg["data"])
+                    if data.get("event") == "node_complete":
+                        # Fetch result from result key (Base64'd since it's an image)
+                        res_key = f"dcn:mission:{mission_id}:result"
+                        img_b64 = await r_async.get(res_key)
+                        if img_b64:
+                            import base64
+                            buf = BytesIO(base64.b64decode(img_b64))
+                            buf.seek(0)
+                            await pubsub.unsubscribe(channel)
+                            await pubsub.close()
+                            return buf
+            
+            await pubsub.unsubscribe(channel)
+            await pubsub.close()
+        except Exception as e:
+            logger.error(f"[Studio] DCN Error: {e}")
+            
         return None
 

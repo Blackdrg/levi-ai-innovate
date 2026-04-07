@@ -1,7 +1,7 @@
 import os
 
 # --- Sovereign Graduation: Universal Version Sync Script ---
-TARGET_VERSION = "v13.1.0-Hardened-PROD"
+TARGET_VERSION = "v14.0.0-Autonomous-SOVEREIGN"
 LEGACY_VERSION = "v1.0.0-RC1"
 EXTENSIONS = {".md", ".py", ".conf", ".json", ".js", ".jsx"}
 PROJECT_ROOT = "d:/LEVI-AI"
@@ -35,7 +35,7 @@ def sync_versions():
                 except Exception as e:
                     print(f"❌ Error updating {file_path}: {e}")
 
-    print(f"\n--- Graduation Sync Complete ---")
+    print("\n--- Graduation Sync Complete ---")
     print(f"Total Files Updated: {updated_files}")
     print(f"Total Replacements: {replacement_count}")
 
