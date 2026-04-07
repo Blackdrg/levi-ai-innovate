@@ -11,24 +11,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY backend/requirements.prod.txt .
 RUN pip install --no-cache-dir --user -r requirements.prod.txt
 
-# Stage 2: Final (Sovereign Monolith Graduation)
+# Stage 2: Final (Sovereign OS v14.0.0 Graduation)
 FROM python:3.11-slim
 
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app \
-    PATH="/home/levi_monolith/.local/bin:$PATH"
+    PATH="/home/sovereign_operator/.local/bin:$PATH"
 
 # Create production non-root user
-RUN useradd -m levi_monolith && \
+RUN useradd -m sovereign_operator && \
     mkdir -p /app/backend/data && \
-    chown -R levi_monolith:levi_monolith /app
+    chown -R sovereign_operator:sovereign_operator /app
 
-USER levi_monolith
+USER sovereign_operator
 
 # Copy lean dependencies from builder
-COPY --from=builder /root/.local /home/levi_monolith/.local
+COPY --from=builder /root/.local /home/sovereign_operator/.local
 
 # Copy application source
 COPY shared/ /app/shared/
@@ -37,11 +37,11 @@ COPY backend/ /app/backend/
 # Metadata & Health Graduation
 EXPOSE 8000
 LABEL maintainer="LEVI-AI Collective"
-LABEL version="13.0.0-final"
+LABEL version="14.0.0-Autonomous-SOVEREIGN"
 LABEL architecture="Distributed Cognitive Network (DCN)"
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
   CMD curl -f http://localhost:8000/health || exit 1
 
-# Launch the Unified Monolith
+# Launch the Sovereign OS Core
 CMD ["uvicorn", "backend.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

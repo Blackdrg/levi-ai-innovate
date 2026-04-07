@@ -11,7 +11,7 @@ SCALING_ALERT_KEY = "dcn:scaling:alerts"
 
 class AutoScaler:
     """
-    Sovereign Auto-Scaler v13.1.0.
+    Sovereign Auto-Scaler v14.0.0.
     Monitors swarm saturation and emits Scaling Cognitive Pulses.
     """
 

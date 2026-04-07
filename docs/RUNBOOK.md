@@ -1,6 +1,6 @@
-# 🏃 LEVI-AI Operational Runbook (v14.0 Production)
+# 🏃 LEVI-AI Operational Runbook (v14.0.0-Autonomous-SOVEREIGN)
 
-Operations and recovery procedures for the LEVI-AI v14.0 Production Architecture.
+Operations and recovery procedures for the LEVI-AI v14.0.0-Autonomous-SOVEREIGN Production Architecture.
 
 ---
 
@@ -138,4 +138,4 @@ curl -N http://localhost:8000/api/v1/telemetry/stream
 
 ---
 
-© 2026 LEVI-AI HUB — Operational Runbook v14.0 Production Stable
+© 2026 LEVI-AI Sovereign OS — Operational Runbook v14.0.0 Production Stable

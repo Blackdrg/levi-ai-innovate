@@ -1,6 +1,6 @@
 """
-Sovereign Generation Engine v13.0.0.
-High-performance streaming cognitive synthesis for the Absolute Monolith.
+Sovereign Generation Engine v14.0.0.
+High-performance streaming cognitive synthesis for the Sovereign OS.
 """
 
 import os
@@ -27,8 +27,8 @@ class ModelProvider(Enum):
 
 class SovereignGenerator:
     """
-    Absolute Monolith Generator (v13.0.0).
-    Parallel model routing and Adaptive Pulse v4.1 integration.
+    Sovereign OS Generator (v14.0.0).
+    Parallel model routing and Adaptive Pulse v5.0 integration.
     """
     
     def __init__(self):
@@ -37,7 +37,7 @@ class SovereignGenerator:
 
     async def stream_response(self, messages: List[Dict], model: Optional[str] = None, model_tier: str = "L2", lang: str = "en", task_type: str = "chat"):
         """
-        Token-by-token SSE streaming via local Ollama (v13.0.0).
+        Token-by-token SSE streaming via local Ollama (v14.0.0).
         """
         # Resolve model from tier if not explicitly provided
         if not model:
@@ -49,7 +49,7 @@ class SovereignGenerator:
             async for token in self._stream_local(messages, model, lang):
                 yield token
         except Exception as e:
-            logger.error(f"[Generator-v13] Local stream fail: {e}")
+            logger.error(f"[Generator-v14] Local stream fail: {e}")
             yield SovereignI18n.get_prompt("error_fallback", lang)
 
     async def _stream_local(self, messages: List[Dict], model: str, lang: str):
@@ -87,28 +87,28 @@ class SovereignGenerator:
 
     async def council_of_models(self, messages: List[Dict], model_tier: str = "L3") -> str:
         """
-        Council of Models (v13.0): Local Multi-Agent Consensus.
+        Council of Models (v14.0.0): Local Multi-Agent Consensus.
         """
         model = ModelRouter.get_model_for_tier(model_tier)
         return await self._single_call(messages, model)
 
     async def _single_call(self, messages: List[Dict], model: str, provider: Any = None) -> str:
-        """Sovereign v13: Fast local generation path."""
+        """Sovereign v14.0.0: Fast local generation path."""
         from backend.utils.llm_utils import call_ollama_llm
         return await call_ollama_llm(messages, model=model)
 
     async def generate(self, messages: List[Dict], task_type: str = "chat") -> str:
-        """Central non-streaming entry point (v13.0 Completion)."""
+        """Central non-streaming entry point (v14.0.0 Completion)."""
         return await self.router.generate_hybrid(messages, task_type)
 
 class LLMRouter:
     """
-    Sovereign LLM Router v13.0.
+    Sovereign LLM Router v14.0.0.
     Decides between local reasoning, safe-mode grounding, and high-fidelity cloud APIs.
     """
     def route(self, prompt: str, task_type: str = "chat") -> str:
         """
-        Sovereign v13.0.0: Neural Handoff Integration.
+        Sovereign v14.0.0: Neural Handoff Integration.
         """
         analysis = SovereignHandoff.analyze_mission(prompt, task_type)
         provider = SovereignHandoff.select_provider(analysis)
@@ -119,11 +119,11 @@ class LLMRouter:
             "session_id": f"gen_{uuid.uuid4().hex[:6]}"
         })
         
-        logger.info(f"[LLMRouter-v13] Routing {task_type} mission to {provider.upper()} engine.")
+        logger.info(f"[LLMRouter-v14] Routing {task_type} mission to {provider.upper()} engine.")
         return provider
 
     async def generate_hybrid(self, messages: List[Dict], task_type: str = "chat") -> str:
-        """Route and generate based on result (v13 async)."""
+        """Route and generate based on result (v14 async)."""
         prompt = messages[-1]["content"] or ""
         route = self.route(prompt, task_type)
         
@@ -135,7 +135,7 @@ class LLMRouter:
             SovereignBroadcaster.publish("NEURAL_THINKING", {"provider": "local"})
             res = await local_llm.agenerate(prompt, system_prompt=system_prompt)
             if res: return res
-            logger.warning("[LLMRouter-v13] Local failure. Falling back to API.")
+            logger.warning("[LLMRouter-v14] Local failure. Falling back to API.")
 
         gen = SovereignGenerator()
         return await gen.council_of_models(messages)
@@ -144,14 +144,14 @@ from backend.config.prompts import PromptRegistry
 
 # ── Global Pulse Utilities ──────────────────────────────────────────────────
 def _build_dynamic_system_prompt(persona: Dict, user_memory: Optional[str], lang: str = "en") -> str:
-    """Sovereign v13.0.0: Dynamics for the Absolute Monolith."""
+    """Sovereign v14.0.0: Dynamics for the Sovereign OS."""
     # Use PromptRegistry for versioned templates
     base = PromptRegistry.get_prompt("the_brain", version="v1.1")
     
     if user_memory: 
         base += f"\n\n[USER RESONANCE]:\n{user_memory}"
     
-    base += "\n\n[v13.0 SOVEREIGN PROTOCOL]:\n"
+    base += "\n\n[v14.0 SOVEREIGN PROTOCOL]:\n"
     base += "- Priority 1: DETERMINISTIC ENGINE accuracy.\n"
     base += "- Priority 2: ABSOLUTE PRIVACY (Safe Mode).\n"
     base += "- Return logic-synthesized responses only.\n"
@@ -164,7 +164,7 @@ async def async_stream_llm_response(
     user_memory: Optional[str] = None,
     persona: Optional[Dict] = None
 ):
-    """Entry point for v13.0 token streaming."""
+    """Entry point for v14.0.0 token streaming."""
     generator = SovereignGenerator()
     if not any(m["role"] == "system" for m in messages):
         identity = _build_dynamic_system_prompt(persona or {}, user_memory, lang=lang)

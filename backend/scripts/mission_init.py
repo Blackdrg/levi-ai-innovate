@@ -1,5 +1,5 @@
 """
-LEVI-AI Sovereign OS v13.0.0 Stable
+LEVI-AI Sovereign OS v14.0.0 Stable
 Global Mission Initializer (The Heart of the Brain).
 Initializes high-fidelity cognitive loops and DCN synchrony.
 """
@@ -26,17 +26,17 @@ logger = logging.getLogger("MissionInit")
 
 async def mission_initialization_sequence():
     """
-    Sovereign Protocol v13.0: Absolute Monolith Boot.
+    Sovereign Protocol v14.0: Sovereign OS Boot.
     """
-    logger.info("=== INITIALIZING ABSOLUTE MONOLITH (v13.0.0) ===")
+    logger.info("=== INITIALIZING SOVEREIGN OS (v14.0.0) ===")
     
-    # 1. Heartbeat Pulse (v13 Handshake)
-    logger.info("[Init] Emitting Neural Pulse v13.0.0 to Global Stream...")
+    # 1. Heartbeat Pulse (v14 Handshake)
+    logger.info("[Init] Emitting Neural Pulse v14.0.0 to Global Stream...")
     SovereignBroadcaster.broadcast({
         "type": "PULSE_HANDSHAKE", 
-        "version": "13.0.0", 
+        "version": "14.0.0", 
         "status": "pulsing", 
-        "mode": "Absolute Monolith"
+        "mode": "Sovereign OS"
     })
     
     # 2. Database & Vector Synchronization (HNSW/SQL Sync)

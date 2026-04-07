@@ -1,4 +1,4 @@
-## [14.0.0] — 2026-04-07 (Production Release)
+## [14.0.0-Autonomous-SOVEREIGN] — 2026-04-07 (Production Graduation)
 ### **Production Hardening & System Stability**
 
 - **[SECURITY]** EgressProxy: Deny-by-Default allowlist (Tavily/SerpAPI only).

@@ -68,7 +68,7 @@ async def get_current_user(request: Request, cred: Optional[HTTPAuthorizationCre
                 return user_data
 
         # 2. Sovereign/Firebase Verification
-        if token == "sovereign_test_token_v13" and os.getenv("ENVIRONMENT") != "production":
+        if token == "sovereign_test_token_v14" and os.getenv("ENVIRONMENT") != "production":
             user_data = {
                 "uid": "test_pro_user",
                 "username": "test_pro",
@@ -108,7 +108,7 @@ async def get_current_user(request: Request, cred: Optional[HTTPAuthorizationCre
             except Exception: pass
             
         if not user_data:
-            # Absolute Monolith v13: SQL Resonance Fallback
+            # Sovereign OS v14.0.0: SQL Resonance Fallback
             try:
                 async with get_write_session() as session:
                     stmt = select(UserProfile).where(UserProfile.user_id == uid)
@@ -190,7 +190,7 @@ async def verify_admin(request: Request):
 
 async def verify_internal_service(request: Request):
     """
-    Hardened Service-to-Service authentication for internal monolith triggers.
+    Hardened Service-to-Service authentication for internal sovereign triggers.
     Enforces the use of INTERNAL_SERVICE_KEY for background tasks and distillation.
     """
     internal_key = os.getenv("INTERNAL_SERVICE_KEY") or os.getenv("ADMIN_KEY")

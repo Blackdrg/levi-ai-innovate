@@ -16,9 +16,9 @@ class SovereignError(LEVIException):
         super().__init__(message, status_code=503, error_code="SOVEREIGN_ENGINE_OFFLINE", metadata=metadata)
 
 class ResourceSaturationError(LEVIException):
-    """Raised when the monolith's 8Gi RAM or Concurrency Gate is saturated."""
+    """Raised when the Sovereign OS 8Gi RAM or Concurrency Gate is saturated."""
     def __init__(self, message: str):
-        super().__init__(message, status_code=429, error_code="MONOLITH_SATURATED")
+        super().__init__(message, status_code=429, error_code="SOVEREIGN_RESOURCES_SATURATED")
 
 def levi_exception_handler(request_id: str, exc: LEVIException):
     content = {

@@ -9,7 +9,7 @@
 ### 1. API Gateway & Infrastructure
 - **OWASP Top 10**: Comprehensive testing of the primary API gateway.
 - **JWT Forgery**: Validation of JWT implementation, including RS256/HS256 transitions, key leakage, and token theft.
-- **Docker Attack Surface**: Probing for Docker socket exposure, container breakout, and insecure volume mounts on the Absolute Monolith.
+- **Docker Attack Surface**: Probing for Docker socket exposure, container breakout, and insecure volume mounts on the Sovereign OS.
 - **EgressProxy**: Testing for SSRF via allowlist bypass (e.g., DNS rebinding, URL encoding).
 
 ### 2. Agent Ecosystem & LLM Injection

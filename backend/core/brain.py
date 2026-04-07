@@ -1,7 +1,7 @@
 """
-Sovereign Brain v8.
+LEVI-AI v14.0 Brain (Meta-Orchestrator).
 The cognitive heart of LEVI-AI.
-Orchestrates Perception, Goal-Setting, Planning, Execution, and Reflection.
+Centrally governs Strategy, Subsystem Activation, and Execution Policy.
 """
 
 import logging
@@ -11,14 +11,17 @@ from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional, AsyncGenerator, Union
 
 from .perception import PerceptionEngine
+from .policy_engine import BrainPolicyEngine
 from .goal_engine import GoalEngine
 from .planner import DAGPlanner
 from .executor import GraphExecutor
+from .failure_engine import FailurePolicyEngine
 from .reflection import ReflectionEngine
 from .workflow_engine import WorkflowEngine
 from .context_manager import ContextManager
 from backend.memory.manager import MemoryManager
-from .orchestrator_types import ToolResult
+from .orchestrator_types import ToolResult, BrainDecision, BrainMode, FailureType, FailureAction
+from backend.services.brain_service import brain_service
 from ..utils.kafka import SovereignKafka
 from backend.broadcast_utils import (
     SovereignBroadcaster, 
@@ -30,18 +33,20 @@ from backend.broadcast_utils import (
 
 logger = logging.getLogger(__name__)
 
-class LeviBrainV8:
+class LeviBrainV14:
     """
-    LeviBrain v8: High-Fidelity Cognitive Pipeline.
-    Architecture: Perception -> Goal -> Planning -> Execution -> Reflection -> Memory.
+    LeviBrain v14.0: Brain Control System.
+    Architecture: Perception -> BRAIN POLICY -> Goal -> Planning -> Execution -> Reflection -> Memory.
     """
 
     def __init__(self):
         self.memory = MemoryManager()
         self.perception = PerceptionEngine(self.memory)
+        # Decision engine is now externalized via brain_service
         self.goal_engine = GoalEngine()
         self.planner = DAGPlanner()
         self.executor = GraphExecutor()
+        self.failure_engine = FailurePolicyEngine()
         self.reflection = ReflectionEngine()
         self.workflow_engine = WorkflowEngine()
         self.context = ContextManager()
@@ -54,10 +59,6 @@ class LeviBrainV8:
         streaming: bool = False,
         **kwargs
     ) -> Union[Dict[str, Any], AsyncGenerator[Dict[str, Any], None]]:
-        """
-        Unified Cognitive Entry Point v8.
-        Routes the mission to either the Batch or Streaming pipeline.
-        """
         if streaming:
             return self.stream(user_input, user_id, session_id, **kwargs)
         else:
@@ -72,113 +73,127 @@ class LeviBrainV8:
         **kwargs
     ) -> Dict[str, Any]:
         """
-        LeviBrain v8: The main cognitive execution pass.
-        7-Step Pipeline: Perception -> Goal -> Planning -> Execution -> Reflection -> Memory -> Response.
+        LeviBrain v14.0: Brain-Controlled Execution Pass.
+        Pipeline: Perception -> POLICY -> Goal -> Planning -> Execution -> Reflection -> Memory.
         """
-        request_id = request_id or f"v8_{uuid.uuid4().hex[:8]}"
+        request_id = request_id or f"v14_{uuid.uuid4().hex[:8]}"
         session_id = session_id or f"sess_{uuid.uuid4().hex[:8]}"
         mission_start = datetime.now(timezone.utc)
-        logger.info("[V8 Brain] Starting Cognitive Mission: %s", request_id)
+        logger.info("[V14 Brain] Starting Cognitive Mission: %s", request_id)
         
-        # 1. PERCEPTION: Extract intent and context
-        SovereignBroadcaster.publish(PULSE_MISSION_STARTED, {"request_id": request_id, "user_input": user_input}, user_id=user_id)
-        asyncio.create_task(SovereignKafka.emit_event("brain_events", {"event": "MISSION_STARTED", "request_id": request_id}))
-        perception = await self.perception.perceive(user_input, user_id, session_id, **kwargs)
-
+        # Initialize default decision for failure handling
+        decision = None
         
-        # 2. GOAL CREATION: Formulate cognitive mission
-        goal = await self.goal_engine.create_goal(perception)
+        try:
+            # 1. PERCEPTION
+            SovereignBroadcaster.publish(PULSE_MISSION_STARTED, {"request_id": request_id, "user_input": user_input}, user_id=user_id)
+            asyncio.create_task(SovereignKafka.emit_event("brain_events", {"event": "MISSION_STARTED", "request_id": request_id}))
+            perception = await self.perception.perceive(user_input, user_id, session_id, **kwargs)
 
-        # 3. PLANNING (DAG): Decompose goal into task graph
-        task_graph = await self.planner.build_task_graph(goal, perception)
-        SovereignBroadcaster.publish(PULSE_MISSION_PLANNED, {"request_id": request_id, "goal": goal.objective, "steps": [s.description for s in task_graph.steps]}, user_id=user_id)
-        asyncio.create_task(SovereignKafka.emit_event("brain_events", {"event": "MISSION_PLANNED", "request_id": request_id, "graph": task_graph.dict()}))
+            # 2. BRAIN POLICY (v14.0 Controlled)
+            policy = await brain_service.generate_policy(user_input, perception["context"])
+            logger.info(f"[V14 Brain] Policy Locked: {policy.mode} (ID: {policy.policy_id})")
+            
+            # Policy Enforcement: Fail Mission if Policy Generation fails (Sovereign Requirement)
+            if not policy:
+                raise Exception("Sovereign Policy Violation: Failed to generate execution pulse.")
 
-        
-        # 4. EXECUTION: Run the task graph (Parallel DAG or Autonomous Workflow)
-        if perception["intent"].intent_type == "complex":
-            logger.info("[V8 Brain] Complexity Breach Detected. Handoff to Autonomous Workflow Engine.")
-            wf_state = await self.workflow_engine.run(goal, self, perception)
-            final_response = wf_state["final_output"]
-            results = [ToolResult(success=True, message=res["results"][-1]["message"], agent=res["results"][-1]["agent"]) for res in wf_state["steps"]] # Simplified for trace
+            # 2.1 Bridge Service Policy to Internal BrainDecision (v14.0 Monolith compatibility)
+            from .orchestrator_types import BrainDecision, MemoryPolicy, ExecutionPolicy, LLMPolicy, BrainMode
+            
+            # Map string mode to BrainMode enum
+            try:
+                bm = BrainMode(policy.mode)
+            except ValueError:
+                bm = BrainMode.BALANCED
+
+            decision = BrainDecision(
+                mode=bm,
+                enable_agents=policy.enable,
+                memory_policy=MemoryPolicy(
+                    redis=policy.memory.get("redis", True),
+                    postgres=policy.memory.get("postgres", True),
+                    neo4j=policy.memory.get("neo4j", False),
+                    faiss=policy.memory.get("faiss", True)
+                ),
+                execution_policy=ExecutionPolicy(
+                    parallel_waves=policy.execution.get("parallel_waves", 2),
+                    max_retries=policy.execution.get("max_retries", 1),
+                    sandbox_required=policy.enable.get("sandbox", False)
+                ),
+                llm_policy=LLMPolicy(
+                    local_only=policy.llm.get("local_only", True),
+                    cloud_fallback=policy.llm.get("fallback_allowed", False)
+                ),
+                complexity_score=policy.dict().get("scores", {}).get("complexity_score", 0.5)
+            )
+
+            # 3. GOAL CREATION (Controlled by Policy)
+            goal = await self.goal_engine.create_goal(perception, decision=decision)
+
+            # 4. PLANNING (DAG)
+            task_graph = await self.planner.build_task_graph(goal, perception, decision=decision)
+            SovereignBroadcaster.publish(PULSE_MISSION_PLANNED, {"request_id": request_id, "goal": goal.objective}, user_id=user_id)
+
+            # 5. EXECUTION (Enforcing Policy Limits)
+            results = await self.executor.execute(task_graph, perception, user_id=user_id, policy=decision.execution_policy)
+            SovereignBroadcaster.publish(PULSE_MISSION_EXECUTED, {"request_id": request_id}, user_id=user_id)
+
+            # 6. REFLECTION Loop
+            from .engine import synthesize_response
+            draft_response = await synthesize_response(results, perception["context"])
+            
+            if decision.enable_agents.get("critic", False):
+                refinement_count = 0
+                max_refs = decision.execution_policy.max_retries
+                while refinement_count < max_refs:
+                    reflection = await self.reflection.evaluate(draft_response, goal, perception, results)
+                    if reflection["is_satisfactory"]:
+                        break
+                    refinement_count += 1
+                    task_graph = await self.planner.refine_plan(task_graph, reflection, goal, perception)
+                    results = await self.executor.execute(task_graph, perception, user_id=user_id, policy=decision.execution_policy)
+                    draft_response = await synthesize_response(results, perception["context"])
+            
+            final_response = draft_response
+            
+            # 7. MEMORY SYNC (Tiered Routing)
+            try:
+                await self.memory.store(user_id, session_id, user_input, final_response, perception, results, policy=decision.memory_policy)
+            except Exception as mem_err:
+                logger.error(f"[V14 Brain] Background Memory Sync Error: {mem_err}")
+
+            # 8. AUDITING
+            from backend.evaluation.evaluator import AutomatedEvaluator
+            latency = (datetime.now(timezone.utc) - mission_start).total_seconds() * 1000
+            audit = await AutomatedEvaluator.evaluate_transaction(
+                user_id=user_id, session_id=session_id, user_input=user_input,
+                response=final_response, goals=[goal.objective], 
+                tool_results=[r.dict() for r in results], latency_ms=latency
+            )
+            SovereignBroadcaster.publish(PULSE_MISSION_AUDITED, {"request_id": request_id, "score": audit["total_score"]}, user_id=user_id)
+
             return {
                 "response": final_response,
                 "request_id": request_id,
-                "intent": "complex",
-                "goal": goal.dict(),
-                "workflow": wf_state,
-                "audit": {"total_score": 1.0} # Workflow has internal evaluation
+                "mode": policy.mode,
+                "results": [r.dict() for r in results],
+                "policy": policy.dict()
             }
 
-        results = await self.executor.execute(task_graph, perception, user_id=user_id)
-        SovereignBroadcaster.publish(PULSE_MISSION_EXECUTED, {"request_id": request_id, "success_count": len([r for r in results if r.success])}, user_id=user_id)
-        asyncio.create_task(SovereignKafka.emit_event("brain_events", {"event": "MISSION_EXECUTED", "request_id": request_id, "results": [r.dict() for r in results]}))
-
-
-        # 5. REFLECTION & DEBATE LOOP: Evaluate and refine if necessary
-        from .engine import synthesize_response
-        draft_response = await synthesize_response(results, perception["context"])
-        
-        refinement_count = 0
-        MAX_REFINEMENTS = 2
-        
-        while refinement_count < MAX_REFINEMENTS:
-            reflection = await self.reflection.evaluate(draft_response, goal, perception, results)
+        except Exception as e:
+            logger.error(f"[V14 Brain] Structural Failure: {e}")
+            # Recovery Action Logic
+            if decision:
+                failure_type = FailureType.LLM_ERROR if "LLM" in str(e).upper() else FailureType.DAG_CONFLICT
+                action = await self.failure_engine.determine_action(failure_type, str(e), {}, decision)
+                
+                if action.action == "fallback":
+                    return {"response": "I encountered a high-complexity anomaly and shifted to a resilient model proxy.", "mode": "recovery"}
+                elif action.action == "regenerate":
+                    return {"response": "Plan conflict detected. Re-initiating sequential mission.", "mode": "recovery"}
             
-            if reflection["is_satisfactory"]:
-                final_response = draft_response
-                break
-            
-            refinement_count += 1
-            logger.warning("[V8 Brain] Low fidelity mission detected. Refinement cycle %d/%d initiated.", refinement_count, MAX_REFINEMENTS)
-            # Standard pulse for the block mission (Kafka/Audit)
-            asyncio.create_task(SovereignKafka.emit_event("brain_events", {"event": "DEBATE_CYCLE", "request_id": request_id, "cycle": refinement_count, "fidelity": reflection['score']}))
-            
-            # Refine the plan based on the Critic's fix
-            task_graph = await self.planner.refine_plan(task_graph, reflection, goal, perception)
-            results = await self.executor.execute(task_graph, perception, user_id=user_id)
-            draft_response = await synthesize_response(results, perception["context"])
-        else:
-            # If we reach max refinements, use the best possible draft
-            final_response = draft_response
-        
-        # Last known fidelity score
-        final_fidelity = reflection.get("score") if 'reflection' in locals() else 0.0
-
-
-        # 6. MEMORY UPDATE: Store results and context
-        await self.memory.store(user_id, session_id, user_input, final_response, perception, results, fidelity=final_fidelity)
-
-        # 7. MISSION AUDITING: Self-Evolution Loop
-        from backend.evaluation.evaluator import AutomatedEvaluator
-        latency = (datetime.now(timezone.utc) - mission_start).total_seconds() * 1000
-        audit = await AutomatedEvaluator.evaluate_transaction(
-            user_id=user_id,
-            session_id=session_id,
-            user_input=user_input,
-            response=final_response,
-            goals=[goal.objective] + goal.success_criteria,
-            tool_results=[r.dict() for r in results],
-            latency_ms=latency
-        )
-        SovereignBroadcaster.publish(PULSE_MISSION_AUDITED, {"request_id": request_id, "score": audit["total_score"], "latency": latency}, user_id=user_id)
-        asyncio.create_task(SovereignKafka.emit_event("brain_events", {"event": "MISSION_AUDITED", "request_id": request_id, "score": audit["total_score"]}))
-
-
-        # 8. FINAL RESPONSE
-        return {
-            "response": final_response,
-            "request_id": request_id,
-            "intent": perception["intent"].intent_type,
-            "goal": goal.dict(),
-            "graph": task_graph.dict(),
-            "results": [r.dict() for r in results],
-            "audit": audit
-        }
-
-    async def _update_memory(self, user_id: str, session_id: str, user_input: str, response: str, perception: Dict[str, Any], results: List[ToolResult], fidelity: Optional[float] = None):
-        """Bridges results to the 4-tier memory ecosystem."""
-        await self.memory.store(user_id, session_id, user_input, response, perception, results, fidelity=fidelity)
+            return {"response": f"Brain Anomaly: {str(e)}", "status": "error"}
 
     async def stream(
         self, 
@@ -188,65 +203,74 @@ class LeviBrainV8:
         request_id: Optional[str] = None,
         **kwargs
     ) -> AsyncGenerator[Dict[str, Any], None]:
-        """
-        Token-by-token cognitive streaming.
-        Architecture: Metadata -> Perception -> Activity -> Execution -> Token Stream.
-        """
-        request_id = request_id or f"v8_stream_{uuid.uuid4().hex[:8]}"
-        logger.info("[V8 Brain] Starting Streaming Mission: %s", request_id)
-
-        # 1. Initial Metadata Pulse
+        request_id = request_id or f"v14_stream_{uuid.uuid4().hex[:8]}"
         yield {"event": "metadata", "data": {"request_id": request_id, "status": "pulsing"}}
 
         try:
-            # 2. Perception Pass
+            # 1. Perception
             perception = await self.perception.perceive(user_input, user_id, session_id, **kwargs)
             yield {"event": "activity", "data": f"Intent: {perception['intent'].intent_type.upper()}"}
             
+            # 2. Brain Policy (v14.0 Controlled)
+            policy = await brain_service.generate_policy(user_input, perception["context"])
+            yield {"event": "activity", "data": f"Mode: {policy.mode}"}
+            
+            # Policy Enforcement: Fail if Policy Generation fails
+            if not policy:
+                raise Exception("Sovereign Policy Violation: Failed to generate execution pulse.")
+            
+            # 2.1 Bridge to internal Decision
+            from .orchestrator_types import BrainDecision, MemoryPolicy, ExecutionPolicy, LLMPolicy, BrainMode
+            try:
+                bm = BrainMode(policy.mode)
+            except ValueError:
+                bm = BrainMode.BALANCED
+
+            decision = BrainDecision(
+                mode=bm,
+                enable_agents=policy.enable,
+                memory_policy=MemoryPolicy(
+                    redis=policy.memory.get("redis", True),
+                    postgres=policy.memory.get("postgres", True),
+                    neo4j=policy.memory.get("neo4j", False),
+                    faiss=policy.memory.get("faiss", True)
+                ),
+                execution_policy=ExecutionPolicy(
+                    parallel_waves=policy.execution.get("parallel_waves", 2),
+                    max_retries=policy.execution.get("max_retries", 1),
+                    sandbox_required=policy.enable.get("sandbox", False)
+                ),
+                llm_policy=LLMPolicy(
+                    local_only=policy.llm.get("local_only", True),
+                    cloud_fallback=policy.llm.get("fallback_allowed", False)
+                )
+            )
+
             # 3. Goal & Planning
-            goal = await self.goal_engine.create_goal(perception)
-            task_graph = await self.planner.build_task_graph(goal, perception)
-            yield {"event": "graph", "data": task_graph.dict()}
-            yield {"event": "activity", "data": "Mission Graph constructed."}
+            goal = await self.goal_engine.create_goal(perception, decision=decision)
+            task_graph = await self.planner.build_task_graph(goal, perception, decision=decision)
             
-            # 4. Execution & Reflection (v8 Synthetic Swarm)
-            refinement_count = 0
-            MAX_REFINEMENTS = 2
-            
-            while refinement_count < MAX_REFINEMENTS:
-                results = await self.executor.execute(task_graph, perception, user_id=user_id)
-                yield {"event": "results", "data": [r.dict() for r in results]}
-                
-                # Dynamic Logic Hub Synthesis
-                from .engine import synthesize_response
-                draft_response = await synthesize_response(results, perception["context"])
-                
-                reflection = await self.reflection.evaluate(draft_response, goal, perception, results)
-                if reflection["is_satisfactory"]:
-                    break
-                
-                refinement_count += 1
-                yield {"event": "activity", "data": f"Refinement Cycle {refinement_count}: {reflection['issues'][0]}"}
-                task_graph = await self.planner.refine_plan(task_graph, reflection, goal, perception)
-                yield {"event": "activity", "data": "Mission Graph refined."}
+            # 4. Execution (Enforcing Policy)
+            results = await self.executor.execute(task_graph, perception, user_id=user_id, policy=decision.execution_policy)
             
             # 5. Streaming Synthesis
             from .engine import synthesize_streaming_response
-            
             full_response_parts = []
             async for chunk in synthesize_streaming_response(results, perception["context"]):
                 if "token" in chunk:
                     full_response_parts.append(chunk["token"])
                 yield chunk
 
-            # 6. Memory Update (Background)
+            # 6. Memory Sync (Background)
             full_response = "".join(full_response_parts)
-            asyncio.create_task(self._update_memory(user_id, session_id, user_input, full_response, perception, results))
+            asyncio.create_task(self.memory.store(user_id, session_id, user_input, full_response, perception, results, policy=decision.memory_policy))
 
         except Exception as e:
-            logger.error("[V8 Brain] Streaming anomaly: %s", e)
-            yield {"event": "error", "data": "The cognitive stream encountered a quantum misalignment."}
+            logger.error("[V14 Brain] Stream Failure: %s", e)
+            if decision:
+                # Basic recovery for stream if possible
+                yield {"event": "error", "data": "The cognitive stream encountered a quantum misalignment. Re-adjusting..."}
+            else:
+                yield {"event": "error", "data": "Critical Perception Failure."}
 
-
-LeviBrain = LeviBrainV8
-
+LeviBrain = LeviBrainV14

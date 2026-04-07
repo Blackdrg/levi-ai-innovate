@@ -65,7 +65,7 @@ async def test_graduation_prompt_registry():
     """Audit Point 19: Prompt Registry."""
     from backend.config.prompts import PromptRegistry
     p = PromptRegistry.get_prompt("the_brain", version="v1.1")
-    assert "Absolute Monolith" in p
+    assert "Sovereign OS" in p
 
 @pytest.mark.asyncio
 async def test_graduation_pii_sanitization():

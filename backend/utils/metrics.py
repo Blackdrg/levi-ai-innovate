@@ -1,5 +1,5 @@
 """
-Sovereign Metrics Hub v13.1.0.
+Sovereign Metrics Hub v14.0.0.
 Provides Prometheus-compatible telemetry for system health, VRAM, and missions.
 """
 

@@ -151,7 +151,7 @@ export const EvolutionDashboard = () => {
                 <Shield size={16} className="text-emerald-500" /> AES-256 Memory Hardened
               </div>
               <div className="flex items-center gap-3 px-5 py-3 glass rounded-2xl text-[10px] uppercase font-black text-white/40 border border-white/5 hover:border-purple-500/20 transition-all">
-                <Sparkles size={16} className="text-purple-500" /> v13.1.0 Monolith Core
+                <Sparkles size={16} className="text-purple-500" /> v14.0.0 Sovereign Core
               </div>
               <div className="flex items-center gap-3 px-5 py-3 glass rounded-2xl text-[10px] uppercase font-black text-white/40 border border-white/5 hover:border-blue-500/20 transition-all">
                 <Activity size={16} className="text-blue-500" /> DCN Pulse v13.1

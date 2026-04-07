@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, ChangeEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Zap, Send, ShieldAlert, Sparkles, Orbit, Activity } from "lucide-react";
 import { apiFetch } from "../lib/auth";
@@ -25,7 +25,7 @@ export default function Console() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           input: query, 
-          context: { tier, session_id: "console_v13" } 
+          context: { tier, session_id: "console_v14" } 
         }),
       });
 
@@ -33,8 +33,8 @@ export default function Console() {
       
       const data = await res.json();
       setMissionId(data.mission_id);
-    } catch (err: any) {
-      setError(err.message || "Celestial misalignment detected.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Celestial misalignment detected.");
     } finally {
       setIsLaunching(false);
     }
@@ -54,14 +54,14 @@ export default function Console() {
              <h1 className="text-5xl font-heading font-black tracking-tighter text-white uppercase italic leading-none">
                 Sovereign<span className="text-emerald-500">.</span>Console
              </h1>
-             <p className="text-[10px] uppercase tracking-[0.2em] text-white/20 font-bold ml-1">v13.1.0 Absolute Monolith Engine // Grade: Graduated</p>
+             <p className="text-[10px] uppercase tracking-[0.2em] text-white/20 font-bold ml-1">v14.0.0 Autonomous-SOVEREIGN Engine // Grade: Graduated</p>
           </div>
           <div className="flex flex-col items-end gap-2">
             <div className="flex items-center gap-2 px-3 py-1.5 glass rounded-lg border border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.1)]">
                <Orbit className="text-emerald-500 animate-spin-slow" size={16} />
                <span className="text-[10px] font-mono text-emerald-300 uppercase tracking-widest font-bold">Resonance: Active</span>
             </div>
-            <div className="text-[8px] text-white/10 font-mono uppercase">Node ID: SM-V13-ALPHA-9</div>
+            <div className="text-[8px] text-white/10 font-mono uppercase">Node ID: SOVEREIGN-V14-ALPHA</div>
           </div>
         </header>
 
@@ -78,12 +78,12 @@ export default function Console() {
                         <div className="w-1.5 h-1.5 rounded-full bg-white/10" />
                         <div className="w-1.5 h-1.5 rounded-full bg-white/10" />
                      </div>
-                     <span className="text-[9px] uppercase tracking-widest font-bold">Neural Input Buffer v13</span>
+                     <span className="text-[9px] uppercase tracking-widest font-bold">Neural Input Buffer v14</span>
                   </div>
 
                   <textarea 
                     value={query}
-                    onChange={(e) => setQuery(e.target.value)}
+                    onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setQuery(e.target.value)}
                     placeholder="Initialize sovereign mission protocol..."
                     className="w-full h-56 bg-transparent border-none outline-none text-white/95 placeholder:text-white/10 resize-none font-sans text-xl leading-relaxed selection:bg-emerald-500/30"
                     disabled={isLaunching}
@@ -157,7 +157,7 @@ export default function Console() {
                        </h4>
                        <div className="space-y-3 max-h-64 overflow-y-auto text-[10px] font-mono custom-scrollbar pr-2">
                           <div className="flex gap-2">
-                             <span className="text-emerald-500 font-bold">[LOG_V13]</span>
+                             <span className="text-emerald-500 font-bold">[LOG_V14]</span>
                              <span className="text-white/60">Mission {missionId.slice(0, 8)} linked.</span>
                           </div>
                           <div className="flex gap-2">
@@ -166,7 +166,7 @@ export default function Console() {
                           </div>
                           <div className="flex gap-2">
                              <span className="text-blue-500 font-bold">[CORE]</span>
-                             <span className="text-white/60">Monolith resonance at 98.4%.</span>
+                             <span className="text-white/60">Sovereign resonance at 99.9%.</span>
                           </div>
                        </div>
                     </div>
@@ -180,7 +180,7 @@ export default function Console() {
                     <div className="text-center space-y-3">
                        <h4 className="text-[10px] font-black text-white uppercase tracking-[0.2em]">Neural Pulse</h4>
                        <p className="text-[10px] text-white/40 leading-relaxed max-w-[180px] mx-auto">
-                          Waiting for cognitive emission. Launch a mission to witness the absolute autonomy of the monolith.
+                          Waiting for cognitive emission. Launch a mission to witness the absolute autonomy of the Sovereign OS.
                        </p>
                     </div>
                  </div>
@@ -208,7 +208,7 @@ function TierBadge({ tier }: { tier: string }) {
    );
 }
 
-function detectTier(q: string): string {
+function detectTier(q: string): "L1" | "L2" | "L3" | "L4" {
   const words = q.trim().split(/\s+/).length;
   if (!q.trim()) return "L1";
   if (words < 10) return "L1";

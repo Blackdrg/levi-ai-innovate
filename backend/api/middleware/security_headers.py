@@ -9,7 +9,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
         
-        # 🛡️ Graduation Standards: Audit-Ready Header Injection (v13.1.0)
+        # 🛡️ Graduation Standards: Audit-Ready Header Injection (v14.0.0)
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "

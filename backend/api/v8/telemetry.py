@@ -53,7 +53,7 @@ async def stream_telemetry(
         # v13.0.0 Protocol Handshake
         handshake = {
             "version": "13.0.0",
-            "status": "SOVEREIGN_ABS_MONOLITH_ONLINE",
+            "status": "SOVEREIGN_OS_ONLINE",
             "profile": profile
         }
         yield f"event: pulse_handshake\ndata: {json.dumps(handshake)}\n\n"

@@ -16,7 +16,7 @@ except ImportError:
 
 class SovereignVault:
     """
-    Sovereign Vault v13.1.0: Hardened Identity Protection.
+    Sovereign Vault v14.0.0: Hardened Identity Protection.
     Implements Envelope Encryption and Key Rotation.
     
     Architecture:

@@ -50,7 +50,7 @@ class VectorStore:
                     import json
                     self.metadata = json.load(f)
                 
-                # 🔄 Replay Deltas (v13.1 Resilience)
+                # 🔄 Replay Deltas (v14.0.0 Resilience)
                 self._replay_deltas()
                 
                 logger.info(f"VectorStore: Loaded '{self.index_name}' (HNSW) from disk with delta replay.")
@@ -93,7 +93,7 @@ class VectorStore:
 
     def checkpoint_delta(self):
         """
-        Sovereign v13.1: High-Frequency Delta Snapshot.
+        Sovereign v14.0.0: High-Frequency Delta Snapshot.
         Persists only the new vectors to a binary .delta file for RPO: 30min optimization.
         """
         if not self._delta_buffer: return
@@ -123,7 +123,7 @@ class VectorStore:
         self.index.add(data)
         self.metadata.extend(metadata)
         
-        # 🛡️ Graduation Buffering (v13.1)
+        # 🛡️ Graduation Buffering (v14.0.0)
         for i, emb in enumerate(data):
             self._delta_buffer.append({"embedding": emb, "metadata": metadata[i]})
 
@@ -162,7 +162,7 @@ class VectorStore:
 
     async def delete(self, record_id: str):
         """
-        Sovereign v13.1.0: GDPR Soft-Deletion.
+        Sovereign v14.0.0: GDPR Soft-Deletion.
         Marks a record for immediate filtering and nightly physical erasure.
         """
         if HAS_REDIS and redis_sync:
@@ -175,7 +175,7 @@ class VectorStore:
 
     async def rebuild_index(self):
         """
-        Sovereign v13.1.0: Physical erasure of GDPR-flagged vectors.
+        Sovereign v14.0.0: Physical erasure of GDPR-flagged vectors.
         Rebuilds the index from scratch, excluding soft-deleted IDs.
         """
         logger.info(f"VectorStore: Commencing nightly rebuild for '{self.index_name}'...")
@@ -194,7 +194,7 @@ class VectorStore:
         # FAISS HNSW does not support index.reconstruct(i), so we rely on metadata for re-insertion
         # if we stores embeddings in metadata, but usually we don't.
         # This implementation assumes the system can fetch original embeddings or they are stored.
-        # Given the Absolute Monolith constraints, we'll implement a 'soft-delete-aware' compaction.
+        # Given the Sovereign OS constraints, we'll implement a 'soft-delete-aware' compaction.
         
         new_index = faiss.IndexHNSWFlat(self.dimension, 32)
         new_index.hnsw.efConstruction = 128

@@ -194,19 +194,24 @@ class MemoryManager:
             logger.error(f"Tier 4 trait retrieval anomaly: {e}")
             return {}
 
-    async def store(self, user_id: str, session_id: Optional[str] = None, user_input: str = "", response: str = "", perception: Optional[Dict[str, Any]] = None, results: Optional[List[Any]] = None):
-        """Coordinates short-term (Working) and long-term (Episodic/Semantic) updates."""
+    async def store(self, user_id: str, session_id: Optional[str] = None, user_input: str = "", response: str = "", perception: Optional[Dict[str, Any]] = None, results: Optional[List[Any]] = None, policy: Optional[Any] = None):
+        """Coordinates short-term and long-term updates based on Brain Policy."""
         session_id = session_id or f"sess_v8_{user_id}"
         perception = perception or {}
         results = results or []
         
         logger.info("[MemoryManager] Storing interaction: %s", session_id)
         
-        await self.store_memory(user_id, session_id, user_input, response)
+        # 1. Short-term/Episodic (Redis/Postgres)
+        if not policy or policy.redis:
+            await self.store_memory(user_id, session_id, user_input, response)
         
+        # 2. Long-term/Relational (Neo4j/FAISS)
         if user_id and not str(user_id).startswith("guest:"):
-            if len(user_input.split()) > 4 or len(results) > 1:
-                asyncio.create_task(self.process_extraction(user_id, user_input, response))
+            if not policy or (policy.neo4j or policy.faiss):
+                if len(user_input.split()) > 4 or len(results) > 1:
+                    # Pass policy to extraction logic if it were to be refactored further
+                    asyncio.create_task(self.process_extraction(user_id, user_input, response, policy=policy))
 
     async def store_memory(self, user_id: str, session_id: str, user_input: str, bot_response: str):
         history = await self.get_short_term(session_id)
@@ -218,7 +223,7 @@ class MemoryManager:
         if len(history) > 20: history = history[-20:]
         await asyncio.to_thread(MemoryCache.save_session_history, session_id, history, user_id=user_id)
 
-    async def process_extraction(self, user_id: str, user_input: str, bot_response: str):
+    async def process_extraction(self, user_id: str, user_input: str, bot_response: str, policy: Optional[Any] = None):
         from backend.core.memory_utils import extract_memory_graph 
         from backend.core.planner import call_lightweight_llm
 
@@ -229,16 +234,16 @@ class MemoryManager:
             
             if not new_facts and not triplets: return
 
-            # 1. Store Relational Triplets (Neo4j)
-            if triplets:
+            # 1. Store Relational Triplets (Neo4j) - Respect Policy
+            if triplets and (not policy or policy.neo4j):
                 for t in triplets:
                     asyncio.create_task(self.graph.upsert_triplet(
                         user_id, t["subject"], t["relation"], t["object"],
                         tenant_id=extraction.get("tenant_id", "default")
                     ))
 
-            # 2. Store Atomic Facts (FAISS/Mongo)
-            if new_facts:
+            # 2. Store Atomic Facts (FAISS/Mongo) - Respect Policy
+            if new_facts and (not policy or policy.faiss):
                 scoring_prompt = (
                     "Grade these user facts (0.0 to 1.0) on permanent identity significance.\n"
                     f"Facts: {json.dumps([f['fact'] for f in new_facts])}\n"

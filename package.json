@@ -1,7 +1,7 @@
 {
   "name": "LEVI-AI",
-  "version": "13.1.0",
-  "description": "Absolute Monolith production-grade Sovereign OS",
+  "version": "14.0.0",
+  "description": "Autonomous-SOVEREIGN production-grade Sovereign OS",
   "author": "Sovereign Engineering",
   "license": "Sovereign-1.0",
   "scripts": {
@@ -9,7 +9,7 @@
     "client": "python -m http.server 8080 --bind 127.0.0.1 --directory frontend",
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "build:frontend": "npm run --prefix frontend build",
-    "audit:monolith": "python tests/verify_v13_monolith.py"
+    "audit:sovereign": "python tests/graduation_audit_extended.py"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

@@ -100,5 +100,5 @@ class EvolutionEngine:
         logger.info(f"[Evolution] Neural growth batch crystallized: {batch_file}")
         return [str(batch_file)]
 
-# Global instance for the Absolute Monolith
+# Global instance for the Sovereign OS
 evolution_engine = EvolutionEngine()

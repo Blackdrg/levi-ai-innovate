@@ -72,7 +72,7 @@ class AgentRegistry:
             # v8 Agents expect a Dict or Pydantic model directly.
             raw_input = context.get("query", context.get("message", context.get("text", "")))
             
-            # 🛡️ Global Prompt Injection Shield (v13.1.0)
+            # 🛡️ Global Prompt Injection Shield (v14.0.0)
             # All 14 agent endpoints are sanitized here before dispatch.
             sanitized_input = PromptSanitizer.sanitize(raw_input)
             

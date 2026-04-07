@@ -1,8 +1,8 @@
 @echo off
-REM start.bat — Sovereign OS v13.1.0 "Absolute Monolith" Graduation Launcher
+REM start.bat — Sovereign OS v14.0.0 "Autonomous-SOVEREIGN" Graduation Launcher
 setlocal
 
-echo [🚀] Initializing LEVI-AI v13.1.0 Graduation Tier...
+echo [🚀] Initializing LEVI-AI v14.0.0 Graduation Tier...
 
 REM 1. Infrastructure Infrastructure Checks
 echo [🏗️] Initializing D-Drive Data Fabric (100% Isolation)...
@@ -48,7 +48,7 @@ docker compose exec api python backend/scripts/generate_sbom.py
 
 REM 5. Neural Verification
 echo [🛡️] Executing Graduation Audit (28-Point Suite)...
-docker compose exec api pytest tests/v13_hardening_test.py
+docker compose exec api pytest tests/graduation_audit_extended.py
 if %errorlevel% neq 0 (
     echo [WARNING] Some graduation tests failed. Check logs for compliance gaps.
 )
@@ -58,12 +58,12 @@ echo [🏗️] Finalizing Neural Frontend & Worker Swarm...
 docker compose up -d api worker nginx prometheus grafana
 
 echo.
-echo [🎓] LEVI-AI v13.1.0 IS LIVE.
+echo [🎓] LEVI-AI v14.0.0 IS LIVE.
 echo    ------------------------------------------
 echo    Frontend:   http://localhost (Sovereign)
 echo    API Docs:   http://localhost/docs
 echo    Monitoring: http://localhost:3000 (Grafana)
 echo    ------------------------------------------
-echo    Mission Control: Absolute Monolith Status [ACTIVE]
+echo    Mission Control: Sovereign OS Status [ACTIVE]
 echo.
 pause

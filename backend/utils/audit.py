@@ -1,5 +1,5 @@
 """
-Sovereign Audit Logger v13.1.0.
+Sovereign Audit Logger v14.0.0.
 Handles immutable append-only recording of system-critical events.
 """
 

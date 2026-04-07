@@ -7,7 +7,7 @@ from backend.db.postgres_db import get_read_session
 from sqlalchemy import text
 
 @pytest.mark.asyncio
-async def test_v13_absolute_monolith_brain():
+async def test_v14_sovereign_os_brain():
     """Verifies the v13.0.0 Unified Async Brain Controller."""
     brain = LeviBrainCoreController()
     
@@ -64,7 +64,7 @@ async def test_v13_pulse_binary_telemetry():
     """Verifies the v4.1 Adaptive Pulse (Binary/Compressible) Emission."""
     pulse = {
         "type": "NEURAL_PULSE",
-        "data": {"status": "SOVEREIGN_ABS_MONOLITH_ONLINE"},
+        "data": {"status": "SOVEREIGN_OS_ONLINE"},
         "version": "13.0.0"
     }
     # Should not raise error and correctly pass through Broadcaster
@@ -73,7 +73,7 @@ async def test_v13_pulse_binary_telemetry():
 
 if __name__ == "__main__":
     import asyncio
-    asyncio.run(test_v13_absolute_monolith_brain())
+    asyncio.run(test_v14_sovereign_os_brain())
     asyncio.run(test_v13_dcn_synk_integrity())
     asyncio.run(test_v13_pulse_binary_telemetry())
     print("LEVI-AI v13.0.0: Graduation Finality Verified.")

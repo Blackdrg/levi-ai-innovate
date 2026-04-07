@@ -1,13 +1,15 @@
 """
-Sovereign Perception Layer v8.
-Extracts intent, entities, emotion, and context from user input.
+Sovereign Perception Layer v14.0.
+Extracts intent, entities, and compresses user input into an Intent Graph.
 """
 
 import logging
+import uuid
 from datetime import datetime, timezone
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 from .planner import detect_intent
+from .orchestrator_types import IntentResult, IntentGraph, IntentNode, IntentEdge
 from backend.memory.manager import MemoryManager
 from backend.utils.shield import SovereignShield
 
@@ -15,34 +17,71 @@ from backend.utils.shield import SovereignShield
 logger = logging.getLogger(__name__)
 
 class PerceptionEngine:
+    """
+    v14.0 Perception Layer.
+    Implements Intent Compression and Context Hydration.
+    """
     def __init__(self, memory: MemoryManager):
         self.memory = memory
 
     async def perceive(self, user_input: str, user_id: str, session_id: str, **kwargs) -> Dict[str, Any]:
         """
         Synthesizes raw input into a structured cognitive perception.
-        Combines 4-tier memory context with real-time intent detection.
+        Performs Intent Compression (User Query -> Intent Graph).
         """
-        # 0. Sovereign Shield: PII Masking (Security Layer)
+        # 0. Sovereign Shield: PII Masking
         safe_input = SovereignShield.mask_pii(user_input)
-        if safe_input != user_input:
-            logger.info("[Perception] Sovereign Shield: Sensitive data masked.")
-
-        # 1. Intent & Complexity Analysis
+        
+        # 1. Intent Analysis
         intent = await detect_intent(safe_input)
 
+        # 2. INTENT COMPRESSION (v14.0 Upgrade)
+        intent_graph = self._compress_intent(safe_input, intent)
         
-        # 2. Context Hydration (4-Tier Memory)
-        context = await self.memory.get_combined_context(user_id, session_id, user_input)
+        # 3. Context Hydration (4-Tier Memory)
+        context = await self.memory.get_combined_context(user_id, session_id, safe_input)
         context.update(kwargs)
         
         return {
             "input": safe_input,
-            "raw_input": user_input, # Maintain original internally for context
-
+            "raw_input": user_input,
             "intent": intent,
+            "intent_graph": intent_graph,
             "context": context,
             "user_id": user_id,
             "session_id": session_id,
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
+
+    def _compress_intent(self, text: str, intent: IntentResult) -> IntentGraph:
+        """
+        Intent Compression: Structured representation of user intent.
+        """
+        nodes = []
+        edges = []
+        
+        # Root Intent Node
+        root_id = f"intent_{uuid.uuid4().hex[:4]}"
+        nodes.append(IntentNode(
+            id=root_id,
+            label=intent.intent_type,
+            confidence=intent.confidence_score
+        ))
+        
+        # Extract keywords/entities (Simplified for v14.0 base)
+        words = text.split()
+        if len(words) > 0:
+            for i, word in enumerate(words[:5]): # Capture key tokens as entities
+                if len(word) > 3:
+                    entity_id = f"ent_{uuid.uuid4().hex[:4]}"
+                    nodes.append(IntentNode(id=entity_id, label="entity", entity=word))
+                    edges.append(IntentEdge(source=root_id, target=entity_id, relation="references"))
+
+        return IntentGraph(
+            nodes=nodes,
+            edges=edges,
+            metadata={
+                "complexity": intent.complexity_level,
+                "cost_weight": intent.estimated_cost_weight
+            }
+        )

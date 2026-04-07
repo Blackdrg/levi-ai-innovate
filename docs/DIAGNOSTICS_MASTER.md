@@ -1,6 +1,6 @@
-# 🩺 System Diagnostics Master (v14.0 Production)
+# 🩺 System Diagnostics Master (v14.0.0-Autonomous-SOVEREIGN)
 
-Standard health-monitoring and performance metrics for the LEVI-AI v14.0 Distributed Stack.
+Standard health-monitoring and performance metrics for the LEVI-AI v14.0.0-Autonomous-SOVEREIGN Distributed Stack.
 
 ---
 
@@ -31,4 +31,4 @@ LEVI-AI uses a unified testing framework to ensure system stability:
 
 ---
 
-© 2026 LEVI-AI HUB. Engineered for Technical Excellence.
+© 2026 LEVI-AI Sovereign OS. Engineered for Technical Excellence.

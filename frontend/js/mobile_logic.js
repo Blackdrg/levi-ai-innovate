@@ -1,5 +1,5 @@
 /**
- * LEVI-AI Sovereign v8 
+ * LEVI-AI Sovereign OS v14.0.0 
  * Mobile Dashboard Logic & Telemetry Bridge
  */
 
@@ -59,7 +59,7 @@ async function confirmLink() {
     if (!token) return;
 
     try {
-        // v13.0.0 Absolute Monolith Link
+        // v14.0.0 Sovereign OS Link
         const response = await fetch('/api/v1/mobile/link/confirm?token=' + token, {
             method: 'POST'
         });
@@ -73,9 +73,9 @@ async function confirmLink() {
             togglePairing(false);
             checkLinkStatus();
             initTelemetryStream();
-            addEvent('System', 'Sovereign Link v13.0.0 Established.', 'settings_input_antenna');
+            addEvent('System', 'Sovereign Link v14.0.0 Established.', 'settings_input_antenna');
         } else {
-            alert('Pairing Failed: Link rejected by Monolith.');
+            alert('Pairing Failed: Link rejected by Sovereign OS.');
         }
     } catch (err) {
         console.error('Pairing Error:', err);
@@ -83,7 +83,7 @@ async function confirmLink() {
     }
 }
 
-// --- ADAPTIVE PULSE DECODER (v4.1) ---
+// --- ADAPTIVE PULSE DECODER (v5.0) ---
 function decodePulse(rawData) {
     if (!rawData) return null;
     try {
@@ -100,7 +100,7 @@ function decodePulse(rawData) {
             const decompressed = pako.inflate(bytes, { to: 'string' });
             return JSON.parse(decompressed);
         } catch (err) {
-            console.error("[Pulse v4.1] Logic Drift: Decompression failure.", err);
+            console.error("[Pulse v5.0] Logic Drift: Decompression failure.", err);
             return null;
         }
     }
@@ -108,20 +108,20 @@ function decodePulse(rawData) {
 
 // --- TELEMETRY STREAM (SSE) ---
 function initTelemetryStream() {
-    console.log("[Pulse v4.1] Synchronizing v13.0.0 Monolith Bridge...");
+    console.log("[Pulse v5.0] Synchronizing v14.0.0 Sovereign OS Bridge...");
     
     // Request the graduated v1 telemetry stream
-    const eventSource = new EventSource('/api/v8/telemetry/stream?profile=mobile&version=v13.0.0');
+    const eventSource = new EventSource('/api/v8/telemetry/stream?profile=mobile&version=v14.0.0');
 
-    // v13.0 Handshake
+    // v14.0.0 Handshake
     eventSource.addEventListener('pulse_handshake', (e) => {
         const data = decodePulse(e.data);
         if (!data) return;
-        console.log(`[Pulse v4.1] v13.0 Linked. Profile: ${data.profile}`);
-        addEvent('System', `Absolute Monolith Pulse v${data.version} established.`, 'terminal');
+        console.log(`[Pulse v5.0] v14.0.0 Linked. Profile: ${data.profile}`);
+        addEvent('System', `Sovereign OS Pulse v${data.version} established.`, 'terminal');
     });
 
-    // Perception & Handoff (v13.0)
+    // Perception & Handoff (v14.0.0)
     eventSource.addEventListener('perception', (e) => {
         const event = decodePulse(e.data);
         if (!event) return;
@@ -137,7 +137,7 @@ function initTelemetryStream() {
             handoffEl.classList.add('opacity-0');
         }
 
-        addEvent('Brain', `Perception: ${decision} path elected (v13.0)`, 'visibility');
+        addEvent('Brain', `Perception: ${decision} path elected (v14.0.0)`, 'visibility');
     });
 
     // Learning & Self-Correction
@@ -156,7 +156,7 @@ function initTelemetryStream() {
         loadCrystallizedTraits(); 
     });
 
-    // v9.8.1: Mission Events
+    // v14.0.0: Mission Events
     eventSource.addEventListener('mission_start', (e) => {
         const event = decodePulse(e.data);
         if (event) handleMissionUpdate({ type: 'mission_start', payload: event.data });
@@ -190,7 +190,7 @@ function initTelemetryStream() {
         if (event) handleMissionUpdate({ type: 'mission_complete', payload: event.data });
     });
 
-    // v9.8.1: Dreaming Phase Logs
+    // v14.0.0: Dreaming Phase Logs
     eventSource.addEventListener('MEMORY_DREAMING_START', (e) => {
         addEvent('Evolution', 'Sovereign Dreaming initiated: Consolidating episodic fragments...', 'psychology');
     });
@@ -201,7 +201,7 @@ function initTelemetryStream() {
     });
 
     eventSource.onerror = (err) => {
-        console.error("[Pulse v4.1] Bridge Severed. Recalibrating...", err);
+        console.error("[Pulse v5.0] Bridge Severed. Recalibrating...", err);
         const statusIcon = document.getElementById('link-status').querySelector('div');
         statusIcon.classList.replace('bg-emerald-500', 'bg-rose-500');
     };

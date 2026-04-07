@@ -1,6 +1,6 @@
 """
-Sovereign Orchestration Gateway v13.0.0.
-Primary v1 REST/SSE interface for the Absolute Monolith.
+Sovereign Orchestration Gateway v14.0.0.
+Primary v1 REST/SSE interface for the Sovereign OS.
 """
 
 import logging
@@ -18,11 +18,11 @@ from backend.engines.utils.security import SovereignSecurity
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="", tags=["Orchestrator v13"])
 
-# Unified v13.0.0 Brain Monolith
-brain_v13 = LeviBrainCoreController()
+# Unified v14.0.0 Sovereign OS Fabric
+brain_gateway = LeviBrainCoreController()
 
 class MissionRequest(BaseModel):
-    message: str = Field(..., description="Absolute Monolith query")
+    message: str = Field(..., description="Sovereign OS query")
     session_id: Optional[str] = None
     context: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
@@ -32,7 +32,7 @@ async def orchestrate_mission_v13(
     identity: Any = Depends(get_sovereign_identity)
 ):
     """
-    Standard Sovereign Mission (v13.0.0) - Synchronous.
+    Standard Sovereign Mission (v14.0.0) - Synchronous.
     """
     uid = getattr(identity, "uid", "guest")
     logger.info(f"[Orchestrator-v13] Synchronous mission started: {uid}")
@@ -41,7 +41,7 @@ async def orchestrate_mission_v13(
         raise HTTPException(status_code=400, detail="Neural protocol violation.")
 
     try:
-        res = await brain_v13.run_mission_sync(
+        res = await brain_gateway.run_mission_sync(
             input_text=request.message,
             user_id=uid,
             session_id=request.session_id,
@@ -54,13 +54,13 @@ async def orchestrate_mission_v13(
             "fidelity": res.get("fidelity_score", 1.0),
             "status": "success",
             "metadata": {
-                 "engine": "sovereign_monolith_v13.0.0",
+                 "engine": "sovereign_os_v14.0.0",
                  "latency_ms": res.get("latency_ms")
             }
         }
     except Exception as e:
         logger.error(f"[Orchestrator-v13] Anomaly: {e}")
-        return {"status": "error", "message": "Monolith synchronization drift."}
+        return {"status": "error", "message": "Sovereign OS synchronization drift."}
 
 @router.post("/chat/stream")
 async def orchestrate_stream_v13(
@@ -68,14 +68,14 @@ async def orchestrate_stream_v13(
     identity: Any = Depends(get_sovereign_identity)
 ):
     """
-    Streaming Sovereign Mission (v13.0.0 SSE).
+    Streaming Sovereign Mission (v14.0.0 SSE).
     """
     uid = getattr(identity, "uid", "guest")
     logger.info(f"[Orchestrator-v13] SSE mission started: {uid}")
 
-    async def _monolith_stream():
+    async def _sovereign_stream():
         try:
-            async for event in brain_v13.run_mission_stream(
+            async for event in brain_gateway.run_mission_stream(
                 user_input=request.message,
                 user_id=uid,
                 session_id=request.session_id,
@@ -87,6 +87,6 @@ async def orchestrate_stream_v13(
             yield f"event: done\ndata: {json.dumps('[MISSION_COMPLETE]')}\n\n"
         except Exception as e:
             logger.error(f"[Orchestrator-v13] Stream drift: {e}")
-            yield f"event: error\ndata: {json.dumps('Absolute Monolith flux.')}\n\n"
+            yield f"event: error\ndata: {json.dumps('Sovereign OS flux.')}\n\n"
 
-    return StreamingResponse(_monolith_stream(), media_type="text/event-stream")
+    return StreamingResponse(_sovereign_stream(), media_type="text/event-stream")

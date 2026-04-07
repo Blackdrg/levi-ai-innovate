@@ -1,5 +1,5 @@
 """
-Sovereign DCN (Distributed Cognitive Network) Protocol v13.1.0.
+Sovereign DCN (Distributed Cognitive Network) Protocol v14.0.0.
 Handles HMAC-signed cognitive gossip and localized Kubernetes service discovery.
 """
 
@@ -47,7 +47,7 @@ class DCNProtocol:
             )
         else:
             self.is_active = True
-            logger.info(f"[DCN] Protocol v13.1.0 Active. Node: {self.node_id}")
+            logger.info(f"[DCN] Protocol v14.0.0 Active. Node: {self.node_id}")
             self.gossip = DCNGossip()
 
     async def broadcast_gossip(self, mission_id: str, payload: Any, pulse_type: str = "cognitive_gossip"):

@@ -1,5 +1,5 @@
 """
-Sovereign Egress Proxy v13.1.0.
+Sovereign Egress Proxy v14.0.0.
 Hardened against SSRF bypasses via private IP ranges and metadata service.
 """
 
@@ -30,7 +30,7 @@ FORBIDDEN_NETWORK_RANGES = [
 
 class EgressProxy:
     """
-    Sovereign v13.1.0: Egress Protection.
+    Sovereign v14.0.0: Egress Protection.
     Ensures every outgoing request is validated against an allowlist 
     and blocks potential SSRF bypasses via private IP addresses.
     """

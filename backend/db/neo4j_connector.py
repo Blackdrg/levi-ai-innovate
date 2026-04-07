@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 class Neo4jStore:
     """
     Sovereign Tier 5 Memory Connector.
-    Interfaces with the Neo4j Knowledge Graph using the Absolute Monolith ontology.
+    Interfaces with the Neo4j Knowledge Graph using the Sovereign OS ontology.
     """
     def __init__(self):
         self.uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
@@ -30,7 +30,7 @@ class Neo4jStore:
     async def upsert_triplet(self, triplet: KnowledgeTriplet):
         """
         Inserts or merges a typed knowledge triplet into the graph.
-        v13.1.0: Parameterized to prevent Cypher injection.
+        v14.0.0: Parameterized to prevent Cypher injection.
         """
         driver = await self.connect()
         async with driver.session() as session:

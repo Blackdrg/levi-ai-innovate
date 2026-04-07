@@ -28,7 +28,7 @@ class SovereignShieldMiddleware(BaseHTTPMiddleware):
         # 3. Post-processing (Audit Point 25: Security Headers)
         process_time = (time.perf_counter() - start_time) * 1000
         response.headers["X-Process-Time-Ms"] = str(int(process_time))
-        response.headers["X-Sovereign-Shield"] = "v13.1.0-active"
+        response.headers["X-Sovereign-Shield"] = "v14.0.0-active"
         
         # Hardened Perimeter Headers
         response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline'; frame-ancestors 'none';"

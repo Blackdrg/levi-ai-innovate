@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 async def initialize_v8_persistence():
     """
     LeviBrain v8: Persistence Layer Initializer.
-    Migrates the 'Cognitive Monolith' schema to the production Postgres instance.
+    Migrates the 'Sovereign OS Fabric' schema to the production Postgres instance.
     """
     database_url = os.getenv("DATABASE_URL", "postgresql://levi:levi_pass@localhost:5432/levidb")
     schema_path = os.path.join(os.path.dirname(__file__), "schema.sql")

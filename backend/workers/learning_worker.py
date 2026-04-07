@@ -1,7 +1,7 @@
 """
 Sovereign Learning Workers v13.0.0.
 Background orchestration for cognitive hygiene and self-evolution.
-Synchronized with the Absolute Monolith SQL Fabric.
+Synchronized with the Sovereign OS SQL Fabric.
 """
 
 import logging

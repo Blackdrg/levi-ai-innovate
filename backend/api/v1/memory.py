@@ -93,7 +93,7 @@ async def gdpr_erasure_endpoint(
     identity: UserIdentity = Depends(get_sovereign_identity)
 ):
     """
-    Sovereign v13.1.0: Managed GDPR Erasure Protocol.
+    Sovereign v14.0.0: Managed GDPR Erasure Protocol.
     Marks a vector for immediate deletion and records an audit trail.
     """
     logger.info(f"[MemoryAPI] GDPR Erasure requested for {identity.uid} (ID: {request.record_id})")

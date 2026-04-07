@@ -1,5 +1,5 @@
 """
-Sovereign v13.1.0 Cipher Injection Fuzz Test.
+Sovereign v14.0.0 Cipher Injection Fuzz Test.
 Generates 500 adversarial entity names and verifies that CypherSanitizer 
 neutralizes potential DDL/DML injection payloads.
 """

@@ -1,6 +1,6 @@
-# 🚀 Production Release Manifest (v14.0 Production)
+# 🚀 Production Release Manifest (v14.0.0-Autonomous-SOVEREIGN)
 
-The complete service set for the v14.0 Production Release of the LEVI-AI Distributed Stack.
+The complete service set for the v14.0.0-Autonomous-SOVEREIGN Production Release of the LEVI-AI Distributed Stack.
 
 ---
 
@@ -8,8 +8,8 @@ The complete service set for the v14.0 Production Release of the LEVI-AI Distrib
 
 | Service | Image/Engine | Role | Status |
 | :--- | :--- | :--- | :--- |
-| **Orchestrator API** | `levi-backend:v14.0` | **System Controller** (FastAPI, Task Orchestrator) | Active |
-| **Task Worker** | `celery:v14.0` | **Execution Layer** (Agent Execution, Background Tasks) | Active |
+| **Orchestrator API** | `levi-backend:v14.0.0` | **System Controller** (FastAPI, Task Orchestrator) | Active |
+| **Task Worker** | `celery:v14.0.0` | **Execution Layer** (Agent Execution, Background Tasks) | Active |
 | **Episodic Memory** | `postgres:15-alpine` | **Relational Persistence** (Profiles, Session Logs) | Active |
 | **Working Memory** | `redis:7-alpine` | **Task Queue & Cache** (Task State, Rate Limiting) | Active |
 | **Semantic Memory** | `faiss-service` | **Vector Store** (Semantic data, Embeddings) | Active |
@@ -28,4 +28,4 @@ The complete service set for the v14.0 Production Release of the LEVI-AI Distrib
 
 ---
 
-© 2026 LEVI-AI HUB. Engineered for Technical Excellence.
+© 2026 LEVI-AI Sovereign OS. Engineered for Technical Excellence.

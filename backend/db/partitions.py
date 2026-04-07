@@ -1,5 +1,5 @@
 """
-Sovereign Postgres Partition Manager v13.1.0.
+Sovereign Postgres Partition Manager v14.0.0.
 Automates the creation of child tables for the partitioned 'audit_log'.
 """
 

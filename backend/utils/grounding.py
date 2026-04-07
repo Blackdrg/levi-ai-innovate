@@ -1,5 +1,5 @@
 """
-Sovereign Factual Grounding Hub v13.1.0.
+Sovereign Factual Grounding Hub v14.0.0.
 Cross-references agent claims against the Tier 5 Knowledge Graph (Neo4j).
 Ensures evidence-based adjudication in the Swarm Consensus Protocol.
 """

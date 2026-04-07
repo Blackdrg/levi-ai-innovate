@@ -1,5 +1,5 @@
 """
-Sovereign JWT Provider v13.1.0.
+Sovereign JWT Provider v14.0.0.
 Independent identity provider with full token lifecycle.
 Features: 15m Identity Token, 7d Refresh Token, JTI Revocation in Redis.
 """
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 class JWTProvider:
     """
-    Sovereign Identity Layer v13.1.0.
+    Sovereign Identity Layer v14.0.0.
     Replaces common external IDPs with a resident, cryptographic provider.
     """
     
@@ -110,7 +110,7 @@ class JWTProvider:
     @classmethod
     def rotate_internal_key(cls, new_key: str):
         """
-        Sovereign v13.1.0: Admin-Triggered Key Rotation.
+        Sovereign v14.0.0: Admin-Triggered Key Rotation.
         Updates the legacy INTERNAL_SERVICE_KEY in the runtime environment.
         This allows for mission-draining before rotation to prevent HMAC failure.
         """

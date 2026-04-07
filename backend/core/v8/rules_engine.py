@@ -1,7 +1,7 @@
 """
 Sovereign Rules Engine v13.0.0.
 High-fidelity reinforcement learning and pattern distillation.
-Synchronized with the Absolute Monolith SQL Fabric.
+Synchronized with the Sovereign OS SQL Fabric.
 """
 
 import json

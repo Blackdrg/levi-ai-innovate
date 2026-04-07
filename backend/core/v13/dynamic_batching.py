@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 class DynamicBatcher:
     """
-    Sovereign Dynamic Batching Engine v13.1.0.
+    Sovereign Dynamic Batching Engine v14.0.0.
     Optimizes GPU throughput by grouping concurrent cognitive pulses.
     """
 

@@ -1,9 +1,9 @@
 #!/bin/bash
-# LEVI-AI v13 Sovereign OS: Absolute Monolith - Global Command
+# LEVI-AI v14.0.0 Sovereign OS: Autonomous-SOVEREIGN - Global Command
 set -e
 
 # Phase 1: Neural Synthesis (Build Frontend)
-echo "🧬 Synthesizing Neural Frontend (v13.0)..."
+echo "🧬 Synthesizing Neural Frontend (v14.0.0)..."
 cd levi-frontend
 if [ ! -d "node_modules" ]; then
     echo "📦 Installing neural dependencies..."
@@ -22,11 +22,11 @@ until docker-compose exec postgres pg_isready -U levi; do
   printf "."
   sleep 1
 done
-echo "✅ Resonance Confirmed. Applying v13 migrations..."
+echo "✅ Resonance Confirmed. Applying v14 migrations..."
 docker-compose exec postgres psql -U levi -d levi_db -f /docker-entrypoint-initdb.d/init.sql
 
 # Phase 3: Launch Sovereign Stack
-echo "🚀 Terminal Ignition: LEVI-AI v13.0 Absolute Monolith"
+echo "🚀 Terminal Ignition: LEVI-AI v14.0.0 Autonomous-SOVEREIGN"
 docker-compose up -d --build
 
 echo "✅ Pulse Active: Sovereign OS is operational."

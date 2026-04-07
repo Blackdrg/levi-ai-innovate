@@ -1,4 +1,4 @@
-# 🧠 LEVI-AI Documentation (v14.0 Production)
+# 🧠 LEVI-AI Documentation (v14.0.0-Autonomous-SOVEREIGN)
 
 Welcome to the technical documentation hub for the LEVI-AI distributed task orchestration platform.
 
@@ -17,7 +17,7 @@ Welcome to the technical documentation hub for the LEVI-AI distributed task orch
 ## 🏗️ 2. Operational Framework
 | Manual | Description |
 | :--- | :--- |
-| **[DEPLOYMENT](file:///d:/LEVI-AI/docs/DEPLOYMENT.md)** | Service topology (Postgres, Redis, Neo4j, FAISS, Ollama). |
+| **[DEPLOYMENT](file:///d:/LEVI-AI/docs/DEPLOYMENT.md)** | Service topology (Postgres, Redis, Neo4j, HNSW, Ollama). |
 | **[RUNBOOK](file:///d:/LEVI-AI/docs/RUNBOOK.md)** | Startup procedures, backup, and emergency recovery. |
 | **[DIAGNOSTICS](file:///d:/LEVI-AI/docs/DIAGNOSTICS_MASTER.md)** | System health monitoring and event telemetry. |
 
@@ -27,9 +27,9 @@ Welcome to the technical documentation hub for the LEVI-AI distributed task orch
 | Manual | Description |
 | :--- | :--- |
 | **[CHANGELOG](file:///d:/LEVI-AI/docs/CHANGELOG.md)** | System version history and release notes. |
-| **[MANIFEST](file:///d:/LEVI-AI/docs/LAUNCH_MANIFEST.md)** | The complete v14.0 production service specification. |
+| **[MANIFEST](file:///d:/LEVI-AI/docs/LAUNCH_MANIFEST.md)** | The complete v14.0.0 production service specification. |
 | **[TODO](file:///d:/LEVI-AI/docs/TODO.md)** | Future roadmap for LEVI-AI platform expansion. |
 
 ---
 
-© 2026 LEVI-AI HUB. Engineered for Technical Excellence.
+© 2026 LEVI-AI Sovereign OS. Engineered for Technical Excellence.

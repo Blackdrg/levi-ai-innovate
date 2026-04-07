@@ -1,7 +1,7 @@
 """
 Sovereign Self-Evolution Pipeline v13.0.0.
 Captures low-fidelity missions (failures) and maps them to prompt optimizations.
-Synchronized with the Absolute Monolith SQL Fabric.
+Synchronized with the Sovereign OS SQL Fabric.
 """
 
 import os
@@ -44,13 +44,13 @@ class LearningSystem:
                         "score": score
                     }
                 )
-            logger.info(f"[Learning-v13] Logged low-fidelity mission (Resonance: {score:.2f})")
+            logger.info(f"[Learning-v14] Logged low-fidelity mission (Resonance: {score:.2f})")
         except Exception as e:
             logger.error(f"[Learning-v13] SQL failure logging failed: {e}")
 
     async def improve(self):
         """
-        Main optimization pass for the Absolute Monolith.
+        Main optimization pass for the Sovereign OS.
         Selects failure insights, generates a SQL-backed 'System Patch', and updates the blueprint.
         """
         logger.info("[Learning-v13] Initiating self-improvement cycle...")
@@ -108,7 +108,7 @@ class LearningSystem:
         
         generator = SovereignGenerator()
         return await generator.council_of_models([
-            {"role": "system", "content": "You are the LEVI v13.0 Monolith Optimization Architect."},
+            {"role": "system", "content": "You are the LEVI Sovereign OS Optimization Architect."},
             {"role": "user", "content": opt_prompt}
         ])
 

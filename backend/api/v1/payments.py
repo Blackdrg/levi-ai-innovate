@@ -116,7 +116,7 @@ async def verify_payment_endpoint(
             user_id = current_user["uid"]
             bonus = 100 if plan == "pro" else 500 if plan == "creator" else 0
             
-            # 1. v13.0 SQL Resonance Update (Absolute Monolith)
+            # 1. Sovereign OS v14.0.0 SQL Resonance Update
             try:
                 async with get_write_session() as session:
                     await session.execute(
@@ -144,7 +144,7 @@ async def verify_payment_endpoint(
             SovereignBroadcaster.broadcast(pulse)
 
             logger.info(f"User {user_id} upgraded to {plan} (100% SQL Sovereign)")
-        return {"status": "success", "message": "Transaction verified. Absolute Monolith updated."}
+        return {"status": "success", "message": "Transaction verified. Sovereign OS updated."}
     else:
         raise HTTPException(status_code=400, detail="Invalid payment resonance.")
 

@@ -53,7 +53,7 @@ def cleanup_stuck_jobs():
 @celery_app.task(name="backend.tasks.re_execute_mission_task")
 def re_execute_mission_task(mission_id: str):
     """
-    Sovereign Resilience v13.1.0: Background Mission Replay.
+    Sovereign Resilience v14.0.0: Background Mission Replay.
     Resumes a frozen DAG from its last successful wave checkpoint.
     """
     logger.info(f"[Resilience] Replaying mission: {mission_id}")
