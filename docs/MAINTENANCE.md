@@ -1,6 +1,6 @@
-# 🛠️ LEVI-AI Maintenance Guide (v1.0.0-RC1)
+# 🛠️ LEVI-AI Maintenance Guide (v13.1.0-Hardened-PROD)
 
-Ensuring the stability and fidelity of the LEVI-AI v1.0.0-RC1 Distributed Stack requires periodic maintenance across the quad-persistence memory fabric and the cognitive evolution pipeline.
+Ensuring the stability and fidelity of the LEVI-AI v13.1.0-Hardened-PROD Distributed Stack requires periodic maintenance across the quad-persistence memory fabric and the cognitive evolution pipeline.
 
 ---
 
@@ -16,7 +16,7 @@ High-fidelity facts from episodic missions are automatically distilled into long
 ### 1.2 LearningLoop — Pattern Corpus [UPDATED]
 The `LearningLoop` captures patterns from high-fidelity missions (S > 0.85) into the `training_corpus` table.
 
-- **Status**: **[STUB]** — Data is captured only. Model weights are NOT modified in v1.0.0.
+- **Status**: **[ACTIVE] v13.1.0** — Autonomous 4-bit LoRA (Q4_K_M) fine-tuning pipeline active.
 - **Inspect corpus**: `SELECT COUNT(*) FROM training_corpus;`
 - **GDPR**: Records automatically wiped with 5-tier user deletion.
 
@@ -125,4 +125,4 @@ python -m backend.scripts.restore_drill
 
 ---
 
-© 2026 LEVI-AI SOVEREIGN HUB — Maintenance Specification v1.0.0-RC1
+© 2026 LEVI-AI SOVEREIGN HUB — Maintenance Specification v13.1.0-Hardened-PROD

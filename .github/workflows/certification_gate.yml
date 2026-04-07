@@ -1,0 +1,94 @@
+name: LEVI-AI Certification Gate (v13.1)
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  quality-gate:
+    name: "🛡️ Stage 1-2: Quality & Unit Tests"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff mypy pytest pytest-asyncio
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+      - name: Lint with Ruff
+        run: ruff check .
+      - name: Type check with Mypy
+        run: mypy backend/
+      - name: Run Unit Tests
+        run: pytest tests/unit
+
+  integration-gate:
+    name: "🧬 Stage 3: Agent E2E (Testcontainers)"
+    needs: quality-gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Docker
+        uses: docker-setup-action@v2 # Placeholder for real docker setup
+      - name: Run Agent E2E Suite
+        run: pytest tests/integration/agents/test_agents_e2e.py
+
+  security-gate:
+    name: "🔒 Stage 4: Vulnerability Scan"
+    needs: integration-gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Build temporary image
+        run: docker build -t levi-ai:test .
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'levi-ai:test'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+  resilience-gate:
+    name: "🏗️ Stage 5: Restore Drill (RTO Verify)"
+    needs: security-gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Execute Restore Drill
+        run: python -m backend.scripts.restore_drill --ci-mode
+
+  deploy-gate:
+    name: "🚀 Stage 6: GHCR Push & CD"
+    needs: resilience-gate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v3
+      - name: Log in to the Container registry
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}

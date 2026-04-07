@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 class SlidingWindowRateLimiter:
     """
-    Sovereign v1.0.0-RC1 Sliding Window Rate Limiter.
+    Sovereign v13.1.0-Hardened-PROD Sliding Window Rate Limiter.
     Uses Redis ZSETs to enforce strict per-user cognitive pulse thresholds.
     """
     def __init__(self, r: redis_client, limit: int = 60, window: int = 60):

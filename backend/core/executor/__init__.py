@@ -261,7 +261,7 @@ class GraphExecutor:
                             call_tool, 
                             agent_name, 
                             merged_params, 
-                            perception.get("context", {})
+                            {**perception.get("context", {}), "model_tier": getattr(node, "model_tier", "L2")}
                         ),
                         timeout=timeout
                     )

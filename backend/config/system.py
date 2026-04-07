@@ -1,8 +1,8 @@
 # backend/config/system.py
-"""Centralized configuration for LEVI-AI v1.0.0-RC1."""
+"""Centralized configuration for LEVI-AI v13.1.0-Hardened-PROD."""
 import os
 
-SOVEREIGN_VERSION = os.getenv("SOVEREIGN_VERSION", "v1.0.0-RC1")
+SOVEREIGN_VERSION = os.getenv("SOVEREIGN_VERSION", "v13.1.0-Hardened-PROD")
 ENVIRONMENT = os.getenv("ENVIRONMENT", "production")
 
 TIERS = {
@@ -42,7 +42,7 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 # Disaster Recovery & Backup Settings
 DR_RTO_SECONDS = 300      # Recovery Time Objective: 5 minutes
 DR_RPO_SECONDS = 3600     # Recovery Point Objective: 1 hour
-FAISS_SNAPSHOT_INTERVAL_HOURS = 6
+FAISS_SNAPSHOT_INTERVAL_MINUTES = 30
 POSTGRES_WAL_BACKUP_ENABLED = True
 NEO4J_BACKUP_INTERVAL_HOURS = 12
 REDIS_APPENDFSYNC = "everysec"
@@ -51,3 +51,11 @@ REDIS_APPENDFSYNC = "everysec"
 FAILURE_THRESHOLD = 5
 RETRY_DELAY = 2.0
 CLOUD_FALLBACK_ENABLED = os.getenv("CLOUD_FALLBACK_ENABLED", "false").lower() == "true"
+
+# Cognitive Safety Gates
+# Calibrated via 'calibrate_cu.py' script. 
+# Re-calibrated (v13.1 Phase 5): 500 CU for L3 reasoning tasks.
+CU_ABORT_THRESHOLD = int(os.getenv("CU_ABORT_THRESHOLD", "500"))
+CU_WARNING_PERCENT = 0.7  # Trigger warning at 70% of ceiling
+HITL_STRICT_MODE = True  # Block DRAFT quality delivery
+CRITIC_CALIBRATION_OFFSET = 0.0 # Weekly adjustment value

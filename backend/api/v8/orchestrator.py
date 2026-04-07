@@ -17,8 +17,8 @@ from backend.db.redis import r as redis_client, HAS_REDIS
 from backend.api.utils.auth import get_current_user
 from backend.core.v8.brain import LeviBrainCoreController
 from backend.engines.utils.security import SovereignSecurity
-from backend.db.postgres_db import get_read_session
 from sqlalchemy import text
+from backend.utils.audit import AuditLogger
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="", tags=["Orchestration v13"])
@@ -194,6 +194,15 @@ async def approve_mission_node(
     redis_client.set(approval_key, decision)
     if request.feedback:
         redis_client.set(f"{approval_key}:feedback", request.feedback)
+    
+    await AuditLogger.log_event(
+        event_type="HITL",
+        action="Human Decision",
+        user_id=user_id,
+        resource_id=request.mission_id,
+        status=decision,
+        metadata={"node_id": request.node_id, "feedback": request.feedback}
+    )
     
     logger.info(f"[HITL] Decision '{decision}' received for mission {request.mission_id}")
     return {"status": "success", "message": f"Mission node {decision}."}

@@ -5,6 +5,7 @@ import httpx
 import os
 import asyncio
 import time
+from backend.utils.egress import EgressProxy
 from typing import Optional, Any, Dict, Callable
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
@@ -24,16 +25,8 @@ ALLOWED_DOMAINS = [
 ]
 
 def is_url_allowed(url: str) -> bool:
-    """Verifies that the target domain is within the Sovereign allowlist."""
-    from urllib.parse import urlparse
-    try:
-        parsed = urlparse(url)
-        # Allow internal K8s services (no dot or .local)
-        if "." not in parsed.netloc or parsed.netloc.endswith(".local"):
-            return True
-        return parsed.netloc in ALLOWED_DOMAINS
-    except Exception:
-        return False
+    """Delegates to Sovereing EgressProxy for SSRF protection."""
+    return EgressProxy.validate_target(url)
 
 # Standardized retry decorator
 standard_retry = retry(

@@ -1,5 +1,5 @@
 """
-LEVI-AI: Local-First Distributed AI Stack v1.0.0-RC1.
+LEVI-AI: Sovereign OS v13.1.0-Hardened-PROD.
 Central Gateway & Service Orchestrator.
 """
 
@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from fastapi import FastAPI, Request, Response, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
+from backend.utils.metrics import MetricsHub
 
 from backend.config.system import SOVEREIGN_VERSION, CLOUD_FALLBACK_ENABLED, CORS_ORIGINS
 
@@ -29,6 +30,7 @@ from backend.api.marketplace import router as marketplace_v1
 from backend.api.compliance import router as compliance_v1
 from backend.api.v8.learning import router as learning_v1
 from backend.api.scheduling import router as scheduling_v1
+from backend.api.v1.replay import router as replay_v1
 
 # Middleware Tier
 from backend.api.middleware.security_headers import SecurityHeadersMiddleware
@@ -36,14 +38,16 @@ from backend.api.middleware.rate_limiter import RateLimitMiddleware
 
 # Core Logic
 from backend.db.postgres_db import verify_resonance
+from backend.db.partitions import ensure_audit_partitions
 from backend.broadcast_utils import SovereignBroadcaster
+from backend.core.model_router import ModelRouter
 
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="LEVI-AI Distributed Stack",
     version=SOVEREIGN_VERSION,
-    description="Local-First Agentic Infrastructure (v1.0.0-RC1 Graduation)"
+    description="Sovereign AI Operating System (v13.1.0-Hardened-PROD Graduation)"
 )
 
 # 1. Security Hardening (CORS)
@@ -98,6 +102,7 @@ app.include_router(marketplace_v1, prefix="/api/v1/marketplace", tags=["Marketpl
 app.include_router(compliance_v1, prefix="/api/v1/compliance", tags=["Compliance"])
 app.include_router(scheduling_v1, prefix="/api/v1/scheduling", tags=["Scheduling"])
 app.include_router(learning_v1, prefix="/api/v1/learning", tags=["Evolution"])
+app.include_router(replay_v1, prefix="/api/v1/missions", tags=["Resilience"])
 
 async def gossip_handler(pulse: Dict[str, Any]):
     """
@@ -123,6 +128,8 @@ async def graduation_audit():
     try:
         if await verify_resonance():
             logger.info("✅ Database resonance confirmed. Local persistence active.")
+            # Ensure Audit Log Partitions (v13.1.0)
+            await ensure_audit_partitions()
         else:
             logger.warning("⚠️ Database sync drift detected.")
     except Exception as e:
@@ -159,8 +166,18 @@ async def health_status():
         "version": SOVEREIGN_VERSION,
         "environment": os.getenv("ENVIRONMENT", "production"),
         "cloud_fallback": CLOUD_FALLBACK_ENABLED,
+        "model_assignments": ModelRouter.get_all_assignments(),
         "resonance": "GRADUATED"
     }
+
+# --- Prometheus Observability (v13.1) ---
+@app.get("/metrics")
+async def get_metrics():
+    """Exposes real-time system and mission telemetry for Prometheus."""
+    return Response(
+        content=MetricsHub.get_latest_metrics(),
+        media_type=MetricsHub.get_content_type()
+    )
 
 if __name__ == "__main__":
     import uvicorn

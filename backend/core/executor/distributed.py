@@ -8,6 +8,7 @@ from typing import List, Dict, Any, Optional
 from ..task_graph import TaskNode
 from ..orchestrator_types import ToolResult
 from . import GraphExecutor
+from ..cloud_fallback import CloudFallbackProxy
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ class DistributedGraphExecutor:
         self.node_weight = int(os.getenv("NODE_WEIGHT", "4")) # Default to 4 slots (RC1 standard)
         self.semaphore = asyncio.Semaphore(self.node_weight)
         self.executor_logic = GraphExecutor() # Reuse node execution logic
+        self.cloud_proxy = CloudFallbackProxy()
         self.is_running = False
 
     async def enqueue_wave(self, mission_id: str, wave: List[TaskNode], perception: Dict[str, Any], previous_results: Dict[str, Any]):
@@ -73,13 +75,25 @@ class DistributedGraphExecutor:
                 task_pkg = json.loads(task_json)
                 mission_id = task_pkg["mission_id"]
                 node_id = task_pkg["node_id"]
+                enqueued_at = task_pkg.get("enqueued_at", asyncio.get_event_loop().time())
+                wait_time = asyncio.get_event_loop().time() - enqueued_at
 
-                # Task Stealing / Load Balancing Logic
-                if self.semaphore.locked():
-                    # Node is at capacity — put task back at the end of the queue for another node
-                    logger.debug(f"[DCN Worker] Node busy. Stealing prevention: re-queueing {node_id}")
+                # Cloud Fallback Check (Audit Point 45: 90s Surcharge Overflow)
+                model_tier = task_pkg.get("node_data", {}).get("model_tier", "L2")
+                if model_tier in ["L3", "L4"] and wait_time > 90 and self.cloud_proxy.enabled:
+                    logger.warning(f"[DCN] Wait time exceeded for {node_id} ({wait_time:.1f}s). Activating Cloud Fallback.")
+                    asyncio.create_task(self._process_cloud_fallback(task_pkg))
+                    continue
+
+                # Task Stealing / Resource Pressure Logic
+                vram_pressure = await self.r.get("vram:pressure")
+                
+                if vram_pressure == "true" or self.semaphore.locked():
+                    # Node is at capacity or under VRAM pressure — put task back
+                    reason = "VRAM_PRESSURE" if vram_pressure == "true" else "CONCURRENCY_LIMIT"
+                    logger.debug(f"[DCN Worker] Node busy ({reason}). Re-queueing {node_id}")
                     await self.r.rpush(TASK_QUEUE, task_json)
-                    await asyncio.sleep(0.5) # Prevent tight-loop spinning
+                    await asyncio.sleep(1.0) # Prevent tight-loop spinning
                     continue
 
                 # Execute task in background to keep loop reactive
@@ -97,13 +111,21 @@ class DistributedGraphExecutor:
         mission_id = task_pkg["mission_id"]
         node_id = task_pkg["node_id"]
         
-        async with self.semaphore:
-            logger.info(f"[DCN Worker] Executing task {node_id} for mission {mission_id}")
+        # Audit Point 32: Tier-based Resource Allocation
+        node_data = task_pkg.get("node_data", {})
+        model_tier = node_data.get("model_tier", "L2")
+        slots_needed = 2 if model_tier in ["L3", "L4"] else 1
+        
+        # Multi-slot acquisition
+        for _ in range(slots_needed):
+            await self.semaphore.acquire()
+            
+        try:
+            logger.info(f"[DCN Worker] Executing task {node_id} (Tier: {model_tier}) for mission {mission_id}")
             
             try:
-                node = TaskNode(**task_pkg["node_data"])
+                node = TaskNode(**node_data)
                 # We need to bridge to GraphExecutor's _execute_node
-                # Note: GraphExecutor._execute_node expects results as a Dict[str, ToolResult]
                 previous_results_raw = task_pkg["previous_results"]
                 previous_results = {k: ToolResult(**v) if isinstance(v, dict) else v for k, v in previous_results_raw.items()}
                 
@@ -117,15 +139,53 @@ class DistributedGraphExecutor:
                 result_key = f"dcn:mission:{mission_id}:result:{node_id}"
                 await self.r.setex(result_key, RESULT_TTL, json.dumps(result.dict()))
                 
-                # Notify completion (Pub/Sub or Stream can be used, but here we just use the key)
+                # Notify completion
                 await self.r.publish(f"dcn:mission:{mission_id}:events", json.dumps({"event": "node_complete", "node_id": node_id}))
                 
                 logger.info(f"[DCN Worker] Task {node_id} completed by {self.node_id}")
 
             except Exception as e:
-                logger.exception(f"[DCN Worker] Task crached: {node_id} -> {e}")
-                # Optional: Push failure event
+                logger.exception(f"[DCN Worker] Task crashed: {node_id} -> {e}")
                 await self.r.publish(f"dcn:mission:{mission_id}:events", json.dumps({"event": "node_failed", "node_id": node_id, "error": str(e)}))
+        finally:
+            # Multi-slot release
+            for _ in range(slots_needed):
+                self.semaphore.release()
+
+    async def _process_cloud_fallback(self, task_pkg: Dict[str, Any]):
+        """Executes a task using CloudFallbackProxy when local resources are saturated."""
+        mission_id = task_pkg["mission_id"]
+        node_id = task_pkg["node_id"]
+        
+        try:
+            logger.info(f"[DCN Cloud] Routing {node_id} to Cloud Fallback.")
+            
+            # Simple message reconstruction for the cloud proxy
+            perception = task_pkg["perception"]
+            messages = [{"role": "user", "content": perception.get("input", "Synchronous mission")}]
+            
+            # Call Cloud Proxy
+            res_message = await self.cloud_proxy.generate_overflow(messages)
+            
+            if res_message:
+                result = ToolResult(
+                    success=True,
+                    message=res_message,
+                    agent="CloudFallback",
+                    latency_ms=1000 # Apprx
+                )
+                
+                result_key = f"dcn:mission:{mission_id}:result:{node_id}"
+                await self.r.setex(result_key, RESULT_TTL, json.dumps(result.dict()))
+                await self.r.publish(f"dcn:mission:{mission_id}:events", json.dumps({"event": "node_complete", "node_id": node_id}))
+                logger.info(f"[DCN Cloud] Task {node_id} completed via Cloud.")
+            else:
+                logger.error(f"[DCN Cloud] Cloud fallback failed for {node_id}. Re-queueing.")
+                await self.r.rpush(TASK_QUEUE, json.dumps(task_pkg))
+                
+        except Exception as e:
+            logger.error(f"[DCN Cloud] Explosion in cloud fallback: {e}")
+            await self.r.rpush(TASK_QUEUE, json.dumps(task_pkg))
 
     def stop(self):
         self.is_running = False

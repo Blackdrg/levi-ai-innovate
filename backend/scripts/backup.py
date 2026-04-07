@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 class SnapshotOrchestrator:
     """
-    Sovereign v1.0.0-RC1 Disaster Recovery Hub.
+    Sovereign v13.1.0-Hardened-PROD Disaster Recovery Hub.
     Orchestrates unified snapshots of Postgres, Neo4j, and FAISS.
     Addresses Warning #8 from the audit.
     """

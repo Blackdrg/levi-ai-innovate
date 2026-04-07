@@ -1,6 +1,6 @@
-# ⚖️ Core Architecture Specification (v1.0.0-RC1)
+# ⚖️ Core Architecture Specification (v13.1.0-Hardened-PROD)
 
-Technical specifications for the LEVI-AI v1.0.0-RC1 Local-First Distributed Stack.
+Technical specifications for the LEVI-AI v13.1.0-Hardened-PROD Local-First Distributed Stack.
 
 ---
 

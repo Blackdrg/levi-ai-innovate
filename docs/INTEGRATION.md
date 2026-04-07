@@ -1,4 +1,4 @@
-# 🔌 System Integration Master Spec (v1.0.0-RC1)
+# 🔌 System Integration Master Spec (v13.1.0-Hardened-PROD)
 
 The LEVI-AI Distributed Stack exposes a production-ready API for real-time mission orchestration via the central Brain Controller.
 
@@ -11,7 +11,7 @@ Executes a cognitive mission with real-time SSE telemetry pulses.
 
 - **Request Headers:**
     - `Authorization: Bearer <JWT_TOKEN>`
-    - `X-Sovereign-Version: v1.0.0-RC1`
+    - `X-Sovereign-Version: v13.1.0-Hardened-PROD`
     - `Content-Type: application/json`
 
 - **Request Body (JSON):**
@@ -31,7 +31,7 @@ Every mission emits a sequence of SSE Telemetry Pulse events for real-time obser
 
 | Event Type | Description | Schema / Payload |
 | :--- | :--- | :--- |
-| `metadata` | Mission ID and Stack Version. | `{request_id: "m-...", version: "v1.0.0-RC1"}` |
+| `metadata` | Mission ID and Stack Version. | `{request_id: "m-...", version: "v13.1.0-Hardened-PROD"}` |
 | `activity` | Human-readable service updates. | `"Scout Agent: Searching Tavily API..."` |
 | `graph` | The full DAG-based TaskGraph. | `TaskGraph.to_dict()` (JSON) |
 | `results` | Sanitized agent execution outputs. | `[AgentResult, ...]` |

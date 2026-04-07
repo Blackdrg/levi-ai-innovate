@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 class FidelityRubric(BaseModel):
     """
-    Objective scoring dimensions for the Swarm Adjudication Protocol (v1.0.0-RC1).
+    Objective scoring dimensions for the Swarm Adjudication Protocol (v13.1.0-Hardened-PROD).
     """
     syntax_correctness: float = Field(0.0, ge=0.0, le=1.0)
     logical_consistency: float = Field(0.0, ge=0.0, le=1.0)
@@ -27,7 +27,7 @@ class FidelityRubric(BaseModel):
 
     def calculate_fidelity(self, content: str, intent: str = "general") -> float:
         """
-        v1.0.0-RC1: Deterministic Weighted Aggregator.
+        v13.1.0-Hardened-PROD: Deterministic Weighted Aggregator.
         Combines neural scores with a hard-coded HardRuleValidator [50% weight].
         """
         weights = self.get_weight_profile(intent)

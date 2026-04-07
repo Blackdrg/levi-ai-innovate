@@ -1,6 +1,6 @@
-# ✅ Production Deployment Checklist (v1.0.0-RC1)
+# ✅ Production Deployment Checklist (v13.1.0-Hardened-PROD)
 
-Ensure all checkpoints are verified before graduating the v1.0.0-RC1 Distributed Stack to production.
+Ensure all checkpoints are verified before graduating the v13.1.0-Hardened-PROD Distributed Stack to production.
 
 ---
 

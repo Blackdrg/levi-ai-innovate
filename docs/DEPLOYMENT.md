@@ -1,12 +1,11 @@
-# 🚢 LEVI-AI: Deployment Guide (v1.0.0-RC1)
+# 🚢 LEVI-AI: Deployment Guide (v13.1.0-Hardened-PROD)
 
-> [!IMPORTANT]
-> **LEVI-AI v1.0.0-RC1 Production Specification**
+> **LEVI-AI v13.1.0-Hardened-PROD Production Specification**
 > This architecture coordinates five primary services (FastAPI, Redis, Postgres, Neo4j, Celery) for absolute data residency and high-performance mission orchestration at local-first sovereign standard.
 
 ---
 
-## 1. Service Topology (v1.0.0-RC1)
+## 1. Service Topology (Hardened)
 
 ```mermaid
 graph TD
@@ -60,7 +59,7 @@ graph TD
 ### Step 1 — Environment Preparation
 ```env
 # Core Identity
-SOVEREIGN_VERSION=v1.0.0-RC1
+SOVEREIGN_VERSION=v13.1.0-Hardened-PROD
 ENVIRONMENT=production
 
 # Service Connectivity
@@ -142,4 +141,4 @@ DCN_NODE_ID=node-beta
 
 ---
 
-© 2026 LEVI-AI SOVEREIGN HUB — Deployment Specification v1.0.0-RC1
+© 2026 LEVI-AI SOVEREIGN HUB — Deployment Specification v13.1.0-Hardened-PROD

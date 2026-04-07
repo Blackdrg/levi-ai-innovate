@@ -50,7 +50,7 @@ class GossipEngine:
 
     async def fragment_scrubber(self, fidelity: float) -> bool:
         """
-        Sovereign v1.0.0-RC1: Fragment Scrubber.
+        Sovereign v13.1.0-Hardened-PROD: Fragment Scrubber.
         Strictly gates inter-node sync to ensure only the highest fidelity data is gossiped.
         """
         SCRUB_THRESHOLD = 0.95 # Section 15.1 Requirement

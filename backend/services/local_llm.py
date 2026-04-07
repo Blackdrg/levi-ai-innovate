@@ -1,6 +1,7 @@
 import os
 import logging
 from typing import Optional, List, Dict
+from backend.core.model_router import ModelRouter
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,7 @@ class LocalLLM:
         except Exception as e:
             logger.error(f"[LocalLLM] Failed to load local model: {e}")
 
-    async def agenerate(self, prompt: str, system_prompt: str = "You are LEVI, a local AI.", max_tokens: int = 512) -> Optional[str]:
+    async def agenerate(self, prompt: str, system_prompt: str = "You are LEVI, a local AI.", max_tokens: int = 512, model_tier: str = "L2") -> Optional[str]:
         """Async local generation for v13.0.0 brain stream."""
         # 1. Prioritize Ollama if configured
         if os.getenv("OLLAMA_BASE_URL"):
@@ -51,7 +52,8 @@ class LocalLLM:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt}
             ]
-            return await call_ollama_llm(messages, model=os.getenv("OLLAMA_MODEL", "llama3"))
+            model = ModelRouter.get_model_for_tier(model_tier)
+            return await call_ollama_llm(messages, model=model)
 
         # 2. Fallback to llama-cpp
         if not self.model:

@@ -11,4 +11,4 @@ class TelemetryPulse(BaseModel):
     fidelity_score: float
     resource_saturation: str
     latencies: dict
-    version: str = "v1.0.0-RC1"
+    version: str = "v13.1.0-Hardened-PROD"

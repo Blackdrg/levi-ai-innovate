@@ -11,6 +11,7 @@ import uuid
 import logging
 from typing import Dict, Any, Optional
 from datetime import datetime, timedelta, timezone
+from backend.utils.audit import AuditLogger
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,23 @@ class JWTProvider:
         ident_token = jwt.encode(ident_payload, cls.SECRET_KEY, algorithm=cls.ALGORITHM)
         refresh_token = jwt.encode(refresh_payload, cls.SECRET_KEY, algorithm=cls.ALGORITHM)
         
+        # 🛡️ Security Check: Default Secret Warning
+        if cls.SECRET_KEY == "sovereign_monolith_default_secret" and os.getenv("ENVIRONMENT") == "production":
+            logger.critical("🚨 SECURITY ALERT: PRODUCTION ENVIRONMENT USING DEFAULT JWT SECRET. FORGERY IS TRIVIAL.")
+            # We don't crash, but we log the critical failure
+        
+        # Record creation event (No need to await, fire and forget)
+        import asyncio
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+             asyncio.create_task(AuditLogger.log_event(
+                 event_type="AUTH",
+                 action="Token Issued",
+                 user_id=user_id,
+                 status="success",
+                 metadata={"ident_jti": ident_jti}
+             ))
+
         return {
             "identity_token": ident_token,
             "refresh_token": refresh_token,

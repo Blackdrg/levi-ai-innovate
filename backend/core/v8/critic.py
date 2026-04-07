@@ -14,9 +14,11 @@ class ReflectionEngine:
 
     async def evaluate(self, response: str, goal: Any, perception: Dict[str, Any]) -> Dict[str, Any]:
         """
-        LeviBrain v8.7: Evolutionary qualitative audit.
-        Adjusts strictness based on historical fragility and mission complexity.
+        LeviBrain v13.1 Bias-Aware Qualitative Audit.
+        Implements Shadow Critic cross-verification and Fidelity Badging.
         """
+        mission_id = perception.get("context", {}).get("mission_id", "audit")
+        user_id = perception.get("user_id", "default_user")
         user_input = perception.get("input", "")
         context = perception.get("context", {})
         
@@ -38,9 +40,33 @@ class ReflectionEngine:
             "rigor": "exhaustive" if hyper_reflection else "standard"
         }, audit_context)
         
+        # 🛡️ Shadow Critic Intervention (v13.1 Phase 5)
+        # We invoke an independent model (e.g., phi3:mini) to detect self-referential bias
+        shadow_audit_context = {**audit_context, "preferred_model": "phi3:mini"} # Force lightweight shadow model
+        shadow_audit = await call_tool("critic_agent", {
+            "goal": goal.objective,
+            "success_criteria": goal.success_criteria,
+            "response": response,
+            "user_input": user_input,
+            "rigor": "standard"
+        }, shadow_audit_context)
+
         # 3. Extract High-Fidelity Metrics
         metrics = audit_raw.get("data", {})
         fidelity_score = metrics.get("quality_score", 0.5)
+        shadow_score = shadow_audit.get("data", {}).get("quality_score", 0.5)
+        
+        # 🧪 Bias Detection Logic
+        divergence = abs(fidelity_score - shadow_score)
+        
+        # 🛡️ v13.1 Phase 7: Personalized Calibration Offset
+        offset = await self._get_calibration_offset(user_id)
+        fidelity_score = max(0.0, min(1.0, fidelity_score + offset))
+        
+        requires_hitl = divergence > 0.15
+        
+        # Log calibration data for weekly offset calculation
+        asyncio.create_task(self._log_calibration(mission_id, fidelity_score, shadow_score, divergence))
         issues = metrics.get("issues", [])
         fix_strategy = metrics.get("fix", "Apply general refinement.")
         is_safe = not metrics.get("hallucination_detected", True)
@@ -48,19 +74,78 @@ class ReflectionEngine:
         # 4. Dynamic Threshold Logic
         # High-fragility missions require higher fidelity (up to 0.95)
         threshold = 0.80 + (sc_weight * 0.15)
-        is_satisfactory = fidelity_score >= threshold and is_safe
+        is_satisfactory = fidelity_score >= threshold and is_safe and not requires_hitl
         
+        # 🏷️ Fidelity Badge Allocation (v13.1 Limbo Gap Correction)
+        if fidelity_score >= 0.85:
+            badge = "VERIFIED"
+        elif fidelity_score >= 0.65:
+            badge = "REVIEWED"
+        else:
+            badge = "DRAFT"
+
+        if requires_hitl:
+            logger.warning("[V13.1 Bias] Primary/Shadow Divergence detected (%.2f). Blocking auto-crystallization.", divergence)
+
         if hyper_reflection and not is_satisfactory:
             logger.warning("[V8 Reflection] Hyper-Reflection Triggered: Fidelity (%.2f) < Threshold (%.2f)", fidelity_score, threshold)
         
         return {
             "score": fidelity_score,
+            "shadow_score": shadow_score,
+            "divergence": divergence,
+            "badge": badge,
+            "requires_hitl": requires_hitl,
             "issues": issues,
             "fix": fix_strategy,
             "is_satisfactory": is_satisfactory,
             "threshold": threshold,
             "metrics": metrics.get("metrics", {})
         }
+
+    async def _log_calibration(self, mission_id: str, primary: float, shadow: float, divergence: float):
+        """Persists calibration drift to Postgres."""
+        try:
+            from backend.db.postgres_db import PostgresDB
+            from backend.db.models import CriticCalibration
+            async with PostgresDB._session_factory() as session:
+                calibration = CriticCalibration(
+                    mission_id=mission_id,
+                    user_id=mission_id.split("_")[0] if "_" in mission_id else "default_user", # Heuristic for user_id
+                    primary_score=primary,
+                    shadow_score=shadow,
+                    divergence=divergence
+                )
+                session.add(calibration)
+                await session.commit()
+        except Exception as e:
+            logger.error(f"[BiasControl] Failed to log calibration: {e}")
+
+    async def _get_calibration_offset(self, user_id: str) -> float:
+        """Fetches the personalized calibration offset for the user, with a global fallback."""
+        try:
+            from backend.db.postgres_db import PostgresDB
+            from backend.db.models import UserCalibration
+            from sqlalchemy import select
+            
+            async with PostgresDB._session_factory() as session:
+                # 1. Check User specific
+                stmt = select(UserCalibration.bias_offset).where(UserCalibration.user_id == user_id)
+                res = await session.execute(stmt)
+                offset = res.scalar_one_or_none()
+                
+                if offset is not None:
+                    return float(offset)
+                
+                # 2. Fallback to Global
+                stmt = select(UserCalibration.bias_offset).where(UserCalibration.user_id == "global")
+                res = await session.execute(stmt)
+                offset = res.scalar_one_or_none()
+                
+                return float(offset) if offset is not None else 0.0
+        except Exception as e:
+            logger.error(f"[BiasControl] Failed to fetch offset for {user_id}: {e}")
+            return 0.0
 
     async def self_correct(self, response: str, evaluation: Dict[str, Any], goal: Any, perception: Dict[str, Any]) -> str:
         """Adaptive Refinement pass with Evolutionary context."""

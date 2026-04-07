@@ -17,7 +17,7 @@ REGISTERED_AGENTS = [
     "Diagnostic", # System health
     "Imaging",    # Vision/Generation
     "Video",      # Motion Synthesis
-    "Relay",      # Communication stub
+    "Relay",      # Sub-mission handoff router
 ]
 
 AGENT_COUNT = len(REGISTERED_AGENTS)  # single source of truth (14)
@@ -36,3 +36,4 @@ from .memory_agent import MemoryAgent as Memory
 from .diagnostic_agent import DiagnosticAgent as Diagnostic
 from .image_agent import ImageAgent as Imaging
 from .video_agent import VideoAgent as Video
+from .relay_agent import RelayAgent as Relay

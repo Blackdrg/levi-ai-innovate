@@ -7,6 +7,7 @@ from .pipeline import FlowState, FlowPipeline
 from backend.core.agent_registry import AgentRegistry, AgentResult
 from backend.engines.utils.security import SovereignSecurity
 from backend.engines.utils.i18n import SovereignI18n
+from backend.utils.audit import AuditLogger
 
 logger = logging.getLogger(__name__)
 
@@ -139,8 +140,24 @@ class BrainOrchestrator:
 
     async def _dispatch_agent_step(self, step_id, name, params, state):
         """Unified dispatch to the hardened agent registry."""
+        await AuditLogger.log_event(
+            event_type="AGENT",
+            action="Dispatch",
+            user_id=state.user_id,
+            resource_id=name,
+            metadata={"step_id": step_id, "params_keys": list(params.keys())}
+        )
         result = await AgentRegistry.dispatch(name, params)
         state.engine_results[step_id] = result
+        
+        await AuditLogger.log_event(
+            event_type="AGENT",
+            action="Result",
+            user_id=state.user_id,
+            resource_id=name,
+            status="success" if result.success else "failed",
+            metadata={"step_id": step_id, "error": result.error if not result.success else None}
+        )
 
     async def synthesize_mission_results(self, state: FlowState, lang: str = "en") -> str:
         """Final synthesis mission via the DialogueArchitect."""
