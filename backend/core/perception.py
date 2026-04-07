@@ -5,7 +5,7 @@ Extracts intent, entities, emotion, and context from user input.
 
 import logging
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 from .planner import detect_intent
 from backend.memory.manager import MemoryManager

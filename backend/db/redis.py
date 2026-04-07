@@ -13,28 +13,87 @@ from backend.utils.network import redis_breaker
 
 logger = logging.getLogger(__name__)
 
-# --- Redis Configuration ---
+def _is_local_url(url: str) -> bool:
+    """Detects if the Redis URL points to localhost/127.0.0.1 to avoid SSL handshake paradoxes."""
+    return any(host in url for host in ["localhost", "127.0.0.1", "0.0.0.0"])
+
+# --- Redis Configuration (HA Support v2.1) ---
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+REDIS_MODE = os.getenv("REDIS_MODE", "standalone").lower() # standalone | sentinel | cluster
+SENTINEL_SERVICE = os.getenv("REDIS_SENTINEL_SERVICE", "mymaster")
+SENTINEL_NODES = os.getenv("REDIS_SENTINEL_NODES", "") # e.g. "localhost:26379,localhost:26380"
+
 HAS_REDIS = False
 r = None
 r_async = None
 HAS_REDIS_ASYNC = False
 
-# Synchronous Heartbeat (Safe for module load)
-try:
-    r = redis.from_url(REDIS_URL, decode_responses=True)
-    r.ping()
-    HAS_REDIS = True
-    logger.info("Sovereign Redis: Sync heartbeat detected.")
-except Exception as e:
-    logger.error(f"Sovereign Redis Sync: Pulse not found: {e}")
+def _create_ha_clients():
+    global r, r_async, HAS_REDIS, HAS_REDIS_ASYNC
+    
+    # 🛡️ Graduation Audit: Enforce mandatory Redis in Production
+    is_prod = os.getenv("ENVIRONMENT", "development").lower() == "production"
+    
+    # Check for test injection
+    if os.getenv("TEST_MODE", "false").lower() == "true":
+        try:
+            from fakeredis import FakeRedis
+            from fakeredis.aioredis import FakeRedis as AsyncFakeRedis
+            r = FakeRedis(decode_responses=True)
+            r_async = AsyncFakeRedis(decode_responses=True)
+            HAS_REDIS = True
+            HAS_REDIS_ASYNC = True
+            logger.info("Sovereign Redis: Using Mock Infrastructure (TEST_MODE).")
+            return
+        except ImportError:
+            logger.warning("fakeredis not found. Tests will attempt live connection.")
 
-# Asynchronous Client (Requires explicit await/event loop)
-try:
-    r_async = async_redis.from_url(REDIS_URL, decode_responses=True)
-    HAS_REDIS_ASYNC = True
-except Exception as e:
-    logger.error(f"Sovereign Redis Async: Failed to initialize: {e}")
+    try:
+        # Resolve SSL Paradox: Strip SSL parameters for local dev machines
+        kwargs = {"decode_responses": True}
+        if _is_local_url(REDIS_URL):
+            kwargs["ssl"] = False
+            # Some versions of redis-py pass ssl_cert_reqs even if ssl=False, which triggers errors
+            # We use from_url for its robust parsing but sanitize the URL if needed.
+
+        if REDIS_MODE == "sentinel" and SENTINEL_NODES:
+            from redis.sentinel import Sentinel
+            nodes = [tuple(n.split(':')) for n in SENTINEL_NODES.split(',')]
+            sentinel = Sentinel(nodes, **kwargs)
+            r = sentinel.master_for(SENTINEL_SERVICE)
+            # Async version
+            from redis.asyncio.sentinel import Sentinel as AsyncSentinel
+            async_sentinel = AsyncSentinel(nodes, **kwargs)
+            r_async = async_sentinel.master_for(SENTINEL_SERVICE)
+            logger.info(f"Sovereign Redis: Linked to Sentinel Swarm [{SENTINEL_SERVICE}]")
+        
+        elif REDIS_MODE == "cluster":
+            from redis.cluster import RedisCluster
+            r = RedisCluster.from_url(REDIS_URL, **kwargs)
+            from redis.asyncio.cluster import RedisCluster as AsyncRedisCluster
+            r_async = AsyncRedisCluster.from_url(REDIS_URL, **kwargs)
+            logger.info("Sovereign Redis: Cluster mode active.")
+        
+        else: # standalone
+            r = redis.from_url(REDIS_URL, **kwargs)
+            r_async = async_redis.from_url(REDIS_URL, **kwargs)
+            logger.info("Sovereign Redis: Standalone pulse detected.")
+
+        r.ping()
+        HAS_REDIS = True
+        HAS_REDIS_ASYNC = True
+    except Exception as e:
+        if is_prod:
+            logger.error(f"CRITICAL: [Redis] Mandatory infrastructure failed ({e}) in PRODUCTION. System Halted.")
+            raise ConnectionError(f"Sovereign DCN requires active Redis for persistence and quorum. Error: {e}")
+        else:
+            logger.error(f"Sovereign Redis HA Failure: {e}. Defaulting to standalone fallback.")
+            try:
+                r = redis.from_url(REDIS_URL, decode_responses=True)
+                r_async = async_redis.from_url(REDIS_URL, decode_responses=True)
+            except: pass
+
+_create_ha_clients()
 
 # --- Central Interface ---
 def get_redis_client() -> Optional[redis.Redis]:
@@ -97,7 +156,6 @@ def store_exact_match(user_id: str, message: str, mood: str, response: str, ttl:
 
 def check_semantic_match(user_id: str, message: str, mood: str, threshold: float = 0.95) -> Optional[str]:
     if not HAS_REDIS: return None
-    from backend.db.vector import VectorStore # Use new vector tier
     # Logic bridged to VectorStore for v8 semantic caching
     return None
 

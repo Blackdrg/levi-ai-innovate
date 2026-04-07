@@ -5,7 +5,7 @@ Refactored to point to the tiered backend structure.
 """
 
 import logging
-from typing import Dict, Any, Type, Optional
+from typing import Dict, Any, Optional
 from backend.utils.network import standard_retry, ai_service_breaker
 
 # Importing from the new tiered agent ecosystem (V8 Hardened)
@@ -17,6 +17,7 @@ from backend.core.v8.agents.python_repl import PythonReplAgentV8
 from backend.core.v8.agents.consensus import ConsensusAgentV8
 from backend.core.v8.agents.relation_agent import RelationAgentV8
 from backend.core.v8.agents.critic import CriticAgentV8
+from backend.core.v8.agents.mental_compressor import MentalCompressorAgent
 
 # Legacy / Non-reasoning agents
 from backend.agents.image_agent import ImageAgent
@@ -49,6 +50,7 @@ _TOOL_INSTANCES: Dict[str, Any] = {
     "memory_agent": MemoryAgent(),
     "consensus_agent": ConsensusAgentV8(),
     "relation_agent": RelationAgentV8(),
+    "mental_compressor": MentalCompressorAgent(),
     "deterministic_engine": DeterministicEngine(),
 }
 

@@ -7,7 +7,7 @@ Broadcasting neural evolution telemetry and asynchronous task updates.
 import json
 import logging
 import asyncio
-from typing import AsyncGenerator, Dict, Any, Optional
+from typing import AsyncGenerator, Dict, Any
 from backend.redis_client import SovereignCache
 
 logger = logging.getLogger(__name__)

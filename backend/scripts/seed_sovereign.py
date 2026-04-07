@@ -2,7 +2,6 @@ import asyncio
 import logging
 from backend.db.postgres import PostgresDB
 from backend.db.models import UserProfile, CustomAgent
-from datetime import datetime, timezone
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("seed")

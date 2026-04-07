@@ -5,7 +5,6 @@ Features: 15m Identity Token, 7d Refresh Token, JTI Revocation in Redis.
 """
 
 import os
-import time
 import jwt # PyJWT
 import uuid
 import logging

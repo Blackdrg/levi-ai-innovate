@@ -4,10 +4,9 @@ Strategic management of the HNSW-powered Cognitive Vault and Logic Fabric.
 """
 
 import logging
-import json
 import uuid
-from typing import Optional, List, Dict, Any
-from fastapi import APIRouter, Depends, Request, HTTPException
+from typing import Any
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from datetime import datetime
 

@@ -17,7 +17,7 @@ from .graph_engine import GraphEngine
 from ..services.learning.distiller import MemoryDistiller
 from backend.db.firestore_db import db as firestore_db
 from backend.db.postgres import PostgresDB
-from backend.db.models import UserProfile, UserTrait, UserPreference
+from backend.db.models import UserProfile
 from sqlalchemy import select
 
 from backend.services.learning.logic import UserPreferenceModel

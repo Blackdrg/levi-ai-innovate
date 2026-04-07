@@ -1,6 +1,6 @@
 import pytest
 from backend.auth import TIERS, check_allowance
-from backend.db.redis_client import incr_daily_ai_spend, get_daily_ai_spend
+from backend.db.redis_client import incr_daily_ai_spend
 
 @pytest.fixture
 def mock_redis(monkeypatch):

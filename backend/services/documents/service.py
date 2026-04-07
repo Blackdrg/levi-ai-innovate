@@ -1,7 +1,6 @@
 import os
-import asyncio
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List
 from backend.utils.vector_db import VectorDB
 
 logger = logging.getLogger(__name__)

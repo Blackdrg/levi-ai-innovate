@@ -4,13 +4,9 @@ High-performance streaming cognitive synthesis for the Absolute Monolith.
 """
 
 import os
-import random
 import logging
-import asyncio
 import json
 import uuid
-import zlib
-import base64
 from typing import Optional, Any, List, Dict
 from enum import Enum
 
@@ -60,7 +56,7 @@ class SovereignGenerator:
         """
         Direct Ollama streaming interface.
         """
-        import httpx, json
+        import httpx
         base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
         
         system_msg = next((m["content"] for m in messages if m["role"] == "system"), SovereignI18n.get_prompt("system_brain", lang))

@@ -10,6 +10,11 @@
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1" rel="stylesheet" />
     <script src="https://cdn.tailwindcss.com"></script>
     
+    <!-- Sovereign Core -->
+    <script src="js/config.js"></script>
+    <script src="js/levi-api.js"></script>
+    <script src="js/shared.js"></script>
+    
     <!-- React Flow & React (via CDN) -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -45,6 +50,9 @@
             <div class="flex items-center gap-4">
                 <span class="text-2xl font-bold tracking-tighter text-neural">LEVI-AI</span>
                 <span class="text-[10px] uppercase tracking-[0.3em] text-slate-500 font-bold border-l border-white/10 pl-4">No-Code Architect</span>
+            </div>
+            <div id="sovereign-nav" class="flex items-center gap-8">
+                <!-- Injected via shared.js -->
             </div>
             <div class="flex items-center gap-4">
                 <button onclick="saveAgent()" class="bg-neural px-6 py-2 rounded-xl text-xs font-bold uppercase tracking-widest hover:scale-105 transition-transform shadow-[0_0_20px_rgba(168,85,247,0.4)]">
@@ -109,13 +117,7 @@
             };
 
             try {
-                const url = `http://localhost:8000/api/v13/agents/create`;
-                const resp = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                    body: JSON.stringify(config)
-                });
-                const data = await resp.json();
+                const data = await LeviAPI.post('/api/v1/agents/create', config);
                 if (data.status === 'success') {
                     alert("Agent Archetype successfully synthesized and stored in Sovereign Fabric.");
                 }

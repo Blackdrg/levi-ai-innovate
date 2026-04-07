@@ -1,7 +1,5 @@
 import os
 import logging
-from typing import List, Optional
-from datetime import datetime, timezone
 from backend.celery_app import celery_app # type: ignore
 from backend.db.firestore_db import db as firestore_db
 from backend.services.notifications.email import send_email_notification

@@ -5,9 +5,8 @@ Refactored to V8 Sovereign standard.
 """
 
 import logging
-from typing import Optional, Any
-from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from typing import Any
+from fastapi import APIRouter, Depends, HTTPException
 from backend.api.utils.auth import get_current_user
 
 logger = logging.getLogger(__name__)

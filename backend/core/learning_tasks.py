@@ -4,7 +4,7 @@ from datetime import datetime
 from backend.celery_app import celery_app
 from backend.services.learning.logic import AdaptivePromptManager
 from backend.services.learning.unbound import unbound_engine
-from backend.services.learning.trainer import poll_and_activate, upload_training_file, submit_finetuning_job
+from backend.services.learning.trainer import upload_training_file, submit_finetuning_job
 from backend.api.v8.telemetry import broadcast_mission_event
 
 logger = logging.getLogger(__name__)

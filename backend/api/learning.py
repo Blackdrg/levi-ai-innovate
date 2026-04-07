@@ -6,8 +6,7 @@ Hardened for global telemetry and identity-aware adaptation.
 """
 
 import logging
-import json
-from typing import Optional, Dict, Any, List
+from typing import Dict, Any
 from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field

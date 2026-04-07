@@ -1,16 +1,15 @@
 import json
 import logging
-import hashlib
 import os
 import asyncio
 import numpy as np
 import faiss  # type: ignore
 from datetime import datetime, timedelta, timezone
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 
 from backend.db.vector_store import embed_text
 from backend.db.postgres import PostgresDB
-from backend.db.models import UserFact, Mission
+from backend.db.models import UserFact
 from backend.db.vector_store import VectorDB
 from backend.db.vector_store import SovereignVault
 

@@ -2,7 +2,6 @@ import os
 import logging
 import subprocess
 import datetime
-from typing import List
 
 logger = logging.getLogger(__name__)
 

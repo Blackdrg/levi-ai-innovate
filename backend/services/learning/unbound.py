@@ -1,14 +1,11 @@
-import os
 import json
 import logging
-import asyncio
-from typing import List, Dict, Any, Optional
+from typing import Dict, Any
 from pathlib import Path
 from datetime import datetime
 
 from backend.core.v8.agents.critic import CriticAgentV8, CriticInput
 from backend.services.learning.scraper import scraper
-from backend.services.learning.trainer import upload_training_file, submit_finetuning_job
 
 logger = logging.getLogger(__name__)
 

@@ -5,7 +5,7 @@ Ensures optimized token allocation across instructions, history, and examples.
 """
 
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
 from dataclasses import dataclass, asdict
 
 logger = logging.getLogger(__name__)

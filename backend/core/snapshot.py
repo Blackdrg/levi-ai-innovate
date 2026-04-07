@@ -3,16 +3,13 @@ import shutil
 import datetime
 import logging
 import asyncio
-import json
-import subprocess
-from typing import List, Optional
-from backend.config.system import DR_RTO_SECONDS, DR_RPO_SECONDS
+from typing import List
 
 logger = logging.getLogger(__name__)
 
 class SnapshotOrchestrator:
     """
-    Sovereign v13.1.0-Hardened-PROD Disaster Recovery Hub.
+    Sovereign v14.0.0-Autonomous-SOVEREIGN Disaster Recovery Hub.
     Orchestrates unified snapshots of Postgres, Neo4j, Redis, and FAISS.
     """
     
@@ -196,7 +193,7 @@ class SnapshotOrchestrator:
     # --- 🛡️ Encryption & Sync Logic ---
     async def _encrypt_and_sync(self, snap_id: str):
         """
-        Sovereign v13.1.0 Graduation: Encrypt and Sync.
+        Sovereign v14.0.0-Autonomous-SOVEREIGN Graduation: Encrypt and Sync.
         Uses 'age' for asymmetric encryption and 'rclone' for off-site transfer.
         """
         try:

@@ -8,9 +8,8 @@ Refactored from backend/services/studio/ai_router.py.
 import logging
 import os
 import asyncio
-from typing import Optional, Dict, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from backend.utils.exceptions import LEVIException
 from backend.core.orchestrator_types import ContentRequest
 from backend.auth.logic import get_current_user
@@ -18,7 +17,6 @@ from backend.engines.studio.content_logic import generate_content, get_available
 from backend.engines.studio.sd_logic import get_available_styles
 from backend.db.redis import is_rate_limited, get_daily_ai_spend, incr_daily_ai_spend
 from backend.services.payments.logic import use_credits
-from backend.utils.robustness import standard_retry
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="", tags=["AI Studio"])

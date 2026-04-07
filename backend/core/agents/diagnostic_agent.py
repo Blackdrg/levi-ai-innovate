@@ -1,7 +1,7 @@
 import logging
 import json
 from typing import Dict, Any, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from backend.core.agent_base import SovereignAgent, AgentResult
 from backend.engines.chat.generation import SovereignGenerator
 from backend.utils.health import check_brain_health

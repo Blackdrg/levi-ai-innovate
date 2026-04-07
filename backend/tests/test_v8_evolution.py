@@ -1,8 +1,6 @@
 import pytest
 import asyncio
-import json
-from datetime import datetime, timezone
-from backend.core.v8.learning import FragilityTracker, LearningLoopV8
+from backend.core.v8.learning import FragilityTracker
 from backend.core.v8.goal_engine import GoalEngine
 from backend.core.v8.critic import ReflectionEngine
 from backend.memory.cache import MemoryCache

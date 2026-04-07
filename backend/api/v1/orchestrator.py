@@ -5,9 +5,8 @@ Primary v1 REST/SSE interface for the Absolute Monolith.
 
 import logging
 import json
-import asyncio
-from typing import Optional, Dict, Any, List
-from fastapi import APIRouter, Depends, Request, HTTPException
+from typing import Optional, Dict, Any
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 

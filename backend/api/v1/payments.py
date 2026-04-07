@@ -10,15 +10,14 @@ import hmac
 import hashlib
 import logging
 import razorpay
-import json
-from typing import Optional, Dict, Any
+from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi import APIRouter, HTTPException, Depends
 from backend.db.postgres_db import get_read_session, get_write_session
 from sqlalchemy import text
 from backend.auth.logic import get_current_user_optional
 from backend.config.system import TIERS, COST_MATRIX
-from backend.db.redis import incr_daily_ai_spend, get_daily_ai_spend, distributed_lock, HAS_REDIS
+from backend.db.redis import incr_daily_ai_spend, get_daily_ai_spend
 from backend.utils.exceptions import LEVIException
 from backend.utils.robustness import standard_retry
 from backend.broadcast_utils import SovereignBroadcaster

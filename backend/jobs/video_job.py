@@ -7,10 +7,8 @@ Triggered by Cloud Tasks or direct gcloud command.
 
 import os
 import sys
-import json
 import logging
 import asyncio
-from typing import Any, Dict
 
 # Ensure we can import from parent directory
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))

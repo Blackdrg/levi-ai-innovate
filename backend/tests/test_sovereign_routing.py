@@ -1,6 +1,6 @@
 import pytest
 import asyncio
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from backend.services.orchestrator.brain import LeviBrain
 from backend.services.orchestrator.orchestrator_types import IntentResult, EngineRoute
 

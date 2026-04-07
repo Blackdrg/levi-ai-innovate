@@ -5,14 +5,11 @@ Contains high-speed rule-based and LLM-based intent detection.
 """
 
 import logging
-import json
 import re
-from typing import List, Dict, Any, Optional
+from typing import Dict, Any
 from .orchestrator_types import IntentResult
 from .task_graph import TaskGraph, TaskNode
 from .intent_classifier import HybridIntentClassifier
-from .intent_rules import INTENT_RULES
-from backend.utils.llm_utils import call_lightweight_llm
 
 logger = logging.getLogger(__name__)
 

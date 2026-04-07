@@ -9,15 +9,14 @@ import logging
 import os
 import numpy as np
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from backend.utils.exceptions import LEVIException
 from backend.auth.logic import verify_admin
 from backend.db.firebase import db as firestore_db
 from backend.utils.network import groq_breaker, together_breaker, CircuitBreaker
 from backend.db.redis import r as redis_client, HAS_REDIS
-from backend.utils.robustness import standard_retry
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="", tags=["Analytics"])

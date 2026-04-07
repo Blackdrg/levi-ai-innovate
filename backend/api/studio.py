@@ -6,11 +6,7 @@ Hardened for asynchronous mission tracking and spectral state management.
 """
 
 import logging
-import uuid
-import asyncio
-from datetime import datetime
-from typing import Optional, Dict, Any
-from fastapi import APIRouter, Depends, Request, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException
 from backend.auth import UserIdentity, get_sovereign_identity
 from backend.core.agent_registry import AgentRegistry
 from backend.firestore_db import db as sovereign_db

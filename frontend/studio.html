@@ -9,6 +9,11 @@
     <link rel="stylesheet" href="./css/styles.css" />
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1" rel="stylesheet" />
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Sovereign Core -->
+    <script src="js/config.js"></script>
+    <script src="js/levi-api.js"></script>
+    <script src="js/shared.js"></script>
 </head>
 
 <body class="bg-[#050507] text-slate-200 font-['Outfit'] overflow-x-hidden">
@@ -23,11 +28,8 @@
                 <span class="text-2xl font-bold tracking-tighter text-neural">LEVI-AI</span>
                 <span class="text-[10px] uppercase tracking-[0.3em] text-slate-500 font-bold border-l border-white/10 pl-4">Sovereign Studio</span>
             </div>
-            <div class="flex items-center gap-8">
-                <a href="index.html" class="text-xs uppercase tracking-widest text-slate-400 hover:text-white transition-colors">Home</a>
-                <a href="chat.html" class="text-xs uppercase tracking-widest text-slate-400 hover:text-white transition-colors">Dialogue</a>
-                <a href="monitor.html" class="text-xs uppercase tracking-widest text-slate-400 hover:text-white transition-colors">Evolution</a>
-                <a href="studio.html" class="text-xs uppercase tracking-widest text-white border-b-2 border-neural pb-1 font-bold">Studio</a>
+            <div id="sovereign-nav" class="flex items-center gap-8">
+                <!-- Injected via shared.js -->
             </div>
         </div>
     </nav>
@@ -75,6 +77,36 @@
                             </select>
                         </div>
                     </div>
+
+                    <!-- Advanced Parameters -->
+                    <details class="group">
+                        <summary class="text-[10px] uppercase tracking-[0.3em] text-slate-600 font-bold cursor-pointer hover:text-slate-400 transition-colors list-none flex items-center gap-2">
+                             <span class="material-symbols-outlined text-sm group-open:rotate-90 transition-transform">chevron_right</span>
+                             Advanced Synthesis Parameters
+                        </summary>
+                        <div class="pt-6 space-y-6 animate-in fade-in slide-in-from-top-2">
+                            <div class="space-y-4">
+                                <label class="text-[10px] uppercase tracking-[0.3em] text-slate-500 font-bold">Negative Prompt</label>
+                                <input id="studio-negative" type="text" placeholder="Low quality, blurry, distorted..." 
+                                    class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm text-slate-300 focus:ring-neural focus:border-neural">
+                            </div>
+                            <div class="grid grid-cols-2 gap-6">
+                                <div class="space-y-4">
+                                    <label class="text-[10px] uppercase tracking-[0.3em] text-slate-500 font-bold">Model</label>
+                                    <select id="studio-model" class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm text-slate-300 focus:ring-neural focus:border-neural">
+                                        <option value="flux">Flux.1 Dev</option>
+                                        <option value="sdxl">SDXL Lightning</option>
+                                        <option value="aura">AuraFlow v1</option>
+                                    </select>
+                                </div>
+                                <div class="space-y-4">
+                                    <label class="text-[10px] uppercase tracking-[0.3em] text-slate-500 font-bold">Seed</label>
+                                    <input id="studio-seed" type="number" placeholder="Random" 
+                                        class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm text-slate-300 focus:ring-neural focus:border-neural">
+                                </div>
+                            </div>
+                        </div>
+                    </details>
 
                     <div class="pt-4 flex gap-4">
                         <button onclick="dispatchVisualMission('image')" 
@@ -133,21 +165,23 @@
             const prompt = document.getElementById("studio-prompt").value.trim();
             const style = document.getElementById("studio-style").value;
             const ratio = document.getElementById("studio-ratio").value;
+            const negative = document.getElementById("studio-negative").value.trim();
+            const model = document.getElementById("studio-model").value;
+            const seed = document.getElementById("studio-seed").value;
             
             if (!prompt) return;
 
-            const token = localStorage.getItem("sovereign_token");
             const endpoint = type === 'image' ? '/api/v1/studio/generate_image' : '/api/v1/studio/generate_video';
 
             try {
-                const resp = await fetch(endpoint, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                    body: JSON.stringify({ prompt, style, aspect_ratio: ratio })
+                const data = await LeviAPI.post(endpoint, { 
+                    prompt, 
+                    style, 
+                    aspect_ratio: ratio,
+                    negative_prompt: negative,
+                    model: model,
+                    seed: seed ? parseInt(seed) : undefined
                 });
-
-                if (!resp.ok) throw new Error("Mission dispatch failed.");
-                const data = await resp.json();
                 
                 // Track mission logic...
                 console.info("[Studio] Mission dispatched:", data.mission_id);

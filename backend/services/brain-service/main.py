@@ -1,11 +1,10 @@
 import logging
-import asyncio
 import uuid
 from fastapi import FastAPI, BackgroundTasks
 from pydantic import BaseModel
-from typing import Dict, Any, List
+from typing import Dict, Any
 
-from shared.schemas import IntentResult, Goal, TaskNode
+from shared.schemas import IntentResult
 from backend.core.v8.goal_engine import GoalEngine
 from backend.core.v8.planner import DAGPlanner
 from backend.kafka_client import LeviKafkaClient, emit_brain_event

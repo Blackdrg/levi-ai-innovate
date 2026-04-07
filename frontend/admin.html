@@ -7,8 +7,11 @@
     <link href="./css/output.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Plus+Jakarta+Sans:wght@200;800&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+    
+    <!-- Sovereign Core -->
     <script src="js/config.js"></script>
-    <script src="js/api.js" type="module"></script>
+    <script src="js/levi-api.js"></script>
+    <script src="js/shared.js"></script>
     <style>
         .glass { background: rgba(19,19,23,0.72); backdrop-filter: blur(24px); }
         .gold-text { background: linear-gradient(135deg, #f2ca50 0%, #d4af37 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
@@ -19,16 +22,9 @@
     </style>
 </head>
 <body class="bg-[#0e0e12] text-[#e5e1e7] font-sans antialiased min-h-screen">
-    <nav class="p-8 border-b border-white/5 flex justify-between items-center glass sticky top-0 z-50">
-        <div class="flex items-center gap-4">
-            <span class="font-headline italic text-2xl gold-text">LEVI Control Plane</span>
-            <span class="text-[10px] uppercase tracking-[0.3em] text-zinc-500 font-bold border-l border-white/10 pl-4">v4.5 Scale Optimized</span>
-        </div>
-        <div id="connection-status" class="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-emerald-500">
-            <span class="w-2 h-2 rounded-full bg-emerald-500 pulse"></span>
-            Syncing Live
-        </div>
-    </nav>
+            <div id="sovereign-nav" class="flex items-center gap-8">
+                <!-- Injected via shared.js -->
+            </div>
 
     <main class="max-w-7xl mx-auto p-8 lg:p-12">
         <!-- Live Gauges -->
@@ -101,13 +97,11 @@
         </div>
     </main>
 
-    <script type="module">
-        import { apiFetch } from './js/api.js';
-
         async function updateStats() {
             try {
-                const data = await apiFetch('/analytics/v2/performance');
-                const breakers = await apiFetch('/analytics/admin/breakers');
+                const data = await LeviAPI.get('/api/v1/telemetry/metrics');
+                // Assume telemetry endpoint returns breakers as well or handle separately
+                const breakers = await LeviAPI.get('/api/v1/telemetry/breakers');
 
                 document.getElementById('metric-latency').innerText = data.p95_latency_ms || 0;
                 document.getElementById('metric-requests').innerText = data.total_requests.toLocaleString() || 0;
@@ -147,12 +141,12 @@
 
         window.tripBreaker = async (name) => {
             if(!confirm(`Trip ${name} circuit manually?`)) return;
-            await apiFetch(`/analytics/admin/breakers/${name}/trip`, { method: 'POST' });
+            await LeviAPI.post(`/api/v1/telemetry/breakers/${name}/trip`, {});
             updateStats();
         };
 
         window.resetBreaker = async (name) => {
-            await apiFetch(`/analytics/admin/breakers/${name}/reset`, { method: 'POST' });
+            await LeviAPI.post(`/api/v1/telemetry/breakers/${name}/reset`, {});
             updateStats();
         };
 

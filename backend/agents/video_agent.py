@@ -8,9 +8,7 @@ FrameConsistency validator enforced on all outputs.
 import os
 import logging
 import asyncio
-import json
 import base64
-from io import BytesIO
 from typing import Any, Dict, List, Optional
 
 import aiohttp

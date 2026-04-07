@@ -1,7 +1,6 @@
 import logging
-import json
 import re
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from pydantic import BaseModel, Field
 from .base import BaseV8Agent, AgentResult
 from backend.engines.chat.generation import SovereignGenerator

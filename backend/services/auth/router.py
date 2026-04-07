@@ -1,10 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, Response # type: ignore
+from fastapi import APIRouter, Depends, Response # type: ignore
 from backend.utils.exceptions import LEVIException
-from typing import Optional
-import os
 
-from backend.auth import get_current_user, get_current_user_optional # type: ignore
-from backend.payments import use_credits # type: ignore
+from backend.auth import get_current_user # type: ignore
 
 router = APIRouter(prefix="", tags=["Auth"])
 

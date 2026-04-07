@@ -4,7 +4,7 @@ Validates the central Redis and Firebase interfaces.
 """
 
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from backend.db.redis import get_redis_client, distributed_lock
 from backend.db.firebase import db as firestore_db
 

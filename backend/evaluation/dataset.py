@@ -3,7 +3,6 @@ Sovereign Dataset v8.
 Management of golden evaluation datasets for regression testing.
 """
 
-import json
 import logging
 from typing import List, Dict, Any
 from backend.db.firebase import db as firestore_db

@@ -1,8 +1,6 @@
-import asyncio
 import sys
 import os
 import unittest
-from typing import Dict, Any
 
 # Ensure we can import from backend
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))

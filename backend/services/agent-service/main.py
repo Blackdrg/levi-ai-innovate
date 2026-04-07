@@ -1,14 +1,11 @@
-import asyncio
 import logging
 from fastapi import FastAPI
-from shared.schemas import ToolResult
 
 from backend.core.v8.agents.research import ResearchAgentV8
 from backend.core.v8.agents.code import CodeAgentV8
 from backend.core.v8.agents.document import DocumentAgentV8
 from backend.core.v8.agents.critic import CriticAgentV8
 
-from backend.kafka_client import LeviKafkaClient
 
 logger = logging.getLogger("agent_service")
 app = FastAPI(title="LeviBrain v8 Agent Service")

@@ -1,7 +1,7 @@
 import os
 import logging
 import httpx
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 from backend.circuit_breaker import groq_breaker
 
 logger = logging.getLogger(__name__)
@@ -113,7 +113,7 @@ class NeuralHandoffManager:
                         logger.warning(f"[NeuralHandoff] Ollama server error ({response.status_code}).")
                         
                 elif self.local_provider == "llama.cpp":
-                    logger.debug(f"[NeuralHandoff] Dispatching to llama.cpp server...")
+                    logger.debug("[NeuralHandoff] Dispatching to llama.cpp server...")
                     
                     response = await client.post(
                         self.llama_cpp_url,

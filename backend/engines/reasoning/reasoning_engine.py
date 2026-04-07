@@ -1,8 +1,6 @@
 import logging
-import asyncio
-from typing import Any, Dict, List, Optional
-from backend.engines.base import EngineBase, EngineResult
-from backend.engines.utils.i18n import SovereignI18n
+from typing import Any, Dict, Optional
+from backend.engines.base import EngineBase
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +16,7 @@ class ReasoningEngine(EngineBase):
 
     async def _run(self, query: str, context: Optional[str] = None, mode: str = "cot", user_id: str = "global", **kwargs) -> Dict[str, Any]:
         """
-        Sovereign v13.1.0-Hardened-PROD Reasoning Wave.
+        Sovereign v14.0.0-Autonomous-SOVEREIGN Reasoning Wave.
         Executes a 5-step cognitive chain governed by AdaptiveThrottler.
         """
         from backend.utils.llm_utils import call_lightweight_llm

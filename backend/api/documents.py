@@ -8,9 +8,7 @@ Hardened for identity-aware ingestion and secure storage.
 import os
 import uuid
 import logging
-from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, Request, UploadFile, File, BackgroundTasks, HTTPException
-from pydantic import BaseModel
 
 from backend.auth import SovereignAuth, UserIdentity
 from backend.engines.document.document_engine import DocumentEngine

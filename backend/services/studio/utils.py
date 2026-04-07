@@ -2,7 +2,7 @@ import uuid
 import logging
 import os
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 from backend.db.firestore_db import db as firestore_db
 from backend.services.studio.tasks import generate_image_task, generate_video_task

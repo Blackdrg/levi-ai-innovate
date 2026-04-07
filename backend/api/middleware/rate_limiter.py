@@ -6,55 +6,62 @@ from backend.db.redis import r_async as redis_client, HAS_REDIS_ASYNC
 
 logger = logging.getLogger(__name__)
 
+# Tiered Limit Definitions (v14.0 Sovereign Policy)
+TIER_LIMITS = {
+    "free":      {"rpm": 5,   "rpd": 50,   "concurrency": 1},
+    "pro":       {"rpm": 30,  "rpd": 1000, "concurrency": 5},
+    "sovereign": {"rpm": 120, "rpd": 5000, "concurrency": 20}
+}
+
 class SlidingWindowRateLimiter:
     """
-    Sovereign v13.1.0-Hardened-PROD Sliding Window Rate Limiter.
-    Uses Redis ZSETs to enforce strict per-user cognitive pulse thresholds.
+    Sovereign v14.0 Sliding Window Rate Limiter.
+    Enforces tiered RPM (Minute) and RPD (Day) thresholds.
     """
-    def __init__(self, r: redis_client, limit: int = 60, window: int = 60):
+    def __init__(self, r: redis_client):
         self.r = r
-        self.limit = limit
-        self.window = window
 
-    async def is_allowed(self, user_id: str) -> bool:
+    async def is_allowed(self, user_id: str, tier: str = "free") -> bool:
         if not HAS_REDIS_ASYNC:
-            return True # Pulse permitted if Redis is offline (Failsafe)
+            return True
 
-        key = f"ratelimit:{user_id}"
+        tier_config = TIER_LIMITS.get(tier.lower(), TIER_LIMITS["free"])
         now = time.time()
-        window_start = now - self.window
+        rpm_key = f"rl:rpm:{user_id}"
+        rpd_key = f"rl:rpd:{user_id}"
 
         try:
             pipe = self.r.pipeline()
-            # 1. Purge entries older than the current window
-            pipe.zremrangebyscore(key, 0, window_start)
-            # 2. Add current pulse timestamp
-            pipe.zadd(key, {str(now): now})
-            # 3. Count active pulses in window
-            pipe.zcard(key)
-            # 4. Refresh TTL
-            pipe.expire(key, self.window * 2)
+            pipe.zremrangebyscore(rpm_key, 0, now - 60)
+            pipe.zadd(rpm_key, {str(now): now})
+            pipe.zcard(rpm_key)
+            pipe.expire(rpm_key, 120)
+            
+            pipe.zremrangebyscore(rpd_key, 0, now - 86400)
+            pipe.zadd(rpd_key, {str(now): now})
+            pipe.zcard(rpd_key)
+            pipe.expire(rpd_key, 172800)
             
             results = await pipe.execute()
-            count = results[2]
-            
-            return count <= self.limit
+            if results[2] > tier_config["rpm"] or results[6] > tier_config["rpd"]:
+                return False
+                
+            return True
         except Exception as e:
-            logger.error(f"[RateLimit] Precise window failure: {e}")
-            return True # Resilience: Allow on logic drift
+            logger.error(f"[RateLimit] Tiered failure: {e}")
+            return True
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, limit: int = 60, window: int = 60):
+    def __init__(self, app):
         super().__init__(app)
-        self.limiter = SlidingWindowRateLimiter(redis_client, limit, window)
+        self.limiter = SlidingWindowRateLimiter(redis_client)
 
     async def dispatch(self, request: Request, call_next):
-        # Identify User (v13.0 Absolute Monolith)
-        # We check common auth headers as this middleware runs BEFORE standard auth dependency
         user_id = request.headers.get("X-User-ID", "global_anonymous")
+        user_tier = request.headers.get("X-User-Tier", "free")
         
-        if not await self.limiter.is_allowed(user_id):
-            logger.warning(f"[RateLimit] Blocked request from {user_id}")
-            raise HTTPException(status_code=429, detail="Sovereign pulse threshold exceeded.")
+        if not await self.limiter.is_allowed(user_id, user_tier):
+            logger.warning(f"[RateLimit] Blocked request from {user_id} (Tier: {user_tier})")
+            raise HTTPException(status_code=429, detail=f"Sovereign {user_tier} pulse threshold exceeded.")
             
         return await call_next(request)

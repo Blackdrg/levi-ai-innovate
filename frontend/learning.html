@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+    <title>LEVI-AI Learning | LoRA Evolution</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="./css/styles.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="js/config.js"></script>
+    <script src="js/levi-api.js"></script>
+    <script src="js/shared.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-[#050507] text-slate-200 font-['Outfit'] overflow-x-hidden">
+    <!-- Sovereign Navigation -->
+    <nav class="fixed top-0 left-0 right-0 z-50 p-6">
+        <div class="max-w-6xl mx-auto sovereign-glass px-8 py-4 flex justify-between items-center bg-white/5 border border-white/10">
+            <div class="flex items-center gap-4">
+                <span class="text-2xl font-bold tracking-tighter text-neural">LEVI-AI</span>
+                <span class="text-[10px] uppercase tracking-[0.3em] text-slate-500 font-bold border-l border-white/10 pl-4">Learning Monitor</span>
+            </div>
+            <div id="sovereign-nav" class="flex items-center gap-8">
+                <!-- Injected via shared.js -->
+            </div>
+        </div>
+    </nav>
+
+    <main class="relative z-10 pt-32 pb-20 px-6 max-w-7xl mx-auto">
+        <header class="mb-12">
+            <h1 class="text-5xl font-bold tracking-tight text-white mb-4">Neural <span class="text-neural">Evolution</span></h1>
+            <p class="text-slate-400 text-lg leading-relaxed">LoRA pipeline monitor and adapter evaluation score tracking.</p>
+        </header>
+
+        <div class="grid lg:grid-cols-2 gap-12">
+            <!-- Training Progress -->
+            <div class="sovereign-glass p-10 bg-white/5 border border-white/10 rounded-[40px] space-y-10">
+                <h3 class="text-[10px] uppercase tracking-[0.3em] text-slate-500 font-bold">Corpus Accumulation</h3>
+                <div class="space-y-4">
+                    <div class="flex justify-between items-end">
+                        <span class="text-4xl font-bold text-neural" id="corpus-count">0</span>
+                        <span class="text-[10px] uppercase tracking-widest text-slate-600 font-bold">500 Trigger Threshold</span>
+                    </div>
+                    <div class="w-full h-2 bg-white/5 rounded-full overflow-hidden">
+                        <div id="corpus-bar" class="h-full bg-neural transition-all duration-1000" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-6 pt-10 border-t border-white/5">
+                    <div class="space-y-4">
+                         <h3 class="text-[10px] uppercase tracking-[0.3em] text-slate-500 font-bold">Shadow Critic Offset</h3>
+                         <div id="shadow-critic-value" class="text-2xl font-bold text-white">±0.00</div>
+                    </div>
+                    <div class="space-y-4">
+                         <h3 class="text-[10px] uppercase tracking-[0.3em] text-slate-500 font-bold">Active Adapter</h3>
+                         <div id="active-adapter" class="text-2xl font-bold text-neural">v1.2.0-Alpha</div>
+                    </div>
+                </div>
+
+                <button onclick="triggerTraining()" class="w-full bg-neural text-white py-5 rounded-2xl font-bold uppercase tracking-[0.2em] shadow-[0_0_30px_rgba(168,85,247,0.3)] hover:scale-[1.02] transition-transform flex items-center justify-center gap-3 mt-6">
+                    <span class="material-symbols-outlined">model_training</span> Trigger Training Run
+                </button>
+            </div>
+
+            <!-- Eval scores -->
+            <div class="sovereign-glass p-10 bg-white/5 border border-white/10 rounded-[40px] flex flex-col">
+                <h3 class="text-[10px] uppercase tracking-[0.3em] text-slate-500 font-bold mb-8">Adapter Eval Scores</h3>
+                <div class="h-80 w-full">
+                    <canvas id="eval-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Adapter History -->
+            <div class="lg:col-span-2 sovereign-glass overflow-hidden rounded-[32px] border border-white/10 bg-white/5 mt-10">
+                <table class="w-full text-left text-sm text-slate-300">
+                    <thead class="bg-white/5 text-[10px] uppercase tracking-[0.2em] font-bold text-neural border-b border-white/10">
+                        <tr>
+                            <th class="px-8 py-6">Version</th>
+                            <th class="px-4 py-6">Eval Score</th>
+                            <th class="px-4 py-6">Loss</th>
+                            <th class="px-4 py-6">Epochs</th>
+                            <th class="px-8 py-6 text-right">Date</th>
+                        </tr>
+                    </thead>
+                    <tbody id="adapter-history-body" class="divide-y divide-white/5">
+                        <!-- Adapter rows injected here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        let evalChart;
+
+        function initEvalChart() {
+            const ctx = document.getElementById('eval-chart').getContext('2d');
+            evalChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Evaluation Score',
+                        data: [],
+                        borderColor: '#A855F7',
+                        borderWidth: 3,
+                        pointBackgroundColor: '#A855F7',
+                        pointBorderColor: '#fff',
+                        pointRadius: 4,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { 
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: { color: 'rgba(255,255,255,0.3)' }
+                        },
+                        x: { display: false }
+                    }
+                }
+            });
+        }
+
+        async function fetchLearningStatus() {
+            try {
+                const data = await LeviAPI.get('/api/v1/learning/status');
+                
+                // Corpus
+                document.getElementById('corpus-count').innerText = data.corpus_examples;
+                document.getElementById('corpus-bar').style.width = `${(data.corpus_examples / 500) * 100}%`;
+
+                // Shadow Critic
+                document.getElementById('shadow-critic-value').innerText = `${data.shadow_critic_offset > 0 ? '+' : ''}${data.shadow_critic_offset.toFixed(3)}`;
+                document.getElementById('active-adapter').innerText = data.active_version;
+
+                // Table & Chart
+                const tbody = document.getElementById('adapter-history-body');
+                tbody.innerHTML = '';
+                evalChart.data.labels = [];
+                evalChart.data.datasets[0].data = [];
+
+                data.history.forEach(v => {
+                    const row = document.createElement('tr');
+                    row.className = 'hover:bg-white/2 transition-colors';
+                    row.innerHTML = `
+                        <td class="px-8 py-6 font-bold text-white">${v.version}</td>
+                        <td class="px-4 py-6 text-emerald-400 font-bold">${(v.eval_score * 100).toFixed(1)}%</td>
+                        <td class="px-4 py-6 text-slate-500">${v.loss.toFixed(4)}</td>
+                        <td class="px-4 py-6 text-slate-500">${v.epochs}</td>
+                        <td class="px-8 py-6 text-right text-xs text-slate-600">${new Date(v.timestamp * 1000).toLocaleDateString()}</td>
+                    `;
+                    tbody.prepend(row);
+                    evalChart.data.labels.push(v.version);
+                    evalChart.data.datasets[0].data.push(v.eval_score);
+                });
+                evalChart.update();
+
+            } catch (err) {
+                console.error("[Learning] Sync failed:", err);
+            }
+        }
+
+        async function triggerTraining() {
+            try {
+                await LeviAPI.post('/api/v1/learning/train', {});
+                alert('LoRA Training Dispatch Sent.');
+                fetchLearningStatus();
+            } catch (err) {
+                console.error("[Learning] Training failed:", err);
+            }
+        }
+
+        initEvalChart();
+        setInterval(fetchLearningStatus, 5000 * 6) // Update once/min or manually
+        fetchLearningStatus();
+    </script>
+</body>
+</html>

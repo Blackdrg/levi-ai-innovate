@@ -7,7 +7,7 @@ import sys
 # Add current directory to path for imports
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from firestore_db import db as firestore_db, add_document # type: ignore
+from firestore_db import db as firestore_db # type: ignore
 from embeddings import embed_text # type: ignore
 
 def seed_quotes():

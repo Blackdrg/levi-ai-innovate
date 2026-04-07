@@ -2,7 +2,6 @@
 import pytest  # type: ignore
 import hmac
 import hashlib
-import os
 from fastapi import HTTPException  # type: ignore
 # from backend.main import verify_password, get_password_hash, create_access_token  # type: ignore
 from backend.payments import verify_razorpay_signature, use_credits  # type: ignore
@@ -84,7 +83,6 @@ async def test_meta_brain_routing_hierarchy():
 @pytest.mark.asyncio
 async def test_local_engine_saturation_fallback():
     """Verify that local engine saturation triggers a routing fallback."""
-    from backend.services.orchestrator.local_engine import LocalLLM
     
     # Mock the semaphore to be locked (simulating saturation)
     with patch("backend.services.orchestrator.local_engine.LocalLLM._concurrency_semaphore") as mock_sem:
@@ -101,7 +99,6 @@ async def test_local_engine_saturation_fallback():
 
 def test_router_agent_intent():
     """Verify intent classification routing logic for v6.8."""
-    from backend.core.agent_registry import RouterAgent
     agent = RouterAgent()
     
     with patch("backend.circuit_breaker.groq_breaker.call") as mock_call:
@@ -118,7 +115,6 @@ def test_router_agent_intent():
 # ── Phase 18: Resiliency & Intelligence Tests ──────────────────
 
 from backend.circuit_breaker import CircuitBreaker
-from backend.core.agent_registry import RouterAgent
 
 def test_circuit_breaker_trips():
     """Verify that the circuit correctly opens after threshold failures."""

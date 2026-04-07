@@ -1,7 +1,5 @@
 import logging
-import json
-import asyncio
-from typing import Dict, Any, List
+from typing import Dict, Any
 from backend.db.redis import r as redis_client, HAS_REDIS
 from backend.api.v8.telemetry import broadcast_mission_event
 

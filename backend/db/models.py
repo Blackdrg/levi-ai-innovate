@@ -75,7 +75,7 @@ class MissionMetric(Base):
 
 class CustomAgent(Base):
     """
-    User-defined agent archetypes (v13.0.0 No-Code Builder).
+    User-defined agent archetypes (v14.0.0-Autonomous-SOVEREIGN).
     """
     __tablename__ = "custom_agents"
 
@@ -125,17 +125,18 @@ class SystemAudit(Base):
     @staticmethod
     def calculate_signature(prev_sig: str, data: str) -> str:
         """
-        v13.1.0-Hardened-PROD: Cryptographic chaining.
+        v14.0.0-Autonomous-SOVEREIGN: Cryptographic chaining.
         HMAC-SHA256(prev_sig + data)
         """
-        import hmac, hashlib
+        import hmac
+        import hashlib
         secret = os.getenv("AUDIT_CHAIN_SECRET", "levi_ai_genesis_key")
         msg = f"{prev_sig}:{data}".encode()
         return hmac.new(secret.encode(), msg, hashlib.sha256).hexdigest()
 
 class AuditLog(Base):
     """
-    Sovereign v13.1.0: Immutable High-Fidelity Audit Ledger.
+    Sovereign v14.0.0-Autonomous-SOVEREIGN: Immutable High-Fidelity Audit Ledger.
     Partitioned by month for long-term scalability and performance.
     """
     __tablename__ = "audit_log"
@@ -159,7 +160,8 @@ class AuditLog(Base):
     @classmethod
     def calculate_checksum(cls, prev_checksum: str, row_data: dict) -> str:
         """Calculates row integrity hash."""
-        import hashlib, json
+        import hashlib
+        import json
         data_str = json.dumps(row_data, sort_keys=True)
         combined = f"{prev_checksum}:{data_str}".encode()
         return hashlib.sha256(combined).hexdigest()
@@ -212,7 +214,7 @@ class Mission(Base):
     intent_type = Column(String)
     status = Column(String, default="pending")
     fidelity_score = Column(Float, default=0.0)
-    payload = Column(JSON) # Stores checkpoint and DAG state (v13.0)
+    payload = Column(JSON) # Stores checkpoint and DAG state (v14.0)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
@@ -237,7 +239,7 @@ class Message(Base):
 
 class CognitiveUsage(Base):
     """
-    Mission Resource Ledger (v13.1.0-Hardened-PROD).
+    Mission Resource Ledger (v14.0.0-Autonomous-SOVEREIGN).
     Tracks token consumption and resource costs for local-first missions.
     """
     __tablename__ = "cognitive_usage"
@@ -256,7 +258,7 @@ class CognitiveUsage(Base):
 
 class CreationJob(Base):
     """
-    Creation Ledger v13.1.0-Hardened-PROD.
+    Creation Ledger v14.0.0-Autonomous-SOVEREIGN.
     Replaces Firestore 'jobs' with resident SQL persistence for Studio/Gallery.
     """
     __tablename__ = "creation_jobs"
@@ -275,7 +277,7 @@ class CreationJob(Base):
 
 class TrainingPattern(Base):
     """
-    Sovereign v13.1.0-Hardened-PROD Learning Corpus.
+    Sovereign v14.0.0-Autonomous-SOVEREIGN Learning Corpus.
     Captures high-fidelity mission results for future LoRA fine-tuning.
     """
     __tablename__ = "training_corpus"
@@ -290,7 +292,7 @@ class TrainingPattern(Base):
 
 class CriticCalibration(Base):
     """
-    Sovereign v13.1 Bias Correction Ledger.
+    Sovereign v14.0 Bias Correction Ledger.
     Tracks primary and shadow critic scores to identify calibration drift.
     """
     __tablename__ = "critic_calibration"
@@ -306,7 +308,7 @@ class CriticCalibration(Base):
 
 class UserCalibration(Base):
     """
-    Sovereign v13.1.0 Phase 7.
+    Sovereign v14.0.0 Phase 8.
     Stores the calculated scoring offset for each user to correct CriticAgent bias.
     """
     __tablename__ = "user_calibration"
@@ -318,7 +320,7 @@ class UserCalibration(Base):
 
 class BenchmarkLedger(Base):
     """
-    Sovereign Benchmark Ledger v13.1.
+    Sovereign Benchmark Ledger v14.0.
     Stores high-fidelity performance metrics (p50/p95/p99) across models and context lengths.
     """
     __tablename__ = "benchmark_ledger"
@@ -336,7 +338,7 @@ class BenchmarkLedger(Base):
 
 class AbortedMission(Base):
     """
-    Sovereign v13.1 Resilience Layer.
+    Sovereign v14.0.0-Autonomous Resilience Layer.
     Persists frozen DAG state and execution wave for transient failure replay.
     """
     __tablename__ = "missions_aborted"

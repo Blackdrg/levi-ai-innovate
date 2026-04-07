@@ -8,16 +8,16 @@ Refactored from backend/services/gallery/router.py.
 import logging
 import hashlib
 import json
-from typing import Optional, List
+from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, Request, Response
 from backend.utils.exceptions import LEVIException
-from backend.services.auth.logic import get_current_user, get_current_user_optional
+from backend.services.auth.logic import get_current_user
 from backend.db.firestore_db import db as firestore_db
 from backend.core.orchestrator_types import Query
 from backend.db.redis_client import get_cached_search, cache_search, HAS_REDIS
 from google.cloud import firestore as google_firestore
-from backend.engines.chat.generation import fetch_open_source_quote, generate_quote
+from backend.engines.chat.generation import generate_quote
 from backend.utils.robustness import standard_retry
 
 logger = logging.getLogger(__name__)

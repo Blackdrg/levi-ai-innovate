@@ -6,14 +6,12 @@ fine-tuning job submission, and activation gating.
 """
 
 import os
-import json
 import logging
 import requests  # type: ignore
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 
 from backend.db.firestore_db import db as firestore_db
-from backend.services.learning.logic import export_training_data
 
 logger = logging.getLogger(__name__)
 

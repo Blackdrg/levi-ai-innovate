@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from fastapi import FastAPI
-from shared.schemas import ToolResult, IntentResult, Goal, TaskNode
+from shared.schemas import Goal, TaskNode
 
 from backend.core.v8.executor import GraphExecutor
 from backend.kafka_client import LeviKafkaClient, emit_brain_event

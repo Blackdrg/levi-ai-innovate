@@ -6,13 +6,11 @@ Provides factual retrieval and thematic research.
 """
 
 import logging
-import os
-import uuid
 from typing import Optional
-from fastapi import APIRouter, Depends, Request, BackgroundTasks, UploadFile, File
+from fastapi import APIRouter, Depends, Request, BackgroundTasks
 from backend.services.auth.logic import get_current_user_optional
 from backend.core.brain import run_orchestrator
-from backend.utils.sanitization import sanitize_input, sanitize_filename
+from backend.utils.sanitization import sanitize_input
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)

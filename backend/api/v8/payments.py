@@ -9,12 +9,12 @@ import hmac
 import hashlib
 import logging
 import razorpay
-from typing import Optional, Dict, Any
-from fastapi import APIRouter, HTTPException, Depends, Request
+from typing import Any
+from fastapi import APIRouter, HTTPException, Depends
 from backend.api.utils.auth import get_current_user
 from backend.db.firebase import db as firestore_db
-from backend.config.system import TIERS, COST_MATRIX
-from backend.db.redis import incr_daily_ai_spend, get_daily_ai_spend, distributed_lock, HAS_REDIS
+from backend.config.system import TIERS
+from backend.db.redis import get_daily_ai_spend
 from firebase_admin import firestore
 
 logger = logging.getLogger(__name__)

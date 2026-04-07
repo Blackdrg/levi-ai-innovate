@@ -5,20 +5,20 @@ logger = logging.getLogger(__name__)
 
 class EngineRegistry:
     """
-    LeviBrain v8.12: Engine Registry (CORE HUB)
+    Sovereign AI v14.0: Engine Registry (CORE HUB)
     Centrally manages deterministic engines for math, logic, and code.
     """
 
     def __init__(self):
         self.engines = {}
         
-        # v13.1.0-Hardened-PROD: Default Cognitive & Logic Engines
+        # v14.0.0-Autonomous-SOVEREIGN: Default Cognitive & Logic Engines
         from backend.engines.reasoning.reasoning_engine import ReasoningEngine
         from backend.engines.deterministic_engine import DeterministicEngine
         
         self.register("Reasoning", ReasoningEngine())
         self.register("Deterministic", DeterministicEngine())
-        logger.info("[EngineRegistry] Core v13.1.0-Hardened-PROD Logic Hub initialized.")
+        logger.info("[EngineRegistry] Core v14.0.0-Autonomous-SOVEREIGN Logic Hub initialized.")
 
     def register(self, name: str, engine: Any):
         """Registers a new deterministic engine."""

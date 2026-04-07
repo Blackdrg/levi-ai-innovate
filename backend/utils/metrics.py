@@ -3,10 +3,9 @@ Sovereign Metrics Hub v13.1.0.
 Provides Prometheus-compatible telemetry for system health, VRAM, and missions.
 """
 
-import os
 import psutil
 import logging
-from prometheus_client import Gauge, Counter, Histogram, CollectorRegistry, generate_latest, CONTENT_TYPE_LATEST
+from prometheus_client import Gauge, Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +19,7 @@ ACTIVE_MISSIONS = Gauge('active_missions', 'Number of currently processing missi
 MISSION_COMPLETED = Counter('missions_completed_total', 'Total successful missions')
 MISSION_ABORTED = Counter('missions_aborted_total', 'Total aborted/failed missions')
 MISSION_CU = Histogram('mission_cu_consumption', 'Cognitive Units consumed per mission')
+COGNITIVE_UNITS_CONSUMED = Counter('cognitive_units_total', 'Total cumulative Cognitive Units consumed')
 AGENT_LATENCY = Histogram('agent_latency_ms', 'Agent response latency in milliseconds', ['agent'])
 GPU_SEMAPHORE_AVAILABLE = Gauge('gpu_semaphore_available', 'Number of available GPU task slots')
 

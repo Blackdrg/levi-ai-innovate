@@ -1,6 +1,5 @@
 from fastapi.testclient import TestClient # type: ignore
 from backend.main import app
-import pytest # type: ignore
 
 client = TestClient(app)
 

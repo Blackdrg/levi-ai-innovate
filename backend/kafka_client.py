@@ -1,6 +1,5 @@
 import json
 import logging
-import asyncio
 from typing import Any, Dict, Optional
 from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
 import os

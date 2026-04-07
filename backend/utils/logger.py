@@ -8,12 +8,11 @@ Ensures all logs are machine-readable and include request/user context.
 import logging
 import sys
 import os
-import json
 from datetime import datetime
-from pythonjsonlogger import jsonlogger
+from pythonjsonlogger import json
 from .logging_context import log_request_id, log_user_id
 
-class LeviJSONFormatter(jsonlogger.JsonFormatter):
+class LeviJSONFormatter(json.JsonFormatter):
     """
     Custom JSON formatter to inject context variables automatically.
     """

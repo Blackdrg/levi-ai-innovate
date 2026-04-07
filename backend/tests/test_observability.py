@@ -1,5 +1,4 @@
 # pyright: reportMissingImports=false
-import pytest
 from fastapi.testclient import TestClient
 import uuid
 from backend.main import app
@@ -39,7 +38,7 @@ def test_v2_performance_endpoint(app_client):
     """Verify the new performance analytics endpoint."""
     # We need an admin key to test this
     import os
-    from unittest.mock import patch, MagicMock
+    from unittest.mock import patch
     admin_key = os.getenv("ADMIN_KEY", "test_admin_key")
     
     # Mock Redis client methods to avoid connection errors

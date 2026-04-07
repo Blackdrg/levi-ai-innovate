@@ -1,7 +1,6 @@
 import os
 import logging
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Request # type: ignore
+from fastapi import APIRouter, Depends, Request # type: ignore
 from backend.utils.exceptions import LEVIException
 from backend.services.learning.models import ContentRequest # type: ignore
 from backend.auth import get_current_user # type: ignore

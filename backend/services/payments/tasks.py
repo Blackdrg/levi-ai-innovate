@@ -1,5 +1,4 @@
 import logging
-from datetime import datetime, timezone
 from backend.celery_app import celery_app # type: ignore
 from google.cloud import firestore
 from backend.db.firestore_db import db as firestore_db

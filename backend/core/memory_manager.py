@@ -1,7 +1,7 @@
 """
 backend/core/memory_manager.py
 
-Sovereign Memory Engine v8: 4-Tier Cognitive Memory System.
+Sovereign Memory Engine v14: 4-Tier Cognitive Memory System.
 
 Tier 1 — Working   (Redis)     : Instant session focus (20 message window)
 Tier 2 — Episodic  (Firestore) : Recent session summaries and event clusters
@@ -18,7 +18,6 @@ Includes:
 import logging
 import asyncio
 import json
-import uuid
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
 
@@ -43,7 +42,7 @@ _MAX_CONTEXT_TOKENS = 2000
 
 class MemoryManager:
     """
-    Sovereign AI Memory Orchestrator v8.
+    Sovereign AI Memory Orchestrator v14.
     Manages the lifecycle of cognitive context across 4 distinct tiers.
     """
 
@@ -100,7 +99,7 @@ class MemoryManager:
             # 3. Graph Resonance (Neo4j)
             graph_resonance = await Neo4jClient.get_resonance_entities(user_id, query)
             
-            # 4. Resonance Decay Application (v11.0 4-Factor)
+            # 4. Resonance Decay Application (v14.0 4-Factor)
             decayed = MemoryResonance.apply_decay(keyword_facts)
             
             # 5. Hybrid Merge & Cognitive Categorization
@@ -210,7 +209,7 @@ class MemoryManager:
             if len(user_input.split()) > 4 or len(results) > 1:
                 asyncio.create_task(self._process_fact_extraction(user_id, user_input, response))
         
-        # 3. Learning Loop Crystallization (v13.1.0-Hardened-PROD)
+        # 3. Learning Loop Crystallization (v14.0.0-Autonomous-SOVEREIGN)
         if fidelity:
             from backend.core.learning_loop import LearningLoop
             asyncio.create_task(LearningLoop.crystallize_pattern(session_id, user_input, response, fidelity))

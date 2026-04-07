@@ -5,9 +5,7 @@ Verification for Phase 7: Advanced Cognition & Real-World Integration.
 """
 
 import pytest
-import asyncio
 from backend.services.orchestrator.brain import LeviBrain
-from backend.services.orchestrator.orchestrator_types import EngineRoute
 
 @pytest.mark.asyncio
 async def test_logic_intent_and_repl():
@@ -36,7 +34,7 @@ async def test_multistep_injection():
     Note: In current planner, we might need a manual plan for a unit test 
     unless the planner naturally generates one.
     """
-    from backend.services.orchestrator.orchestrator_types import IntentResult, ExecutionPlan, PlanStep
+    from backend.services.orchestrator.orchestrator_types import ExecutionPlan, PlanStep
     from backend.services.orchestrator.executor import execute_plan
     
     plan = ExecutionPlan(

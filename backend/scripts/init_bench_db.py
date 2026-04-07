@@ -1,7 +1,6 @@
 import asyncio
 import logging
 from backend.db.postgres import PostgresDB, Base
-from backend.db.models import BenchmarkLedger # Ensure it's imported for metadata
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("db_init")

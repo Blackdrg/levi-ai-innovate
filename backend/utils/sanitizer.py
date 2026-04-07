@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 class PromptSanitizer:
     """
-    Sovereign Shield: Prompt Injection Defense v13.0.0.
+    Sovereign Shield: Prompt Injection Defense v14.0.0.
     Implements multi-layer sanitization and instruction-boundary enforcement.
     """
     
@@ -31,7 +31,7 @@ class PromptSanitizer:
     @staticmethod
     def normalize_homoglyphs(text: str) -> str:
         """
-        Sovereign v13.1.0: Unicode Homoglyph Normalization.
+        Sovereign v14.0.0: Unicode Homoglyph Normalization.
         Converts fancy/adversarial characters (e.g. 𝐢 -> i) to prevent filter bypass.
         """
         return "".join(
@@ -85,7 +85,7 @@ class PromptSanitizer:
     @classmethod
     def mask_pii(cls, text: str, user_id: str = "global") -> str:
         """
-        Sovereign Shield v13.1.0-Hardened-PROD: Hardened PII Encryption.
+        Sovereign Shield v14.0.0-Autonomous-SOVEREIGN: Hardened PII Encryption.
         Encrypts sensitive vectors using AES-256 GCM before model handoff.
         """
         from backend.utils.kms import SovereignKMS
@@ -134,7 +134,7 @@ class PromptSanitizer:
 
 class ResultSanitizer:
     """
-    Sovereign v13.1.0: Output scrubbing and XSS neutralization.
+    Sovereign v14.0.0: Output scrubbing and XSS neutralization.
     Ensures model-produced Markdown doesn't contain malicious injection.
     """
 

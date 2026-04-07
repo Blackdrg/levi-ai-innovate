@@ -8,10 +8,9 @@ Hardened for real-time streaming and identity-aware context.
 import logging
 import json
 import asyncio
-from typing import Optional, List, Dict, Any
-from fastapi import APIRouter, Depends, Request, HTTPException
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
 
 from backend.auth import UserIdentity, get_sovereign_identity
 from backend.core.brain import LeviBrain

@@ -5,7 +5,6 @@ Verification suite for the hardened LEVI-AI v3.0 Brain.
 """
 
 import pytest
-import asyncio
 from backend.services.orchestrator.brain import LeviBrain
 from backend.services.orchestrator.orchestrator_types import EngineRoute
 

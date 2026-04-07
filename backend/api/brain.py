@@ -5,7 +5,7 @@ Bridges to the FusionEngine for high-fidelity synthesis.
 """
 
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional
 from fastapi import APIRouter, Depends, Request, HTTPException
 from pydantic import BaseModel, Field
 

@@ -1,6 +1,6 @@
 import logging
 import re
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
 from backend.core.orchestrator_types import IntentResult
 from backend.memory.manager import MemoryManager
 

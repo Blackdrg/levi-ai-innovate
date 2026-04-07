@@ -6,7 +6,6 @@ Hardened against SSRF bypasses via private IP ranges and metadata service.
 import logging
 import ipaddress
 from urllib.parse import urlparse
-from typing import List
 
 logger = logging.getLogger(__name__)
 

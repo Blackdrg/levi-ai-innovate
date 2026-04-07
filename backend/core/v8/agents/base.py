@@ -1,8 +1,8 @@
 import abc
 import logging
 import time
-from typing import Any, Dict, List, Optional, Generic, TypeVar
-from pydantic import BaseModel, Field
+from typing import Any, Dict, Generic, TypeVar
+from pydantic import BaseModel
 from backend.core.orchestrator_types import AgentResult, AgentBase, ToolResult
 
 T = TypeVar("T", bound=BaseModel)
@@ -16,19 +16,38 @@ class BaseV8Agent(AgentBase, abc.ABC, Generic[T]):
     def __init__(self, name: str):
         self.name = name
         self.logger = logging.getLogger(f"v8.agent.{name.lower()}")
+        self.strategy = "thinking_chain" # Default strategy for v14.0
+        self.__capabilities__ = ["general", "v14_autonomous"]
+
+    async def _select_strategy(self, input_data: T, context: Dict[str, Any]) -> str:
+        """
+        Sovereign v14.0: Autonomous Strategy Selection.
+        Determines the optimal execution flow (DAG, Chain, or Swarm) based on complexity.
+        """
+        complexity = context.get("complexity", 1)
+        if complexity > 7:
+            return "multi_agent_swarm"
+        elif complexity > 3:
+            return "thinking_chain"
+        return "direct_execution"
 
     async def run(self, input_data: T, context: Dict[str, Any] = None) -> AgentResult[Any]:
         """Standardized entry point for all V8 system agents."""
         start_time = time.perf_counter()
-        self.logger.info(f"V8 Agent {self.name} starting mission.")
+        context = context or {}
+        
+        # 0. Autonomous Strategy Selection
+        self.strategy = await self._select_strategy(input_data, context)
+        self.logger.info(f"V8 Agent {self.name} starting mission with strategy: {self.strategy}")
         
         try:
             # 1. Execute internal system logic
-            result = await self._execute_system(input_data, context or {})
+            result = await self._execute_system(input_data, context)
             
             latency = (time.perf_counter() - start_time) * 1000
             result.agent = self.name
             result.latency_ms = latency
+            result.data["strategy_used"] = self.strategy
             return result
             
         except Exception as e:

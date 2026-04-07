@@ -7,9 +7,7 @@ import os
 import json
 import hashlib
 import hmac
-import asyncio
-from datetime import datetime, timedelta, timezone
-from typing import Optional, Any, Dict
+from typing import Optional
 
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -174,7 +172,7 @@ async def get_current_user(cred: HTTPAuthorizationCredentials = Depends(security
         return user_data
 
     except HTTPException: raise
-    except Exception as e:
+    except Exception:
         raise credentials_exception
 
 async def get_current_user_optional(cred: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False))):

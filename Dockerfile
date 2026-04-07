@@ -1,5 +1,5 @@
 # Python 3.11 – required for PyTorch + sentence-transformers compatibility
-FROM python:3.10-slim
+FROM python:3.11-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \

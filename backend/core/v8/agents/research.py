@@ -1,7 +1,7 @@
 import os
 import asyncio
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from pydantic import BaseModel, Field
 from .base import BaseV8Agent, AgentResult
 from backend.engines.chat.generation import SovereignGenerator
@@ -42,7 +42,7 @@ class ResearchAgentV8(BaseV8Agent[ResearchInput]):
         
         # 1. Swarm-Aware Discovery: Delegate to Search Agent if possible
         # This reduces direct API dependency and leverages the common search interface
-        self.logger.info(f"[Research-V8] Delegating primary discovery to Search Agent...")
+        self.logger.info("[Research-V8] Delegating primary discovery to Search Agent...")
         search_res = await self.delegate_to("search_agent", {"query": topic}, context)
         
         all_raw_results = []
@@ -57,7 +57,7 @@ class ResearchAgentV8(BaseV8Agent[ResearchInput]):
             return await self._execute_local_fallback(topic, context)
             
         if self.tavily_key and len(all_raw_results) < 5:
-            self.logger.info(f"[Research-V8] Augmenting swarm data with direct investigative search.")
+            self.logger.info("[Research-V8] Augmenting swarm data with direct investigative search.")
             discovery_tasks = [
                 self._tavily_search(topic, depth="basic")
             ]

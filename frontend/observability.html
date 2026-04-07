@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+    <title>LEVI-AI Observability | Sovereign Vitals</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="./css/styles.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="js/config.js"></script>
+    <script src="js/levi-api.js"></script>
+    <script src="js/shared.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-[#050507] text-slate-200 font-['Outfit'] overflow-x-hidden">
+    <!-- Sovereign Navigation -->
+    <nav class="fixed top-0 left-0 right-0 z-50 p-6">
+        <div class="max-w-6xl mx-auto sovereign-glass px-8 py-4 flex justify-between items-center bg-white/5 border border-white/10">
+            <div class="flex items-center gap-4">
+                <span class="text-2xl font-bold tracking-tighter text-neural">LEVI-AI</span>
+                <span class="text-[10px] uppercase tracking-[0.3em] text-slate-500 font-bold border-l border-white/10 pl-4">Observability</span>
+            </div>
+            <div id="sovereign-nav" class="flex items-center gap-8">
+                <!-- Injected via shared.js -->
+            </div>
+        </div>
+    </nav>
+
+    <main class="relative z-10 pt-32 pb-20 px-6 max-w-7xl mx-auto">
+        <header class="mb-12">
+            <h1 class="text-5xl font-bold tracking-tight text-white mb-4">System <span class="text-neural">Vitals</span></h1>
+            <p class="text-slate-400 text-lg leading-relaxed">Real-time telemetry and resource gating polling /api/v1/telemetry/metrics.</p>
+        </header>
+
+        <div class="grid lg:grid-cols-3 gap-8">
+            <!-- VRAM Gauge -->
+            <div class="sovereign-glass p-8 bg-white/5 border border-white/10 rounded-[40px] flex flex-col items-center justify-center gap-6">
+                <h3 class="text-[10px] uppercase tracking-[0.3em] text-slate-500 font-bold">VRAM Pressure</h3>
+                <div class="relative w-48 h-48 rounded-full border-8 border-white/5 flex items-center justify-center">
+                    <div id="vram-gauge-value" class="text-4xl font-bold text-neural">0%</div>
+                    <svg class="absolute inset-[-8px] w-[calc(100%+16px)] h-[calc(100%+16px)] -rotate-90">
+                        <circle cx="50%" cy="50%" r="92" fill="none" stroke="currentColor" stroke-width="8" stroke-dasharray="578" stroke-dashoffset="578" id="vram-gauge-circle" class="text-neural transition-all duration-1000"></circle>
+                    </svg>
+                </div>
+                <p id="vram-status" class="text-[10px] uppercase tracking-widest text-emerald-500 font-bold">Safe Zone</p>
+            </div>
+
+            <!-- Semaphores & Circuit Breakers -->
+            <div class="lg:col-span-2 sovereign-glass p-10 bg-white/5 border border-white/10 rounded-[40px] space-y-10">
+                <div class="grid grid-cols-2 gap-10">
+                    <div class="space-y-6">
+                        <h3 class="text-[10px] uppercase tracking-[0.3em] text-slate-500 font-bold">4-Slot Semaphores</h3>
+                        <div id="semaphore-visualization" class="flex gap-4">
+                            <div class="w-8 h-8 rounded-lg bg-white/5 border border-white/10"></div>
+                            <div class="w-8 h-8 rounded-lg bg-white/5 border border-white/10"></div>
+                            <div class="w-8 h-8 rounded-lg bg-white/5 border border-white/10"></div>
+                            <div class="w-8 h-8 rounded-lg bg-white/5 border border-white/10"></div>
+                        </div>
+                    </div>
+                    <div class="space-y-6">
+                        <h3 class="text-[10px] uppercase tracking-[0.3em] text-slate-500 font-bold">Circuit Breaker</h3>
+                        <div class="flex items-center gap-4">
+                            <div id="circuit-indicator" class="w-4 h-4 rounded-full bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]"></div>
+                            <span id="circuit-state" class="text-xs uppercase tracking-widest font-bold text-emerald-500">Closed (Optimal)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pt-6 border-t border-white/5">
+                    <h3 class="text-[10px] uppercase tracking-[0.3em] text-slate-500 font-bold mb-6">Execution Latency Trend</h3>
+                    <div class="h-40 w-full bg-black/40 rounded-2xl overflow-hidden relative">
+                         <canvas id="latency-chart" class="w-full h-full"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Concurrency Capacity -->
+            <div class="lg:col-span-3 sovereign-glass p-10 bg-white/5 border border-white/10 rounded-[40px]">
+                <h3 class="text-[10px] uppercase tracking-[0.3em] text-slate-500 font-bold mb-8">Swarm Concurrency Capacity Curve</h3>
+                <div class="h-64">
+                    <canvas id="capacity-chart"></canvas>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        let latencyChart, capacityChart;
+
+        function initCharts() {
+            const ctxLatency = document.getElementById('latency-chart').getContext('2d');
+            latencyChart = new Chart(ctxLatency, {
+                type: 'line',
+                data: {
+                    labels: Array(20).fill(''),
+                    datasets: [{
+                        label: 'Latency (ms)',
+                        data: Array(20).fill(0),
+                        borderColor: '#A855F7',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        fill: true,
+                        backgroundColor: 'rgba(168,85,247,0.1)',
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { display: false },
+                        y: { 
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 8 } }
+                        }
+                    }
+                }
+            });
+
+            const ctxCapacity = document.getElementById('capacity-chart').getContext('2d');
+            capacityChart = new Chart(ctxCapacity, {
+                type: 'line',
+                data: {
+                    labels: ['0', '10', '20', '30', '40', '50', '60', '70', '80', '90', '100% Load'],
+                    datasets: [{
+                        label: 'Scaling Efficiency',
+                        data: [1, 0.98, 0.95, 0.9, 0.85, 0.78, 0.65, 0.5, 0.3, 0.15, 0.05],
+                        borderColor: 'rgba(255,255,255,0.2)',
+                        borderDash: [5, 5],
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { 
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 10 } }
+                        },
+                        x: { grid: { display: false }, ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 10 } } }
+                    }
+                }
+            });
+        }
+
+        async function updateTelemetry() {
+            try {
+                const data = await LeviAPI.get('/api/v1/telemetry/metrics');
+                
+                // VRAM Gauge
+                const vram = data.vram_usage_percent;
+                document.getElementById('vram-gauge-value').innerText = `${vram}%`;
+                const circumference = 578;
+                const offset = circumference - (vram / 100) * circumference;
+                document.getElementById('vram-gauge-circle').style.strokeDashoffset = offset;
+                
+                const statusEl = document.getElementById('vram-status');
+                if (vram > 90) { statusEl.innerText = 'CRITICAL PRESSURE'; statusEl.className = 'text-[10px] uppercase tracking-widest text-rose-500 font-bold animate-pulse'; }
+                else if (vram > 70) { statusEl.innerText = 'High Load'; statusEl.className = 'text-[10px] uppercase tracking-widest text-orange-500 font-bold'; }
+                else { statusEl.innerText = 'Safe Zone'; statusEl.className = 'text-[10px] uppercase tracking-widest text-emerald-500 font-bold'; }
+
+                // Semaphores
+                const slots = document.getElementById('semaphore-visualization').children;
+                for (let i = 0; i < 4; i++) {
+                    slots[i].className = `w-8 h-8 rounded-lg transition-all duration-500 ${i < data.slots_active ? 'bg-neural shadow-[0_0_15px_rgba(168,85,247,0.5)] border-neural' : 'bg-white/5 border border-white/10'}`;
+                }
+
+                // Circuit Breaker
+                const cbIndicator = document.getElementById('circuit-indicator');
+                const cbState = document.getElementById('circuit-state');
+                if (data.circuit_open) {
+                    cbIndicator.className = 'w-4 h-4 rounded-full bg-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.5)] animate-pulse';
+                    cbState.innerText = 'OPEN (Tripped)';
+                    cbState.className = 'text-xs uppercase tracking-widest font-bold text-rose-500';
+                } else {
+                    cbIndicator.className = 'w-4 h-4 rounded-full bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]';
+                    cbState.innerText = 'Closed (Optimal)';
+                    cbState.className = 'text-xs uppercase tracking-widest font-bold text-emerald-500';
+                }
+
+                // Update Charts
+                latencyChart.data.datasets[0].data.push(data.avg_latency);
+                latencyChart.data.datasets[0].data.shift();
+                latencyChart.update('none');
+
+            } catch (err) {
+                console.error("[Telemetry] Sync failed:", err);
+            }
+        }
+
+        initCharts();
+        setInterval(updateTelemetry, 2000);
+        updateTelemetry();
+    </script>
+</body>
+</html>

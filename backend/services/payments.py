@@ -5,9 +5,8 @@ from typing import Optional
 import hmac
 import hashlib
 import logging
-from fastapi import APIRouter, HTTPException, Depends, Request  # type: ignore
+from fastapi import APIRouter, HTTPException, Depends  # type: ignore
 from backend.db.firebase import db as firestore_db
-from backend.db.redis import _get, _set, HAS_REDIS
 from backend.auth import get_current_user_optional  # type: ignore
 
 logger = logging.getLogger(__name__)
@@ -25,7 +24,6 @@ if RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET:
     except Exception as e:
         logger.error(f"Failed to initialize Razorpay client. Check RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET: {e}")
 
-from typing import Optional, Any
 
 
 TIER_CREDITS = {

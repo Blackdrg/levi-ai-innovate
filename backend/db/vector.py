@@ -9,7 +9,7 @@ import numpy as np
 import faiss  # type: ignore
 import pickle
 import time
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from backend.db.redis import r as redis_sync, HAS_REDIS
 
 logger = logging.getLogger(__name__)

@@ -13,8 +13,7 @@ Verifies:
 
 import json
 import pytest
-import asyncio
-from unittest.mock import MagicMock, patch, AsyncMock, call
+from unittest.mock import MagicMock, patch, AsyncMock
 from datetime import datetime
 
 
@@ -224,7 +223,6 @@ class TestStoreFacts:
 
             mock_thread.return_value = [0.1] * 384
 
-            from backend.services.orchestrator import memory_utils
             memory_utils_has_redis = False
 
             from backend.services.orchestrator.memory_utils import store_facts
@@ -329,7 +327,6 @@ class TestFlushAllMemoryBuffers:
         with patch("backend.services.orchestrator.memory_tasks._get_redis", return_value=(mock_redis, True)), \
              patch("backend.services.orchestrator.memory_tasks.flush_memory_buffer", mock_flush_task):
 
-            from backend.services.orchestrator import memory_tasks
             # Call the underlying logic directly (bypassing Celery task wrapper)
             redis_client, has_redis = mock_redis, True
             cursor = 0

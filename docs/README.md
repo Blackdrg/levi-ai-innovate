@@ -1,6 +1,6 @@
-# 🧠 LEVI-AI Documentation (v13.1.0-Hardened-PROD)
+# 🧠 LEVI-AI Documentation (v14.0.0-Autonomous-SOVEREIGN)
 
-Welcome to the technical hub for the LEVI-AI Sovereign OS (v13.1.0-Hardened-PROD).
+Welcome to the technical hub for the LEVI-AI Sovereign OS (v14.0.0-Autonomous-SOVEREIGN).
 
 ---
 
@@ -27,8 +27,8 @@ Welcome to the technical hub for the LEVI-AI Sovereign OS (v13.1.0-Hardened-PROD
 ## 🗺️ 3. Project Soul
 | Manual | Description |
 | :--- | :--- |
-| **[CHANGELOG](file:///d:/LEVI-AI/docs/CHANGELOG.md)** | Evolution history from v13 to v13.1.0-Hardened-PROD. |
-| **[MANIFEST](file:///d:/LEVI-AI/docs/LAUNCH_MANIFEST.md)** | The complete v13.1.0-Hardened-PROD production service set. |
+| **[CHANGELOG](file:///d:/LEVI-AI/docs/CHANGELOG.md)** | Evolution history from v13 to v14.0.0-Autonomous-SOVEREIGN. |
+| **[MANIFEST](file:///d:/LEVI-AI/docs/LAUNCH_MANIFEST.md)** | The complete v14.0.0-Autonomous-SOVEREIGN production service set. |
 | **[TODO](file:///d:/LEVI-AI/docs/TODO.md)** | Roadmap for v14.0+ Sovereign OS expansion. |
 
 ---

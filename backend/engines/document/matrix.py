@@ -6,7 +6,7 @@ High-fidelity RAG via FAISS and Semantic Clustering.
 """
 
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
 from backend.utils.vector_db import VectorDB
 from backend.generation import generate_chat_response
 

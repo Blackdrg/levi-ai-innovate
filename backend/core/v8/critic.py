@@ -2,7 +2,6 @@ import logging
 import asyncio
 from typing import Dict, Any, List, Optional
 from ..tool_registry import call_tool
-from ..orchestrator_types import ToolResult
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +89,9 @@ class ReflectionEngine:
         if hyper_reflection and not is_satisfactory:
             logger.warning("[V8 Reflection] Hyper-Reflection Triggered: Fidelity (%.2f) < Threshold (%.2f)", fidelity_score, threshold)
         
+        # 5. PII Scrubbing (v14.0 Graduation)
+        anon_result = await self.anonymize_content(response)
+        
         return {
             "score": fidelity_score,
             "shadow_score": shadow_score,
@@ -100,7 +102,10 @@ class ReflectionEngine:
             "fix": fix_strategy,
             "is_satisfactory": is_satisfactory,
             "threshold": threshold,
-            "metrics": metrics.get("metrics", {})
+            "metrics": metrics.get("metrics", {}),
+            "pii_redacted": anon_result["redacted"],
+            "redaction_count": anon_result["redaction_count"],
+            "masked_response": anon_result["content"]
         }
 
     async def _log_calibration(self, mission_id: str, primary: float, shadow: float, divergence: float):
@@ -146,6 +151,23 @@ class ReflectionEngine:
         except Exception as e:
             logger.error(f"[BiasControl] Failed to fetch offset for {user_id}: {e}")
             return 0.0
+
+    async def anonymize_content(self, text: str) -> Dict[str, Any]:
+        """
+        Sovereign v14.0: PII Anonymization Gate.
+        Wraps GDPRManager to scrub sensitivity before mission crystallization.
+        """
+        from backend.core.compliance.gdpr import GDPRManager
+        original_len = len(text)
+        masked = GDPRManager.mask_pii(text)
+        redaction_count = masked.count("_REDACTED>")
+        
+        return {
+            "content": masked,
+            "redacted": redaction_count > 0,
+            "redaction_count": redaction_count,
+            "complexity_loss": (original_len - len(masked)) / original_len if original_len > 0 else 0
+        }
 
     async def self_correct(self, response: str, evaluation: Dict[str, Any], goal: Any, perception: Dict[str, Any]) -> str:
         """Adaptive Refinement pass with Evolutionary context."""

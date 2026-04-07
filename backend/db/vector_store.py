@@ -4,11 +4,10 @@ LEVI-AI Vector Store Bridge (v7 Sovereign).
 Unified entry point for semantic embeddings, FAISS storage, and secure vaulting.
 """
 import os
-import json
 import logging
 import hashlib
 import numpy as np  # type: ignore
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 
 # Re-exporting these for the core Brain engines
 from backend.utils.vector_db import VectorDB
@@ -21,7 +20,6 @@ def embed_text(text: str) -> list:
     Returns a 768-dim vector for the given text using local Ollama.
     """
     import httpx
-    import hashlib
     
     # Sovereign v13.1: High-fidelity Local Embeddings
     base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")

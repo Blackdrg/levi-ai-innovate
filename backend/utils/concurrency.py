@@ -1,14 +1,13 @@
 import asyncio
 import logging
 import time
-from typing import Dict, Any, Callable, Optional
-from backend.redis_client import r as redis_client, HAS_REDIS
+from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
 class AdaptiveThrottler:
     """
-    Sovereign v13.1.0-Hardened-PROD: Graduated Task Loop Control.
+    Sovereign v14.0.0-Autonomous-SOVEREIGN: Graduated Task Loop Control.
     Hard-gates background tasks to 4 parallel slots to ensure GPU stability.
     """
     _semaphore: Optional[asyncio.BoundedSemaphore] = None
@@ -33,7 +32,7 @@ class AdaptiveThrottler:
 
 class CircuitBreaker:
     """
-    Sovereign v13.1.0-Hardened-PROD: General Adaptive Circuit Breaker.
+    Sovereign v14.0.0-Autonomous-SOVEREIGN: General Adaptive Circuit Breaker.
     Pauses non-critical background services if infrastructure latency spikes.
     """
     _FAILURE_COUNT = 0

@@ -1,6 +1,6 @@
-# ⚖️ Core Architecture Specification (v13.1.0-Hardened-PROD)
+# ⚖️ Core Architecture Specification (v14.0.0-Autonomous-SOVEREIGN)
 
-Technical specifications for the LEVI-AI v13.1.0-Hardened-PROD Local-First Distributed Stack.
+Technical specifications for the LEVI-AI v14.0.0-Autonomous-SOVEREIGN Local-First Distributed Stack.
 
 ---
 

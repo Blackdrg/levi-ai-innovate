@@ -6,11 +6,7 @@ Hardened for asynchronous mission tracking and spectral state management.
 """
 
 import logging
-import uuid
-import asyncio
-from datetime import datetime
-from typing import Optional, Dict, Any
-from fastapi import APIRouter, Depends, Request, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from backend.auth.logic import get_current_user as get_sovereign_identity

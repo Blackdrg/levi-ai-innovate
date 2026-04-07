@@ -1,7 +1,5 @@
 import pytest
 import os
-import json
-import faiss  # type: ignore
 from backend.utils.vector_db import VectorDB
 
 @pytest.mark.asyncio

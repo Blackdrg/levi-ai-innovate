@@ -3,9 +3,7 @@
 import redis  # type: ignore
 import os
 import json
-import redis
-import redis.asyncio as aioredis
-from typing import Optional, Any, Dict
+from typing import Optional, Any
 from dotenv import load_dotenv  # type: ignore
 from backend.utils.network import redis_breaker
 
@@ -50,7 +48,7 @@ def _set(key, value, ex=None):
 def cache_quote_embedding(quote_id: int, embedding: list):
     _set(f"quote:{quote_id}:emb", json.dumps(embedding))
 
-from typing import Any, cast
+from typing import cast
 
 def get_cached_embedding(quote_id: int):
     raw = _get(f"quote:{quote_id}:emb")

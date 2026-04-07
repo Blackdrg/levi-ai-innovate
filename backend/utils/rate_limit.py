@@ -5,7 +5,7 @@ Implements Redis-backed sliding window rate limiting for autonomous agents and A
 
 import time
 import logging
-from typing import Optional, Tuple
+from typing import Tuple
 from backend.db.redis import r as redis_client, HAS_REDIS
 
 logger = logging.getLogger(__name__)

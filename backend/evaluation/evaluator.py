@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import json
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from datetime import datetime, timezone
 
 from .fidelity import FidelityCritic

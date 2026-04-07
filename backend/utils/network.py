@@ -3,10 +3,9 @@ import logging
 import requests
 import httpx
 import os
-import asyncio
 import time
 from backend.utils.egress import EgressProxy
-from typing import Optional, Any, Dict, Callable
+from typing import Callable
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 logger = logging.getLogger(__name__)
@@ -37,11 +36,13 @@ standard_retry = retry(
 )
 
 class CircuitBreaker:
-    def __init__(self, name: str, threshold: int = 5, recovery_time: int = 60):
+    def __init__(self, name: str, threshold: int = 5, recovery_time: int = 60, success_threshold: int = 3):
         self.name = name
         self.threshold = threshold
         self.recovery_time = recovery_time
+        self.success_threshold = success_threshold
         self.failures = 0
+        self.consecutive_successes = 0
         self.last_failure_time = 0
         self.state = "CLOSED"  # CLOSED, OPEN, HALF-OPEN
         self.webhook_url = os.getenv("ALERT_WEBHOOK_URL")
@@ -112,18 +113,31 @@ class CircuitBreaker:
 
     def on_success(self):
         if self.state == "HALF-OPEN":
-            logger.info(f"Circuit {self.name} is now CLOSED.")
-        self.failures = 0
-        self.state = "CLOSED"
+            self.consecutive_successes += 1
+            if self.consecutive_successes >= self.success_threshold:
+                logger.info(f"✅ Circuit {self.name} is now FULLY RECOVERED and CLOSED.")
+                self.state = "CLOSED"
+                self.failures = 0
+                self.consecutive_successes = 0
+        else:
+            self.failures = 0
+            self.consecutive_successes = 0
 
     def on_failure(self):
         self.failures += 1
+        self.consecutive_successes = 0 # Reset recovery on any failure
         self.last_failure_time = time.time()
+        
+        if self.state == "HALF-OPEN":
+            logger.warning(f"❌ Circuit {self.name} failed during recovery. Reverting to OPEN.")
+            self.state = "OPEN"
+            return
+
         if self.failures >= self.threshold:
             was_open = self.state == "OPEN"
             self.state = "OPEN"
             if not was_open:
-                logger.critical(f"Circuit {self.name} has OPENED due to {self.failures} failures.")
+                logger.critical(f"💥 Circuit {self.name} has OPENED due to {self.failures} failures.")
                 self._send_alert("TRIPPED! Transitioned to OPEN state due to repeated failures.")
 
 # Global circuit breakers (single source of truth — circuit_breaker.py is deprecated)

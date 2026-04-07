@@ -4,9 +4,8 @@ backend/services/orchestrator/tool_contracts.py
 Standardized contracts for all LEVI AI tools and agents.
 Every agent in agent_registry.py must adhere to these models.
 """
-from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any, List
-from .orchestrator_types import ToolResult, PlanStep
+from typing import Dict, Any
+from .orchestrator_types import ToolResult
 
 class ToolContract:
     """

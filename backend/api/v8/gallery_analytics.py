@@ -5,9 +5,8 @@ Refactored to V8 Sovereign standard.
 """
 
 import logging
-from typing import Optional, Dict, Any, List
-from fastapi import APIRouter, Depends, Request, HTTPException
-from pydantic import BaseModel, Field
+from typing import Any
+from fastapi import APIRouter, Depends
 
 from backend.api.utils.auth import get_current_user
 from backend.db.firebase import db as firestore_db

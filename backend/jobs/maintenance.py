@@ -5,7 +5,7 @@ Handles nightly FAISS rebuilds and GDPR erasure compliance.
 
 import logging
 import time
-from backend.db.vector import _USER_COLLECTIONS, get_vector_index
+from backend.db.vector import _USER_COLLECTIONS
 from backend.db.redis import r as redis_sync, HAS_REDIS
 
 logger = logging.getLogger(__name__)

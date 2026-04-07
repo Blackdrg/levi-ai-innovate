@@ -8,7 +8,7 @@ import os
 import logging
 import json
 import uuid
-from typing import Dict, Any, List, Optional
+from typing import List
 from datetime import datetime, timezone
 from sqlalchemy import text
 from backend.db.postgres_db import get_read_session, get_write_session

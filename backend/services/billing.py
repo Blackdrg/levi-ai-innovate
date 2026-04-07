@@ -1,10 +1,5 @@
 import logging
-import uuid
-from typing import Dict, Any, Optional
-from datetime import datetime, timezone
 from backend.redis_client import cache
-from backend.db.postgres import get_db
-from backend.db.models import MissionMetric
 
 logger = logging.getLogger(__name__)
 

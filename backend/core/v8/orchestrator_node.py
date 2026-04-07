@@ -8,7 +8,7 @@ import logging
 import asyncio
 import uuid
 from datetime import datetime, timezone
-from typing import Dict, Any, List, Optional, AsyncGenerator
+from typing import Dict, Any, Optional, AsyncGenerator
 
 from .goal_engine import GoalEngine
 from .planner import DAGPlanner

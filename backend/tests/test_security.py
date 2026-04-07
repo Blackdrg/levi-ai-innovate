@@ -1,9 +1,6 @@
 # pyright: reportMissingImports=false
-import pytest  # type: ignore
 from fastapi.testclient import TestClient  # type: ignore
 from datetime import datetime, timedelta
-import hmac  # type: ignore
-import os
 from unittest.mock import patch, MagicMock
 from backend.main import app, _INJECTION_PATTERNS  # type: ignore
 # from backend.services.learning.models import Users  # type: ignore
@@ -84,7 +81,6 @@ def test_ssrf_custom_bg_blocked():
     # Note: main.py doesn't have a Pydantic validator for 'http', but image_gen now simply 
     # doesn't handle it, effectively blocking the fetch.
     from backend.image_gen import generate_quote_image  # type: ignore
-    from PIL import Image  # type: ignore
     
     # Testing the function directly to ensure the fetch code is gone
     # If the code was there, it would try to fetch and likely timeout/fail.

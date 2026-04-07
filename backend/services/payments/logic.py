@@ -1,9 +1,11 @@
 # backend/services/payments/logic.py
 import os
+import uuid
 import hmac
 import hashlib
 import logging
-from typing import Optional, Dict, Any
+from datetime import datetime, timezone
+from typing import Optional
 from fastapi import HTTPException
 
 from backend.db.firebase import db as firestore_db

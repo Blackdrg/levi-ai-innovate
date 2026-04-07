@@ -5,7 +5,7 @@ Ensures evidence-based adjudication in the Swarm Consensus Protocol.
 """
 
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from backend.db.neo4j_client import Neo4jClient
 
 logger = logging.getLogger(__name__)

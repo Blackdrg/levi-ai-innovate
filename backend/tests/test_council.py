@@ -1,6 +1,6 @@
 # pyright: reportMissingImports=false
 import pytest
-from unittest.mock import patch, AsyncMock
+from unittest.mock import patch
 from backend.generation import generate_council_response
 
 @pytest.mark.asyncio

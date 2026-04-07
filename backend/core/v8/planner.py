@@ -1,10 +1,9 @@
 import logging
 import json
-import random
-from typing import List, Dict, Any, Optional, Set
+from typing import List, Dict, Any
 from pydantic import BaseModel, Field
 
-# V8.7 Evolution: Import Fragility for Swarm Triggering
+# V14.0 Evolution: Import Fragility for Swarm Triggering
 from .learning import FragilityTracker
 from ..orchestrator_types import ToolResult
 
@@ -45,7 +44,7 @@ class TaskGraph(BaseModel):
 
     def validate_dag(self):
         """
-        Sovereign v13.1.0-Hardened-PROD: Topological Safety Audit.
+        Sovereign v14.0.0-Autonomous-SOVEREIGN: Topological Safety Audit.
         Ensures the mission graph is a Directed Acyclic Graph (DAG) using DFS.
         """
         adj = {n.id: n.dependencies for n in self.nodes}
@@ -72,7 +71,7 @@ class TaskGraph(BaseModel):
 
 class LlmDecomposer:
     """
-    Sovereign v9.8: LLM-Driven Mission Decomposition.
+    Sovereign v14.0: LLM-Driven Mission Decomposition.
     Deconstructs complex goals into a structured DAG of agent tasks.
     """
     @staticmethod
@@ -80,7 +79,7 @@ class LlmDecomposer:
         from backend.utils.llm_utils import call_lightweight_llm
         
         prompt = f"""
-You are the LEVI Sovereign Planner (v9.8). Your task is to decompose a complex cognitive mission into a Directed Acyclic Graph (DAG) of specialized agent tasks.
+You are the LEVI Sovereign Planner (v14.0.0). Your task is to decompose a complex cognitive mission into a Directed Acyclic Graph (DAG) of specialized agent tasks.
 
 Mission Objective: {goal_objective}
 User Input: {user_input}
@@ -124,7 +123,7 @@ Guidelines:
             for node_data in data.get("nodes", []):
                 graph.add_node(TaskNode(**node_data))
             
-            graph.validate_dag() # v13.1.0-Hardened-PROD Safety
+            graph.validate_dag() # v14.0.0-Autonomous-SOVEREIGN Safety
             return graph
         except Exception as e:
             logger.error(f"[LlmDecomposer] Neural decomposition drift: {e}")
@@ -132,13 +131,13 @@ Guidelines:
 
 class DAGPlanner:
     """
-    LeviBrain v9.8: Dynamic & Swarm-Aware DAG Planner.
+    Sovereign AI v14.0: Dynamic & Swarm-Aware DAG Planner.
     Generates dynamic task graphs using rules for speed and LLM for complexity.
     """
 
     async def build_task_graph(self, goal: Any, perception: Dict[str, Any]) -> TaskGraph:
         """
-        Strategic Task Graph Construction with Hybrid Logic (v9.8).
+        Strategic Task Graph Construction with Hybrid Logic (v14.0).
         """
         from .engine_registry import EngineRegistry
         
@@ -250,7 +249,7 @@ class DAGPlanner:
                 critical=False
             ))
         
-        graph.validate_dag() # v13.1.0-Hardened-PROD Safety
+        graph.validate_dag() # v14.0.0-Autonomous-SOVEREIGN Safety
         return graph
 
     async def refine_plan(self, original_graph: TaskGraph, reflection: Dict[str, Any], goal: Any, perception: Dict[str, Any]) -> TaskGraph:

@@ -3,7 +3,7 @@ import sys
 import io
 import traceback
 import asyncio
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 from pydantic import BaseModel, Field
 from .base import BaseV8Agent, AgentResult
 
@@ -50,7 +50,11 @@ class PythonReplAgentV8(BaseV8Agent[PythonInput]):
         sys.stdout, sys.stderr = output_buffer, output_buffer
 
         # Restricted Globals (V8.8 Hardened)
-        import math, json, datetime, random, statistics
+        import math
+        import json
+        import datetime
+        import random
+        import statistics
         restricted_globals = {
             "__builtins__": {
                 "print": print, "range": range, "len": len, "int": int, "float": float,

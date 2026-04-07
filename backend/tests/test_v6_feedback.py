@@ -1,6 +1,6 @@
 import pytest
 import json
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch
 from backend.services.orchestrator.executor import _execute_step_with_resilience
 from backend.services.orchestrator.orchestrator_types import PlanStep, ToolResult
 from backend.services.orchestrator.meta_planner import decompose_goal

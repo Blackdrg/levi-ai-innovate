@@ -3,14 +3,9 @@ LEVI-AI Neural Synk API v13.0.
 High-performance binary streaming for total visual sovereignty.
 """
 
-import zlib
-import json
-import asyncio
 import logging
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
-from datetime import datetime, timezone
-from backend.broadcast_utils import PULSE_FIDELITY_UPDATE
 
 logger = logging.getLogger(__name__)
 

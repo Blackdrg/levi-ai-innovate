@@ -1,7 +1,6 @@
 import sys
 import io
 import logging
-import threading
 import concurrent.futures
 from typing import Any, Dict, Optional
 from backend.utils.audit import AuditLogger

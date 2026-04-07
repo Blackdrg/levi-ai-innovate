@@ -2,9 +2,8 @@ import os
 import json
 import hashlib
 import hmac
-import asyncio
-from datetime import datetime, timedelta, timezone
-from typing import Optional, Any, Dict
+from datetime import datetime
+from typing import Optional
 
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials

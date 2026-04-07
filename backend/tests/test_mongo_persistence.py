@@ -1,5 +1,4 @@
 import pytest
-import os
 from backend.db.mongo import MongoDB
 
 @pytest.mark.asyncio

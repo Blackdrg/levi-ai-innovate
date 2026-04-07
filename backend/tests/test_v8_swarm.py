@@ -1,7 +1,7 @@
 import pytest
 import asyncio
 import json
-from backend.core.v8.planner import DAGPlanner, TaskGraph
+from backend.core.v8.planner import DAGPlanner
 from backend.core.v8.learning import FragilityTracker
 from backend.core.v8.agents.consensus import ConsensusAgentV8, ConsensusInput
 from backend.memory.cache import MemoryCache
@@ -57,7 +57,6 @@ async def test_consensus_logic():
     }
     
     # We mock council_of_models to return a specific consensus analysis
-    import backend.core.v8.agents.consensus
     original_council = agent.generator.council_of_models
     
     async def mock_analysis(messages, temperature=0.2):

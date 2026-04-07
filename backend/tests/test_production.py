@@ -1,11 +1,8 @@
 # pyright: reportMissingImports=false
 import sys
 sys.path.append('.')
-import pytest  # type: ignore
 from unittest.mock import patch, MagicMock
-from fastapi.testclient import TestClient  # type: ignore
 
-from backend.main import app # type: ignore
 
 @patch('backend.db.firestore_db.db')
 @patch('backend.services.studio.router.use_credits')

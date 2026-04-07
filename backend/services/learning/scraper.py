@@ -5,13 +5,11 @@ Synchronizes high-fidelity seeds with the Postgres SQL Fabric.
 """
 
 import os
+import json
 import logging
-import asyncio
 import arxiv
 import fitz  # PyMuPDF
 from typing import List, Dict, Any
-from pathlib import Path
-from datetime import datetime, timezone
 from backend.db.postgres_db import get_write_session
 from sqlalchemy import text
 

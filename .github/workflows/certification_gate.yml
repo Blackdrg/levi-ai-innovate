@@ -1,4 +1,4 @@
-name: LEVI-AI Certification Gate (v13.1)
+name: LEVI-AI Certification Gate (v14.0-SOVEREIGN)
 
 on:
   push:
@@ -60,6 +60,8 @@ jobs:
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
+      - name: Run ARCA Red-Teaming Simulation
+        run: python -m backend.core.v8.arca --simulate-all-categories
 
   resilience-gate:
     name: "🏗️ Stage 5: Restore Drill (RTO Verify)"

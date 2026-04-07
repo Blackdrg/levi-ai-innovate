@@ -2,7 +2,7 @@ import asyncio
 import logging
 from fastapi import FastAPI
 from pydantic import BaseModel
-from typing import Dict, Any, List
+from typing import Dict, Any
 
 from backend.core.memory_manager import MemoryManager
 from backend.kafka_client import LeviKafkaClient

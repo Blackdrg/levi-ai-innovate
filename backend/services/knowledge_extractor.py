@@ -1,7 +1,7 @@
 import requests
 import json
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List
 from ..db.ontology import KnowledgeTriplet, Entity, EntityType, Relation, RelationType
 
 logger = logging.getLogger(__name__)

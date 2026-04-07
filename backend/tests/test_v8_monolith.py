@@ -2,7 +2,6 @@ import pytest
 import asyncio
 import uuid
 from backend.core.v8.orchestrator_node import SovereignOrchestrator
-from backend.api.v8.telemetry import broadcast_mission_event
 
 @pytest.mark.async_timeout(30)
 async def test_complete_mission_flow():

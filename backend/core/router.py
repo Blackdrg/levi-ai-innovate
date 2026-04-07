@@ -5,7 +5,6 @@ FastAPI router for the LEVI AI Orchestrator endpoint.
 Mounted at /api/v1/chat by the gateway.
 """
 import logging
-import uuid
 from typing import Optional
 
 from fastapi import APIRouter, Depends, BackgroundTasks, Request

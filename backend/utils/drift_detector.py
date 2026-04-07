@@ -1,6 +1,6 @@
 import logging
 import statistics
-from typing import List, Dict, Any, Optional
+from typing import List
 from backend.redis_client import cache
 
 logger = logging.getLogger(__name__)

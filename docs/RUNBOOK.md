@@ -1,6 +1,6 @@
-# 🏃 LEVI-AI Operational Runbook (v13.1.0-Hardened-PROD)
+# 🏃 LEVI-AI Operational Runbook (v14.0.0-Autonomous-SOVEREIGN)
 
-Operations and recovery procedures for the LEVI-AI v13.1.0-Hardened-PROD Absolute Monolith.
+Operations and recovery procedures for the LEVI-AI v14.0.0-Autonomous-SOVEREIGN Absolute Monolith.
 
 ---
 
@@ -50,7 +50,7 @@ curl http://localhost:11434/api/tags
 ### Telemetry Health
 ```powershell
 curl http://localhost:8000/health
-# Expected: {"status": "online", "version": "v13.1.0-Hardened-PROD"}
+# Expected: {"status": "online", "version": "v14.0.0-Autonomous-SOVEREIGN"}
 ```
 
 ---
@@ -138,4 +138,4 @@ curl -N http://localhost:8000/api/v1/telemetry/stream
 
 ---
 
-© 2026 LEVI-AI SOVEREIGN HUB — Operational Runbook v13.1.0-Hardened-PROD
+© 2026 LEVI-AI SOVEREIGN HUB — Operational Runbook v14.0.0-Autonomous-SOVEREIGN

@@ -8,11 +8,10 @@
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
 <link href="./css/output.css" rel="stylesheet">
-<!-- Firebase & Auth Init (Early) -->
-<script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
+<!-- Sovereign Core -->
 <script src="js/config.js?v=5"></script>
-<script src="js/api.js?v=5"></script>
+<script src="js/levi-api.js"></script>
+<script src="js/shared.js"></script>
 <script src="js/ui.js?v=5"></script>
 <script src="js/auth-manager.js?v=5"></script>
 <script src="js/status.js?v=5"></script>
@@ -122,11 +121,8 @@
 <div class="flex items-center gap-2">
 <span class="text-2xl font-serif italic tracking-tighter bg-gradient-to-r from-[#f2ca50] to-[#d4af37] bg-clip-text text-transparent">LEVI</span>
 </div>
-<div class="hidden md:flex items-center gap-8">
-<a class="text-zinc-400 hover:text-zinc-100 transition-colors duration-300 font-sans text-sm" href="index.html">Home</a>
-<a class="text-zinc-400 hover:text-zinc-100 transition-colors duration-300 font-sans text-sm" href="chat.html">Chat</a>
-<a class="text-zinc-400 hover:text-zinc-100 transition-colors duration-300 font-sans text-sm" href="studio.html">Studio</a>
-<a class="text-[#f2ca50] font-semibold border-b border-[#f2ca50] pb-1 font-sans text-sm" href="feed.html">Feed</a>
+<div id="sovereign-nav" class="hidden md:flex items-center gap-8">
+  <!-- Injected via shared.js -->
 </div>
 <button onclick="toggleMobileMenu()" class="md:hidden mr-2 text-zinc-400"><span class="material-symbols-outlined">menu</span></button><button class="px-5 py-2 rounded-full bg-gradient-to-r from-primary to-primary-container text-on-primary font-label text-sm font-semibold hover:scale-105 transition-all duration-300 active:scale-95">
             Seeker Account
@@ -144,23 +140,8 @@
 <p class="font-sans text-[10px] uppercase tracking-widest text-zinc-500 opacity-70 mt-1">Celestial Muse</p>
 </div>
 </div>
-<nav class="space-y-4">
-<a class="flex items-center gap-4 px-4 py-3 text-zinc-500 opacity-70 hover:bg-white/5 hover:opacity-100 transition-all group" href="index.html">
-<span class="material-symbols-outlined text-xl" data-icon="auto_awesome">auto_awesome</span>
-<span class="font-sans text-xs uppercase tracking-widest">Home</span>
-</a>
-<a class="flex items-center gap-4 px-4 py-3 text-zinc-500 opacity-70 hover:bg-white/5 hover:opacity-100 transition-all group" href="index.html#chat">
-<span class="material-symbols-outlined text-xl" data-icon="philosophy">psychology</span>
-<span class="font-sans text-xs uppercase tracking-widest">Chat</span>
-</a>
-<a class="flex items-center gap-4 px-4 py-3 text-zinc-500 opacity-70 hover:bg-white/5 hover:opacity-100 transition-all group" href="studio.html">
-<span class="material-symbols-outlined text-xl" data-icon="auto_fix_high">auto_fix_high</span>
-<span class="font-sans text-xs uppercase tracking-widest">Studio</span>
-</a>
-<a class="flex items-center gap-4 px-4 py-3 bg-gradient-to-r from-[#f2ca50]/20 to-transparent text-[#f2ca50] border-l-2 border-[#f2ca50] transition-all group shadow-[inset_0_0_20px_rgba(242,202,80,0.05)]" href="feed.html">
-<span class="material-symbols-outlined text-xl icon-fill" data-icon="public">public</span>
-<span class="font-sans text-xs uppercase tracking-widest font-bold">Feed</span>
-</a>
+<nav id="sovereign-sidebar" class="space-y-4">
+  <!-- Injected via shared.js -->
 </nav>
 </div>
 <div class="mt-auto p-8 border-t border-white/5">

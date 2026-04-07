@@ -91,7 +91,6 @@ class EvolutionEngine:
         if promoted_count >= threshold:
             logger.info(f"[Evolution] Threshold reached ({promoted_count}/{threshold}). Triggering Autonomous Fine-tuning...")
             try:
-                from backend.services.learning.trainer import submit_finetuning_job
                 # In a real system, we'd export the rules to a JSONL first.
                 # For Phase 5, we trigger the automation pulse.
                 asyncio.create_task(self._async_trigger_ft())

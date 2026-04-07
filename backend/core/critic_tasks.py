@@ -1,7 +1,6 @@
 import logging
 import json
 import asyncio
-from typing import List, Dict, Any
 from backend.celery_app import celery_app
 from backend.db.redis import r as redis_client, HAS_REDIS
 from backend.core.v8.critic import ReflectionEngine

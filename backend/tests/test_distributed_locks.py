@@ -1,8 +1,7 @@
 # pyright: reportMissingImports=false
 import pytest
-import time
-from unittest.mock import patch, MagicMock, call
-from backend.db.redis_client import distributed_lock, HAS_REDIS
+from unittest.mock import patch, MagicMock
+from backend.db.redis_client import distributed_lock
 
 def test_lock_acquisition():
     """Verify that a lock can be acquired and released."""

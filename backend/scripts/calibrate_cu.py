@@ -1,9 +1,8 @@
 import asyncio
 import logging
-from sqlalchemy import select, func
+from sqlalchemy import select
 from backend.db.postgres import PostgresDB
 from backend.db.models import BenchmarkLedger
-import os
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("calibration")
@@ -37,10 +36,10 @@ async def calibrate():
             # Clamp between 100 and 1000
             final_threshold = max(100, min(1000, new_threshold))
             
-            logger.info(f"📊 Calibration Results (Tier L3):")
+            logger.info("📊 Calibration Results (Tier L3):")
             logger.info(f"  Max p95 Latency: {max_p95:.2f}ms")
             logger.info(f"  Recommended CU Abort Threshold: {final_threshold} CU")
-            logger.info(f"  (Current Threshold: 200 CU)")
+            logger.info("  (Current Threshold: 200 CU)")
 
             # Provide the update command
             print("\n" + "="*40)

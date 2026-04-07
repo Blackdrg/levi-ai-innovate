@@ -1,10 +1,9 @@
 import pytest
 import json
 from unittest.mock import AsyncMock, patch, MagicMock
-from backend.services.orchestrator.agents.critic_agent import ValidatorAgent, ValidatorInput
-from backend.services.orchestrator.agents.optimizer_agent import OptimizerAgent, OptimizerInput
+from backend.services.orchestrator.agents.critic_agent import ValidatorAgent
 from backend.services.orchestrator.executor import execute_plan
-from backend.services.orchestrator.orchestrator_types import ExecutionPlan, PlanStep, ToolResult
+from backend.services.orchestrator.orchestrator_types import ExecutionPlan, PlanStep
 from backend.services.orchestrator.brain import LeviBrain
 
 @pytest.mark.asyncio

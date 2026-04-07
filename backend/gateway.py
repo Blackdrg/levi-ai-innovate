@@ -13,7 +13,6 @@ DEPRECATION NOTICE:
 """
 
 import warnings
-from backend.main import app, lifespan
 
 warnings.warn(
     "gateway.py is deprecated and retired. Use backend.main instead.",

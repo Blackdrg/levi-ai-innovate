@@ -11,7 +11,7 @@ import pytest
 from unittest.mock import patch, AsyncMock
 
 from backend.services.orchestrator import run_orchestrator
-from backend.services.orchestrator.planner import detect_intent, check_rules
+from backend.services.orchestrator.planner import check_rules
 from backend.services.orchestrator.engine import route_request
 from backend.services.orchestrator.orchestrator_types import IntentResult, EngineRoute
 

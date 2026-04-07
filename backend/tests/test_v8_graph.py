@@ -1,9 +1,7 @@
 import asyncio
 import logging
-import json
 from backend.engines.memory.graph_engine import GraphEngine
 from backend.core.memory_utils import extract_memory_graph
-from backend.memory.manager import MemoryManager
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

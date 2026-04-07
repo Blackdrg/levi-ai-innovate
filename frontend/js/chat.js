@@ -248,66 +248,61 @@ async function sendMessage() {
     saveToCache();
     localStorage.removeItem(`levi_pending_input_${sessionId}`);
 
+    sessionMessages.push({ role: "user", content: text });
+    saveToCache();
+    localStorage.removeItem(`levi_pending_input_${sessionId}`);
+
     try {
-        await window.api.chatStream(
-            text,
-            sessionId,
-            (chunk) => {
-                botFullText += chunk;
+        await LeviAPI.postStream('/api/v1/chat/stream', {
+            message: text,
+            session_id: sessionId,
+            mood: currentMood,
+            history: sessionMessages
+        }, (event) => {
+            // Handle different event types from the unified stream
+            if (event.type === 'token') {
+                botFullText += event.data;
                 window.requestAnimationFrame(() => {
                     const parsed = typeof marked !== 'undefined' ? marked.parse(botFullText) : botFullText;
                     textSpan.innerHTML = parsed + '<span class="streaming-cursor"></span>';
                     messagesDiv.scrollTo({ top: messagesDiv.scrollHeight, behavior: 'auto' });
                 });
-            },
-            (meta) => {
-                const { event, data } = meta;
-                
-                // 1. Mission Metadata
-                if (event === 'metadata') {
-                    console.log("[LEVI] Mission Pulse:", data.request_id);
-                    if (data.request_id) metadataCaptured = { ...metadataCaptured, ...data };
-                }
+            }
 
-                // 2. Intent & Activity (Visual Pulse)
-                if (event === 'activity') {
-                    let statusDiv = botDiv.querySelector('.levi-status-indicator');
-                    if (!statusDiv) {
-                        statusDiv = document.createElement('div');
-                        statusDiv.className = 'levi-status-indicator text-[9px] text-neural/60 font-mono italic mb-2 animate-pulse';
-                        botDiv.prepend(statusDiv);
-                    }
-                    statusDiv.innerText = `● ${data}`;
+            if (event.type === 'audit') {
+                let badgeContainer = botDiv.querySelector('.audit-badge-container');
+                if (!badgeContainer) {
+                    badgeContainer = document.createElement('div');
+                    badgeContainer.className = 'audit-badge-container absolute -top-2 -right-2';
+                    botDiv.style.position = 'relative';
+                    botDiv.appendChild(badgeContainer);
                 }
+                badgeContainer.innerHTML = LeviUI.renderAuditBadge(event.status);
+            }
 
-                // 3. Goal Formation
-                if (event === 'goal') {
-                    console.log("[LEVI] Goal Formed:", data.objective);
-                    // Could show goal in UI if needed
-                }
+            if (event.type === 'metadata') {
+                console.log("[LEVI] Mission Pulse:", event.data.request_id);
+                if (event.data.request_id) metadataCaptured = { ...metadataCaptured, ...event.data };
+            }
 
-                // 4. Mission Graph (Cytoscape Visualization)
-                if (event === 'graph') {
-                    const panel = document.getElementById("mission-graph-panel");
-                    if (panel) {
-                        panel.classList.remove("hidden");
-                        _renderMissionGraph(data);
-                    }
+            if (event.type === 'activity') {
+                let statusDiv = botDiv.querySelector('.levi-status-indicator');
+                if (!statusDiv) {
+                    statusDiv = document.createElement('div');
+                    statusDiv.className = 'levi-status-indicator text-[9px] text-neural/60 font-mono italic mb-2 animate-pulse';
+                    botDiv.prepend(statusDiv);
                 }
+                statusDiv.innerText = `● ${event.data}`;
+            }
 
-                // 5. Execution Results
-                if (event === 'results') {
-                    metadataCaptured = { ...metadataCaptured, results: data };
+            if (event.type === 'graph') {
+                const panel = document.getElementById("mission-graph-panel");
+                if (panel) {
+                    panel.classList.remove("hidden");
+                    _renderMissionGraph(event.data);
                 }
-
-                // 6. Dreaming Phase (Evolutionary Pulse)
-                if (event === 'dreaming') {
-                    uiShowToast(`Evolutionary Dreaming Phase: ${data.message || 'Crystallizing bits...'}`, "info");
-                }
-            },
-            currentMood,
-            sessionMessages
-        );
+            }
+        });
 
         messageCount++;
         lastBotMessage = botFullText;

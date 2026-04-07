@@ -1,6 +1,5 @@
 import logging
-from typing import Dict, Any, Type, Optional
-from pydantic import BaseModel
+from typing import Dict, Any, Type
 
 from backend.core.agent_base import SovereignAgent, AgentResult
 from backend.core.v8.agents.chat import ChatAgentV8 as ChatAgent

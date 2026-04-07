@@ -2,8 +2,6 @@ import os
 import logging
 from typing import Optional, Dict, Any
 from google.cloud import run_v2 # type: ignore
-from google.cloud import tasks_v2 # type: ignore
-from google.protobuf import timestamp_pb2 # type: ignore
 
 logger = logging.getLogger(__name__)
 
