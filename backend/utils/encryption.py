@@ -1,7 +1,7 @@
 import os
 import base64
 import logging
-from typing import Any, Optional
+from typing import Any, Optional, Dict
 
 logger = logging.getLogger(__name__)
 

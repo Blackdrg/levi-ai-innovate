@@ -43,6 +43,33 @@ class TaskGraph(BaseModel):
     def mark_complete(self, node_id: str, result: ToolResult):
         self.results[node_id] = result
 
+    def validate_dag(self):
+        """
+        Sovereign v1.0.0-RC1: Topological Safety Audit.
+        Ensures the mission graph is a Directed Acyclic Graph (DAG) using DFS.
+        """
+        adj = {n.id: n.dependencies for n in self.nodes}
+        visited = set()
+        path = set()
+
+        def has_cycle(node_id):
+            if node_id in path: return True
+            if node_id in visited: return False
+            
+            visited.add(node_id)
+            path.add(node_id)
+            for dep in adj.get(node_id, []):
+                if has_cycle(dep): return True
+            path.remove(node_id)
+            return False
+
+        for node in self.nodes:
+            if has_cycle(node.id):
+                logger.error(f"[V9 Planner] Topological Violation: Cycle detected at {node.id}")
+                raise ValueError(f"Neural Topology Error: Mission graph contains a cycle at {node.id}")
+        
+        logger.info("[V9 Planner] Topological Audit Successful. DAG is valid.")
+
 class LlmDecomposer:
     """
     Sovereign v9.8: LLM-Driven Mission Decomposition.
@@ -96,6 +123,8 @@ Guidelines:
             graph = TaskGraph()
             for node_data in data.get("nodes", []):
                 graph.add_node(TaskNode(**node_data))
+            
+            graph.validate_dag() # v1.0.0-RC1 Safety
             return graph
         except Exception as e:
             logger.error(f"[LlmDecomposer] Neural decomposition drift: {e}")
@@ -220,7 +249,8 @@ class DAGPlanner:
                 dependencies=[final_node_id],
                 critical=False
             ))
-
+        
+        graph.validate_dag() # v1.0.0-RC1 Safety
         return graph
 
     async def refine_plan(self, original_graph: TaskGraph, reflection: Dict[str, Any], goal: Any, perception: Dict[str, Any]) -> TaskGraph:

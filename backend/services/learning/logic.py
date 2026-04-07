@@ -102,23 +102,23 @@ async def collect_training_sample(
         collect_interaction_log(user_message, route, latency_ms, rating >= 3, user_id)
     )
     
-    from backend.utils.concurrency import SovereignThrottler, LearningCircuitBreaker
+    from backend.utils.concurrency import AdaptiveThrottler, CircuitBreaker
 
-    if LearningCircuitBreaker.is_open():
+    if CircuitBreaker.is_open():
         logger.warning("[Learning] Circuit Breaker OPEN. Skipping background learning.")
         return results[0][1].id
 
     # Pattern crystallization for high-quality interactions (5-star Hive Wisdom)
     if rating >= 5:
-        asyncio.create_task(SovereignThrottler.run_throttled(collect_global_pattern, user_message, bot_response, rating))
+        asyncio.create_task(AdaptiveThrottler.run_throttled(collect_global_pattern, user_message, bot_response, rating))
 
     # Knowledge Base augmentation
     if rating >= MIN_QUALITY_SCORE:
-        asyncio.create_task(SovereignThrottler.run_throttled(_augment_knowledge_base, user_message, bot_response, mood))
+        asyncio.create_task(AdaptiveThrottler.run_throttled(_augment_knowledge_base, user_message, bot_response, mood))
 
     # Memory Graph update
     if user_id:
-        asyncio.create_task(SovereignThrottler.run_throttled(update_memory_graph, user_id, user_message))
+        asyncio.create_task(AdaptiveThrottler.run_throttled(update_memory_graph, user_id, user_message))
 
     # Update atomic analytics
     update_system_analytics("total_samples", 1)

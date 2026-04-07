@@ -67,6 +67,22 @@ async def get_write_session() -> AsyncGenerator[AsyncSession, None]:
         finally:
             await session.close()
 
+async def verify_resonance() -> bool:
+    """
+    Verifies that the Postgres connectivity is established and responsive.
+    Crucial for the Graduation Startup Audit.
+    """
+    if not engine:
+        return False
+    try:
+        async with get_read_session() as session:
+            from sqlalchemy import text
+            await session.execute(text("SELECT 1"))
+            return True
+    except Exception as e:
+        logger.error(f"[Postgres-v13] Resonance check failed: {e}")
+        return False
+
 async def close_resonance():
     """ Safely sever the SQL link. """
     if engine:

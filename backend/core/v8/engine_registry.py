@@ -11,6 +11,14 @@ class EngineRegistry:
 
     def __init__(self):
         self.engines = {}
+        
+        # v1.0.0-RC1: Default Cognitive & Logic Engines
+        from backend.engines.reasoning.reasoning_engine import ReasoningEngine
+        from backend.engines.deterministic_engine import DeterministicEngine
+        
+        self.register("Reasoning", ReasoningEngine())
+        self.register("Deterministic", DeterministicEngine())
+        logger.info("[EngineRegistry] Core v1.0.0-RC1 Logic Hub initialized.")
 
     def register(self, name: str, engine: Any):
         """Registers a new deterministic engine."""

@@ -43,7 +43,7 @@ class SovereignGenerator:
         Token-by-token SSE streaming via local Ollama (v13.0.0).
         """
         # Emit Pulse: Neural Thinking (Local)
-        SovereignBroadcaster.broadcast({"type": "NEURAL_THINKING", "provider": "local"})
+        SovereignBroadcaster.publish("NEURAL_THINKING", {"provider": "local"})
 
         try:
             async for token in self._stream_local(messages, model, lang):
@@ -114,8 +114,7 @@ class LLMRouter:
         provider = SovereignHandoff.select_provider(analysis)
         
         # Emit Pulse: Provider Selection
-        SovereignBroadcaster.broadcast({
-            "type": "NEURAL_PROVIDER_SELECTED",
+        SovereignBroadcaster.publish("NEURAL_PROVIDER_SELECTED", {
             "provider": provider,
             "session_id": f"gen_{uuid.uuid4().hex[:6]}"
         })
@@ -133,7 +132,7 @@ class LLMRouter:
 
         if route == "local":
             system_prompt = next((m["content"] for m in messages if m["role"] == "system"), "You are LEVI.")
-            SovereignBroadcaster.broadcast({"type": "NEURAL_THINKING", "provider": "local"})
+            SovereignBroadcaster.publish("NEURAL_THINKING", {"provider": "local"})
             res = await local_llm.agenerate(prompt, system_prompt=system_prompt)
             if res: return res
             logger.warning("[LLMRouter-v13] Local failure. Falling back to API.")

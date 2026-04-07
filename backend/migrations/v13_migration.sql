@@ -41,3 +41,13 @@ CREATE TABLE IF NOT EXISTS user_facts (
     mission_id VARCHAR(255),
     created_at TIMESTAMP DEFAULT NOW()
 );
+
+-- Learning Loop: Training Corpus for v2.0 fine-tuning
+CREATE TABLE IF NOT EXISTS training_corpus (
+    id SERIAL PRIMARY KEY,
+    mission_id VARCHAR(255) UNIQUE,
+    query TEXT NOT NULL,
+    result TEXT NOT NULL,
+    fidelity_score FLOAT NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
+);

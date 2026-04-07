@@ -143,10 +143,13 @@ class LeviBrainV8:
         else:
             # If we reach max refinements, use the best possible draft
             final_response = draft_response
+        
+        # Last known fidelity score
+        final_fidelity = reflection.get("score") if 'reflection' in locals() else 0.0
 
 
         # 6. MEMORY UPDATE: Store results and context
-        await self.memory.store(user_id, session_id, user_input, final_response, perception, results)
+        await self.memory.store(user_id, session_id, user_input, final_response, perception, results, fidelity=final_fidelity)
 
         # 7. MISSION AUDITING: Self-Evolution Loop
         from backend.evaluation.evaluator import AutomatedEvaluator
@@ -175,9 +178,9 @@ class LeviBrainV8:
             "audit": audit
         }
 
-    async def _update_memory(self, user_id: str, session_id: str, user_input: str, response: str, perception: Dict[str, Any], results: List[ToolResult]):
+    async def _update_memory(self, user_id: str, session_id: str, user_input: str, response: str, perception: Dict[str, Any], results: List[ToolResult], fidelity: Optional[float] = None):
         """Bridges results to the 4-tier memory ecosystem."""
-        await self.memory.store(user_id, session_id, user_input, response, perception, results)
+        await self.memory.store(user_id, session_id, user_input, response, perception, results, fidelity=fidelity)
 
     async def stream(
         self, 

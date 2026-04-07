@@ -16,16 +16,18 @@ def run_autonomous_evolution():
     Identifies weak system prompt variants and evolves them based on successful patterns.
     """
     import asyncio
-    logger.info("[Evolver] Initiating daily autonomous evolution cycle...")
-    
+    from backend.utils.concurrency import AdaptiveThrottler, CircuitBreaker
+    if CircuitBreaker.is_open():
+        logger.warning("[Evolver] Circuit Breaker OPEN. Skipping autonomous evolution.")
+        return
+
     manager = AdaptivePromptManager()
     
     loop = asyncio.get_event_loop()
     if loop.is_running():
-        # This shouldn't happen in a celery worker unless misconfigured
-        asyncio.create_task(manager.evolve_variants())
+        asyncio.create_task(AdaptiveThrottler.run_throttled(manager.evolve_variants))
     else:
-        loop.run_until_complete(manager.evolve_variants())
+        loop.run_until_complete(AdaptiveThrottler.run_throttled(manager.evolve_variants))
         
     logger.info("[Evolver] Evolution cycle complete.")
 
@@ -103,13 +105,16 @@ def unbound_training_cycle():
     Phase 6: Unbound Training Array Orchestration.
     Scrapes, filters, and uploads a new autonomous training batch.
     """
-    logger.info("[Unbound] Starting scheduled training cycle...")
-    
+    from backend.utils.concurrency import AdaptiveThrottler, CircuitBreaker
+    if CircuitBreaker.is_open():
+        logger.warning("[Unbound] Circuit Breaker OPEN. Skipping scheduled training cycle.")
+        return
+
     async def _run():
         # Telemetry Start
         broadcast_mission_event("system", "evolution_start", {"message": "Initiating Unbound Scraper Cycle."})
         
-        batch_file = await unbound_engine.run_unbound_cycle()
+        batch_file = await AdaptiveThrottler.run_throttled(unbound_engine.run_unbound_cycle)
         if batch_file:
             broadcast_mission_event("system", "evolution_upload", {"message": "Wisdom Filtered. Uploading dataset."})
             file_id = upload_training_file(batch_file)

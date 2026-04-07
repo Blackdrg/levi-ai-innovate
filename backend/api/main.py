@@ -17,6 +17,7 @@ from backend.config.system import SOVEREIGN_VERSION, CLOUD_FALLBACK_ENABLED, COR
 # Service Routers
 from backend.api.v8.orchestrator import router as orchestrator_v1
 from backend.api.v8.telemetry import router as telemetry_v1
+from backend.core.dcn_protocol import DCNProtocol
 from backend.api.v8.memory import router as memory_v1
 from backend.api.v8.search import router as search_v1
 from backend.api.v1.payments import router as payments_v1
@@ -26,7 +27,12 @@ from backend.api.analytics import router as analytics_v1
 from backend.api.agents import router as agents_v1
 from backend.api.marketplace import router as marketplace_v1
 from backend.api.compliance import router as compliance_v1
+from backend.api.v8.learning import router as learning_v1
 from backend.api.scheduling import router as scheduling_v1
+
+# Middleware Tier
+from backend.api.middleware.security_headers import SecurityHeadersMiddleware
+from backend.api.middleware.rate_limiter import RateLimitMiddleware
 
 # Core Logic
 from backend.db.postgres_db import verify_resonance
@@ -48,6 +54,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 1.5. Sovereign Security Hardening (Audit Prep)
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RateLimitMiddleware, limit=100, window=60) # 100 RPM limit
 
 # 2. Global Versioning & Telemetry Middleware
 @app.middleware("http")
@@ -87,8 +97,24 @@ app.include_router(agents_v1, prefix="/api/v1/agents", tags=["Agents"])
 app.include_router(marketplace_v1, prefix="/api/v1/marketplace", tags=["Marketplace"])
 app.include_router(compliance_v1, prefix="/api/v1/compliance", tags=["Compliance"])
 app.include_router(scheduling_v1, prefix="/api/v1/scheduling", tags=["Scheduling"])
+app.include_router(learning_v1, prefix="/api/v1/learning", tags=["Evolution"])
 
-# 4. Startup Health & Integrity Audit
+async def gossip_handler(pulse: Dict[str, Any]):
+    """
+    Sovereign DCN Gossip Handler (v2.0).
+    Processes incoming pulses from the distributed cognitive network.
+    """
+    node = pulse.get("node")
+    pulse_type = pulse.get("type")
+    
+    if pulse_type == "node_heartbeat":
+        logger.debug(f"[DCN] Swarm Pulse: Node {node} is ACTIVE.")
+    elif pulse_type == "cognitive_gossip":
+        mission_id = pulse.get("payload", {}).get("mission_id")
+        logger.info(f"[DCN] Cognitive Insight: {node} shared pulse for mission {mission_id}")
+    else:
+        logger.warning(f"[DCN] Unknown pulse received from {node}: {pulse_type}")
+
 @app.on_event("startup")
 async def graduation_audit():
     logger.info(f"🛡️ Validating LEVI-AI Stack Graduation ({SOVEREIGN_VERSION})...")
@@ -101,6 +127,28 @@ async def graduation_audit():
             logger.warning("⚠️ Database sync drift detected.")
     except Exception as e:
         logger.error(f"❌ Startup Audit failed: {e}")
+
+    # 🛡️ DCN Gossip Layer (v2.0)
+    try:
+        dcn = DCNProtocol()
+        if dcn.is_active:
+            # 1. Start Listener
+            await dcn.start_listener(gossip_handler)
+            
+            # 2. Start Autonomous Heartbeat (Audit Point 27)
+            os.environ["NODE_ROLE"] = os.getenv("NODE_ROLE", "coordinator")
+            await dcn.start_heartbeat(interval=30)
+            logger.info(f"[DCN] Swarm Presence: [ESTABLISHED] Mode: {os.environ['NODE_ROLE']}")
+
+            # 3. Start Distributed Worker Loop (Task Stealing Participator)
+            if os.getenv("DISTRIBUTED_MODE", "false").lower() == "true":
+                from backend.core.executor.distributed import DistributedGraphExecutor
+                from backend.db.redis import r_async as redis_client
+                dist_executor = DistributedGraphExecutor(redis_client)
+                asyncio.create_task(dist_executor.worker_loop())
+                logger.info("[DCN] Distributed Worker Loop: [ACTIVE]")
+    except Exception as e:
+        logger.error(f"[DCN] Failed to initialize gossip/worker: {e}")
 
 @app.get("/")
 @app.get("/health")

@@ -135,6 +135,7 @@ class CircuitBreaker:
 
 # Global circuit breakers (single source of truth — circuit_breaker.py is deprecated)
 ai_service_breaker = CircuitBreaker("AI_SERVICE", threshold=3, recovery_time=30)
+redis_breaker = CircuitBreaker("REDIS", threshold=5, recovery_time=60)
 groq_breaker = CircuitBreaker("Groq", threshold=3, recovery_time=30)
 together_breaker = CircuitBreaker("TogetherAI", threshold=5, recovery_time=60)
 

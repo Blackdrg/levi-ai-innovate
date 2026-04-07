@@ -1,39 +1,146 @@
-# 🛡️ System Security Framework (v1.0.0-RC1)
+# 🛡️ LEVI-AI: Security Architecture (v1.0.0-RC1)
 
-Architectural isolation relies fundamentally on Identity, Encryption, and Sanitization. LEVI-AI v1.0.0-RC1 implements a multi-layered security mesh to protect user-specific data and cognitive agents.
-
----
-
-## 🔐 1. Identity & Encryption (Vault Service)
-
-LEVI-AI v1.0.0-RC1 uses production-grade encryption for all sensitive data.
-- **Vault Service (AES-256):** All sensitive user identity traits in Postgres are encrypted at rest. Decryption only occurs during authorized session hydration.
-- **Identity Middleware:** All API routes strictly validate JWT sessions and RBAC roles (GUEST, PRO, CREATOR) against the local user store.
-
-## ⚖️ 2. Transaction Integrity & Sync
-
-Mission execution and high-compute tasks are protected by a distributed integrity layer.
-- **Distributed Locking:** Uses Redis to prevent race conditions during mission state transitions and credit deductions.
-- **DCN Integrity:** Inter-node pulses are HMAC-SHA256 signed using a 32-byte `DCN_SECRET`. Unsigned or tampered pulses are rejected.
-
-## 👁️ 3. Security Middleware & PII Masking
-
-The v1.0.0-RC1 stack implements a production-ready sanitization model.
-
-1.  **PII Masking (SHA-256):**
-    - **Deterministic De-identification:** Automatically detects and masks sensitive entities (EMAIL, PHONE, PERSON) via `SHA256(val)[:8]` before model handoff.
-    - **Instruction Boundary Guard:** Enforces strict `<USER_MISSION>` and `<SYSTEM_OVERRIDE>` tags to prevent prompt injection.
-
-2.  **Fidelity Adjudication (Deterministic):**
-    - **Graduation Fidelity (S):** Missions are audited using a 60/40 weighted formula: 60% from neural appraisal and 40% from rule-based **Deterministic Validation** (syntax, logic, JSON integrity).
-    - **Grounding Hub:** Validates all factual claims against the Relational Graph (Neo4j) and Semantic Memory (FAISS).
-
-## 🧩 4. Execution Sandbox (Docker)
-
-The `CodeAgent` executes all generated Python artifacts in an isolated Docker container.
-- **Resource Limits:** CPU (0.5) and Memory (512MB) caps are enforced per execution block.
-- **Network Isolation:** Zero internet access is permitted from within the code sandbox by default (Egress Proxy allowlist restricted).
+Architectural isolation relies on Identity, Encryption, Sanitization, and Boundary Enforcement. LEVI-AI v1.0.0-RC1 implements a multi-layered security mesh to protect all user data and cognitive agents.
 
 ---
 
-© 2026 LEVI-AI SOVEREIGN HUB.
+## 1. Defense-In-Depth Pipeline
+
+Every mission passes through 5 sequential security layers before reaching the cognitive core, and 3 more on output.
+
+```
+INPUT PIPELINE
+[Raw Input] → Prompt Injection Shield
+            → PII Masking (AES-256-GCM)
+            → Rate Limit Gate (Redis Sliding Window)
+            → RBAC Tier Check (G/P/C)
+            → Egress Proxy Allowlist (Deny-by-Default)
+            → [Sovereign Core]
+
+OUTPUT PIPELINE
+[Result] → ResultSanitizer (XSS / Markdown)
+         → PII Re-masking Check
+         → Security Headers (CSP / HSTS / X-Frame)
+         → [Authenticated SSE Response]
+```
+
+---
+
+## 2. SovereignKMS — Encryption Specification [UPDATED]
+
+- **Algorithm**: AES-256-GCM (Authenticated Encryption with Associated Data)
+- **Key Derivation**: PBKDF2-HMAC-SHA256 (100,000 iterations, random salt per encrypt)
+- **PII Scope**: Email addresses, phone numbers, API keys, credential strings
+- **Audit Chain Secret**: `AUDIT_CHAIN_SECRET` env var (production must use 64-char hex)
+- **Decryption**: Plaintext only reconstructed within authorized mission scope — never persisted
+
+> [!CAUTION]
+> The default `AUDIT_CHAIN_SECRET` in `.env.example` is **NOT** production-safe. Generate a 64-character hex key before any production deployment.
+
+---
+
+## 3. EgressProxy — SSRF Prevention [UPDATED]
+
+All outbound HTTP calls from agents are **exclusively** routed via the `EgressProxy`.
+
+### Active Allowlist (Deny-by-Default)
+```python
+ALLOWED_EGRESS_DOMAINS = {
+    "api.tavily.com",    # Web search (approved)
+    "serpapi.com",       # Alternative search (approved)
+}
+# ALL other domains → SSRFBlockedError raised immediately
+```
+
+### Blocked Categories
+| Category | Examples |
+| :--- | :--- |
+| **Private IP ranges** | `10.x.x.x`, `172.16-31.x.x`, `192.168.x.x` |
+| **Localhost** | `127.0.0.1`, `::1`, `localhost` |
+| **Cloud Metadata** | `169.254.169.254` (AWS/GCP/Azure IMDS) |
+| **Unapproved APIs** | All domains not in the allowlist |
+
+---
+
+## 4. Security Headers Middleware [UPDATED]
+
+Enforced on every response via `SecurityHeadersMiddleware`:
+
+| Header | Value | Purpose |
+| :--- | :--- | :--- |
+| `Content-Security-Policy` | `default-src 'self'` | XSS prevention |
+| `Strict-Transport-Security`| `max-age=31536000; includeSubDomains` | HTTPS enforcement |
+| `X-Frame-Options` | `DENY` | Clickjacking prevention |
+| `X-Content-Type-Options` | `nosniff` | MIME-type sniffing prevention |
+| `X-Sovereign-Version` | `v1.0.0-RC1` | Audit traceability header |
+| `Referrer-Policy` | `no-referrer` | Data leakage prevention |
+
+---
+
+## 5. RBAC Permission Matrix
+
+| Role | Missions/Day | Vault Access | System Override | Rate Limit |
+| :--- | :--- | :--- | :--- | :--- |
+| **Guest (G)** | 0 | None | No | 10 req/hr |
+| **Pro (P)** | 100 | Read-only | No | 60 req/min |
+| **Creator (C)** | Unlimited | Full | Yes | 300 req/min |
+
+---
+
+## 6. Docker Sandbox [UPDATED]
+
+The `CodeAgent` (Artisan) executes all generated Python code in an isolated container.
+
+- **Interface**: **Rootless Unix Socket** — Legacy TCP:2375 is **disabled and removed**.
+- **CPU Cap**: 0.5 cores per execution block
+- **Memory Cap**: 512MB per execution block
+- **Network**: Zero internet access from within the container (Egress Proxy controls outbound)
+
+> [!WARNING]
+> Never re-enable the TCP Docker socket (`-H tcp://0.0.0.0:2375`) on production hosts. This creates a container-escape vector.
+
+---
+
+## 7. JWT Identity Cycle
+
+```
+Login
+  → JWT access token (15min expiry) + refresh token (7 days)
+
+Access Token Expired
+  → POST /api/v1/auth/refresh
+  → JTI blacklist checked in Redis
+  → New access JWT issued
+
+Logout / Wipe
+  → JTI added to Redis blacklist (TTL = refresh token expiry)
+  → All mission sessions invalidated
+```
+
+---
+
+## 8. 5-Tier GDPR Memory Wipe
+
+On explicit data deletion request, LEVI-AI executes an atomic ordered wipe across all 5 tiers:
+
+| Tier | Store | Operation |
+| :--- | :--- | :--- |
+| T1 | Redis | `DEL user:{id}:*` — all keys and blackboard |
+| T2 | Postgres | `DELETE FROM missions WHERE user_id=?` |
+| T3 | Neo4j | `MATCH (n {user_id:$u}) DETACH DELETE n` |
+| T4 | FAISS | Remove all vectors with matching `user_id` metadata |
+| T5 | training_corpus | `DELETE FROM training_corpus WHERE user_id=?` |
+
+---
+
+## 9. Rate Limiting Specification [NEW]
+
+Redis-backed **sliding window** algorithm using sorted sets (ZSETs):
+
+- **Window**: 60 seconds rolling
+- **Keys**: `rate_limit:{user_id}:{endpoint}`
+- **On Breach**: `429 Too Many Requests` with `Retry-After` header
+
+---
+
+© 2026 LEVI-AI SOVEREIGN HUB — Security Specification v1.0.0-RC1

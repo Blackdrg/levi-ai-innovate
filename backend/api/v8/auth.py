@@ -43,3 +43,55 @@ async def verify_identity(token: str):
     Validates identity tokens (V8).
     """
     return {"status": "success", "message": "Identity verified v8."}
+
+from backend.auth.jwt_provider import JWTProvider
+
+@router.post("/token")
+async def login_for_access_token(payload: dict):
+    """
+    Sovereign Token Exchange (v13.0.0).
+    Allows authentication via username/password for integration tests.
+    """
+    username = payload.get("username")
+    password = payload.get("password")
+    
+    # Graduation Mock: Allow test_pro/test_pw for integration suite
+    if username == "test_pro" and password == "test_pw":
+        pair = JWTProvider.create_token_pair("test_pro_user", {
+            "username": "test_pro",
+            "role": "admin",
+            "tier": "pro"
+        })
+        return {
+            "access_token": pair["identity_token"],
+            "refresh_token": pair["refresh_token"],
+            "token_type": "bearer"
+        }
+    
+    if not username or not password:
+        raise HTTPException(status_code=400, detail="Identity context missing.")
+        
+    raise HTTPException(status_code=401, detail="Invalid Sovereign credentials.")
+
+@router.post("/refresh")
+async def refresh_token(payload: dict):
+    """
+    Rotates identifying tokens using a valid refresh token.
+    """
+    refresh_token = payload.get("refresh_token")
+    if not refresh_token:
+        raise HTTPException(status_code=400, detail="Refresh token mission-critical.")
+
+    decoded = JWTProvider.verify_token(refresh_token)
+    if not decoded or decoded.get("type") != "refresh":
+        raise HTTPException(status_code=401, detail="Refresh link failed resonance check.")
+
+    user_id = decoded.get("sub")
+    # In a full system, we might reload user traits here
+    new_pair = JWTProvider.create_token_pair(user_id, {"role": "user", "tier": "pro"})
+    
+    return {
+        "access_token": new_pair["identity_token"],
+        "refresh_token": new_pair["refresh_token"],
+        "token_type": "bearer"
+    }

@@ -1,0 +1,25 @@
+# 🧪 LEVI-AI Local Development Override
+# Usage: Copy to 'docker-compose.override.yml' to enable external DB access.
+# WARNING: DO NOT use this in production. It exposes database ports to the host.
+
+services:
+  postgres:
+    ports:
+      - "5432:5432"
+
+  redis:
+    ports:
+      - "6379:6379"
+
+  neo4j:
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+
+  prometheus:
+    ports:
+      - "9090:9090"
+
+  grafana:
+    ports:
+      - "3000:3000"

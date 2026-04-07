@@ -13,6 +13,7 @@ import { AIStudio } from "./features/studio/AIStudio";
 import { searchService } from "./services/searchService";
 import { ExecutionGraph } from "./features/execution/ExecutionGraph";
 import { MissionAuditor } from "./components/MissionAuditor";
+import Console from "./pages/Console";
 
 
 import { Layout } from "./components/Layout";
@@ -146,9 +147,13 @@ function App() {
           <motion.div key="memory" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 flex flex-col overflow-hidden">
              <MemoryVault />
           </motion.div>
-        ) : (
+        ) : activeView === "evolution" ? (
           <motion.div key="evolution" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 flex flex-col overflow-hidden">
              <EvolutionDashboard />
+          </motion.div>
+        ) : (
+          <motion.div key="console" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 flex flex-col overflow-hidden">
+             <Console />
           </motion.div>
         )}
 

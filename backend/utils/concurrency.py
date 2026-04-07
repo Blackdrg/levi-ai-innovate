@@ -6,10 +6,10 @@ from backend.redis_client import r as redis_client, HAS_REDIS
 
 logger = logging.getLogger(__name__)
 
-class SovereignThrottler:
+class AdaptiveThrottler:
     """
-    Sovereign v13.1: Learning Loop Concurrency Gating.
-    Limits background learning tasks to prevent CPU/IO exhaustion.
+    Sovereign v1.0.0-RC1: Graduated Task Loop Control.
+    Hard-gates background tasks to 4 parallel slots to ensure GPU stability.
     """
     _semaphore: Optional[asyncio.BoundedSemaphore] = None
     _MAX_CONCURRENT = 4
@@ -28,13 +28,13 @@ class SovereignThrottler:
             try:
                 return await task_func(*args, **kwargs)
             except Exception as e:
-                logger.error(f"[Throttler] Task failed: {e}")
+                logger.error(f"[AdaptiveThrottler] Task failed: {e}")
                 return None
 
-class LearningCircuitBreaker:
+class CircuitBreaker:
     """
-    Sovereign v13.1: Adaptive Circuit Breaker.
-    Pauses learning if Redis/DB latency exceeds thresholds.
+    Sovereign v1.0.0-RC1: General Adaptive Circuit Breaker.
+    Pauses non-critical background services if infrastructure latency spikes.
     """
     _FAILURE_COUNT = 0
     _THRESHOLD = 5
@@ -47,10 +47,10 @@ class LearningCircuitBreaker:
         return False
 
     @classmethod
-    def record_failure(cls):
+    def record_failure(cls, service_name: str = "Unknown"):
         cls._FAILURE_COUNT += 1
         if cls._FAILURE_COUNT >= cls._THRESHOLD:
-            logger.critical("[CircuitBreaker] Learning Loop OPENED due to repeated failures. Pausing 5m.")
+            logger.critical(f"[CircuitBreaker] {service_name} Loop OPENED due to repeated failures. Pausing 5m.")
             cls._PAUSE_UNTIL = time.time() + 300
             cls._FAILURE_COUNT = 0
 

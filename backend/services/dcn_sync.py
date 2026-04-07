@@ -38,20 +38,30 @@ class CognitiveFragment(BaseModel):
         expected = hmac.new(DCN_SECRET, msg, hashlib.sha256).hexdigest()
         return hmac.compare_digest(self.signature, expected)
 
-class SwarmSyncEngine:
+class GossipEngine:
     """
     Sovereign DCN Protocol v13.1.0 Stable.
-    Handles gossip propagation of cognitive fragments via Redis PubSub.
+    Handles gossip propagation of high-fidelity cognitive fragments via Redis PubSub.
     """
     CHANNEL = "swarm:sync:v13"
 
     def __init__(self):
         self._sync_task: Optional[asyncio.Task] = None
 
+    async def fragment_scrubber(self, fidelity: float) -> bool:
+        """
+        Sovereign v1.0.0-RC1: Fragment Scrubber.
+        Strictly gates inter-node sync to ensure only the highest fidelity data is gossiped.
+        """
+        SCRUB_THRESHOLD = 0.95 # Section 15.1 Requirement
+        if fidelity >= SCRUB_THRESHOLD:
+            return True
+        logger.debug(f"[DCN] Fragment scrubbed: Fidelity {fidelity} < {SCRUB_THRESHOLD}")
+        return False
+
     async def broadcast_fragment(self, payload: Dict[str, Any], fidelity: float):
-        """Broadcasts a high-fidelity fragment to the swarm."""
-        if fidelity < 0.95:
-            logger.debug("[DCN] Fragment rejected: Fidelity below 0.95.")
+        """Broadcasts a high-fidelity fragment to the swarm after scrubbing."""
+        if not await self.fragment_scrubber(fidelity):
             return
 
         fragment = CognitiveFragment(payload=payload, fidelity_s=fidelity)
@@ -65,7 +75,7 @@ class SwarmSyncEngine:
         """Starts the background gossip listener."""
         if not HAS_REDIS: return
         self._sync_task = asyncio.create_task(self._listener_loop())
-        logger.info("[DCN] Gossip listener active.")
+        logger.info("[DCN] Gossip engine listener active.")
 
     async def _listener_loop(self):
         pubsub = redis_client.pubsub()
@@ -76,17 +86,21 @@ class SwarmSyncEngine:
                 try:
                     data = json.loads(message['data'])
                     fragment = CognitiveFragment(**data)
+                    # Audit Point 12: Verify HMAC signature before ingestion
                     if fragment.verify():
                         await self._ingest_fragment(fragment)
                     else:
                         logger.warning(f"[DCN] Tampered fragment detected: {fragment.fragment_id}")
                 except Exception as e:
-                    logger.error(f"[DCN] Sync error: {e}")
+                    logger.error(f"[DCN] Gossip sync error: {e}")
 
     async def _ingest_fragment(self, fragment: CognitiveFragment):
         """Ingests a verified fragment into the local memory fabric (Level 2)."""
         logger.info(f"[DCN] Ingesting verified fragment {fragment.fragment_id} from {fragment.origin_instance}")
-        # Logic to commit to HNSW/Postgres Global tiers
+        # In RC1, ingestion involves adding to the FAISS 'global' index and Postgres Episodic ledger
+        from backend.db.vector_store import SovereignVectorStore
+        v_store = SovereignVectorStore()
+        await v_store.add([fragment.payload.get("text", "")], [{"source": "gossip", "origin": fragment.origin_instance, "fidelity": fragment.fidelity_s}])
         pass
 
-sovereign_swarm = SwarmSyncEngine()
+sovereign_swarm = GossipEngine()

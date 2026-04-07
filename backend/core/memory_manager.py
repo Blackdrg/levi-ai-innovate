@@ -198,7 +198,7 @@ class MemoryManager:
 
     # ── Persistence & Evolutionary Storage ───────────────────────────────────
 
-    async def store(self, user_id: str, session_id: str, user_input: str, response: str, perception: Dict[str, Any], results: List[Any]):
+    async def store(self, user_id: str, session_id: str, user_input: str, response: str, perception: Dict[str, Any], results: List[Any], fidelity: Optional[float] = None):
         """Standard interaction persistence entry point."""
         logger.info(f"[MemoryV8] Storing mission results for {session_id}")
         
@@ -209,6 +209,11 @@ class MemoryManager:
         if user_id and not str(user_id).startswith("guest:"):
             if len(user_input.split()) > 4 or len(results) > 1:
                 asyncio.create_task(self._process_fact_extraction(user_id, user_input, response))
+        
+        # 3. Learning Loop Crystallization (v1.0.0-RC1)
+        if fidelity:
+            from backend.core.learning_loop import LearningLoop
+            asyncio.create_task(LearningLoop.crystallize_pattern(session_id, user_input, response, fidelity))
 
     async def _store_working_memory(self, user_id: str, session_id: str, user_input: str, bot_response: str):
         """Updates the Redis session buffer."""

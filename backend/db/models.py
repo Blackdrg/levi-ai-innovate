@@ -181,6 +181,7 @@ class Mission(Base):
     intent_type = Column(String)
     status = Column(String, default="pending")
     fidelity_score = Column(Float, default=0.0)
+    payload = Column(JSON) # Stores checkpoint and DAG state (v13.0)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
@@ -237,3 +238,17 @@ class CreationJob(Base):
     completed_at = Column(DateTime)
 
     profile = relationship("UserProfile")
+
+class TrainingPattern(Base):
+    """
+    Sovereign v1.0.0-RC1 Learning Corpus.
+    Captures high-fidelity mission results for future LoRA fine-tuning.
+    """
+    __tablename__ = "training_corpus"
+
+    id = Column(Integer, primary_key=True)
+    mission_id = Column(String, unique=True, index=True)
+    query = Column(Text, nullable=False)
+    result = Column(Text, nullable=False)
+    fidelity_score = Column(Float, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

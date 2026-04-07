@@ -16,6 +16,18 @@ class FidelityCritic:
     Evaluates the Brain's output against the mission objective.
     """
 
+    FIDELITY_WEIGHTS = {
+        "llm_appraisal": 0.6,
+        "rule_truth": 0.4,
+    }
+
+    @staticmethod
+    def compute_fidelity(llm_score: float, rule_score: float) -> float:
+        """Canonical fidelity formula — 60/40 LLM/Rule weighting."""
+        s = (llm_score * FidelityCritic.FIDELITY_WEIGHTS["llm_appraisal"]
+             + rule_score * FidelityCritic.FIDELITY_WEIGHTS["rule_truth"])
+        return round(s, 4)
+
     @staticmethod
     async def calculate_s(
         user_query: str,
@@ -24,26 +36,24 @@ class FidelityCritic:
         agent_results: List[Any] # List of AgentResult or ToolResult
     ) -> Dict[str, Any]:
         """
-        Sovereign v13.0: Formal Fidelity Score S Calculation.
-        S = (0.4 * CriticScore) + (0.4 * MeanAgentFidelity) + (0.2 * MeanAgentConfidence)
+        Sovereign v13.1: Formal Fidelity Score S Calculation — 60/40 LLM/Rule weighting.
         """
-        # 1. Get Critic Evaluation
+        # 1. Get Critic Evaluation (LLM Appraisal)
         critic_results = await FidelityCritic.evaluate_mission(user_query, response, goals, [r.dict() if hasattr(r, 'dict') else str(r) for r in agent_results])
         critic_score = critic_results.get("fidelity_score", 0.0)
 
-        # 2. Aggregate Agent Performance
+        # 2. Aggregate Agent Performance (Rule Truth)
         if not agent_results:
-            agent_fidelity = 0.0
-            agent_confidence = 0.0
+            rule_score = 0.0
         else:
             fidelities = [getattr(r, "fidelity_score", 0.0) for r in agent_results]
             confidences = [getattr(r, "confidence", 1.0) for r in agent_results]
-            agent_fidelity = sum(fidelities) / len(fidelities)
-            agent_confidence = sum(confidences) / len(confidences)
+            # Rule truth is mean of agent fidelity and confidence
+            rule_score = (sum(fidelities) / len(fidelities) * 0.8) + (sum(confidences) / len(confidences) * 0.2)
 
         # 3. Final Weighted Score S
-        s_score = (0.4 * critic_score) + (0.4 * agent_fidelity) + (0.2 * agent_confidence)
-        s_score = round(min(max(s_score, 0.0), 1.0), 4)
+        s_score = FidelityCritic.compute_fidelity(critic_score, rule_score)
+        s_score = min(max(s_score, 0.0), 1.0)
 
         # 4. Adjudication Routing
         requires_manual_audit = s_score < 0.6
