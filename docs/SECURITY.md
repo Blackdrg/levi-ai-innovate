@@ -1,45 +1,45 @@
-# 🛡️ LEVI-AI: Security Architecture (v14.0.0-Autonomous-SOVEREIGN)
+# 🛡️ LEVI-AI: Security Architecture (v14.0 Production)
 
-Architectural isolation relies on Identity, Encryption, Sanitization, and Boundary Enforcement. LEVI-AI v14.0.0-Autonomous-SOVEREIGN implements a multi-layered security mesh to protect all user data and cognitive agents.
+Architectural isolation relies on Identity, Encryption, Sanitization, and Boundary Enforcement. LEVI-AI v14.0 implements a multi-layered security mesh to protect all user data and system orchestration components.
 
 ---
 
 ## 1. Defense-In-Depth Pipeline
 
-Every mission passes through 5 sequential security layers before reaching the cognitive core, and 3 more on output.
+Every task request passes through 5 sequential security layers before reaching the orchestration engine, and 3 more on output.
 
 ```
 INPUT PIPELINE
 [Raw Input] → Prompt Injection Shield
             → PII Masking (AES-256-GCM)
             → Rate Limit Gate (Redis Sliding Window)
-            → RBAC Tier Check (G/P/C)
+            → RBAC Tier Check (User/Provider/Core)
             → Egress Proxy Allowlist (Deny-by-Default)
-            → [Sovereign Core]
+            → [Orchestration Engine]
 
 OUTPUT PIPELINE
 [Result] → ResultSanitizer (XSS / Markdown)
          → PII Re-masking Check
          → Security Headers (CSP / HSTS / X-Frame)
-         → [Authenticated SSE Response]
+         → [Authenticated Response]
 ```
 
 ---
 
-## 2. SovereignKMS — Encryption Specification [UPDATED]
+## 2. SystemKMS — Encryption Specification
 
 - **Algorithm**: AES-256-GCM (Authenticated Encryption with Associated Data)
 - **Key Derivation**: PBKDF2-HMAC-SHA256 (100,000 iterations, random salt per encrypt)
 - **PII Scope**: Email addresses, phone numbers, API keys, credential strings
-- **Audit Chain Secret**: `AUDIT_CHAIN_SECRET` env var (production must use 64-char hex)
-- **Decryption**: Plaintext only reconstructed within authorized mission scope — never persisted
+- **System Secret**: `SYSTEM_KMS_SECRET` env var (production must use 64-char hex)
+- **Decryption**: Plaintext only reconstructed within authorized task scope — never persisted
 
 > [!CAUTION]
-> The default `AUDIT_CHAIN_SECRET` in `.env.example` is **NOT** production-safe. Generate a 64-character hex key before any production deployment.
+> The default `SYSTEM_KMS_SECRET` in `.env.example` is **NOT** production-safe. Generate a 64-character hex key before any production deployment.
 
 ---
 
-## 3. EgressProxy — SSRF Prevention [UPDATED]
+## 3. EgressProxy — SSRF Prevention
 
 All outbound HTTP calls from agents are **exclusively** routed via the `EgressProxy`.
 
@@ -62,7 +62,7 @@ ALLOWED_EGRESS_DOMAINS = {
 
 ---
 
-## 4. Security Headers Middleware [UPDATED]
+## 4. Security Headers Middleware
 
 Enforced on every response via `SecurityHeadersMiddleware`:
 
@@ -72,24 +72,24 @@ Enforced on every response via `SecurityHeadersMiddleware`:
 | `Strict-Transport-Security`| `max-age=31536000; includeSubDomains` | HTTPS enforcement |
 | `X-Frame-Options` | `DENY` | Clickjacking prevention |
 | `X-Content-Type-Options` | `nosniff` | MIME-type sniffing prevention |
-| `X-Sovereign-Version` | `v14.0.0-Autonomous-SOVEREIGN` | Audit traceability header |
+| `X-System-Version` | `v14.0.0` | Audit traceability header |
 | `Referrer-Policy` | `no-referrer` | Data leakage prevention |
 
 ---
 
 ## 5. RBAC Permission Matrix
 
-| Role | Missions/Day | Vault Access | System Override | Rate Limit |
+| Role | Tasks/Day | Vault Access | System Override | Rate Limit |
 | :--- | :--- | :--- | :--- | :--- |
 | **Guest (G)** | 0 | None | No | 10 req/hr |
 | **Pro (P)** | 100 | Read-only | No | 60 req/min |
-| **Creator (C)** | Unlimited | Full | Yes | 300 req/min |
+| **Admin (A)** | Unlimited | Full | Yes | 300 req/min |
 
 ---
 
-## 6. Docker Sandbox [UPDATED]
+## 6. Docker Sandbox
 
-The `CodeAgent` (Artisan) executes all generated Python code in an isolated container.
+The `CodeAgent` executes all model-generated code in an isolated container.
 
 - **Interface**: **Rootless Unix Socket** — Legacy TCP:2375 is **disabled and removed**.
 - **CPU Cap**: 0.5 cores per execution block
@@ -114,26 +114,26 @@ Access Token Expired
 
 Logout / Wipe
   → JTI added to Redis blacklist (TTL = refresh token expiry)
-  → All mission sessions invalidated
+  → All task sessions invalidated
 ```
 
 ---
 
-## 8. 5-Tier GDPR Memory Wipe
+## 8. GDPR Data Governance (Erasure)
 
-On explicit data deletion request, LEVI-AI executes an atomic ordered wipe across all 5 tiers:
+On explicit data deletion request, the system executes an atomic ordered wipe across all 5 persistence tiers:
 
 | Tier | Store | Operation |
 | :--- | :--- | :--- |
-| T1 | Redis | `DEL user:{id}:*` — all keys and blackboard |
-| T2 | Postgres | `DELETE FROM missions WHERE user_id=?` |
+| T1 | Redis | `DEL system:user:{id}:*` — all keys and blackboard |
+| T2 | Postgres | `DELETE FROM sessions WHERE user_id=?` |
 | T3 | Neo4j | `MATCH (n {user_id:$u}) DETACH DELETE n` |
 | T4 | FAISS | Remove all vectors with matching `user_id` metadata |
 | T5 | training_corpus | `DELETE FROM training_corpus WHERE user_id=?` |
 
 ---
 
-## 9. Rate Limiting Specification [NEW]
+## 9. Rate Limiting Specification
 
 Redis-backed **sliding window** algorithm using sorted sets (ZSETs):
 
@@ -143,4 +143,4 @@ Redis-backed **sliding window** algorithm using sorted sets (ZSETs):
 
 ---
 
-© 2026 LEVI-AI SOVEREIGN HUB — Security Specification v14.0.0-Autonomous-SOVEREIGN
+© 2026 LEVI-AI HUB — Security Specification v14.0 Production Stable

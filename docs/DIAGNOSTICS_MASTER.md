@@ -1,15 +1,15 @@
-# 🩺 System Diagnostics Master (v14.0.0-Autonomous-SOVEREIGN)
+# 🩺 System Diagnostics Master (v14.0 Production)
 
-Standard health-monitoring and cognitive-fidelity metrics for the LEVI-AI v14.0.0-Autonomous-SOVEREIGN Distributed Stack.
+Standard health-monitoring and performance metrics for the LEVI-AI v14.0 Distributed Stack.
 
 ---
 
 ## 🔍 1. Standard Testing Hierarchy
 
-LEVI-AI uses a unified testing framework to ensure graduate-level stability:
+LEVI-AI uses a unified testing framework to ensure system stability:
 1.  **Unit Tests:** `pytest tests/unit/` (Component isolation).
 2.  **Integration Tests:** `pytest tests/integration/` (Service fabric connectivity).
-3.  **Graduation Audit:** `pytest tests/v1_graduation_suite.py` (Full 28-point technical compliance).
+3.  **Readiness Audit:** `pytest tests/production_readiness_suite.py` (Full technical compliance).
 
 ---
 
@@ -25,10 +25,10 @@ LEVI-AI uses a unified testing framework to ensure graduate-level stability:
 
 ## 🛡️ 3. Security Diagnostics
 
-- **SHA-256 PII Masking:** `SecurityMiddleware.mask_pii(text)` ➔ `SHA256[:8]` de-identification.
+- **PII Masking:** `SecurityMiddleware.mask_pii(text)` ➔ De-identification.
 - **Vault Health:** `VaultService.test_encryption()` ➔ `Success`.
 - **Sandbox Health:** `DockerSandbox.is_available()` ➔ `Active`.
 
 ---
 
-© 2026 LEVI-AI SOVEREIGN HUB.
+© 2026 LEVI-AI HUB. Engineered for Technical Excellence.
