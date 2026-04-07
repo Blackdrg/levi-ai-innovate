@@ -55,14 +55,14 @@ function App() {
     } else {
         addMessage({ role: "assistant", content: "", streaming: true });
         try {
-          // Engages the Modular LeviBrain v8.3 Stream
+          // Engages the Sovereign LeviBrain v14.0.0 Stream
           await startStream("/api/v1/orchestrator/chat/stream", { 
             method: "POST",
-            body: JSON.stringify({ message, session_id: "s_main_v8" })
+            body: JSON.stringify({ message, session_id: "s_main_v14" })
           });
         } catch (err) {
           console.error("Sovereign Stream failure", err);
-          useChatStore.getState().updateLastMessage({ content: "The v8 brain encountered a quantum misalignment.", streaming: false });
+          useChatStore.getState().updateLastMessage({ content: "The Sovereign OS brain encountered a quantum misalignment.", streaming: false });
         }
     }
   };
@@ -76,7 +76,7 @@ function App() {
             <div className="text-xl font-bold font-heading flex items-center gap-2">
               <Zap size={22} className="text-purple-500 fill-purple-500/20" />
               <span className="text-gradient">LEVI</span>
-              <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20">V8.3</span>
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20">V14.0.0</span>
             </div>
           </div>
           
@@ -119,7 +119,7 @@ function App() {
                 <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="px-6 pt-4">
                    <div className="mb-2 flex items-center justify-between">
                      <span className="text-[10px] uppercase tracking-widest text-white/30 font-bold">Cognitive Mission Graph</span>
-                     <span className="text-[9px] text-white/20 italic">v8 Wave Architecture</span>
+                     <span className="text-[9px] text-white/20 italic">v14.0.0 DCN Architecture</span>
                    </div>
                   <ExecutionGraph graph={executionGraph} results={executionResults} />
                   
@@ -135,7 +135,7 @@ function App() {
               <ChatInput onSend={handleSend} disabled={isStreaming} />
               <div className="absolute top-[-40px] left-1/2 -translate-x-1/2 flex items-center gap-2 text-white/10 select-none">
                  <Sparkles size={12} strokeWidth={2.5} className="animate-pulse" />
-                 <span className="text-[9px] uppercase tracking-widest font-heading font-bold">Resonance v8 Monolith Active</span>
+                 <span className="text-[9px] uppercase tracking-widest font-heading font-bold">Sovereign OS v14.0.0 Active</span>
               </div>
             </div>
           </motion.div>

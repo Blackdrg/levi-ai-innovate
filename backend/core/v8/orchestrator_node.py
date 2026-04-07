@@ -1,6 +1,6 @@
 """
 Sovereign V8 Orchestrator Node.
-The unified cognitive heart of the LEVI-AI Absolute Monolith.
+The unified cognitive heart of the LEVI-AI Sovereign OS.
 Consolidates Perception, Planning, execution, and Reflection into a single, Kafka-free process.
 """
 
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 class SovereignOrchestrator:
     """
-    Unified Orchestrator for the Sovereign V8 Monolith.
+    Unified Orchestrator for the Sovereign V14 OS.
     Eliminates the distributive overhead of Kafka/Zookeeper.
     """
 

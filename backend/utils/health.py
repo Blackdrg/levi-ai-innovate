@@ -1,5 +1,5 @@
 """
-Sovereign Health & Pulse Monitoring v13.1.0.
+Sovereign Health & Pulse Monitoring v14.0.0.
 Implements the Agent Heartbeat check for all 17 registered cognitive agents.
 """
 
@@ -35,7 +35,7 @@ class AgentHealthCheck:
                 
                 results[name] = {
                     "status": "healthy" if is_alive else "degraded",
-                    "version": getattr(agent, 'version', "v13.1.0"),
+                    "version": getattr(agent, 'version', "v14.0.0"),
                     "latency_ms": 0 # Local check
                 }
             except Exception as e:

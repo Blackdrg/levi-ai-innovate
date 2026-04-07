@@ -78,7 +78,7 @@ services:
       - SOVEREIGN_SHIELD=true
       - JWT_SECRET=f7e7eac8b6679e3a6b651a6707de960ca07215a806216a3227b98f4bc3d5b3dd
       # Graduation Tier: Security & Audit
-      - AUDIT_CHAIN_SECRET=sovereign_monolith_genesis_v13
+      - AUDIT_CHAIN_SECRET=sovereign_os_genesis_v14
       - INTERNAL_SERVICE_KEY=svc_internal_grad_777_absolute
       - ENVIRONMENT=production
       # Only needed as fallback — can remove for 100% local

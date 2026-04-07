@@ -5,7 +5,7 @@ logger = logging.getLogger(__name__)
 
 class PromptRegistry:
     """
-    Sovereign v13.0: Centralized Prompt Versioning & Governance.
+    Sovereign v14.0: Centralized Prompt Versioning & Governance.
     Allows for structured A/B testing and rollbacks across the agent swarm.
     """
     
@@ -20,7 +20,7 @@ class PromptRegistry:
         },
         "the_brain": {
             "v1.0": "You are the LEVI Sovereign Brain. Orchestrate agents to fulfill the mission.",
-            "v1.1": "You are the Absolute Monolith Brain v13.0. Enforce DAG integrity and fidelity S scores."
+            "v1.1": "You are the Sovereign Brain v14.0. Enforce DAG integrity and fidelity S scores."
         }
     }
     

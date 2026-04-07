@@ -21,7 +21,7 @@ def embed_text(text: str) -> list:
     """
     import httpx
     
-    # Sovereign v13.1: High-fidelity Local Embeddings
+    # Sovereign v14.0.0: High-fidelity Local Embeddings
     base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     model = os.getenv("OLLAMA_MODEL_EMBED", "nomic-embed-text")
     
@@ -56,7 +56,7 @@ class VectorIndex:
 
 class SovereignVectorStore:
     """
-    LEVI-AI v13.0: High-Level Vector Store Bridge.
+    LEVI-AI v14.0.0: High-Level Vector Store Bridge.
     Unified interface for the Learning System and Evolutionary Engines.
     Provides sub-30ms HNSW retrieval via VectorDB.
     """
@@ -79,5 +79,5 @@ class SovereignVectorStore:
         db = await VectorDB.get_user_collection(user_id, "memory")
         await db.clear()
 
-# Graduation Alias for the Absolute Monolith v13
-VectorStoreV13 = SovereignVectorStore
+# Graduation Alias for the Sovereign OS v14.0.0
+VectorStoreV14 = SovereignVectorStore

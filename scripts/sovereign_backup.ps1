@@ -1,5 +1,5 @@
-# Sovereign Backup Protocol v13.1.0
-# "Absolute Monolith" Multi-Store Atomic Backup (Zero-Cloud)
+# Sovereign Backup Protocol v14.0.0
+# "Sovereign OS Fabric" Multi-Store Atomic Backup (Zero-Cloud)
 
 $BackupRoot = "D:\LEVI-AI\backends\backups\$(Get-Date -Format 'yyyy-MM-dd_HH-mm')"
 New-Item -ItemType Directory -Path $BackupRoot -Force

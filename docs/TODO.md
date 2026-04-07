@@ -1,10 +1,10 @@
-# LEVI-AI Roadmap & TODO (v14.0 Production)
+# LEVI-AI Roadmap & TODO (v14.0.0-Autonomous-SOVEREIGN)
 
 This document tracks the technical evolution of the LEVI-AI orchestration platform.
 
 ## 🏁 Phase 1: Core Foundation [x]
 - [x] Service-Oriented Architecture (FastAPI).
-- [x] Local Quad-Persistence (Postgres, Redis, Neo4j, FAISS).
+- [x] Local Quad-Persistence (Postgres, Redis, Neo4j, HNSW).
 - [x] Functional Agent Registry (Search, Code).
 - [x] Deterministic DAG Planner.
 
@@ -37,5 +37,5 @@ This document tracks the technical evolution of the LEVI-AI orchestration platfo
 - [x] **System Analysis**: Automated Root Cause Analysis (ARCA).
 
 ---
-**Status**: PRODUCTION READY (v14.0).
-**Version**: v14.0 Production Release
+**Status**: PRODUCTION READY (v14.0.0-Autonomous-SOVEREIGN).
+**Version**: v14.0.0 Production Release (Autonomous-SOVEREIGN)

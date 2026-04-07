@@ -1,6 +1,6 @@
 """
 Sovereign Orchestration Gateway v13.0.0.
-Primary entry point for the LEVI-AI OS Absolute Monolith.
+Primary entry point for the LEVI-AI OS Sovereign OS.
 Bridges to the v13.0 GraphExecutor and MetaPlanner via LeviBrainCoreController.
 """
 
@@ -16,7 +16,7 @@ from backend.db.redis import r as redis_client, HAS_REDIS
 from backend.db.postgres_db import get_read_session
 
 from backend.api.utils.auth import get_current_user
-from backend.core.v8.brain import LeviBrainCoreController
+from backend.core.brain import LeviBrainV14
 from backend.engines.utils.security import SovereignSecurity
 from sqlalchemy import text
 from backend.utils.audit import AuditLogger
@@ -24,8 +24,8 @@ from backend.utils.audit import AuditLogger
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="", tags=["Orchestration v13"])
 
-# Initialize the v13.0.0 Brain Monolith
-brain = LeviBrainCoreController()
+# Initialize the v14.0.0 Brain Service Monolith (Controlled)
+brain = LeviBrainV14()
 
 class MissionRequest(BaseModel):
     input: str = Field(..., description="The high-level user mission or query")
@@ -59,14 +59,14 @@ async def orchestrate_mission_endpoint(
         }
         redis_client.setex(f"mission:{mission_id}", 3600, json.dumps(state))
 
-    # 2. Dispatch mission to background
+    # 2. Dispatch mission to background (v14 Brain Controlled)
     async def _run_and_finalize():
         try:
-            response_data = await brain.run_mission_sync(
-                input_text=request.input,
+            response_data = await brain.run(
+                user_input=request.input,
                 user_id=user_id,
                 session_id=session_id,
-                mission_id=mission_id, # Pass mission_id for tracking
+                request_id=mission_id, # Link for policy tracking
                 **(request.context or {})
             )
             if HAS_REDIS:
@@ -105,7 +105,7 @@ async def get_mission_status(
     
     data = redis_client.get(f"mission:{mission_id}")
     if not data:
-        # Absolute Monolith v13: Postgres Resonance Fallback
+        # Sovereign OS v14.0.0: Postgres Resonance Fallback
         async with get_read_session() as session:
             try:
                 # Query the missions table for finalized state
@@ -133,7 +133,7 @@ async def orchestrate_mission_stream_endpoint(
     current_user: Any = Depends(get_current_user)
 ):
     """
-    High-Fidelity SSE Streaming Mission (v13.0.0 Absolute Monolith).
+    High-Fidelity SSE Streaming Mission (v14.0.0 Sovereign OS).
     Streams: Perception -> Goal -> Graph -> Execution -> Synthesis.
     """
     user_id = current_user.uid if hasattr(current_user, "uid") else "guest"
@@ -144,11 +144,12 @@ async def orchestrate_mission_stream_endpoint(
 
     async def sse_generator():
         try:
-            # Route through the v13.0.0 Brain (Streaming)
-            async for chunk in brain.run_mission_stream(
+            # Route through the v14.0.0 Brain (Streaming Policy Controlled)
+            async for chunk in brain.stream(
                 user_input=request.input,
                 user_id=user_id,
                 session_id=session_id,
+                request_id=None, # System will generate
                 **(request.context or {})
             ):
                 # Standardize SSE format: event and data

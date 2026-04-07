@@ -1,6 +1,6 @@
-# 🚢 LEVI-AI: Deployment Guide (v14.0 Production)
+# 🚢 LEVI-AI: Deployment Guide (v14.0.0-Autonomous-SOVEREIGN)
 
-> **LEVI-AI v14.0 Production Specification**
+> **LEVI-AI v14.0.0-Autonomous-SOVEREIGN Production Specification**
 > This architecture coordinates five primary services (FastAPI, Redis, Postgres, Neo4j, Celery) for secure local data residency and high-performance task orchestration at a production-grade standard.
 
 ---
@@ -15,7 +15,7 @@ graph TD
         Gateway -->|Identity & Audit| Postgres[(Postgres: Episodic Memory)]
         Gateway -->|Task Queue & Blackboard| Redis[(Redis: Working Memory)]
         Gateway -->|Relational Graph| Neo4j[(Neo4j: Knowledge Graph)]
-        Gateway -->|Semantic Search| FAISS[[FAISS: Semantic Memory]]
+        Gateway -->|Semantic Search| HNSW[[HNSW: Semantic Vault]]
         Gateway -->|Local Inference| Ollama[Ollama: Inference Layer]
     end
     
@@ -141,4 +141,4 @@ DCN_NODE_ID=node-beta
 
 ---
 
-© 2026 LEVI-AI HUB — Deployment Specification v14.0 Production Stable
+© 2026 LEVI-AI Sovereign OS — Deployment Specification v14.0.0 Production Stable

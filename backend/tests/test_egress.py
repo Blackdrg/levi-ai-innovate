@@ -1,5 +1,5 @@
 """
-Sovereign v13.1.0 Egress Proxy (SSRF) Tests.
+Sovereign v14.0.0 Egress Proxy (SSRF) Tests.
 Verifies that unauthorized domains and private IP ranges are blocked.
 """
 

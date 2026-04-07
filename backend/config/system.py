@@ -34,7 +34,7 @@ COST_MATRIX = {
     "video": 10
 }
 
-SECRET_KEY = os.getenv("SECRET_KEY", "sovereign_monolith_genesis_key")
+SECRET_KEY = os.getenv("SECRET_KEY", "sovereign_os_genesis_key")
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

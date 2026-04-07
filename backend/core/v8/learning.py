@@ -181,7 +181,7 @@ from .rules_engine import RulesEngine
 class LearningLoopV13:
     """
     LeviBrain v13.0.0: Evolutionary Intelligence Loop.
-    Autonomous strategic adjustment based on Absolute Monolith outcomes.
+    Autonomous strategic adjustment based on Sovereign OS outcomes.
     """
     
     _rules_engine = RulesEngine()
@@ -287,6 +287,6 @@ class LearningLoopV13:
             if resonance > 0.5: survivors.append(mem)
         return survivors
 
-# Graduation Alias for the Absolute Monolith (v13.0)
+# Graduation Alias for the Sovereign OS (v14.0.0)
 LearningLoopV8 = LearningLoopV13
 

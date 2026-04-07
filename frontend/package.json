@@ -1,7 +1,7 @@
 {
   "name": "levi-ai-frontend",
   "private": true,
-  "version": "14.0.0",
+  "version": "14.0.0-Autonomous-SOVEREIGN",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -19,11 +19,13 @@
     "reactflow": "^11.10.1",
     "tailwind-merge": "^2.0.0",
     "zustand": "^4.4.6",
-    "pako": "^2.1.0"
+    "pako": "^2.1.0",
+    "typescript": "^5.2.2"
   },
   "devDependencies": {
     "@types/react": "^18.2.37",
     "@types/react-dom": "^18.2.15",
+    "@types/pako": "^2.0.3",
     "@vitejs/plugin-react": "^4.2.0",
     "autoprefixer": "^10.4.16",
     "postcss": "^8.4.31",

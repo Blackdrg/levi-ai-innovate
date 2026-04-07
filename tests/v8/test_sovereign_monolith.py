@@ -1,6 +1,6 @@
 """
-Master Sovereign Simulation v9.8.1.
-Verifies the end-to-end cognitive pipeline of the Sovereign Monolith.
+Master Sovereign Simulation v14.0.0.
+Verifies the end-to-end cognitive pipeline of the Sovereign OS.
 """
 
 import asyncio
@@ -16,12 +16,12 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 @pytest.mark.asyncio
-async def test_sovereign_monolith_e2e():
+async def test_sovereign_os_e2e():
     """
     Executes a high-fidelity mission simulation.
     1. Intent -> 2. Goal -> 3. Planning -> 4. Handoff -> 5. Execution -> 6. Shield.
     """
-    user_id = "test_user_v98"
+    user_id = "test_user_v14"
     mission_input = "Analyze my recent stock trades in New York and summarize the risks."
     
     logger.info(f"[Master SIM] Initiating mission: {mission_input}")
@@ -61,8 +61,8 @@ async def test_sovereign_monolith_e2e():
     assert res >= 0.95
     logger.info(f"[Master SIM] Memory Resonance: {res}")
 
-    logger.info("[Master SIM] END-TO-END V9.8.1 CAPABILITY VERIFIED.")
+    logger.info("[Master SIM] END-TO-END V14.0.0 CAPABILITY VERIFIED.")
 
 if __name__ == "__main__":
-    asyncio.run(test_sovereign_monolith_e2e())
-    print("\nLEVI-AI v9.8.1 Sovereign Monolith: VALIDATED")
+    asyncio.run(test_sovereign_os_e2e())
+    print("\nLEVI-AI v14.0.0 Sovereign OS: VALIDATED")

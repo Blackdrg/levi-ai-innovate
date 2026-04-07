@@ -1,5 +1,5 @@
 """
-Sovereign Mission Blackboard v13.1.0.
+Sovereign Mission Blackboard v14.0.0.
 A high-fidelity, transient context layer for inter-agent cognitive synchronization.
 Uses zlib compression for efficient shared-state exchange.
 """

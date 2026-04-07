@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 class SurvivalGater:
     """
     Sovereign Survival Hygiene v13.0.0.
-    Purges low-fidelity and expired memories from the Absolute Monolith.
+    Purges low-fidelity and expired memories from the Sovereign OS.
     """
 
     @staticmethod
@@ -26,7 +26,7 @@ class SurvivalGater:
             # The search logic here would normally involve metadata filtering 
             # for 'resonance_score' or 'created_at'.
             
-            # For the Absolute Monolith, we perform a thorough audit of the user's vector space.
+            # For the Sovereign OS, we perform a thorough audit of the user's vector space.
             # In a production FAISS/HNSW setup, we would query for high-risk nodes.
             
             # Placeholder for the graduated pruning sequence:

@@ -1,6 +1,6 @@
 """
 Sovereign Health Audit v9.8.1.
-Verifies production readiness and service integrity for the Sovereign Monolith.
+Verifies production readiness and service integrity for the Sovereign OS.
 """
 
 import sys

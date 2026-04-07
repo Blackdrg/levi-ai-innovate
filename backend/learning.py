@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class PatternPromotionGate:
     """
-    Sovereign v13.1.0: Human-in-the-loop (HITL) Gate.
+    Sovereign v14.0.0: Human-in-the-loop (HITL) Gate.
     Prevents unreviewed patterns from being promoted to L1 (Deterministic Rules).
     """
     
@@ -38,7 +38,7 @@ class PatternPromotionGate:
 
 class AutonomousLearner:
     """
-    Sovereign Evolution Engine v13.1.0.
+    Sovereign Evolution Engine v14.0.0.
     Observes neural pulses and adjusts model routing parameters.
     """
     

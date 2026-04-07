@@ -1,5 +1,5 @@
 """
-Sovereign Resilience API v13.1.0.
+Sovereign Resilience API v14.0.0.
 Handles mission replay and recovery from wave checkpoints.
 """
 

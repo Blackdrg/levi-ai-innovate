@@ -1,6 +1,6 @@
 """
 Sovereign Orchestration Engine v13.0.0.
-Public interface for the Absolute Monolith Brain.
+Public interface for the Sovereign OS Brain.
 Bridges to the finalized v13.0 LeviBrainCoreController.
 """
 
@@ -14,12 +14,12 @@ from .orchestrator_types import ToolResult
 
 logger = logging.getLogger(__name__)
 
-# Global v13.0.0 Brain Monolith
+# Global v14.0.0 Sovereign OS Brain
 _BRAIN = LeviBrainCoreController()
 
 class LeviOrchestrator:
     """
-    Public interface for the LEVI AI Absolute Monolith.
+    Public interface for the LEVI AI Sovereign OS.
     """
     async def handle(
         self,
@@ -32,7 +32,7 @@ class LeviOrchestrator:
         request_id: Optional[str] = None,
     ) -> str:
         """
-        High-level entry point for the graduated Monolith (v13.0.0).
+        High-level entry point for the graduated Sovereign OS (v14.0.0).
         """
         session_id = session_id or f"sess_{uuid.uuid4().hex[:8]}"
         result = await run_orchestrator(
@@ -44,7 +44,7 @@ class LeviOrchestrator:
             mood=mood,
             request_id=request_id
         )
-        return result.get("response", "Neural protocol drift in Monolith. Retrying...")
+        return result.get("response", "Neural protocol drift in Sovereign OS. Retrying...")
 
 async def run_orchestrator(
     user_input: str,
@@ -57,7 +57,7 @@ async def run_orchestrator(
     request_id: Optional[str] = None,
 ) -> Any:
     """
-    Main mission entry point for v13.0.0 Absolute Monolith.
+    Main mission entry point for v14.0.0 Sovereign OS.
     Delegates to run_mission_sync or run_mission_stream.
     """
     if streaming:
@@ -98,7 +98,7 @@ async def synthesize_response(
     style_hint = profile.get("style", "philosophical")
     
     synth_prompt = (
-        f"You are LEVI, the Absolute Monolith (v13.0.0). "
+        f"You are LEVI, the Sovereign OS (v14.0.0). "
         f"Synthesize the following fragments into your unified voice.\n"
         f"User Style: {style_hint}\n"
         f"Input: {context.get('input', '')}\n\n"

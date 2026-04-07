@@ -10,18 +10,19 @@ import os
 import time
 from typing import Any, Dict, Optional
 
-from .brain import LeviBrainV8
+from .brain import LeviBrainV14
 from backend.db.redis import get_redis_client, check_exact_match, store_exact_match, check_semantic_match
 
 logger = logging.getLogger(__name__)
 
 class Orchestrator:
     """
-    LEVI-AI v8 Orchestrator.
-    Manages the lifecycle of a cognitive mission.
+    LEVI-AI v14.0 Orchestrator.
+    Manages the lifecycle of a cognitive mission with Brain Control System.
     """
     def __init__(self):
-        self.brain = LeviBrainV8()
+        self.brain = LeviBrainV14()
+
 
     # Blue-Green Deployment Strategy (v14.0)
     DEPLOYMENT_STRATEGY = os.getenv("DEPLOYMENT_STRATEGY", "blue") # blue (stable) / green (candidate)

@@ -31,6 +31,7 @@ from backend.api.compliance import router as compliance_v1
 from backend.api.v8.learning import router as learning_v1
 from backend.api.scheduling import router as scheduling_v1
 from backend.api.v1.replay import router as replay_v1
+from backend.api.v14.brain import router as brain_v14
 
 # Middleware Tier
 from backend.api.middleware.security_headers import SecurityHeadersMiddleware
@@ -149,6 +150,7 @@ app.include_router(compliance_v1, prefix="/api/v1/compliance", tags=["Compliance
 app.include_router(scheduling_v1, prefix="/api/v1/scheduling", tags=["Scheduling"])
 app.include_router(learning_v1, prefix="/api/v1/learning", tags=["Evolution"])
 app.include_router(replay_v1, prefix="/api/v1/missions", tags=["Resilience"])
+app.include_router(brain_v14, prefix="/api/v14", tags=["Brain Service v14.0"])
 
 async def gossip_handler(pulse: Dict[str, Any]):
     """

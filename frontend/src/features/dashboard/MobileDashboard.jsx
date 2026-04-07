@@ -3,7 +3,7 @@ import './MobileDashboard.css';
 
 /**
  * LeviBrain v13.0: Mobile Sovereign Dashboard (React)
- * High-fidelity system oversight for the autonomous cognitive monolith.
+ * High-fidelity system oversight for the autonomous Sovereign OS.
  */
 const MobileDashboard = () => {
   const [telemetry, setTelemetry] = useState({

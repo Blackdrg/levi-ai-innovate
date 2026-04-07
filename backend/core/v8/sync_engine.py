@@ -79,7 +79,7 @@ class SovereignSync:
             
             if count > 0:
                 logger.info(f"[Sync-v13] Successfully imported {count} rules from Swarm: {data.get('swarm_id')}")
-                # Audit into SQL Fabric (Absolute Monolith v13)
+                # Audit into SQL Fabric (Sovereign OS v14.0.0)
                 await cls._audit_sync(data.get("swarm_id"), count, "IMPORT")
                 
                 # Pulse: Notify Mobile Dashboard
@@ -117,7 +117,7 @@ class SovereignSync:
         Pushes local delta to the DCN Collective Hub (SQL Protocol).
         Broadcasts via Redis Pub/Sub for sub-second cluster sync.
         """
-        logger.info("[Sync-v13] Initiating DCN Absolute Monolith Synchronization...")
+        logger.info("[Sync-v14] Initiating DCN Sovereign OS Synchronization...")
         
         # 1. Local Redis Broadcast
         local_package = await cls.export_local_rules()

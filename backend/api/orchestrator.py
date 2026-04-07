@@ -13,17 +13,17 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from backend.auth import SovereignAuth, UserIdentity
-from backend.core.v8.brain import LeviBrainCoreController
+from backend.core.brain import LeviBrainV14
 from backend.engines.utils.security import SovereignSecurity
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="", tags=["Orchestrator"])
 
-# Initialize production v9.8.1 LeviBrain instance
-brain = LeviBrainCoreController()
+# Initialize production v14.0.0 LeviBrain instance (Controlled)
+brain = LeviBrainV14()
 
 async def handle_chat(user_input, user_id, session_id=None, tier='free'):
-    """v9.8.1: Unified cognitive execution pass."""
+    """v14.0: Unified cognitive execution pass."""
     result = await brain.run(
         user_input=user_input, 
         user_id=user_id,
@@ -32,14 +32,13 @@ async def handle_chat(user_input, user_id, session_id=None, tier='free'):
     return result
 
 async def stream_chat(user_input, user_id, session_id=None, tier='free'):
-    """v9.8.1: Token-by-token cognitive streaming."""
+    """v14.0: Token-by-token cognitive streaming."""
     yield {"type": "activity", "data": "Synchronizing Sovereignty..."}
     
-    async for chunk in await brain.route(
+    async for chunk in brain.stream(
         user_id=user_id,
         user_input=user_input,
-        session_id=session_id,
-        streaming=True
+        session_id=session_id
     ):
         if "token" in chunk:
             yield {"type": "token", "data": chunk["token"]}
@@ -81,13 +80,11 @@ async def orchestrate_vision(
         raise HTTPException(status_code=400, detail="Neural protocol violation detected.")
 
     try:
-        # We bridge to the production LeviBrain engine
-        res = await brain.route(
+        # We bridge to the production LeviBrain engine (v14.0)
+        res = await brain.run(
             user_id=identity.user_id,
             user_input=request.message,
             session_id=request.session_id,
-            streaming=False,
-            user_tier=identity.tier if hasattr(identity, 'tier') else 'free',
             mood=request.mood
         )
         
@@ -118,13 +115,11 @@ async def orchestrate_stream(
         yield f"event: activity\ndata: {json.dumps('Sovereign Orchestration Active')}\n\n"
         
         try:
-            # 2. Engage the production LeviBrain mission stream
-            async for chunk in await brain.route(
+            # 2. Engage the production LeviBrain mission stream (v14.0)
+            async for chunk in brain.stream(
                 user_id=identity.user_id,
                 user_input=request.message,
                 session_id=request.session_id,
-                streaming=True,
-                user_tier=identity.tier if hasattr(identity, 'tier') else 'free',
                 mood=request.mood
             ):
                 # Standardized v7 SSE Protocol

@@ -1,6 +1,6 @@
 """
 LEVI-AI Knowledge Acquisition Engine v13.0.0.
-Absolute Monolith production-grade scraper.
+Sovereign OS production-grade scraper.
 Synchronizes high-fidelity seeds with the Postgres SQL Fabric.
 """
 
@@ -25,7 +25,7 @@ class ScraperServiceV13:
         self.arxiv_client = arxiv.Client()
 
     async def _save_seed(self, source: str, title: str, url: str, content: str, metadata: Dict[str, Any]):
-        """Persists knowledge seed into the Absolute Monolith SQL Fabric."""
+        """Persists knowledge seed into the Sovereign OS SQL Fabric."""
         try:
             async with get_write_session() as session:
                 await session.execute(
@@ -76,8 +76,8 @@ class ScraperServiceV13:
         return results
 
     async def run_cycle(self):
-        """Standard Absolute Monolith Knowledge Cycle (v13.0)."""
-        logger.info("🧠 Initiating Monolith Knowledge Acquisition (v13.0.0)...")
+        """Standard Sovereign OS Knowledge Cycle (v14.0.0)."""
+        logger.info("🧠 Initiating Sovereign Knowledge Acquisition (v14.0.0)...")
         phi_queries = ["Stoicism philosophy", "AGI Architecture", "Ethics in Swarms"]
         await self.scrape_arxiv(phi_queries)
         logger.info("[KnowledgeEngine-v13] Resonance Cycle Complete.")

@@ -1,6 +1,6 @@
 """
 LEVI-AI Memory Distiller v13.0.0.
-Absolute Monolith production-grade "Dreaming Phase".
+Sovereign OS production-grade "Dreaming Phase".
 Consolidates episodic fragments into the Postgres SQL Fabric.
 """
 

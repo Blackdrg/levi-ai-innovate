@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 class SovereignBackup:
     """
-    Sovereign Backup & Disaster Recovery v13.0.0.
+    Sovereign Backup & Disaster Recovery v14.0.0.
     Orchestrates high-fidelity snapshots of the persistent memory stores.
     """
     
@@ -18,9 +18,9 @@ class SovereignBackup:
 
     @classmethod
     def run_full_backup(cls):
-        """Standard v13 Full Recovery Cycle."""
+        """Standard v14.0.0 Full Recovery Cycle."""
         now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        logger.info(f"[Backup] Starting Absolute Monolith Snapshot: {now}")
+        logger.info(f"[Backup] Starting Sovereign OS Snapshot: {now}")
         
         results = [
             cls.backup_postgres(now),

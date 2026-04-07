@@ -1,6 +1,6 @@
 """
-Sovereign Graduation Audit v13.1.0 (Extended Suite).
-Verifies the 28 points of the Absolute Monolith graduation.
+Sovereign Graduation Audit v14.0.0 (Extended Suite).
+Verifies the 28 points of the Sovereign OS graduation.
 """
 
 import asyncio
@@ -22,7 +22,7 @@ async def test_audit_point_14_gdpr_wipe():
 
 @pytest.mark.asyncio
 async def test_audit_point_08_fidelity_rubric():
-    """Point 08: Formal Weighted Aggregator (v13.1)."""
+    """Point 08: Formal Weighted Aggregator (v14.0)."""
     consensus = ConsensusAgentV11()
     rubric = FidelityRubric(
         syntax_correctness=1.0,

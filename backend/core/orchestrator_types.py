@@ -21,6 +21,87 @@ class EngineRoute(str, Enum):
     API   = "api"     # LLM call: complex reasoning, creative generation, unknown
 
 
+class BrainMode(str, Enum):
+    """v14.0 Cognitive Strategy Modes."""
+    FAST = "FAST"
+    BALANCED = "BALANCED"
+    DEEP = "DEEP"
+    RESEARCH = "RESEARCH"
+    SECURE = "SECURE"
+
+
+class MemoryPolicy(BaseModel):
+    """Tiered memory activation policy."""
+    redis: bool = True
+    postgres: bool = True
+    neo4j: bool = False
+    faiss: bool = True
+
+
+class ExecutionPolicy(BaseModel):
+    """Runtime constraints for the executor."""
+    parallel_waves: int = 2
+    max_retries: int = 1
+    sandbox_required: bool = False
+
+
+class LLMPolicy(BaseModel):
+    """LLM routing constraints."""
+    local_only: bool = True
+    cloud_fallback: bool = False
+
+
+class IntentNode(BaseModel):
+    id: str
+    label: str
+    entity: Optional[str] = None
+    confidence: float = 1.0
+
+
+class IntentEdge(BaseModel):
+    source: str
+    target: str
+    relation: str
+
+
+class IntentGraph(BaseModel):
+    nodes: List[IntentNode] = Field(default_factory=list)
+    edges: List[IntentEdge] = Field(default_factory=list)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class FailureType(str, Enum):
+    LLM_ERROR = "LLM_ERROR"
+    TOOL_FAILURE = "TOOL_FAILURE"
+    DAG_CONFLICT = "DAG_CONFLICT"
+    MEMORY_MISMATCH = "MEMORY_MISMATCH"
+
+
+class FailureAction(BaseModel):
+    action: str  # retry, fallback, regenerate, resync, abort
+    params: Dict[str, Any] = Field(default_factory=dict)
+
+
+class BrainDecision(BaseModel):
+
+    """
+    The unified v14.0 Brain Decision Output.
+    Centrally governs all system behavior.
+    """
+    mode: BrainMode = BrainMode.BALANCED
+    enable_agents: Dict[str, bool] = Field(default_factory=lambda: {
+        "planner": True,
+        "critic": False,
+        "retrieval": False
+    })
+    memory_policy: MemoryPolicy = Field(default_factory=MemoryPolicy)
+    execution_policy: ExecutionPolicy = Field(default_factory=ExecutionPolicy)
+    llm_policy: LLMPolicy = Field(default_factory=LLMPolicy)
+    risk_level: float = 0.0
+    complexity_score: float = 0.0
+
+
+
 # ---------------------------------------------------------------------------
 # Decision Audit Log
 # ---------------------------------------------------------------------------
@@ -90,9 +171,11 @@ class ToolResult(BaseModel):
     agent: str = "unknown"
     latency_ms: int = 0
     confidence: float = Field(1.0, ge=0.0, le=1.0)
+    fidelity_score: float = Field(1.0, ge=0.0, le=1.0)
     cost_score: int = 0
     total_tokens: int = 0
     retryable: bool = True
+
 
 class PlanStep(BaseModel):
     """A single deterministic step in a brain execution plan."""

@@ -1,6 +1,6 @@
 """
-Sovereign Postgres SQL Fabric v13.0.0.
-High-fidelity asynchronous session management for the Absolute Monolith.
+Sovereign Postgres SQL Fabric v14.0.0.
+High-fidelity asynchronous session management for the Sovereign OS.
 """
 
 import os
@@ -13,7 +13,7 @@ from sqlalchemy.orm import declarative_base
 logger = logging.getLogger(__name__)
 Base = declarative_base()
 
-# --- v13.0.0 Engine Configuration ---
+# --- v14.0.0 Engine Configuration ---
 DATABASE_URL = os.getenv("DATABASE_URL")
 if DATABASE_URL:
     if DATABASE_URL.startswith("postgres://"):
@@ -21,7 +21,7 @@ if DATABASE_URL:
     elif not DATABASE_URL.startswith("postgresql+asyncpg://"):
         DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
 
-# High-concurrency engine (v13.0 tuning)
+# High-concurrency engine (v14.0 tuning)
 engine = create_async_engine(
     DATABASE_URL,
     echo=False,
@@ -38,8 +38,8 @@ SessionLocal = async_sessionmaker(
 
 class PostgresDB:
     """
-    Sovereign Postgres Compatibility Bridge (v13.0.0).
-    Maps legacy v8 PostgresDB calls to the new v13 SQL Fabric.
+    Sovereign Postgres Compatibility Bridge (v14.0.0).
+    Maps legacy v13 PostgresDB calls to the new v14 SQL Fabric.
     """
     @staticmethod
     def _session_factory():

@@ -1,5 +1,5 @@
 """
-Sovereign Maintenance v13.1.0.
+Sovereign Maintenance v14.0.0.
 Handles nightly FAISS rebuilds and GDPR erasure compliance.
 """
 

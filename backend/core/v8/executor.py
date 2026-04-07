@@ -22,7 +22,7 @@ from backend.core.v13.vram_guard import VRAMGuard, VRAMPool
 from backend.config.system import CU_ABORT_THRESHOLD, CU_WARNING_PERCENT
 from backend.utils.metrics import MISSION_COMPLETED, MISSION_ABORTED, MISSION_CU, GPU_SEMAPHORE_AVAILABLE
 
-# Absolute Monolith v13: Hardware-Aware VRAM Resource Pool
+# Sovereign OS v14.0.0: Hardware-Aware VRAM Resource Pool
 # Replaced static Semaphore(4) with a model-aware unit allocator.
 GLOBAL_VRAM_GUARD = VRAMGuard()
 GLOBAL_VRAM_POOL = None 

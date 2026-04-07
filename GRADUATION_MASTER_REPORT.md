@@ -8,7 +8,7 @@
 ---
 
 ## 1. System Status: v14.0 FINAL
-The v14.0 release represents a transition from a monolithic architecture to a **modular multi-agent orchestration** system. The platform now supports adaptive task strategies, dynamic resource scheduling, and local-first inference with hybrid cloud fallback capabilities.
+The v14.0 release represents the final transition from a monolithic architecture to a **modular multi-agent orchestration** system (Sovereign OS).
 
 | Category | Status | Detail |
 | :--- | :--- | :--- |

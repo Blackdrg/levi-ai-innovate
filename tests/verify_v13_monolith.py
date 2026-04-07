@@ -1,6 +1,6 @@
 """
-LEVI-AI Sovereign OS v13.0.0: Graduation Master Audit.
-Definitive top-to-bottom technical verification of the Absolute Monolith.
+LEVI-AI Sovereign OS v14.0.0: Graduation Master Audit.
+Definitive top-to-bottom technical verification of the Sovereign OS.
 """
 
 import asyncio
@@ -14,9 +14,9 @@ import base64
 sys.path.append(os.path.join(os.getcwd(), "backend"))
 
 async def run_master_graduation_audit():
-    print("🎓 --- LEVI-AI v13.0.0 'Absolute Monolith' Master Audit --- 🎓")
+    print("🎓 --- LEVI-AI v14.0.0 'Sovereign OS' Master Audit --- 🎓")
     
-    # 1. SQL Resonance Audit (v13.0)
+    # 1. SQL Resonance Audit (v14.0)
     print("\n1. Testing SQL Fabric Resonance (postgres_db.py)...")
     try:
         from backend.db.postgres_db import get_read_session
@@ -28,7 +28,7 @@ async def run_master_graduation_audit():
     except Exception as e:
         print(f"❌ SQL Resonance failure: {e}")
 
-    # 2. HNSW Vault Audit (v13.0)
+    # 2. HNSW Vault Audit (v14.0)
     print("\n2. Testing HNSW Cognitive Vault (SovereignVectorStore)...")
     try:
         from backend.memory.vector_store import SovereignVectorStore
@@ -42,18 +42,17 @@ async def run_master_graduation_audit():
     except Exception as e:
         print(f"❌ HNSW Vault failure: {e}")
 
-    # 3. Async Brain Audit (v13.0)
-    print("\n3. Testing Absolute Brain Controller (LeviBrainCoreController)...")
+    # 3. Async Brain Audit (v14.0)
+    print("\n3. Testing Sovereign Brain Controller (LeviBrainCoreController)...")
     try:
         from backend.core.v8.brain import LeviBrainCoreController
         brain = LeviBrainCoreController()
         # Mock mission sync
-        print("✅ Brain Monolith instance verified. Deterministic pipeline online.")
+        print("✅ Brain Sovereign instance verified. Deterministic pipeline online.")
     except Exception as e:
         print(f"❌ Brain Controller failure: {e}")
 
-    # 4. Binary Telemetry Audit (Adaptive Pulse v4.1)
-    print("\n4. Testing Adaptive Pulse v4.1 (Binary/zlib)...")
+    print("\n4. Testing Adaptive Pulse v5.0 (Binary/zlib)...")
     try:
         test_data = {"event": "NEURAL_THINKING", "data": {"thought": "Graduation..."}}
         json_str = json.dumps(test_data)
@@ -63,12 +62,12 @@ async def run_master_graduation_audit():
         decoded_bytes = base64.b64decode(encoded)
         decompress = zlib.decompress(decoded_bytes).decode()
         if json.loads(decompress) == test_data:
-            print("✅ Adaptive Pulse v4.1 confirmed. Mobile visual sovereignty reached.")
+            print("✅ Adaptive Pulse v5.0 confirmed. Mobile visual sovereignty reached.")
     except Exception as e:
         print(f"❌ Adaptive Pulse failure: {e}")
 
-    # 5. Evolution Sync Audit (v13.0)
-    print("\n5. Testing Global Evolution Cycle (v13 SQL Resonance)...")
+    # 5. Evolution Sync Audit (v14.0.0)
+    print("\n5. Testing Global Evolution Cycle (v14.0.0 SQL Resonance)...")
     try:
         from backend.pipelines.learning import learning_system
         # Check if the graduated SQL-backed methods are present

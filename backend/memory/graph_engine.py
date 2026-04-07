@@ -20,7 +20,7 @@ class GraphEngine:
         Standard v13 Bridge: Distils strings into typed triplets and merges into graph.
         Maps the relation string to a RelationType enum value; unknown values default to RELATED_TO.
         """
-        # v13.1.0 Injection Protection: Strip dangerous keywords from LLM-provided values
+        # v14.0.0 Injection Protection: Strip dangerous keywords from LLM-provided values
         s_clean, r_clean, o_clean = CypherSanitizer.sanitize_triplet(subject, relation, obj)
 
         # Map relation string → RelationType enum

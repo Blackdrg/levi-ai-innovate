@@ -41,7 +41,8 @@ class GraphExecutor:
     MAX_WAVES = 8
     WARNING_THRESHOLD = 8
 
-    async def execute(self, graph: Any, perception: Dict[str, Any], user_id: str = "global") -> List[ToolResult]:
+    async def execute(self, graph: Any, perception: Dict[str, Any], user_id: str = "global", policy: Optional[Any] = None) -> List[ToolResult]:
+
 
         logger.info("[V13.1 Executor] Executing Task Graph...")
         results: Dict[str, ToolResult] = {}
@@ -83,8 +84,11 @@ class GraphExecutor:
 
             logger.debug("[V13.1 Executor] Executing Wave %d: %s", wave_count, [n.id for n in executable_nodes])
             
-            # 2. Parallel Execution of Wave
-            total_nodes_executed += len(executable_nodes)
+            # 2. Parallel Execution of Wave (Limited by Policy)
+            max_parallel = policy.parallel_waves if policy else len(executable_nodes)
+            nodes_to_run = executable_nodes[:max_parallel]
+            
+            total_nodes_executed += len(nodes_to_run)
             
             if total_nodes_executed >= self.WARNING_THRESHOLD and total_nodes_executed < self.MAX_MISSION_NODES:
                 logger.warning(f"[V13.1 Executor] Mission {mission_id} reaching complexity threshold ({total_nodes_executed} nodes).")
@@ -95,8 +99,8 @@ class GraphExecutor:
                 SovereignBroadcaster.publish("MISSION_ABORTED", {"reason": "node_limit_exceeded"}, user_id=user_id)
                 break
 
-            tasks = [self._execute_node(n, results, perception, blackboard=blackboard, user_id=user_id, wave_count=wave_count) for n in executable_nodes]
-            SovereignBroadcaster.publish("WAVE_STARTED", {"nodes": [n.id for n in executable_nodes], "current_wave": wave_count}, user_id=user_id)
+            tasks = [self._execute_node(n, results, perception, blackboard=blackboard, user_id=user_id, wave_count=wave_count, policy=policy) for n in nodes_to_run]
+            SovereignBroadcaster.publish("WAVE_STARTED", {"nodes": [n.id for n in nodes_to_run], "current_wave": wave_count}, user_id=user_id)
 
             # --- Distributed Wave Management (v2.0-Hardened) ---
             try:
@@ -161,7 +165,7 @@ class GraphExecutor:
                         for n, res in zip(timeout_nodes, fallback_results):
                             wave_results_map[n.id] = res
 
-                    wave_results = [wave_results_map.get(n.id, ToolResult(success=False, error="DCN Failure")) for n in executable_nodes]
+                    wave_results = [wave_results_map.get(n.id, ToolResult(success=False, error="DCN Failure")) for n in nodes_to_run]
                 else:
                     # Explicit Local Execution
                     wave_results = await asyncio.gather(*tasks)
@@ -173,14 +177,14 @@ class GraphExecutor:
 
             
             # 3. Update State
-            for n, res in zip(executable_nodes, wave_results):
+            for n, res in zip(nodes_to_run, wave_results):
                 results[n.id] = res
                 completed_ids.add(n.id)
                 remaining_nodes.remove(n)
                 
             # 4. Critical Path Failure Check
             critical_failure = False
-            for n in executable_nodes:
+            for n in nodes_to_run:
                 res = results[n.id]
                 if not res.success and n.critical:
                     critical_failure = True
@@ -198,12 +202,14 @@ class GraphExecutor:
 
         return list(results.values())
 
-    async def _execute_node(self, node: Any, previous_results: Dict[str, ToolResult], perception: Dict[str, Any], blackboard: MissionBlackboard = None, user_id: str = "global", wave_count: int = 0) -> ToolResult:
+    async def _execute_node(self, node: Any, previous_results: Dict[str, ToolResult], perception: Dict[str, Any], blackboard: MissionBlackboard = None, user_id: str = "global", wave_count: int = 0, policy: Optional[Any] = None) -> ToolResult:
         """Executes a single node with template-resolved inputs, retries and fallbacks."""
         agent_name = node.agent
         start_time = asyncio.get_event_loop().time()
-        max_retries = getattr(node, 'retry_count', 2)
-        timeout = getattr(node, 'timeout', 30) # Default 30s
+        # 0. Override Policy Constraints
+        max_retries = policy.max_retries if policy is not None else getattr(node, 'retry_count', 1)
+        if policy and policy.sandbox_required:
+            logger.info(f"[V14 Brain] Mandatory Sandbox Isolation Enforced for node {node.id}")
         
         # 1. Input Resolution ({{task_id.result}})
         resolved_inputs = self._resolve_inputs(node.inputs, previous_results)

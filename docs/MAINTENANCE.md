@@ -1,6 +1,6 @@
-# 🛠️ LEVI-AI Maintenance Guide (v14.0 Production)
+# 🛠️ LEVI-AI Maintenance Guide (v14.0.0-Autonomous-SOVEREIGN)
 
-Ensuring the stability and performance of the LEVI-AI v14.0 Distributed Stack requires periodic maintenance across the quad-persistence memory layer and the system optimization pipeline.
+Ensuring the stability and performance of the LEVI-AI v14.0.0-Autonomous-SOVEREIGN Distributed Stack requires periodic maintenance across the quad-persistence memory layer and the system optimization pipeline.
 
 ---
 
@@ -11,7 +11,7 @@ Verified data from episodic tasks are automatically integrated into long-term kn
 
 - **Trigger**: Automatic after every task (if score > 0.85).
 - **Manual Force**: `MemoryManager.force_integration(user_id)` via Python REPL.
-- **Stores updated**: Neo4j (entity triplets) + FAISS (semantic index).
+- **Stores updated**: Neo4j (entity triplets) + HNSW Vault (semantic index).
 
 ### 1.2 LearningLoop — Performance Corpus
 The `LearningLoop` captures patterns from high-performance tasks (S > 0.85) into the `training_corpus` table.
@@ -24,12 +24,12 @@ The `LearningLoop` captures patterns from high-performance tasks (S > 0.85) into
 
 ## 2. Persistence Layer Maintenance
 
-### 2.1 FAISS Index Rebuild
+### 2.1 HNSW Vault Rebuild
 Semantic memory retrieval may require optimization after heavy usage. Rebuild the index to maintain search precision.
 
 ```python
 from backend.core.vector_store import VectorStore
-await VectorStore().rebuild_index()
+await VectorStore().rebuild_hnsw_index()
 ```
 
 Recommended frequency: **Monthly** or after 100k+ insertions.
@@ -61,11 +61,11 @@ Automated 12-hour backup via `neo4j-admin`:
 neo4j-admin database backup neo4j --to-path=/backups/neo4j
 ```
 
-### 2.5 FAISS — Snapshot Schedule
+### 2.5 HNSW Vault — Snapshot Schedule
 Automated every 6 hours via `SnapshotOrchestrator`. Manual trigger:
 ```python
 from backend.core.snapshot import SnapshotOrchestrator
-await SnapshotOrchestrator().backup_faiss()
+await SnapshotOrchestrator().backup_hnsw()
 ```
 
 ---
@@ -73,7 +73,7 @@ await SnapshotOrchestrator().backup_faiss()
 ## 3. Resource Hygiene
 
 ### 3.1 Memory Pruning (Automatic)
-The `MemoryPruner` background task runs weekly, removing low-scoring records (score < 0.5) from FAISS to maintain index quality.
+The `MemoryPruner` background task runs weekly, removing low-scoring records (score < 0.5) from HNSW Vault to maintain index quality.
 
 Audit via worker logs:
 ```bash
@@ -112,7 +112,7 @@ pytest tests/production_readiness_suite.py -v
 | :--- | :--- | :--- |
 | **API Latency** | < 500ms | > 1000ms |
 | **Vector Recall** | < 100ms | > 250ms |
-| **Inference (L3.1)** | < 2.0s | > 4.0s |
+| **Inference (L3.3)** | < 1.0s | > 2.0s |
 | **Evaluation Score (S)** | avg > 0.85 | avg < 0.70 |
 | **Resource Units** | < 50 RU | > 100 RU |
 
@@ -125,4 +125,4 @@ python -m backend.scripts.restore_drill
 
 ---
 
-© 2026 LEVI-AI HUB — Maintenance Specification v14.0 Production Stable
+© 2026 LEVI-AI Sovereign OS — Maintenance Specification v14.0.0 Production Stable

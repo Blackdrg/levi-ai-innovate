@@ -1,5 +1,5 @@
 #!/bin/bash
-# LEVI-AI Sovereign Monolith v9.8.1 Launcher
+# LEVI-AI Sovereign OS v14.0.0 Launcher
 # Engineered for Absolute Autonomy
 
 echo "--------------------------------------------------"
@@ -19,13 +19,13 @@ if ! command -v docker &> /dev/null; then
     exit 1
 fi
 
-# 3. Boot the Monolith
-echo "🚀 Booting the Sovereign Fabric (Monolith + DBs)..."
+# 3. Boot the Sovereign OS
+echo "🚀 Booting the Sovereign Fabric (DCN + DBs)..."
 docker compose up -d --build
 
 # 4. Final Pulse Check
 echo "--------------------------------------------------"
-echo "✅ MISSION_ACTIVE: The Monolith is rising."
+echo "✅ MISSION_ACTIVE: The Sovereign OS is rising."
 echo "🔗 API Gateway: http://localhost:8000"
 echo "📊 Telemetry: http://localhost:8000/telemetry (Profile: default)"
 echo "--------------------------------------------------"

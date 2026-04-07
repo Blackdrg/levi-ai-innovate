@@ -54,7 +54,7 @@ async def conversational_endpoint_v13(
         return {
             "response": res.get("response", ""),
             "session_id": request.session_id,
-            "engine": "sovereign_monolith_v13.0.0",
+            "engine": "sovereign_os_v14.0.0",
             "status": "success",
             "metadata": {
                 "decision": res.get("decision"),
@@ -64,7 +64,7 @@ async def conversational_endpoint_v13(
         }
     except Exception as e:
         logger.error(f"[ChatAPI-v13] Mission Failure: {e}")
-        return {"status": "error", "message": "The Absolute Monolith encountered an anomaly."}
+        return {"status": "error", "message": "The Sovereign OS encountered an anomaly."}
 
 @router.post("/stream")
 async def conversational_stream_endpoint_v13(
@@ -100,6 +100,6 @@ async def conversational_stream_endpoint_v13(
             yield "data: [DONE]\n\n"
         except Exception as e:
             logger.error(f"[ChatAPI-v13] Stream Failure: {e}")
-            yield f"event: error\ndata: {json.dumps(('Monolith synchronization failed.'))}\n\n"
+            yield f"event: error\ndata: {json.dumps(('Sovereign OS synchronization failed.'))}\n\n"
 
     return StreamingResponse(_mission_generator(), media_type="text/event-stream")

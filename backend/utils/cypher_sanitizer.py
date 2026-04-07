@@ -1,5 +1,5 @@
 """
-Sovereign Cypher Shield v13.1.0.
+Sovereign Cypher Shield v14.0.0.
 Strips DDL/DML keywords from LLM-provided values to prevent Cypher injection.
 """
 

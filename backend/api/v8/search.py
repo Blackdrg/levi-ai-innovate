@@ -1,6 +1,6 @@
 """
 Sovereign Search API v13.0.0.
-Directed factual retrieval and research for the Absolute Monolith.
+Directed factual retrieval and research for the Sovereign OS.
 """
 
 import logging

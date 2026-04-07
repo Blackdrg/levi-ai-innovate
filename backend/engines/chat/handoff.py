@@ -1,7 +1,7 @@
 """
-Sovereign Neural Handoff v13.0.0.
-Absolute Monolith Dynamic Provider Routing (Local vs. Cloud).
-Hardened for Adaptive Pulse v4.1 (Binary/zlib) and identity-aware context.
+Sovereign Neural Handoff v14.0.0.
+Sovereign OS Dynamic Provider Routing (Local vs. Cloud).
+Hardened for Adaptive Pulse v5.0 (Binary/zlib) and identity-aware context.
 """
 
 import logging
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 class SovereignHandoff:
     """
-    Sovereign Hybrid Controller (v13.0.0).
+    Sovereign Hybrid Controller (v14.0.0).
     Optimizes for Privacy, Intelligence, and Speed.
     """
     
@@ -28,7 +28,7 @@ class SovereignHandoff:
 
     @classmethod
     def analyze_mission(cls, prompt: str, task_type: str = "chat") -> Dict[str, Any]:
-        """Analyzes a mission for the v13.0.0 Absolute Monolith."""
+        """Analyzes a mission for the v14.0.0 Sovereign OS."""
         prompt_lower = prompt.lower()
         word_count = len(prompt.split())
         
@@ -46,13 +46,13 @@ class SovereignHandoff:
     @classmethod
     def select_provider(cls, analysis: Dict[str, Any], user_id: str = "guest") -> str:
         """
-        Sovereign Routing logic (v13.0.0):
+        Sovereign Routing logic (v14.0.0):
         1. OFFLINE OVERRIDE: Force ALL to local.
         2. Privacy Override: Local Immunity.
         3. Local Availability: Efficiency matching.
         4. Cloud Strategy: Groq/Together.
         """
-        # 0. v13.0 Local Sovereignty Override
+        # v14.0.0 Local Sovereignty Override
         if os.getenv("OFFLINE_MODE") == "true":
             return "local"
 

@@ -1,6 +1,6 @@
-# 🛡️ LEVI-AI: Security Architecture (v14.0 Production)
+# 🛡️ LEVI-AI: Security Architecture (v14.0.0-Autonomous-SOVEREIGN)
 
-Architectural isolation relies on Identity, Encryption, Sanitization, and Boundary Enforcement. LEVI-AI v14.0 implements a multi-layered security mesh to protect all user data and system orchestration components.
+Architectural isolation relies on Identity, Encryption, Sanitization, and Boundary Enforcement. LEVI-AI v14.0.0-Autonomous-SOVEREIGN implements a multi-layered security mesh to protect all user data and system orchestration components.
 
 ---
 
@@ -128,7 +128,7 @@ On explicit data deletion request, the system executes an atomic ordered wipe ac
 | T1 | Redis | `DEL system:user:{id}:*` — all keys and blackboard |
 | T2 | Postgres | `DELETE FROM sessions WHERE user_id=?` |
 | T3 | Neo4j | `MATCH (n {user_id:$u}) DETACH DELETE n` |
-| T4 | FAISS | Remove all vectors with matching `user_id` metadata |
+| T4 | HNSW Vault | Remove all vectors with matching `user_id` metadata |
 | T5 | training_corpus | `DELETE FROM training_corpus WHERE user_id=?` |
 
 ---
@@ -143,4 +143,4 @@ Redis-backed **sliding window** algorithm using sorted sets (ZSETs):
 
 ---
 
-© 2026 LEVI-AI HUB — Security Specification v14.0 Production Stable
+© 2026 LEVI-AI Sovereign OS — Security Specification v14.0.0 Production Stable

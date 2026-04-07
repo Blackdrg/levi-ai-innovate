@@ -1,5 +1,5 @@
 -- LeviBrain v8: High-Fidelity Postgres Schema
--- Unified persistence for the Cognitive Monolith
+-- Unified persistence for the Sovereign OS Fabric
 
 -- 1. Identity & Profile Layer
 CREATE TABLE IF NOT EXISTS user_profiles (

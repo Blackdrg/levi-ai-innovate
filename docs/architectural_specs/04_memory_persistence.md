@@ -47,7 +47,7 @@ graph LR
 ### T5 — training_corpus (LearningLoop — ACTIVE)
 - **Purpose**: Long-term crystallization of high-fidelity mission patterns.
 - **Gate**: Only missions with `fidelity_score > 0.85` are stored.
-- **Status**: **[ACTIVE] v13.1.0** — Autonomous 4-bit LoRA (Q4_K_M) fine-tuning pipeline enabled.
+- **Status**: **[ACTIVE] v14.0.0** — Autonomous 4-bit LoRA (Q4_K_M) fine-tuning pipeline enabled.
 - **Evolution**: 5% improvement gate (Eval Harness) before hot-swapping adapters.
 
 ---

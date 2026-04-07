@@ -1,5 +1,5 @@
 """
-Sovereign Audit Jobs v13.1.0.
+Sovereign Audit Jobs v14.0.0.
 Handles nightly integrity verification and 90-day retention policies for the Audit Log.
 """
 

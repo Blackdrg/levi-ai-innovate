@@ -1,8 +1,8 @@
 #!/bin/bash
-# LEVI-AI Sovereign OS v13.0.0: One-Click Private Deploy
+# LEVI-AI Sovereign OS v14.0.0: One-Click Private Deploy
 # "Sovereignty is not a gift, but a deterministic infrastructure."
 
-echo "🛡️ Initiating Sovereign Deployment Phase (Monolith v13.0)..."
+echo "🛡️ Initiating Sovereign Deployment Phase (Sovereign OS v14.0.0)..."
 
 # 1. Environment Check
 if ! [ -x "$(command -v docker)" ]; then
@@ -20,7 +20,7 @@ if [ ! -f .env ]; then
     echo "📋 Manifest .env missing. Synchronizing from .env.example..."
     cp .env.example .env
     # Generate unique keys
-    sed -i "s/graduated_v13_resonance/$(openssl rand -hex 16)/g" .env
+    sed -i "s/graduated_v14_resonance/$(openssl rand -hex 16)/g" .env
     echo "✅ Logic-Before-Language: .env synchronized."
 else
     echo "✅ Logic-Before-Language: .env pulse detected."
@@ -31,7 +31,7 @@ echo "📡 Pulling Sovereign Images..."
 docker-compose pull
 
 # 4. Neural Link Ignition
-echo "🚀 Igniting Absolute Monolith Swarm..."
+echo "🚀 Igniting Sovereign OS Swarm..."
 docker-compose up -d --build
 
 # 5. Health Audit

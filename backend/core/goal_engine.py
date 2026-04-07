@@ -1,12 +1,13 @@
 """
-Sovereign Goal Engine v8.
-Transforms user intent and perception into a formal cognitive goal.
+Sovereign Goal Engine v14.0.
+Transforms user intent and brain policy into a formal cognitive goal.
 """
 
 import logging
 import uuid
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from pydantic import BaseModel, Field
+from .orchestrator_types import BrainDecision, BrainMode
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,7 @@ class Goal(BaseModel):
     metrics: Dict[str, Any] = Field(default_factory=dict) # Quantitative targets
     priority: str = "medium"
     state: str = "active"
+    mode: Optional[str] = None
 
     def dict(self, *args, **kwargs):
         # Compatibility with older pydantic versions if needed
@@ -25,53 +27,72 @@ class Goal(BaseModel):
 
 class GoalEngine:
     """
-    LeviBrain v8: Goal Engine
-    Transforms user intent and perception into a formal cognitive goal.
+    LeviBrain v14.0: Goal Engine.
+    Subservient to the Brain Policy Engine.
     """
 
-    async def create_goal(self, perception: Dict[str, Any]) -> Goal:
+    async def create_goal(self, perception: Dict[str, Any], decision: Optional[BrainDecision] = None) -> Goal:
         intent = perception.get("intent")
         intent_type = intent.intent_type if intent else "chat"
         complexity = intent.complexity_level if intent else 2
         
-        # 1. Objective Formulation
-        objective = self._formulate_objective(perception)
+        # 1. Mode-Driven Objective Formulation
+        mode = decision.mode if decision else BrainMode.BALANCED
+        objective = self._formulate_objective(perception, mode)
         
-        # 2. Success Criteria & Validators Generation
-        success_criteria, validators, metrics = self._generate_measurable_criteria(intent_type, complexity, perception.get("input", ""))
+        # 2. Policy-Driven Success Criteria & Validators Generation
+        success_criteria, validators, metrics = self._generate_criteria(intent_type, complexity, perception.get("input", ""), mode)
         
         # 3. Priority Calculation
-        priority = "high" if complexity >= 3 else "medium"
+        priority = "high" if (complexity >= 3 or mode in [BrainMode.DEEP, BrainMode.SECURE]) else "medium"
         
         return Goal(
             objective=objective,
             success_criteria=success_criteria,
             validators=validators,
             metrics=metrics,
-            priority=priority
+            priority=priority,
+            mode=mode.value
         )
 
-    def _formulate_objective(self, perception: Dict[str, Any]) -> str:
+    def _formulate_objective(self, perception: Dict[str, Any], mode: BrainMode) -> str:
         input_text = perception.get("input", "")
         intent = perception.get("intent")
         intent_type = intent.intent_type if intent else "chat"
         
-        if intent_type == "search":
-            return f"Answer with latest data: {input_text}"
-        elif intent_type == "document":
-            return f"Extract context and answer query: {input_text}"
-        elif intent_type == "code":
-            return f"Build/Debug code solution: {input_text}"
-        elif intent_type == "image":
-            return f"Visualize creative concept: {input_text}"
+        prefix = f"[{mode.value}] "
         
-        return f"Synthesize coherent response: {input_text}"
+        if mode == BrainMode.SECURE:
+             return f"{prefix}Securely process restricted query: {input_text}"
+             
+        if intent_type == "search":
+            return f"{prefix}Retrieve and distill latest data: {input_text}"
+        elif intent_type == "document":
+            return f"{prefix}Synthesize document insights: {input_text}"
+        elif intent_type == "code":
+            return f"{prefix}Architect and verify code solution: {input_text}"
+        elif intent_type == "image":
+            return f"{prefix}Render high-fidelity creative concept: {input_text}"
+        
+        return f"{prefix}Synthesize coherent response: {input_text}"
 
-    def _generate_measurable_criteria(self, intent_type: str, complexity: int, user_input: str) -> tuple:
+    def _generate_criteria(self, intent_type: str, complexity: int, user_input: str, mode: BrainMode) -> tuple:
         criteria = ["Syntactic coherence", "Factual alignment"]
         validators = []
         metrics = {"min_confidence": 0.8}
         
+        # Mode-based constraints
+        if mode == BrainMode.FAST:
+            criteria.append("Latency < 1000ms")
+            metrics["max_latency_ms"] = 1000
+        elif mode == BrainMode.DEEP:
+            criteria = ["Logical chain validation", "Comprehensive synthesis", "Cross-domain resonance"]
+            metrics["min_confidence"] = 0.95
+        elif mode == BrainMode.SECURE:
+            criteria.append("PII isolation")
+            validators.append({"type": "sandbox_check", "level": "high"})
+        
+        # Intent-based rules
         if intent_type == "search":
              criteria.append("Citations included")
              validators.append({"type": "regex", "pattern": r"\[\d+\]|https?://", "field": "response"})
@@ -80,13 +101,5 @@ class GoalEngine:
              criteria.append("Syntactical correctness")
              validators.append({"type": "python_check", "field": "code"})
              metrics["max_latency_ms"] = 5000
-        elif intent_type == "summarize" or "summarize" in user_input.lower():
-             criteria.append("Length < 250 words")
-             validators.append({"type": "word_count", "max": 250})
-             metrics["compression_ratio"] = 0.5
-        
-        if complexity >= 3:
-             criteria.append("Cross-engine validation")
-             validators.append({"type": "consensus", "min_agreement": 0.9})
              
         return criteria, validators, metrics

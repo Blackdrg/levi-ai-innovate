@@ -12,7 +12,7 @@ from backend.redis_client import r as redis_client, HAS_REDIS
 logger = logging.getLogger(__name__)
 
 # Secret for fragment signing (Graduation Tier requirement)
-DCN_SECRET = os.getenv("AUDIT_CHAIN_SECRET", "sovereign_monolith_genesis_v14").encode()
+DCN_SECRET = os.getenv("AUDIT_CHAIN_SECRET", "sovereign_os_genesis_v14").encode()
 
 class CognitiveFragment(BaseModel):
     """
@@ -20,7 +20,7 @@ class CognitiveFragment(BaseModel):
     Represents a high-fidelity semantic unit for cross-instance sync.
     """
     fragment_id: str = Field(default_factory=lambda: os.urandom(8).hex())
-    origin_instance: str = Field(default="monolith_prime")
+    origin_instance: str = Field(default="sovereign_alpha")
     payload: Dict[str, Any]
     fidelity_s: float = Field(ge=0.95) # Only High-Fidelity gossip allowed
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

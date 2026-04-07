@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 class LeviBrainCoreController:
     """
-    LeviBrain Core Controller (v13.0.0 "Absolute Monolith")
+    LeviBrain Core Controller (v14.0.0 "Sovereign OS")
     PRIMARY DIRECTIVE: Internal Engines & System Logic FIRST.
     Priority Stack:
     LEVEL 1: Internal Brain Logic / Memory
@@ -328,7 +328,7 @@ class LeviBrainCoreController:
                 
             elif decision == "INTERNAL":
                 # LEVEL 1: INTERNAL BRAIN LOGIC
-                yield {"event": "activity", "data": "Processing via Internal Monolith Logic..."}
+                yield {"event": "activity", "data": "Processing via Sovereign OS Logic..."}
                 final_response = await self._solve_internally(perception, metrics)
                 yield {"event": "neural_synthesis", "data": {"token": final_response, "done": True}}
                 asyncio.create_task(self._update_memory(user_input, final_response, perception, [], 1))
@@ -384,7 +384,7 @@ class LeviBrainCoreController:
                 results = await self.executor.run(task_graph, perception, concurrency_limit=concurrency)
                 yield {"event": "results", "data": [r.dict() if hasattr(r, "dict") else r for r in results]}
                 
-                yield {"event": "activity", "data": "Synthesizing Absolute Monolith Response..."}
+                yield {"event": "activity", "data": "Synthesizing Sovereign OS Response..."}
                 from ..engine import synthesize_streaming_response
                 full_parts = []
                 async for chunk in synthesize_streaming_response(results, perception["context"]):
@@ -395,7 +395,7 @@ class LeviBrainCoreController:
 
         except Exception as e:
             logger.error("[V13 Brain] Stream anomaly: %s", e)
-            yield {"event": "error", "data": f"The Absolute Monolith encountered a logic flux: {str(e)}"}
+            yield {"event": "error", "data": f"The Sovereign OS encountered a logic flux: {str(e)}"}
 
     async def _get_concurrency_limit(self, user_id: str) -> int:
         """

@@ -10,7 +10,7 @@ MIN_FREE_GB = 1.0 # Absolute minimum 1GB free
 
 class VRAMPool:
     """
-    Sovereign VRAM Resource Pool v13.1.0.
+    Sovereign VRAM Resource Pool v14.0.0.
     Manages available VRAM in MB across all device slots.
     """
     def __init__(self, total_mb: int):
@@ -59,7 +59,7 @@ class VRAMPool:
 
 class VRAMGuard:
     """
-    Sovereign VRAM Guard v13.1.0.
+    Sovereign VRAM Guard v14.0.0.
     Handles real-time hardware telemetry and heuristic-based resource gating.
     Supports Multi-GPU pooling by treating each GPU as a 'DeviceSlot'.
     """

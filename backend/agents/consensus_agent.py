@@ -1,6 +1,6 @@
 """
 Sovereign Consensus Agent v14.0.0.
-The collective adjudicator for the Absolute Monolith.
+The collective adjudicator for the Sovereign OS.
 Resolves cognitive friction via Collective Resonance (CR) and Swarm Appraisal.
 """
 
@@ -163,6 +163,6 @@ class ConsensusAgentV14(SovereignAgent[ConsensusInput, AgentResult]):
                 "score": fallback_score
             }
 
-# Graduation Alias for the Absolute Monolith (v14.0)
+# Graduation Alias for the Sovereign OS (v14.0.0)
 ConsensusAgentV13 = ConsensusAgentV14
 ConsensusAgentV11 = ConsensusAgentV14

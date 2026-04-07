@@ -1,6 +1,6 @@
 """
-Sovereign Monolith Graduation Audit v11.0.
-The final technical verification of LEVI-AI's autonomous cognitive core.
+Sovereign OS Graduation Audit v14.0.0.
+The final technical verification of LEVI-AI's autonomous cognitive OS.
 """
 
 import os
@@ -78,7 +78,7 @@ async def audit_recursive_patching():
 async def run_graduation_audit():
     """Executes the final Sovereign Audit."""
     print("=" * 60)
-    print(f"LEVI-AI SOVEREIGN GRADUATION AUDIT v11.0 - {datetime.now().strftime('%Y-%m-%d')}")
+    print(f"LEVI-AI SOVEREIGN GRADUATION AUDIT v14.0.0 - {datetime.now().strftime('%Y-%m-%d')}")
     print("=" * 60)
     
     results = [
@@ -97,7 +97,7 @@ async def run_graduation_audit():
     
     if all_passed:
         print("GRADUATION STATUS: SOVEREIGN ALIGNED (100% READINESS)")
-        print("THE MONOLITH GRADUATION IS COMPLETE.")
+        print("THE SOVEREIGN OS GRADUATION IS COMPLETE.")
     else:
         print("GRADUATION STATUS: SYSTEM DRIFT DETECTED - AUDIT FAILED")
     print("=" * 60)
