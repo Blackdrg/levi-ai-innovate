@@ -4,6 +4,7 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
 from backend.db.neo4j_connector import Neo4jStore
 from backend.db.ontology import KnowledgeTriplet, Entity, EntityType, Relation, RelationType
+from backend.utils.cypher_sanitizer import CypherSanitizer
 
 logger = logging.getLogger(__name__)
 
@@ -17,14 +18,22 @@ class GraphEngine:
 
     async def upsert_triplet(self, user_id: str, subject: str, relation: str, obj: str, tenant_id: str = "default"):
         """
-        Standard v13 Bridge: Distills strings into typed triplets and merges into graph.
+        Standard v13 Bridge: Distils strings into typed triplets and merges into graph.
+        Maps the relation string to a RelationType enum value; unknown values default to RELATED_TO.
         """
-        # Logic: We'll assume CONCEPT for generic strings unless we have metadata
+        # v13.1.0 Injection Protection: Strip dangerous keywords from LLM-provided values
+        s_clean, r_clean, o_clean = CypherSanitizer.sanitize_triplet(subject, relation, obj)
+
+        # Map relation string → RelationType enum
+        try:
+            rel_type = RelationType(r_clean.upper())
+        except ValueError:
+            rel_type = RelationType.RELATED_TO
+
         triplet = KnowledgeTriplet(
-            subject=Entity(name=subject.lower(), type=EntityType.CONCEPT, tenant_id=tenant_id),
-            predicate=Relation(source=subject, target=obj, type=RelationType.RELATED_TO, tenant_id=tenant_id),
-            object=Entity(name=obj.lower(), type=EntityType.CONCEPT, tenant_id=tenant_id),
-            tenant_id=tenant_id
+            subject=Entity(name=s_clean.lower(), type=EntityType.CONCEPT, tenant_id=tenant_id),
+            predicate=Relation(source=s_clean, target=o_clean, type=rel_type, tenant_id=tenant_id),
+            object=Entity(name=o_clean.lower(), type=EntityType.CONCEPT, tenant_id=tenant_id),
         )
         await self.store.upsert_triplet(triplet)
 

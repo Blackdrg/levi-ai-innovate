@@ -1,5 +1,5 @@
 # LEVI-AI: Memory & Persistence Architecture
-### Specification v1.0.0-RC1
+### Specification v13.1.0-Hardened-PROD
 
 ---
 
@@ -44,11 +44,11 @@ graph LR
 - **Index**: HNSW with `efSearch=64`, `efConstruction=200`.
 - **Vector Model**: `nomic-embed-text` (768 dimensions).
 
-### T5 — training_corpus (LearningLoop — STUB)
+### T5 — training_corpus (LearningLoop — ACTIVE)
 - **Purpose**: Long-term crystallization of high-fidelity mission patterns.
 - **Gate**: Only missions with `fidelity_score > 0.85` are stored.
-- **Status**: **[STUB] v1.0.0** — data logged but model weights NOT modified.
-- **Future**: LoRA fine-tuning pipeline planned for v2.0.
+- **Status**: **[ACTIVE] v13.1.0** — Autonomous 4-bit LoRA (Q4_K_M) fine-tuning pipeline enabled.
+- **Evolution**: 5% improvement gate (Eval Harness) before hot-swapping adapters.
 
 ---
 
@@ -111,4 +111,4 @@ async def absolute_wipe(user_id: str):
 
 ---
 
-*© 2026 LEVI-AI Sovereign Hub — Memory Architecture Specification v1.0.0-RC1*
+*© 2026 LEVI-AI Sovereign Hub — Memory Architecture Specification v13.1.0-Hardened-PROD*

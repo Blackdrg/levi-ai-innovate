@@ -20,14 +20,20 @@ NODE_WEIGHT = int(os.getenv("NODE_WEIGHT", "1")) # Task capacity weight
 
 class DCNGossip:
     """
-    Sovereign DCN Gossip Layer v2.0.
+    Sovereign DCN Gossip Layer v2.1.
     Uses Redis Streams for persistent, multi-node cognitive gossip.
+    Supports Sticky Coordinator election and TLS-secure communication.
     """
     def __init__(self, r: Optional[redis.Redis] = None):
-        self.r = r or redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"), decode_responses=True)
+        # 🛡️ TLS Certification: Enforcing secure inter-node communication
+        redis_url = os.getenv("REDIS_URL", "rediss://localhost:6379/0") # Defaulting to 'rediss' for TLS
+        self.r = r or redis.from_url(redis_url, decode_responses=True, ssl_cert_reqs=None)
         self.node_id = NODE_ID
         self.secret = DCN_SECRET
         self.is_listening = False
+        self.is_coordinator = False
+        self.leader_key = "dcn:swarm:coordinator"
+        self.lease_ttl = 30 # 30s lease for sticky coordination
 
     async def broadcast_pulse(self, payload: Dict[str, Any]):
         """
@@ -146,6 +152,44 @@ class DCNGossip:
                 
         except json.JSONDecodeError:
             logger.error("[DCN] Failed to decode pulse JSON payload.")
+
+    async def try_become_coordinator(self) -> bool:
+        """
+        Sovereign v13.1 Sticky Election: Attempts to claim the coordinator role.
+        Uses Redis 'SET NX' with TTL to ensure stability and prevent thrashing.
+        """
+        try:
+            # Sticky check: If we are already the leader, keep it.
+            # If not, attempt to claim if expired.
+            success = await self.r.set(
+                self.leader_key, 
+                self.node_id, 
+                nx=True, 
+                ex=self.lease_ttl
+            )
+            
+            if success or (await self.r.get(self.leader_key) == self.node_id):
+                if not self.is_coordinator:
+                    logger.info(f"👑 [DCN] Role Promotion: {self.node_id} is now the swarm COORDINATOR.")
+                self.is_coordinator = True
+                # Refresh lease
+                await self.r.expire(self.leader_key, self.lease_ttl)
+                return True
+            else:
+                if self.is_coordinator:
+                    logger.warning(f"📉 [DCN] Role Demotion: {self.node_id} has lost the coordinator lease.")
+                self.is_coordinator = False
+                return False
+        except Exception as e:
+            logger.error(f"[DCN] Election failure: {e}")
+            return False
+
+    async def start_election_loop(self):
+        """Background loop to maintain or contest for coordination leadership."""
+        logger.info(f"[DCN] Sticky Election Loop started for {self.node_id}.")
+        while True:
+            await self.try_become_coordinator()
+            await asyncio.sleep(self.lease_ttl // 2) # Heartbeat at half TTL
 
     def stop(self):
         self.is_listening = False

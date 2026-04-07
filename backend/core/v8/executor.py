@@ -13,12 +13,15 @@ from backend.api.v8.telemetry import broadcast_mission_event
 from backend.services.push_service import PushService
 from backend.core.v8.blackboard import MissionBlackboard
 from backend.core.v8.dreaming_task import DreamingTask
+from backend.utils.audit import AuditLogger
+import asyncio
+
+from backend.config.system import CU_ABORT_THRESHOLD, CU_WARNING_PERCENT, HITL_STRICT_MODE
+from backend.utils.metrics import MISSION_COMPLETED, MISSION_ABORTED, MISSION_CU, GPU_SEMAPHORE_AVAILABLE
 
 # Absolute Monolith v13: Global GPU Concurrency Guard
 # Prevents CUDA OOM by limiting parallel neural calls across ALL simultaneous missions.
 GLOBAL_GPU_SEMAPHORE = asyncio.Semaphore(4)
-
-logger = logging.getLogger(__name__)
 
 class GraphExecutor:
     """
@@ -44,8 +47,19 @@ class GraphExecutor:
         blackboard = MissionBlackboard(session_id)
         await blackboard.clear()
         
+        # 📊 v13.1 Phase 5: CU Resource Tracking
+        total_cu_consumed = 0
+        warning_triggered = False
+        ceiling = CU_ABORT_THRESHOLD
+        warning_threshold = ceiling * CU_WARNING_PERCENT
+        
+        # Monitor Semaphore (v13.1)
+        GPU_SEMAPHORE_AVAILABLE.set(GLOBAL_GPU_SEMAPHORE._value)
+
         # 1. Topological Wave Execution Loop
+        wave_index = 0
         while not graph.is_complete():
+            wave_index += 1
             executable_nodes = graph.get_ready_tasks()
             
             if not executable_nodes:
@@ -59,6 +73,9 @@ class GraphExecutor:
             tasks = [_sem_execute(n) for n in executable_nodes]
             wave_results = await asyncio.gather(*tasks)
             
+            # Update Semaphore telemetry after wave
+            GPU_SEMAPHORE_AVAILABLE.set(GLOBAL_GPU_SEMAPHORE._value)
+
             # 3. State Update & Failure Handling
             for n, res in zip(executable_nodes, wave_results):
                 graph.mark_complete(n.id, res)
@@ -66,12 +83,36 @@ class GraphExecutor:
                 # Hybrid Persistence: Checkpoint mission state after each task
                 asyncio.create_task(self._checkpoint(user_id, session_id, perception.get("mission_id"), graph))
                 
-                # Telemetry
+                # Telemetry & CU Accounting
+                cu_cost = res.cost_score if hasattr(res, 'cost_score') else 1
+                total_cu_consumed += cu_cost
+                
+                # 🛑 CU Safety Gate: Warning (70%)
+                if total_cu_consumed >= warning_threshold and not warning_triggered:
+                    logger.warning("[V13.1 CU] Resource ceiling nearing: %d/%d CU (%.1f%%)", 
+                                   total_cu_consumed, ceiling, (total_cu_consumed/ceiling)*100)
+                    broadcast_mission_event(user_id, "cu_warning", {
+                        "consumed": total_cu_consumed, 
+                        "ceiling": ceiling,
+                        "percentage": 70
+                    })
+                    warning_triggered = True
+                
+                # 💥 CU Safety Gate: Abort (100%)
+                if total_cu_consumed > ceiling:
+                    logger.error("[V13.1 CU] RESOURCE EXHAUSTION: Mission %s aborted at %d CU.", 
+                                 perception.get("mission_id"), total_cu_consumed)
+                    MISSION_ABORTED.inc()
+                    MISSION_CU.observe(total_cu_consumed)
+                    await self._notify_failure(user_id, n, graph, perception, wave_index)
+                    return list(graph.results.values())
+
                 broadcast_mission_event(user_id, "task_complete", {
                     "id": n.id, 
                     "success": res.success, 
                     "latency": res.latency_ms,
-                    "agent": n.agent
+                    "agent": n.agent,
+                    "cu_cost": cu_cost
                 })
                 
                 # 4. 'Retry + Compensate' Logic for Critical Nodes
@@ -81,16 +122,21 @@ class GraphExecutor:
                     
                     if not compensation_success:
                         logger.error("[V9 Executor] Compensation failed for critical node %s. Aborting mission.", n.id)
-                        await self._notify_failure(user_id, n)
+                        await self._notify_failure(user_id, n, graph, perception, wave_index)
                         return list(graph.results.values())
                     else:
                         logger.info("[V9 Executor] Compensation successful for %s. Continuing graph...", n.id)
 
         # 5. Finalization & Dreaming
         if graph.is_complete():
+            MISSION_COMPLETED.inc()
+            MISSION_CU.observe(total_cu_consumed)
             broadcast_mission_event(user_id, "mission_complete", {"status": "success"})
             await blackboard.post_insight("executor", "Mission crystallized successfully.", tag="mission_summary")
             await DreamingTask.increment_and_check(user_id)
+        else:
+            MISSION_ABORTED.inc()
+            MISSION_CU.observe(total_cu_consumed)
 
         return list(graph.results.values())
 
@@ -136,11 +182,27 @@ class GraphExecutor:
 
             # 2. Secure Call via Global GPU Semaphore & AI Service Breaker
             async with GLOBAL_GPU_SEMAPHORE:
+                await AuditLogger.log_event(
+                    event_type="AGENT",
+                    action="Dispatch",
+                    user_id=perception.get("user_id"),
+                    resource_id=agent_name,
+                    metadata={"mission_id": perception.get("mission_id"), "step_id": node.id}
+                )
                 raw_res = await ai_service_breaker.async_call(
                     call_tool, 
                     agent_name, 
                     merged_params, 
                     perception.get("context", {})
+                )
+                
+                await AuditLogger.log_event(
+                    event_type="AGENT",
+                    action="Result",
+                    user_id=perception.get("user_id"),
+                    resource_id=agent_name,
+                    status="success" if getattr(raw_res, 'success', True) else "failed",
+                    metadata={"mission_id": perception.get("mission_id")}
                 )
             
             # 3. Normalize Result
@@ -178,6 +240,14 @@ class GraphExecutor:
                 "prompt": params.get("prompt", "Approval required to proceed."),
                 "context": params.get("context", {})
             })
+            
+            await AuditLogger.log_event(
+                event_type="HITL",
+                action="Suspended",
+                user_id=user_id,
+                resource_id=mission_id,
+                metadata={"node_id": node_id, "prompt": params.get("prompt")}
+            )
             
             # 3. Wait for Signal (Polling for simplicity in this version, can be optimized with PubSub)
             start_wait = asyncio.get_event_loop().time()
@@ -248,15 +318,43 @@ class GraphExecutor:
                  
         return False
 
-    async def _notify_failure(self, user_id: str, node: Any):
+    async def _notify_failure(self, user_id: str, node: Any, graph: Any = None, perception: Dict[str, Any] = None, wave_index: int = 0):
         push = PushService()
+        mission_id = perception.get("mission_id") if perception else None
+        
+        # 🛡️ Resilience: Persist Aborted State for Replay (v13.1)
+        if mission_id and graph:
+            try:
+                from backend.db.postgres_db import PostgresDB
+                from backend.db.models import AbortedMission
+                async with PostgresDB._session_factory() as session:
+                    # Serialize Graph (assuming it has a to_dict or we serialize its core components)
+                    frozen_dag = {
+                        "nodes": [n.__dict__ for n in graph.nodes] if hasattr(graph, 'nodes') else [],
+                        "results": {nid: res.__dict__ for nid, res in graph.results.items()}
+                    }
+                    
+                    new_abort = AbortedMission(
+                        mission_id=mission_id,
+                        user_id=user_id,
+                        frozen_dag=frozen_dag,
+                        wave_index=wave_index,
+                        error_node_id=node.id,
+                        payload=perception
+                    )
+                    session.add(new_abort)
+                    await session.commit()
+                    logger.info(f"[Resilience] Mission {mission_id} persisted in AbortedMission ledger.")
+            except Exception as e:
+                logger.error(f"[Resilience] Failed to persist aborted mission {mission_id}: {e}")
+
         await push.send_critical_alert(
             user_id=user_id,
             title="Sovereign Mission Halt",
             message=f"Node '{node.id}' failed all compensation attempts.",
-            data={"node": node.id}
+            data={"node": node.id, "mission_id": mission_id}
         )
-        broadcast_mission_event(user_id, "mission_aborted", {"reason": f"Unrecoverable: {node.id}"})
+        broadcast_mission_event(user_id, "mission_aborted", {"reason": f"Unrecoverable: {node.id}", "mission_id": mission_id})
 
     def _resolve_inputs(self, node: Any, inputs: Dict[str, Any], previous_results: Dict[str, ToolResult]) -> Dict[str, Any]:
         """Resolves template placeholders with swarm intelligence logic."""

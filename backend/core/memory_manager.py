@@ -210,7 +210,7 @@ class MemoryManager:
             if len(user_input.split()) > 4 or len(results) > 1:
                 asyncio.create_task(self._process_fact_extraction(user_id, user_input, response))
         
-        # 3. Learning Loop Crystallization (v1.0.0-RC1)
+        # 3. Learning Loop Crystallization (v13.1.0-Hardened-PROD)
         if fidelity:
             from backend.core.learning_loop import LearningLoop
             asyncio.create_task(LearningLoop.crystallize_pattern(session_id, user_input, response, fidelity))

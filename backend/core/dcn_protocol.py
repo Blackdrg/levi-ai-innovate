@@ -93,9 +93,26 @@ class DCNProtocol:
         asyncio.create_task(heartbeat_loop())
 
     async def start_listener(self, handler: Callable):
-        """Starts the background gossip listener."""
-        if self.is_active and self.gossip:
-            asyncio.create_task(self.gossip.listen(handler))
+        """
+        Starts the background gossip listener with mandatory HMAC verification.
+        """
+        if not self.is_active or not self.gossip:
+            return
+
+        async def secure_handler(pulse_data: Dict[str, Any]):
+            try:
+                # 🛡️ HMAC-SHA256 Verification Gate
+                pulse = DCNPulse(**pulse_data)
+                if await self.verify_pulse(pulse):
+                    logger.info(f"[DCN] Valid pulse received from {pulse.node_id}")
+                    await handler(pulse)
+                else:
+                    logger.warning(f"[DCN] AUTH_FAILURE: Invalid signature from node {pulse.node_id}. Dropping pulse.")
+            except Exception as e:
+                logger.error(f"[DCN] Listener error: {e}")
+
+        logger.info(f"[DCN] Secure Listener: [ACTIVE] Node: {self.node_id}")
+        asyncio.create_task(self.gossip.listen(secure_handler))
 
     async def verify_pulse(self, pulse: DCNPulse) -> bool:
         """

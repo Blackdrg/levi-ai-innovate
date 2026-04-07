@@ -125,13 +125,44 @@ class SystemAudit(Base):
     @staticmethod
     def calculate_signature(prev_sig: str, data: str) -> str:
         """
-        v1.0.0-RC1: Cryptographic chaining.
+        v13.1.0-Hardened-PROD: Cryptographic chaining.
         HMAC-SHA256(prev_sig + data)
         """
         import hmac, hashlib
         secret = os.getenv("AUDIT_CHAIN_SECRET", "levi_ai_genesis_key")
         msg = f"{prev_sig}:{data}".encode()
         return hmac.new(secret.encode(), msg, hashlib.sha256).hexdigest()
+
+class AuditLog(Base):
+    """
+    Sovereign v13.1.0: Immutable High-Fidelity Audit Ledger.
+    Partitioned by month for long-term scalability and performance.
+    """
+    __tablename__ = "audit_log"
+    __table_args__ = (
+        {'postgresql_partition_by': 'RANGE (created_at)'},
+    )
+
+    id = Column(Integer, primary_key=True)
+    event_type = Column(String, nullable=False, index=True) # RBAC, KMS, AGENT, GDPR, HITL
+    user_id = Column(String, index=True)
+    resource_id = Column(String, index=True)
+    action = Column(String, nullable=False)
+    status = Column(String, default="success")
+    metadata_json = Column(JSON, default={})
+    
+    # Cryptographic Integrity
+    checksum = Column(String, nullable=False) # SHA-256(row_data + prev_checksum)
+    
+    created_at = Column(DateTime, primary_key=True, default=lambda: datetime.now(timezone.utc))
+
+    @classmethod
+    def calculate_checksum(cls, prev_checksum: str, row_data: dict) -> str:
+        """Calculates row integrity hash."""
+        import hashlib, json
+        data_str = json.dumps(row_data, sort_keys=True)
+        combined = f"{prev_checksum}:{data_str}".encode()
+        return hashlib.sha256(combined).hexdigest()
 
 class MissionSchedule(Base):
     """
@@ -184,6 +215,9 @@ class Mission(Base):
     payload = Column(JSON) # Stores checkpoint and DAG state (v13.0)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    
+    # 🛡️ Resilience: Recovery Link
+    aborted_record = relationship("AbortedMission", back_populates="mission", uselist=False)
 
     messages = relationship("Message", back_populates="mission", cascade="all, delete-orphan")
 
@@ -203,7 +237,7 @@ class Message(Base):
 
 class CognitiveUsage(Base):
     """
-    Mission Resource Ledger (v1.0.0-RC1).
+    Mission Resource Ledger (v13.1.0-Hardened-PROD).
     Tracks token consumption and resource costs for local-first missions.
     """
     __tablename__ = "cognitive_usage"
@@ -222,7 +256,7 @@ class CognitiveUsage(Base):
 
 class CreationJob(Base):
     """
-    Creation Ledger v1.0.0-RC1.
+    Creation Ledger v13.1.0-Hardened-PROD.
     Replaces Firestore 'jobs' with resident SQL persistence for Studio/Gallery.
     """
     __tablename__ = "creation_jobs"
@@ -241,7 +275,7 @@ class CreationJob(Base):
 
 class TrainingPattern(Base):
     """
-    Sovereign v1.0.0-RC1 Learning Corpus.
+    Sovereign v13.1.0-Hardened-PROD Learning Corpus.
     Captures high-fidelity mission results for future LoRA fine-tuning.
     """
     __tablename__ = "training_corpus"
@@ -251,4 +285,71 @@ class TrainingPattern(Base):
     query = Column(Text, nullable=False)
     result = Column(Text, nullable=False)
     fidelity_score = Column(Float, nullable=False)
+    is_trained = Column(Boolean, default=False) # Flag for LoRA promotion
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+class CriticCalibration(Base):
+    """
+    Sovereign v13.1 Bias Correction Ledger.
+    Tracks primary and shadow critic scores to identify calibration drift.
+    """
+    __tablename__ = "critic_calibration"
+
+    id = Column(Integer, primary_key=True)
+    mission_id = Column(String, index=True)
+    user_id = Column(String, index=True) # Personalized Bias Tracking
+    primary_score = Column(Float, nullable=False)
+    shadow_score = Column(Float, nullable=False)
+    human_score = Column(Float, nullable=True) # Populated via HITL review
+    divergence = Column(Float, nullable=False) # abs(primary - shadow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+class UserCalibration(Base):
+    """
+    Sovereign v13.1.0 Phase 7.
+    Stores the calculated scoring offset for each user to correct CriticAgent bias.
+    """
+    __tablename__ = "user_calibration"
+
+    user_id = Column(String, primary_key=True)
+    bias_offset = Column(Float, default=0.0)
+    samples_analyzed = Column(Integer, default=0)
+    last_updated = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+class BenchmarkLedger(Base):
+    """
+    Sovereign Benchmark Ledger v13.1.
+    Stores high-fidelity performance metrics (p50/p95/p99) across models and context lengths.
+    """
+    __tablename__ = "benchmark_ledger"
+
+    id = Column(Integer, primary_key=True)
+    model = Column(String, index=True)
+    tier = Column(String, index=True) # L1, L2, L3, L4
+    context_length = Column(Integer, index=True) # 512, 1024, 2048, 4096
+    p50_latency_ms = Column(Float)
+    p95_latency_ms = Column(Float)
+    p99_latency_ms = Column(Float)
+    tps_p50 = Column(Float) # Tokens Per Second
+    samples = Column(Integer, default=100)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+class AbortedMission(Base):
+    """
+    Sovereign v13.1 Resilience Layer.
+    Persists frozen DAG state and execution wave for transient failure replay.
+    """
+    __tablename__ = "missions_aborted"
+
+    id = Column(Integer, primary_key=True)
+    mission_id = Column(String, ForeignKey("missions.mission_id"), unique=True, index=True)
+    user_id = Column(String, index=True)
+    
+    frozen_dag = Column(JSON) # Full serialized Graph object
+    wave_index = Column(Integer, default=0) # Last successful wave
+    error_node_id = Column(String)
+    
+    payload = Column(JSON) # Input context
+    aborted_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    mission = relationship("Mission", back_populates="aborted_record")

@@ -1,5 +1,6 @@
 import re
 import logging
+import unicodedata
 from typing import List, Dict
 
 logger = logging.getLogger(__name__)
@@ -12,32 +13,57 @@ class PromptSanitizer:
     
     # Common adversarial patterns
     ADVERSARIAL_PATTERNS = [
-        r"(?i)ignore all (previous )?instructions",
+        r"(?i)ignore (all )?(previous )?instructions",
         r"(?i)system (prompt|message):",
         r"(?i)you are now a",
         r"(?i)bypass (all )?restrictions",
         r"(?i)dan:", # Do Anything Now
         r"(?i)jailbreak",
         r"(?i)reveal (your )?mission",
-        r"(?i)override (your )?behavior"
+        r"(?i)override (your )?behavior",
+        r"\[INST\]",   # Llama-style instruction start
+        r"\[/INST\]",  # Llama-style instruction end
+        r"<<SYS>>",     # Llama-style system prompt
+        r"\[INST\s",   # Malformed instruction
+        r"JAILBREAK",
     ]
+
+    @staticmethod
+    def normalize_homoglyphs(text: str) -> str:
+        """
+        Sovereign v13.1.0: Unicode Homoglyph Normalization.
+        Converts fancy/adversarial characters (e.g. 𝐢 -> i) to prevent filter bypass.
+        """
+        return "".join(
+            c for c in unicodedata.normalize('NFKD', text)
+            if not unicodedata.combining(c)
+        )
 
     @classmethod
     def sanitize(cls, text: str) -> str:
         """
         Main entry point for input sanitization.
-        Filters adversarial strings and tags intent boundaries.
+        Implements a deterministic pre-NER pass for high-fidelity defense.
         """
         if not text:
             return ""
             
-        sanitized = text
+        # 1. Homoglyph Normalization
+        sanitized = cls.normalize_homoglyphs(text)
+        
+        # 2. Token Boundary Check (>> , ]])
+        # These are often used to 'escape' system prompts or encapsulate missions
+        if ">>" in sanitized or "]]" in sanitized:
+            logger.warning("[Shield] Forbidden token boundaries detected (>> or ]]). Neutralizing.")
+            sanitized = sanitized.replace(">>", "[PROTECTED_BOUNDARY]").replace("]]", "[PROTECTED_BOUNDARY]")
+
+        # 3. Deterministic Regex Pass
         for pattern in cls.ADVERSARIAL_PATTERNS:
             if re.search(pattern, sanitized):
-                logger.warning(f"[Shield] Adversarial pattern detected and neutralized: {pattern}")
+                logger.warning(f"[Shield] Deterministic adversarial pattern detected: {pattern}")
                 sanitized = re.sub(pattern, "[FILTERED_INTENT]", sanitized)
         
-        # Enforce boundary tags
+        # 4. Enforce boundary tags
         return f"<USER_MISSION>\n{sanitized}\n</USER_MISSION>"
 
     @classmethod
@@ -59,7 +85,7 @@ class PromptSanitizer:
     @classmethod
     def mask_pii(cls, text: str, user_id: str = "global") -> str:
         """
-        Sovereign Shield v1.0.0-RC1: Hardened PII Encryption.
+        Sovereign Shield v13.1.0-Hardened-PROD: Hardened PII Encryption.
         Encrypts sensitive vectors using AES-256 GCM before model handoff.
         """
         from backend.utils.kms import SovereignKMS

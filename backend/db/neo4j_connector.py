@@ -30,13 +30,14 @@ class Neo4jStore:
     async def upsert_triplet(self, triplet: KnowledgeTriplet):
         """
         Inserts or merges a typed knowledge triplet into the graph.
+        v13.1.0: Parameterized to prevent Cypher injection.
         """
         driver = await self.connect()
         async with driver.session() as session:
             try:
-                cypher = triplet.to_cypher()
-                await session.run(cypher)
-                logger.info(f"[Neo4j] Triplet Upsert: ({triplet.subject.name})-[{triplet.predicate.type.value}]->({triplet.object.name})")
+                cypher_query, parameters = triplet.to_cypher()
+                await session.run(cypher_query, parameters)
+                logger.debug(f"[Neo4j] Parameterized Upsert: ({triplet.subject.name})-[{triplet.predicate.type.value}]->({triplet.object.name})")
             except Exception as e:
                 logger.error(f"[Neo4j] Failed to upsert triplet: {e}")
 

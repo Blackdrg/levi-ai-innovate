@@ -22,6 +22,7 @@ from backend.db.postgres import PostgresDB
 from backend.db.models import UserProfile
 from backend.db.redis_client import r as redis_client, HAS_REDIS, is_jti_blacklisted
 from backend.config.system import TIERS
+from backend.utils.audit import AuditLogger
 
 class SovereignRole(str, Enum):
     GUEST = "guest"
@@ -58,10 +59,25 @@ def require_role(required_role: SovereignRole):
             }
             
             if role_hierarchy.get(user_role, 0) < role_hierarchy.get(required_role, 0):
+                await AuditLogger.log_event(
+                    event_type="RBAC",
+                    action="Access Denied",
+                    user_id=user.get("uid"),
+                    status="forbidden",
+                    metadata={"required": required_role, "current": user_role, "func": func.__name__}
+                )
                 raise HTTPException(
                     status_code=403, 
                     detail=f"Access Denied: Required role '{required_role}' exceeds current privilege '{user_role}'."
                 )
+            
+            await AuditLogger.log_event(
+                event_type="RBAC",
+                action="Access Granted",
+                user_id=user.get("uid"),
+                status="success",
+                metadata={"required": required_role, "current": user_role, "func": func.__name__}
+            )
             
             return await func(*args, **kwargs)
         return wrapper
@@ -99,6 +115,12 @@ async def get_current_user(cred: HTTPAuthorizationCredentials = Depends(security
                 uid = "test_pro_user"
                 email = "test_pro@sovereign.io"
                 jti = "test_jti_pulse"
+                await AuditLogger.log_event(
+                    event_type="AUTH",
+                    action="Test Token Bypass",
+                    status="warning",
+                    metadata={"uid": uid}
+                )
             else:
                 decoded = firebase_auth.verify_id_token(token, check_revoked=True)
                 uid = decoded.get("uid")
@@ -111,6 +133,12 @@ async def get_current_user(cred: HTTPAuthorizationCredentials = Depends(security
                 uid = "dev_user_777"
                 email = "sovereign@levi.ai"
                 jti = "dev_jti_pulse"
+                await AuditLogger.log_event(
+                    event_type="AUTH",
+                    action="Dev User Bypass",
+                    status="warning",
+                    metadata={"uid": uid}
+                )
             else:
                 raise credentials_exception
         

@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 @router.get("/metrics")
 async def get_learning_metrics():
     """
-    Sovereign v1.0.0-RC1 Learning Dashboard API.
+    Sovereign v13.1.0-Hardened-PROD Learning Dashboard API.
     Exposes real-time counts of the training corpus and knowledge base.
     """
     try:

@@ -9,6 +9,8 @@ from backend.core.v8.agents.document import DocumentAgentV8 as DocumentAgent
 from backend.core.v8.agents.research import ResearchAgentV8 as ResearchAgent
 from backend.core.v8.agents.python_repl import PythonReplAgentV8 as PythonReplAgent
 from backend.core.v8.agents.critic import CriticAgentV8 as CriticAgent
+from backend.utils.sanitizer import PromptSanitizer
+from backend.utils.audit import AuditLogger
 
 # Specialized/Legacy Support
 from backend.agents.image_agent import ImageAgent
@@ -18,6 +20,7 @@ from backend.agents.memory_agent import MemoryAgent
 from backend.agents.optimizer_agent import OptimizerAgent
 from backend.agents.task_agent import TaskAgent
 from backend.agents.diagnostic_agent import DiagnosticAgent
+from backend.agents.relay_agent import RelayAgent
 
 
 logger = logging.getLogger(__name__)
@@ -34,14 +37,15 @@ class AgentRegistry:
         "critic": CriticAgent,
         "diagnostic": DiagnosticAgent,
         "document": DocumentAgent,
-        "image": ImageAgent,
-        "video": VideoAgent,
-        "local": LocalAgent,
-        "memory": MemoryAgent,
-        "optimizer": OptimizerAgent,
-        "python": PythonReplAgent,
-        "research": ResearchAgent,
-        "task": TaskAgent
+        "image":      ImageAgent,
+        "video":      VideoAgent,
+        "local":      LocalAgent,
+        "memory":     MemoryAgent,
+        "optimizer":  OptimizerAgent,
+        "python":     PythonReplAgent,
+        "relay":      RelayAgent,
+        "research":   ResearchAgent,
+        "task":       TaskAgent,
     }
 
     @classmethod
@@ -67,8 +71,23 @@ class AgentRegistry:
             
             # 2. Mission Schema Preparation
             # v8 Agents expect a Dict or Pydantic model directly.
+            raw_input = context.get("query", context.get("message", context.get("text", "")))
+            
+            # 🛡️ Global Prompt Injection Shield (v13.1.0)
+            # All 14 agent endpoints are sanitized here before dispatch.
+            sanitized_input = PromptSanitizer.sanitize(raw_input)
+            
+            if sanitized_input != raw_input:
+                await AuditLogger.log_event(
+                    event_type="SECURITY",
+                    action="Prompt Sanitized",
+                    user_id=context.get("user_id", "unknown"),
+                    status="warning",
+                    metadata={"agent": name, "original": raw_input[:50], "sanitized": sanitized_input[:50]}
+                )
+
             mission_input = {
-                "input": context.get("query", context.get("message", context.get("text", ""))),
+                "input": sanitized_input,
                 **context
             }
 

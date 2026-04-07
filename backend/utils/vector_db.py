@@ -97,7 +97,7 @@ class VectorDB:
 
     async def rebuild_index(self):
         """
-        Sovereign v1.0.0-RC1: High-fidelity deterministic re-indexing.
+        Sovereign v13.1.0-Hardened-PROD: High-fidelity deterministic re-indexing.
         Applies L2-normalization for METRIC_INNER_PRODUCT (Cosine Similarity).
         Preserves tenant_id and versioning for absolute isolation.
         """
@@ -128,14 +128,14 @@ class VectorDB:
         # 32 = M (Max Connections), defaults to L2 if not specified.
         new_index = faiss.IndexHNSWFlat(self.dimension, 32, faiss.METRIC_INNER_PRODUCT)
         new_index.hnsw.efConstruction = 200
-        new_index.hnsw.efSearch = 64 # Optimized for real-time latency (v1.0.0-RC1)
+        new_index.hnsw.efSearch = 64 # Optimized for real-time latency (v13.1.0-Hardened-PROD)
         new_index.add(emb_np)
         
         async with self._lock:
             self.index = new_index
             # Ensure version and tenant mapping is preserved in metadata
             for m in self.metadata:
-                m["version"] = os.getenv("SOVEREIGN_VERSION", "v1.0.0-RC1")
+                m["version"] = os.getenv("SOVEREIGN_VERSION", "v13.1.0-Hardened-PROD")
             self._save()
         logger.info(f"[VectorDB] Rebuild complete for {self.collection_name}.")
 

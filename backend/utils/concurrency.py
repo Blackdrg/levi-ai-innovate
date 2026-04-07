@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 class AdaptiveThrottler:
     """
-    Sovereign v1.0.0-RC1: Graduated Task Loop Control.
+    Sovereign v13.1.0-Hardened-PROD: Graduated Task Loop Control.
     Hard-gates background tasks to 4 parallel slots to ensure GPU stability.
     """
     _semaphore: Optional[asyncio.BoundedSemaphore] = None
@@ -33,7 +33,7 @@ class AdaptiveThrottler:
 
 class CircuitBreaker:
     """
-    Sovereign v1.0.0-RC1: General Adaptive Circuit Breaker.
+    Sovereign v13.1.0-Hardened-PROD: General Adaptive Circuit Breaker.
     Pauses non-critical background services if infrastructure latency spikes.
     """
     _FAILURE_COUNT = 0

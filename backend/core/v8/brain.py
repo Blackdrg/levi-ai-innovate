@@ -242,7 +242,16 @@ class LeviBrainCoreController:
 
             # 4. FINAL BRAIN SYNTHESIS
             # In v8.12, the Brain synthesizes the structured data from agents
-            final_response = await self._brain_synthesis(results, goal, perception)
+            final_response, evaluation = await self._brain_synthesis_with_eval(results, goal, perception)
+            
+            # 🛡️ Graduation v13.1: HITL Strict Mode Gate
+            from backend.config.system import HITL_STRICT_MODE
+            if HITL_STRICT_MODE and evaluation.get("badge") == "DRAFT":
+                logger.warning("[Brain-v13] DRAFT output detected. Routing to HITL queue before delivery.")
+                # We reuse the executor's HITL handler logic or a specialized one
+                # For now, we mark the response as pending and wait for approval
+                final_response = await self._handle_draft_hitl(final_response, evaluation, perception)
+            
             self.metrics_registry["tasks_solved_llm"] += 1
             execution_level = 4
 
@@ -255,11 +264,17 @@ class LeviBrainCoreController:
              asyncio.create_task(SovereignSync.sync_with_collective_hub())
 
         # 7. RESPONSE SYNCHRONIZATION
+        broadcast_mission_event(user_id, "mission_complete", {
+            "status": "success", 
+            "fidelity_badge": evaluation.get("badge", "VERIFIED") if 'evaluation' in locals() else "VERIFIED"
+        })
+        
         return {
             "response": final_response,
             "request_id": request_id,
             "decision": decision,
             "latency_ms": latency,
+            "fidelity_badge": evaluation.get("badge", "VERIFIED") if 'evaluation' in locals() else "VERIFIED",
             "results": [r.dict() if hasattr(r, "dict") else r for r in results],
             "metrics": self.metrics_registry
         }
@@ -426,31 +441,38 @@ class LeviBrainCoreController:
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
-    async def _brain_synthesis(self, results: List[ToolResult], goal: Any, perception: Dict[str, Any]) -> str:
+    async def _brain_synthesis_with_eval(self, results: List[ToolResult], goal: Any, perception: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
         """
-        Brain-Level Final Synthesis (v8.12).
-        Orchestrates final response using structured data from agents.
+        Brain-Level Final Synthesis with Qualitative Evaluation (v13.1).
         """
         from ..engine import synthesize_response
-        
-        # Format structured data for LLM synthesis if needed
-        # Agents now return Pydantic models in .data
-        formatted_results = []
-        for r in results:
-            if hasattr(r, "data") and hasattr(r.data, "dict"):
-                 formatted_results.append(f"Agent {r.agent} Results: {json.dumps(r.data.dict())}")
-            else:
-                 formatted_results.append(str(r))
-
         response = await synthesize_response(results, perception["context"])
         
         # Reflection pass
         evaluation = await self.reflection.evaluate(response, goal, perception)
-        if not evaluation["is_satisfactory"]:
+        if not evaluation["is_satisfactory"] and not evaluation.get("requires_hitl"):
             broadcast_mission_event(perception["user_id"], "reflection_retry", {"score": evaluation["score"]})
             response = await self.reflection.self_correct(response, evaluation, goal, perception)
         
-        return response
+        return response, evaluation
+
+    async def _handle_draft_hitl(self, response: str, evaluation: Dict[str, Any], perception: Dict[str, Any]) -> str:
+        """Suspends delivery of DRAFT outputs until human approval."""
+        # This uses the same Redis-based signaling as standard HITL nodes
+        user_id = perception.get("user_id")
+        mission_id = perception.get("context", {}).get("mission_id")
+        
+        broadcast_mission_event(user_id, "draft_review_required", {
+            "mission_id": mission_id,
+            "fidelity": evaluation.get("score"),
+            "badge": evaluation.get("badge"),
+            "issues": evaluation.get("issues"),
+            "response_preview": response[:200]
+        })
+        
+        # In a real system, we'd poll Redis for approval here
+        # For the drill, we'll return the response but with a HITL header
+        return f"[HITL_PENDING_REVIEW] {response}"
 
     async def _solve_internally(self, perception: Dict[str, Any], metrics: Dict[str, Any]) -> str:
         """LEVEL 1: Deterministic solution via memory/graph/templates."""

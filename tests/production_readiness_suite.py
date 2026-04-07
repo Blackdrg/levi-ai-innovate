@@ -9,7 +9,7 @@ from backend.config.system import SOVEREIGN_VERSION, CLOUD_FALLBACK_ENABLED
 from backend.utils.concurrency import AdaptiveThrottler, CircuitBreaker
 from backend.core.egress_proxy import ALLOWED_EGRESS_DOMAINS
 
-# --- Sovereign Production Readiness Suite (v1.0.0-RC1) ---
+# --- Sovereign Production Readiness Suite (v13.1.0-Hardened-PROD) ---
 
 class TestReadiness_01_PromptInjection:
     def test_injection_guard(self):
@@ -30,7 +30,7 @@ class TestReadiness_02_CodeSandboxing:
 class TestReadiness_03_EmbeddingModel:
     def test_embedding_params(self):
         from backend.utils.vector_db import VectorDB
-        # Standard v1.0.0-RC1 efSearch is 64 for real-time recall parity
+        # Standard v13.1.0-Hardened-PROD efSearch is 64 for real-time recall parity
         # (This is a config-level check)
         pass
 
@@ -118,7 +118,7 @@ class TestReadiness_18_Residency:
 
 class TestReadiness_19_Versioning:
     def test_config_version(self):
-        assert SOVEREIGN_VERSION == "v1.0.0-RC1"
+        assert SOVEREIGN_VERSION == "v13.1.0-Hardened-PROD"
 
 class TestReadiness_20_CUBilling:
     def test_usage_ledger(self):

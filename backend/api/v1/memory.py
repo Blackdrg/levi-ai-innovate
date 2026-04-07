@@ -13,6 +13,8 @@ from pydantic import BaseModel, Field
 from backend.auth.logic import get_current_user as get_sovereign_identity
 from backend.auth.models import UserProfile as UserIdentity
 from backend.memory.manager import MemoryManager
+from backend.utils.audit import AuditLogger
+from backend.db.vector import get_vector_index
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="", tags=["Memory"])
@@ -24,6 +26,10 @@ memory_manager = MemoryManager()
 class MemorySaveRequest(BaseModel):
     fact: str = Field(..., description="Fact to crystallize in the vault")
     category: str = "general"
+
+class ErasureRequest(BaseModel):
+    record_id: str = Field(..., description="ID of the record to erase/forget")
+    collection: str = "memory"
 
 class QueryRequest(BaseModel):
     query: str = Field(..., description="Semantic query for recall")
@@ -81,6 +87,44 @@ async def crystallize_memory_endpoint(
     except Exception as e:
         logger.error(f"[MemoryAPI] Crystallization failure: {e}")
         return {"status": "error", "message": "Neural archival failed."}
+
+@router.post("/erasure")
+async def gdpr_erasure_endpoint(
+    request: ErasureRequest,
+    identity: UserIdentity = Depends(get_sovereign_identity)
+):
+    """
+    Sovereign v13.1.0: Managed GDPR Erasure Protocol.
+    Marks a vector for immediate deletion and records an audit trail.
+    """
+    logger.info(f"[MemoryAPI] GDPR Erasure requested for {identity.uid} (ID: {request.record_id})")
+    
+    try:
+        # 1. Audit Request Entry
+        await AuditLogger.log_event(
+            event_type="GDPR",
+            action="Erasure Request",
+            user_id=identity.uid,
+            resource_id=request.record_id,
+            metadata={"collection": request.collection}
+        )
+
+        # 2. Execute soft-delete
+        index = await get_vector_index(identity.uid, request.collection)
+        await index.delete(request.record_id)
+        
+        return {"status": "erased", "record_id": request.record_id}
+    except Exception as e:
+        logger.error(f"[MemoryAPI] Erasure failure: {e}")
+        await AuditLogger.log_event(
+            event_type="GDPR",
+            action="Erasure Failed",
+            user_id=identity.uid,
+            resource_id=request.record_id,
+            status="failed",
+            metadata={"error": str(e)}
+        )
+        return {"status": "error", "message": "Neural erasure failed."}
 
 @router.get("/vault_stats")
 async def get_vault_health(identity: UserIdentity = Depends(get_sovereign_identity)):

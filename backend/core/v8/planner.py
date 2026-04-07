@@ -45,7 +45,7 @@ class TaskGraph(BaseModel):
 
     def validate_dag(self):
         """
-        Sovereign v1.0.0-RC1: Topological Safety Audit.
+        Sovereign v13.1.0-Hardened-PROD: Topological Safety Audit.
         Ensures the mission graph is a Directed Acyclic Graph (DAG) using DFS.
         """
         adj = {n.id: n.dependencies for n in self.nodes}
@@ -124,7 +124,7 @@ Guidelines:
             for node_data in data.get("nodes", []):
                 graph.add_node(TaskNode(**node_data))
             
-            graph.validate_dag() # v1.0.0-RC1 Safety
+            graph.validate_dag() # v13.1.0-Hardened-PROD Safety
             return graph
         except Exception as e:
             logger.error(f"[LlmDecomposer] Neural decomposition drift: {e}")
@@ -250,7 +250,7 @@ class DAGPlanner:
                 critical=False
             ))
         
-        graph.validate_dag() # v1.0.0-RC1 Safety
+        graph.validate_dag() # v13.1.0-Hardened-PROD Safety
         return graph
 
     async def refine_plan(self, original_graph: TaskGraph, reflection: Dict[str, Any], goal: Any, perception: Dict[str, Any]) -> TaskGraph:

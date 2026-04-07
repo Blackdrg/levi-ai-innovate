@@ -1,6 +1,6 @@
-# 🧠 LEVI-AI Documentation (v1.0.0-RC1)
+# 🧠 LEVI-AI Documentation (v13.1.0-Hardened-PROD)
 
-Welcome to the technical hub for the LEVI-AI Distributed Stack (v1.0.0-RC1).
+Welcome to the technical hub for the LEVI-AI Sovereign OS (v13.1.0-Hardened-PROD).
 
 ---
 
@@ -27,9 +27,9 @@ Welcome to the technical hub for the LEVI-AI Distributed Stack (v1.0.0-RC1).
 ## 🗺️ 3. Project Soul
 | Manual | Description |
 | :--- | :--- |
-| **[CHANGELOG](file:///d:/LEVI-AI/docs/CHANGELOG.md)** | Evolution history from v13 to v1.0.0-RC1. |
-| **[MANIFEST](file:///d:/LEVI-AI/docs/LAUNCH_MANIFEST.md)** | The complete v1.0.0-RC1 production service set. |
-| **[TODO](file:///d:/LEVI-AI/docs/TODO.md)** | Roadmap for v1.1.0 P2P Swarm expansion. |
+| **[CHANGELOG](file:///d:/LEVI-AI/docs/CHANGELOG.md)** | Evolution history from v13 to v13.1.0-Hardened-PROD. |
+| **[MANIFEST](file:///d:/LEVI-AI/docs/LAUNCH_MANIFEST.md)** | The complete v13.1.0-Hardened-PROD production service set. |
+| **[TODO](file:///d:/LEVI-AI/docs/TODO.md)** | Roadmap for v14.0+ Sovereign OS expansion. |
 
 ---
 

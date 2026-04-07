@@ -4,6 +4,7 @@ import logging
 import threading
 import concurrent.futures
 from typing import Any, Dict, Optional
+from backend.utils.audit import AuditLogger
 
 # Resource limiting is Unix-only, fallback for Windows
 try:
@@ -43,8 +44,8 @@ class SovereignSandbox:
         safe_builtins = {
             'abs': abs, 'all': all, 'any': any, 'bin': bin, 'bool': bool, 'chr': chr,
             'dict': dict, 'divmod': divmod, 'enumerate': enumerate, 'filter': filter,
-            'float': float, 'format': format, 'frozenset': frozenset, 'getattr': getattr,
-            'hasattr': hasattr, 'hash': hash, 'hex': hex, 'int': int, 'isinstance': isinstance,
+            'float': float, 'format': format, 'frozenset': frozenset, 
+            'int': int, 'isinstance': isinstance,
             'iter': iter, 'len': len, 'list': list, 'map': map, 'max': max, 'min': min,
             'next': next, 'object': object, 'oct': oct, 'ord': ord, 'pow': pow, 
             'print': print, 'range': range, 'repr': repr, 'reversed': reversed,
@@ -82,6 +83,17 @@ class SovereignSandbox:
             except Exception as e:
                 success = False
                 stderr.write(f"Sovereign Sandbox Fault: Internal system error - {str(e)}")
+
+        # 🛡️ Graduation Audit: Record Execution Attempt
+        import asyncio
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.create_task(AuditLogger.log_event(
+                event_type="SECURITY",
+                action="REPL EXEC",
+                status="success" if success else "failed",
+                metadata={"code_len": len(code), "success": success}
+            ))
 
         return {
             "success": success,

@@ -18,7 +18,7 @@ class ReasoningEngine(EngineBase):
 
     async def _run(self, query: str, context: Optional[str] = None, mode: str = "cot", user_id: str = "global", **kwargs) -> Dict[str, Any]:
         """
-        Sovereign v1.0.0-RC1 Reasoning Wave.
+        Sovereign v13.1.0-Hardened-PROD Reasoning Wave.
         Executes a 5-step cognitive chain governed by AdaptiveThrottler.
         """
         from backend.utils.llm_utils import call_lightweight_llm

@@ -1,5 +1,5 @@
 # LEVI-AI: Distributed Cognitive Network (DCN) v2.0
-### Architectural Specification v1.0.0-RC1 [PREVIEW]
+### Architectural Specification v13.1.0-Hardened-PROD [PREVIEW]
 
 > [!IMPORTANT]
 > DCN Multi-Node is in **Preview Status**. Target production graduation: **Q3 2026**.
@@ -123,4 +123,4 @@ async def worker_loop(self):
 
 ---
 
-*© 2026 LEVI-AI Sovereign Hub — DCN v2.0 Specification v1.0.0-RC1*
+*© 2026 LEVI-AI Sovereign Hub — DCN v2.0 Specification v13.1.0-Hardened-PROD*

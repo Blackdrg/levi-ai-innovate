@@ -24,7 +24,7 @@ class SovereignSecurity:
     @classmethod
     def mask_pii(cls, text: str, user_id: str = "global") -> str:
         """
-        Sovereign Shield v1.0.0-RC1: Hardened PII Encryption.
+        Sovereign Shield v13.1.0-Hardened-PROD: Hardened PII Encryption.
         Encrypts sensitive facts using AES-256 GCM before model handoff.
         """
         return cls.deidentify(text, user_id)

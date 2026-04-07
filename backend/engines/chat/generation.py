@@ -15,6 +15,7 @@ from typing import Optional, Any, List, Dict
 from enum import Enum
 
 from backend.services.local_llm import local_llm
+from backend.core.model_router import ModelRouter
 from backend.engines.utils.security import SovereignSecurity
 from backend.engines.utils.i18n import SovereignI18n
 from .handoff import SovereignHandoff
@@ -38,10 +39,13 @@ class SovereignGenerator:
         self.groq_api_key = os.getenv("GROQ_API_KEY")
         self.together_api_key = os.getenv("TOGETHER_API_KEY")
 
-    async def stream_response(self, messages: List[Dict], model: str = "llama3.1:8b", lang: str = "en", task_type: str = "chat"):
+    async def stream_response(self, messages: List[Dict], model: Optional[str] = None, model_tier: str = "L2", lang: str = "en", task_type: str = "chat"):
         """
         Token-by-token SSE streaming via local Ollama (v13.0.0).
         """
+        # Resolve model from tier if not explicitly provided
+        if not model:
+            model = ModelRouter.get_model_for_tier(model_tier)
         # Emit Pulse: Neural Thinking (Local)
         SovereignBroadcaster.publish("NEURAL_THINKING", {"provider": "local"})
 
@@ -85,11 +89,11 @@ class SovereignGenerator:
             logger.error(f"[Local-Stream] Inference Error: {e}")
             raise RuntimeError("Local brain offline.")
 
-    async def council_of_models(self, messages: List[Dict]) -> str:
+    async def council_of_models(self, messages: List[Dict], model_tier: str = "L3") -> str:
         """
         Council of Models (v13.0): Local Multi-Agent Consensus.
         """
-        model = os.getenv("OLLAMA_MODEL_COMPLEX", "llama3.3:70b")
+        model = ModelRouter.get_model_for_tier(model_tier)
         return await self._single_call(messages, model)
 
     async def _single_call(self, messages: List[Dict], model: str, provider: Any = None) -> str:

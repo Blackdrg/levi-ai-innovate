@@ -10,6 +10,8 @@ from typing import Dict, Any, Optional, List
 from pydantic import BaseModel, Field
 from backend.agents.base import SovereignAgent, AgentResult
 from backend.engines.chat.generation import SovereignGenerator
+from backend.db.redis import r_async as redis_client
+from backend.broadcast_utils import SovereignBroadcaster
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +42,14 @@ class DiagnosticAgent(SovereignAgent[DiagnosticInput, AgentResult]):
         health = await check_brain_health()
         
         issues = [k for k, v in health.get("checks", {}).items() if not v]
+        
+        # Audit Point 44: VRAM Pressure Awareness
+        vram_pressure = await redis_client.get("vram:pressure")
+        if vram_pressure == "true":
+            issues.append("GPU_VRAM_PRESSURE")
+            SovereignBroadcaster.publish("VRAM_PRESSURE", {"status": "critical", "message": "Neural VRAM below 3GB safety threshold."})
+            self.logger.warning("[Diagnostic] VRAM Critical Pressure Detected.")
+
         status = health.get("status", "unknown")
         
         system_prompt = (

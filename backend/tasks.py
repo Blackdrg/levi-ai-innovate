@@ -52,6 +52,73 @@ def cleanup_stuck_jobs():
     """Stale job cleanup for the Visual/Motion Studio."""
     logger.info("[Task] Cleaning stale jobs from Sovereign Studio.")
     return {"status": "cleaned", "jobs_removed": 5}
+@celery_app.task(name="backend.tasks.re_execute_mission_task")
+def re_execute_mission_task(mission_id: str):
+    """
+    Sovereign Resilience v13.1.0: Background Mission Replay.
+    Resumes a frozen DAG from its last successful wave checkpoint.
+    """
+    logger.info(f"[Resilience] Replaying mission: {mission_id}")
+    
+    # Use sync wrapper for async recovery logic
+    from backend.db.postgres_db import PostgresDB
+    from backend.db.models import AbortedMission
+    from backend.core.v8.executor import GraphExecutor
+    from backend.core.v8.planner import TaskGraph, TaskNode
+    from sqlalchemy import select
+    import json
+    
+    async def _run_replay():
+        async with PostgresDB._session_factory() as session:
+            stmt = select(AbortedMission).where(AbortedMission.mission_id == mission_id)
+            res = await session.execute(stmt)
+            aborted = res.scalar_one_or_none()
+            
+            if not aborted:
+                logger.error(f"[Resilience] No aborted record for {mission_id}")
+                return False
+            
+            logger.info(f"[Resilience] Re-hydrating graph for {mission_id}...")
+            
+            # 1. Re-hydrate DAG
+            try:
+                dag_data = aborted.frozen_dag
+                graph = TaskGraph()
+                for node_data in dag_data.get("nodes", []):
+                    graph.add_node(TaskNode(**node_data))
+                
+                # 🛡️ Resilience: Restore completed results
+                # results is a dict mapping node_id to ToolResult data
+                results_data = dag_data.get("results", {})
+                from backend.core.orchestrator_types import ToolResult
+                for node_id, res_data in results_data.items():
+                    graph.results[node_id] = ToolResult(**res_data)
+                    
+            except Exception as e:
+                logger.error(f"[Resilience] Graph re-hydration failed: {e}")
+                return False
+            
+            # 2. Execute
+            executor = GraphExecutor()
+            perception = {
+                "user_id": aborted.user_id,
+                "mission_id": mission_id,
+                "context": aborted.payload or {"mission_id": mission_id}
+            }
+            
+            logger.info(f"[Resilience] Resuming execution from wave {aborted.wave_index}")
+            # Ensure the executor knows it's a resume and doesn't reset counters
+            await executor.run(graph, perception)
+            
+            # 3. Cleanup
+            await session.delete(aborted)
+            await session.commit()
+            logger.info(f"[Resilience] Mission {mission_id} replay completed and record purged.")
+            return True
+
+    loop = asyncio.get_event_loop()
+    return loop.run_until_complete(_run_replay())
+
 @celery_app.task(name="backend.services.scheduling.trigger_scheduled_missions")
 def trigger_scheduled_missions_task():
     """
@@ -59,6 +126,17 @@ def trigger_scheduled_missions_task():
     Runs every 60 seconds.
     """
     logger.info("[Task] Pulse: Checking for scheduled missions.")
+    from backend.services.scheduling import trigger_scheduled_missions
     # Use sync wrapper for async function
     loop = asyncio.get_event_loop()
     return loop.run_until_complete(trigger_scheduled_missions())
+@celery_app.task(name="backend.tasks.weekly_critic_calibration")
+def weekly_critic_calibration():
+    """
+    Sovereign v13.1 Phase 7: Periodic Bias Correction.
+    Runs once a week to update user-specific scoring offsets.
+    """
+    logger.info("[Task] Pulse: Initiating Weekly Critic Calibration Loop.")
+    from backend.scripts.calibrate_critic import calibrate_all_users
+    loop = asyncio.get_event_loop()
+    return loop.run_until_complete(calibrate_all_users())
