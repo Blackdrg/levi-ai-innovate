@@ -1,743 +1,310 @@
-# 🪐 LEVI-AI: Sovereign OS v14.0.0-Autonomous-SOVEREIGN
-### **Sovereign Graduation: Autonomous Agentic Intelligence** 🎓 🤖 🚀
+# 🤖 LEVI-AI: Multi-Agent Orchestration Platform (v14.0)
+### **Modular Agentic Infrastructure for Task Decomposition & Reasoning**
 
 ---
 
-## 📜 PRODUCTION CERTIFICATION GATE (v14.0.0-Autonomous-SOVEREIGN)
-**Date**: 2026-04-07  
-**Status**: **👑 CERTIFIED FOR AUTONOMOUS PRODUCTION**  
-**Cognitive Score**: **98 / 100 (Autonomous Elite)**  
+## 📌 1.0 Overview
+LEVI-AI is a modular multi-agent orchestration system designed for complex task decomposition, autonomous tool execution, and memory-augmented reasoning. Unlike monolithic LLM wrappers, LEVI-AI provides a distributed framework where specialized agents collaborate via a central orchestrator to solve multi-step problems with high precision.
 
-> [!IMPORTANT]
-> ### **Sovereign Performance Certification**
-> LEVI-AI v14.0.0-Autonomous-SOVEREIGN has successfully passed the **Certification Gate**. This includes 100% E2E test coverage for all 14 agents via `testcontainers`, a self-strategy adaptation engine, and a **Hybrid VRAM Burst** capability supporting **1000+ concurrent cognitive missions** via cloud fallback.
-
----
-
-> *“Autonomy is not the absence of control, but the presence of a deterministic, audited, and service-oriented architecture.”*
-
-LEVI-AI v14.0.0-Autonomous-SOVEREIGN is a high-fidelity, service-oriented multi-agent operating system designed for absolute local sovereignty with autonomous cloud burst resilience.
+**Key Capabilities:**
+- **Task Decomposition**: Automatically breaks down natural language queries into executable Directed Acyclic Graphs (DAGs).
+- **Hybrid Inference**: Local-first execution using Ollama, with dynamic cloud fallback for high-concurrency workloads.
+- **Quad-Persistence Memory**: Integrated support for working (Redis), episodic (Postgres), relational (Neo4j), and semantic (FAISS) memory tiers.
+- **Secure Execution**: Rootless Docker sandboxing for all tool and code execution tasks.
 
 ---
 
-## ⚡ 0.0 Quick Start
-1. `docker-compose up -d`
-2. `cd backend && pip install -r requirements.txt && python -m api.main`
-3. `cd frontend && npm install && npm run dev`
+## ⚡ 1.1 Quick Start
+1. **Initialize Infrastructure**: `docker-compose up -d`
+2. **Setup Backend**: 
+   ```bash
+   cd backend
+   pip install -r requirements.txt
+   python -m api.main
+   ```
+3. **Launch UI**:
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
 
 ---
 
-## 🔍 1.0 Current System Reality (Live Status) [UPDATED v14.0]
-| **Brain Core** | ✅ Autonomous | v14.0.0 Distributed Orchestrator with Strategy Selection. |
-| **Neural Stability**| ✅ Hardened | Continuous Eval (CE) | **Experience Replay Buffer**. |
-| **GDPR/Privacy** | ✅ Compliant | PII Masking (AES-256-GCM) | **RTBF (Manual Wipe)**. |
-| **Inference** | ✅ Active | Hybrid-First (Local + Cloud Burst) | **Concurrency: 1000+**. |
-| **Cognitive Score**| 💎 **98 / 100** | Autonomous Elite Performance Certification. |
-
----
-
-## 🚀 1.1 v14.0 Core Innovations [NEW]
-
-### 🧠 Autonomous Strategy Selection
-Agents now dynamically choose between `DirectExecution`, `ThinkingChain`, or `MultiAgentSwarm` based on mission complexity and real-time VRAM availability.
-
-### 🔋 Hybrid VRAM Burst Scheduling
-The system monitors local GPU slots. Upon saturation, missions are dynamically offloaded to **Cloud Burst Nodes** (Groq/OpenAI) via the `CloudFallbackProxy`, ensuring zero mission drops.
-
-### 🧪 Neural Drift Correction
-The `SovereignTrainer` executes an hourly **Cognitive Benchmark**. If average scores fall below 0.85, a **Safe Rollback** is triggered to protect core model weights from catastrophic forgetting.
-
----
-
-## 📜 1.2 v14.0 Graduation Certificate (Autonomous-SOVEREIGN) [NEW]
-
-| Category | Status | Detail |
+## 🔍 1.2 System Status (v14.0 Production Prep)
+| Feature | Implementation | Status |
 | :--- | :--- | :--- |
-| **Agent Intelligence** | ✅ Autonomous | Strategy Selection, Tool Discovery, and Meta-Arbitration. |
-| **Neural Stability** | ✅ Hardened | Continuous Eval (CE), Replay Buffer, and Shadow Deployment. |
-| **Security & GDPR** | ✅ Compliant | PII Masking, RTBF (Wipe), and Red-Teaming Simulator. |
-| **Hybrid Scale** | ✅ Resilient | Local + Cloud Burst (Groq/OAI), Tiered Rate Limiting. |
-| **Observability** | ✅ Deep Trace | OpenTelemetry/Jaeger + ARCA (Automated Root Cause). |
+| **Orchestrator** | Distributed Task Scheduler with Adaptive Strategy Selection | ✅ Active |
+| **Model Routing**| Dynamic VRAM-aware routing (Local + Cloud Burst) | ✅ Hardened |
+| **Data Governance**| GDPR-compliant PII Masking & AES-256-GCM Encryption | ✅ Compliant |
+| **Stability** | Experience Replay Buffer & Automated Root Cause Analysis | ✅ Active |
+| **Evaluation** | Integrated Benchmarking Suite (Internal Evaluation) | 🧪 Experimental |
 
 ---
 
-## 🌍 2.0 Distributed Service Architecture
-LEVI-AI is composed of five distinct, coordinated services:
-- **FastAPI**: Gateway & Orchestration API.
-- **Postgres**: Relational Persistence & Tenant Isolation.
-- **Redis**: Low-latency Working Memory & Message Queue (**TLS-Enabled**).
-- **Neo4j**: Relational Knowledge Graph (**Bolt+S Secure**).
-- **Celery**: Background Task Workers, Memory Pruning & **Mission Replay**.
+## 🚀 2.0 System Architecture
+LEVI-AI is built on a 5-service modular architecture optimized for local-first execution:
+- **FastAPI**: Gateway processing, task orchestration, and SSE telemetry hub.
+- **PostgreSQL**: ACID-compliant persistence for long-term episodic logs and tenant data.
+- **Redis**: High-speed blackboard for inter-agent communication and task queuing.
+- **Neo4j**: Graph-based knowledge representation for relational entity mapping.
+- **Celery**: Asynchronous background workers for memory pruning and task replay.
 
----
-
-## 📁 3.0 Repository Structure
+### 2.1 Repository Structure
 ```text
 /backend
-  /api          <- Gateway Entry Points
-  /core         <- Orchestration Logic
-  /agents       <- Specialized Swarm Modules
-/infrastructure <- Docker/K8s configurations
+  /api          <- FastAPI Entry Points & Middleware
+  /core         <- Central Orchestration & Strategy Logic
+  /agents       <- Functional Agent Modules (Planner, Execution, etc.)
+/infrastructure <- Docker & Container Orchestration Configs
+/frontend       <- React-based Monitoring & Control UI
 ```
 
 ---
 
-## 🗺️ 4.0 Architecture: Master System Topology (v14.0.0-Autonomous-SOVEREIGN)
-LEVI-AI is built on a 5-service modular architecture optimized for local-first cognitive autonomy.
+## 🗺️ 3.0 System Topology
+The following diagram illustrates the high-level coordination between system layers:
 
 ```mermaid
 graph LR
     User((User)) -- "HTTPS / SSE" --> Gateway[API Gateway: FastAPI]
     
-    subgraph ShieldCluster ["Sovereign Shield Cluster (Security)"]
-        Gateway -- "RBAC G/P/C" --> RBAC[RBAC Middleware]
-        RBAC -- "User Context" --> KMS[SovereignKMS: AES-256]
-        KMS -- "Encrypted Vector" --> Boundary[Mission Boundary]
-        Boundary -- "Sanitized Pulse" --> Auth[Auth Registry]
+    subgraph SecurityLayer ["Security & Gateway Layer"]
+        Gateway -- "RBAC" --> RBAC[RBAC Middleware]
+        RBAC -- "Context" --> KMS[SystemKMS: AES-256]
+        KMS -- "Encrypted Data" --> Boundary[Task Boundary]
+        Boundary -- "Sanitized Event" --> Auth[Auth Registry]
     end
 
-    subgraph CognitiveCore ["Cognitive Core (Orchestration)"]
-        Auth -- "Authorized Mission" --> Brain[Brain Orchestrator]
-        Brain -- "System Intent" --> Goal[Goal Engine]
-        Goal -- "Task Tree" --> Planner[Mission Planner]
-        Planner -- "Topological Wave" --> Executor[Graph Executor]
-        Executor -- "Wave Pulse" --> Blackboard[(Redis: Blackboard)]
+    subgraph OrchestrationEngine ["Orchestration Engine"]
+        Auth -- "Authorized Task" --> Orchestrator[Task Orchestrator]
+        Orchestrator -- "Intent" --> Goal[Goal Engine]
+        Goal -- "Task Tree" --> Planner[Task Planner]
+        Planner -- "DAG" --> Executor[Graph Executor]
+        Executor -- "Event" --> Blackboard[(Redis: Blackboard)]
     end
 
-    subgraph SwarmLayer ["Swarm Layer (14 Specialized Agents)"]
-        Executor -- "Task Assignment" --> Artisan[Artisan: Code]
-        Executor -- "Research Scan" --> Scout[Scout: Web]
-        Executor -- "Adjudication" --> Critic[Critic: Audit]
-        Executor -- "Logic Check" --> Coder[Coder: Scripts]
+    subgraph AgentSystem ["Agent System (Functional Categories)"]
+        Executor -- "Assign" --> PAgent[Planner Agents]
+        Executor -- "Execute" --> EAgent[Execution Agents]
+        Executor -- "Retrieve" --> RAgent[Retrieval Agents]
+        Executor -- "Audit" --> CAgent[Critic Agents]
     end
 
-    subgraph ToolingEnv ["Tooling & Execution Layer"]
-        Artisan -- "Execute" --> Docker[Docker Sandbox]
-        Scout -- "Query" --> Search[Search API]
-        Scout -- "Browse" --> Browser[Playwright]
+    subgraph ToolingEnv ["Tooling & Runtime Layer"]
+        EAgent -- "Run" --> Docker[Docker Sandbox]
+        RAgent -- "Search" --> Search[Search API]
+        RAgent -- "Browse" --> Browser[Playwright]
     end
 
-    subgraph InferenceStack ["Local-First Inference Stack"]
-        Artisan -- "Predict" --> Ollama[Ollama Engine]
-        Ollama -- "L3.1 / L3.3" --> LLM[Local Models]
-        Ollama -- "768d" --> Nomic[Nomic Embed]
+    subgraph InferenceStack ["Inference Stack"]
+        EAgent -- "Inference" --> Ollama[Ollama Engine]
+        Ollama -- "Llama 3 / Phi-3" --> LLM[Local Models]
+        Ollama -- "Nomic" --> Embed[Embeddings]
     end
 
-    subgraph FidelityCluster ["Fidelity Cluster (Validation)"]
-        Artisan -- "Validation" --> HardRule[HardRule Validator]
-        HardRule -- "AST Check" --> Logic[Logic Verifier]
-        Logic -- "Fidelity Score" --> Score[Fidelity S > 60/40]
+    subgraph EvalCluster ["Evaluation & Validation"]
+        EAgent -- "Validate" --> Validator[HardRule Validator]
+        Validator -- "AST/JSON" --> Logic[Logic Verifier]
+        Logic -- "Eval Score" --> Score[Evaluation Score]
     end
 
-    subgraph MemoryVault ["Memory Vault (Quad-Persistence)"]
-        Brain -- "State Sync" --> MM[Memory Manager]
-        MM -- "Working State" --> Redis[(Redis)]
+    subgraph PersistenceLayer ["Persistence Layer (Quad-Sync)"]
+        Orchestrator -- "Sync" --> MM[Memory Manager]
+        MM -- "Working" --> Redis[(Redis)]
         MM -- "Episodic" --> Postgres[(Postgres)]
         MM -- "Relational" --> Neo4j[(Neo4j)]
         MM -- "Semantic" --> FAISS[(FAISS)]
-        MM -- "Backups" --> Snap[Snapshot Orchestrator: Encrypted]
-        Snap -- "Sync" --> CloudRclone[(rclone: S3/MinIO/Vault)]
     end
 
-    Score -- "Verified Results" --> MM
-    Gateway -- "Real-time Pulse" --> SSE[SSE Telemetry Hub]
-    SSE -- "Compressed Data" --> User
+    Score -- "Verified" --> MM
+    Gateway -- "Telemetry" --> SSE[SSE Telemetry Hub]
+    SSE -- "Data" --> User
 
-    %% Styling with ClassDefs
-    classDef userStyle fill:#ce93d8,stroke:#333,stroke-width:2px;
-    classDef securityStyle fill:#fffde7,stroke:#fbc02d,stroke-width:1px;
-    classDef cognitiveStyle fill:#e3f2fd,stroke:#1e88e5,stroke-width:1px;
-    classDef swarmStyle fill:#e8f5e9,stroke:#4caf50,stroke-width:1px;
-    classDef dbStyle fill:#bbdefb,stroke:#1e88e5,stroke-width:2px;
+    %% Styling
+    classDef userStyle fill:#f5f5f5,stroke:#333,stroke-width:2px;
+    classDef securityStyle fill:#fffceb,stroke:#d4a017,stroke-width:1px;
+    classDef orchestrationStyle fill:#e6f3ff,stroke:#0056b3,stroke-width:1px;
+    classDef agentStyle fill:#f0fff0,stroke:#2e7d32,stroke-width:1px;
+    classDef dbStyle fill:#f8f9fa,stroke:#495057,stroke-width:2px;
 
     class User,Gateway,SSE userStyle;
-    class ShieldCluster,RBAC,KMS,Boundary,Auth,FidelityCluster,HardRule,Logic,Score securityStyle;
-    class CognitiveCore,Brain,Goal,Planner,Executor,MM cognitiveStyle;
-    class SwarmLayer,Artisan,Scout,Critic,Coder,ToolingEnv,Docker,Search,Browser swarmStyle;
-    class MemoryVault,Redis,Postgres,Neo4j,FAISS,Snap,Blackboard dbStyle;
+    class SecurityLayer,RBAC,KMS,Boundary,Auth,EvalCluster,Validator,Logic,Score securityStyle;
+    class OrchestrationEngine,Orchestrator,Goal,Planner,Executor,MM orchestrationStyle;
+    class AgentSystem,PAgent,EAgent,RAgent,CAgent,ToolingEnv,Docker,Search,Browser agentStyle;
+    class PersistenceLayer,Redis,Postgres,Neo4j,FAISS dbStyle;
 ```
 
-### 4.0.1 Diagram Legend
-| Color | Cluster Type | Purpose |
+---
+
+## 🛠️ 4.0 Core Components
+
+### 🔒 Security & Ingress Layer
+- **API Gateway**: Central entry point for REST and SSE telemetry.
+- **RBAC Middleware**: Role-based access control (User/Provider/Core).
+- **SystemKMS**: AES-256-GCM encryption for sensitive data handling.
+- **Egress Proxy**: Gated HTTP client preventing unauthorized external access.
+
+### 🧠 Orchestration & Logic Layer
+- **Task Orchestrator**: Manages the lifecycle of high-level requests and adaptive strategy selection.
+- **Goal Engine**: Decomposes natural language into executable goal trees.
+- **Task Planner**: Generates Directed Acyclic Graphs (DAGs) for execution.
+- **Graph Executor**: Handles parallel execution of task dependencies.
+- **Circuit Breaker**: Adaptive gating to maintain system stability under load.
+
+---
+
+## 🤖 5.0 Agent System (Functional Registry)
+LEVI-AI categorizes its specialized micro-agents into five core functional areas:
+
+| Category | Role | Sub-Modules |
 | :--- | :--- | :--- |
-| **Purple** | **User / Ingress** | Primary entry, SSE telemetry, and client-side real-time pulses. |
-| **Yellow** | **Security / Validation** | Auth, RBAC, AES-256-GCM encryption, and hard-rule fidelity gates. |
-| **Green** | **Execution / Swarm** | Specialized multi-agent orchestration and sandboxed runtime execution. |
-| **Blue** | **Persistence / Memory** | Quad-Persistence layer (Episodic, Relational, Semantic, Working states). |
-| **White** | **Inference** | Local GGUF model hosting and gated cloud-residency proxies. |
-
-### 4.0.2 Service Interaction Matrix (Core-5) [UPDATED]
-| Source | Target | Protocol | Port (Internal) | Logic / Purpose |
-| :--- | :--- | :--- | :--- | :--- |
-| **Gateway** | **Redis** | RESP | 6379 | Working memory, pub/sub telemetry, and mission blackboard. |
-| **Gateway** | **Postgres** | binary | 5432 | ACID-compliant episodic ledger and tenant-isolated RBAC. |
-| **Gateway** | **Neo4j** | Bolt | 7687 | Relational knowledge graph for entity-triplet extraction. |
-| **Worker** | **Ollama** | REST/JSON | 11434 | Local GGUF inference (Llama 3.1, Phi-3) and Nomic embeddings. |
-| **Artisan** | **Docker** | **Unix Socket** | **Rootless** | Sandboxed code execution using a hardened local socket. |
-
-### 4.1 Master Node Mapping (50+ Detailed Components)
-#### 🔒 Security & Ingress Layer
-1.  **FastAPIGateway**: Central entry point for REST and SSE telemetry streams.
-2.  **RBACMiddleware**: Grade-based (G/P/C) access control for multi-tenant isolation.
-3.  **SovereignKMS**: AES-256-GCM encryption engine for PII pseudonymisation.
-4.  **InstructionBoundary**: Injects `<MISSION_CONTEXT>` walls to prevent prompt leakage.
-5.  **AuthRegistry**: Master store for identity-mission binding.
-6.  **SecretManager**: Vaulted storage for DCN secrets and external API keys.
-7.  **JWTRotator**: Logic for session-bound token refreshing and rotation.
-8.  **EgressProxy**: Gated HTTP client for agents to prevent internal SSRF attacks.
-
-#### 🧠 Cognitive Orchestration Layer
-9.  **BrainController**: The cognitive hub managing mission lifecycles and state loops.
-10. **GoalEngine**: Decomposes natural language queries into executable goal trees.
-11. **MissionPlanner**: Generates a Directed Acyclic Graph (DAG) for swarm execution.
-12. **GraphExecutor**: Orchestrates topological parallel execution of task waves.
-13. **WaveScheduler**: Logic for managing recursion depth and task dependencies.
-14. **MissionBlackboard**: Redis-backed shared memory for inter-agent context.
-15. **CircuitBreaker**: Adaptive gating that pauses tasks if DB latency is too high.
-16. **LearningThrottler**: Limits background self-evolution tasks to preserve VRAM.
-
-#### 🤖 Swarm Agent Layer (Specialized Modules)
-17. **Artisan (CodeGen)**: Specialized in building and testing logic/scripts.
-18. **Scout (Research)**: Multi-threaded web exploration and data scraping.
-19. **Critic (Adjudicator)**: High-fidelity reflection and failure analysis module.
-20. **HardRuleValidator**: Non-probabilistic AST/JSON/Regex verification suite.
-21. **Coder (Logic)**: Core reasoning agent for structural/algorithmic tasks.
-22. **Researcher (Discovery)**: Synthesizes knowledge from multiple information pools.
-23. **Analyst (Quant)**: Processes structured datasets and generates mission insights.
-24. **SwarmControl**: Gateway for agents to trigger sub-missions recursively.
-
-#### 🛠️ Tooling & Sandbox Layer
-25. **DockerSandbox**: Isolated runtime for OCI-compliant code execution.
-26. **SecureShell**: Restricted bash shell for local system interaction (Unix/Git).
-27. **BrowserSubagent**: Playwright-based headless browser for complex navigation.
-28. **SearchAPI**: Tavily/Serp integration for real-time web grounding.
-29. **LocalFS**: Managed interaction with the local host filesystem (Project Drive).
-30. **SyntaxChecker**: PyLint-based static analysis for model-generated code.
-31. **LogicVerifier**: JSON integrity and schema enforcement module.
-
-#### 💾 Memory & Resonance Layer
-32. **MemoryManager**: Master IO orchestrator for the quad-persistence layer.
-33. **EpisodicLedger**: Postgres-backed store for historical mission logs.
-34. **SemanticIndex**: FAISS HNSW store for high-recall RAG operations.
-35. **KnowledgeGraph**: Neo4j hub for relational entity-relationship mapping.
-36. **WorkingState**: Redis transient store for real-time mission variables.
-37. **SnapshotOrchestrator**: Unified backup and disaster recovery logic.
-38. **HNSW Index (efSearch 64)**: Optimized vector search for <100ms recall.
-39. **FidelityScore (S)**: The **60/40 weighted metric** for output quality.
-40. **TelemetryBroadcaster**: zLib-compressed SSE stream for the Sovereign UI.
-
-#### 📡 Inference & Flux Layer
-41. **OllamaEngine**: Local interface for GGUF model management.
-42. **Llama 3.1 (8B)**: The primary general-purpose inference model.
-43. **Llama 3.3 (70B)**: The reasoning-heavy "Brain" for complex adjudication.
-44. **Phi-3 (Mini)**: Optimized logic engine for structural validation.
-45. **Nomic-Embed**: Local 768-dim vector model for RAG embeddings.
-46. **CloudFallbackProxy**: Gated redirection to external APIs (Disabled by Default).
-
-#### 🌀 Evolution & Telemetry Layer
-47. **LearningLoop**: **[ACTIVE] v14.0.0** — Autonomous 4-bit LoRA (Q4_K_M) fine-tuning pipeline with 5% improvement gate and **Cognitive Drift Rollback**.
-48. **TelemetryHub**: Real-time observability (Prometheus) for cognitive unit (CU) costs.
-49. **PulseCompressor**: zLib-logic to minimize network overhead for SSE.
-50. **UserBillingLedger**: Permanent ACID records of CU consumption and drift.
-51. **CriticCalibration**: Analyzes Primary/Shadow divergence for bias correction.
-52. **Grafana Dashboard**: Production-grade system and cognitive observability.
-
-#### 🎓 v14.0 Sovereign-Elite Components [NEW]
-53. **SovereignTrainer**: Manages hourly cognitive benchmarks and LoRA promotion.
-54. **CloudBurstProxy**: Handles mission offloading to Groq/OpenAI nodes.
-55. **StrategyEngine**: Dynamic selection of execution paths (CoT/Swarm).
-56. **ARCA Hub**: Automated Root Cause Analysis for mission failures.
-57. **RedTeamSimulator**: Executes automated security stress tests.
-58. **ExperienceReplay**: Buffer for maintaining mission performance consistency.
-59. **ShadowDeploymentHandler**: Manages A/B testing between primary and candidate models.
-60. **PrivacyRouter**: Enforces GDPR-compliant data governance and PII masking.
+| **Planner Agent** | Task decomposition & routing | `TaskAgent`, `AgentRegistry` |
+| **Execution Agent** | Code generation & execution | `CodeAgent`, `PythonReplAgent`, `LocalAgent` |
+| **Retrieval Agent**| Data discovery & synthesis | `SearchAgent`, `ResearchAgent`, `DocumentAgent`, `MemoryAgent` |
+| **Critic Agent** | Evaluation & diagnostic review | `CriticAgent`, `ConsensusAgent`, `DiagnosticAgent` |
+| **Tool Agent** | Specialized media & optimization| `ImageAgent`, `VideoAgent`, `RelayAgent`, `OptimizerAgent` |
 
 ---
 
-## 🔬 4.1.1 Runtime Truth Metrics (v14.0.0-Autonomous-SOVEREIGN)
-LEVI-AI operates under a "Hybrid Resilient" model where local hardware is paired with cloud burst capacity.
+## ⚡ 6.0 Task Execution Flow
+The following diagram illustrates the lifecycle of a task request:
 
-### Updated Performance Metrics (v13.1 vs v14.0)
-| Parameter | v13.1 (Baseline) | v14.0 (Autonomous) | Status |
-| :--- | :--- | :--- | :--- |
-| **Concurrent Users (CCU)** | 16 | **1000+ (Hybrid Burst)** | 🟢 Elite |
-| **Latency (p95)** | < 15s | **< 12s (Cloud Accelerated)** | 🟢 Optimal |
-| **Strategy Latency** | Static | **Adaptive (5-50ms overhead)** | 🟢 Optimal |
-| **Recovery Protocol** | Manual / Drill | **Autonomous ARCA** | 🟢 Certified |
-| **Data Retention** | Local-Only | **GDPR-Scrubbed Global Sync** | 🟢 Compliant |
-
-> [!TIP]
-> **Burst Threshold**: The `asyncio.Semaphore(4)` GPU Guard remains the primary local safety mechanism. Beyond local saturation, the **Cloud Burst Proxy** automatically handles overflow.
-
----
-
-## 🔁 4.2 Mission Execution Flowchart (v14.0.0-Autonomous-SOVEREIGN) [UPDATED]
 ```mermaid
 graph TD
     User([User Request]) --> Gateway{API Gateway}
-    Gateway -- "Rate Limit Check" --> RBAC[RBAC / Tier Filter]
-    RBAC -- "Pass" --> KMS[SovereignKMS: AES-256 Encrypt]
-    KMS -- "Secure Payload" --> Brain[Brain Orchestrator]
+    Gateway -- "Rate Limit" --> RBAC[RBAC Filter]
+    RBAC -- "Pass" --> KMS[SystemKMS: AES-256]
+    KMS -- "Secure Payload" --> Orchestrator[Task Orchestrator]
     
-    subgraph "Recursive Planning Loop"
-        Brain --> Goal[Goal Engine: Intent Audit]
+    subgraph "Planning Loop"
+        Orchestrator --> Goal[Goal Engine: Intent Analysis]
         Goal --> Planner[DAG Planner: Step Synthesis]
     end
     
-    Planner -- "Executable DAG" --> Executor[Graph Executor: V8]
+    Planner -- "Executable DAG" --> Executor[Graph Executor]
     
-    subgraph "Swarm Execution & Compensation"
+    subgraph "Parallel Execution"
         Executor --> Wave[Wave Scheduler: Semaphore 4]
         Wave --> HITL{HITL Gate?}
-        HITL -- "Yes" --> Approval[Redis: Human Approval Required]
-        Approval -- "Approved" --> Agents[Swarm Agents: 16+ Active]
+        HITL -- "Yes" --> Approval[Redis: User Approval Required]
+        Approval -- "Approved" --> Agents[Parallel Agents]
         HITL -- "No" --> Agents
         
-        Agents --> Tool[Tool Execution: Docker Socket]
-        Tool -- "Success" --> Adjudicate[Critic: Fidelity Review]
+        Agents --> Tool[Tool Execution: Docker Sandbox]
+        Tool -- "Success" --> Evaluate[Critic: Quality Review]
         Tool -- "Fail" --> Retry{Retry < 2?}
         Retry -- "Yes" --> Wave
         Retry -- "No" --> Compensate[Compensation Engine]
-        Compensate -- "Success" --> Adjudicate
-        Compensate -- "Fail" --> Abort[Mission Abort: Critical Alert]
+        Compensate -- "Success" --> Evaluate
+        Compensate -- "Fail" --> Terminate[Task Termination]
     end
     
-    Adjudicate -- "Fidelity Score > 0.5" --> Crystallize[Memory Manager: Quad-Sync]
-    Adjudicate -- "Low Fidelity" --> Retry
+    Evaluate -- "Score > 0.5" --> Persist[Memory Manager: Quad-Sync]
+    Evaluate -- "Low Score" --> Retry
     
-    subgraph "Persistence Layer"
-        Crystallize --> Redis[(Working Store)]
-        Crystallize --> Postgres[(Episodic Ledger)]
-        Crystallize --> Neo4j[(Relational Graph)]
-        Crystallize --> FAISS[(FAISS: Semantic Index)]
+    subgraph "Persistence Tiers"
+        Persist --> Redis[(Working Store)]
+        Persist --> Postgres[(Episodic Ledger)]
+        Persist --> Neo4j[(Relational Graph)]
+        Persist --> FAISS[(Semantic Index)]
     end
     
-    Crystallize -- "Final Result" --> Zlib[zLib Pulse Compressor]
+    Persist -- "Result" --> Zlib[zLib Event Compressor]
     Zlib --> SSE[SSE Telemetry Hub]
     SSE --> Response([User Workstation])
 ```
 
 ---
 
-## 🔄 4.3 Cognitive Mission Lifecycle (Sequence Flow) [NEW]
-The exact sequence of events from user request to memory crystallization.
+## 📦 7.0 Persistence & Memory System
+LEVI-AI implements a Quad-Persistence model to ensure high-fidelity data retrieval:
 
-```mermaid
-sequenceDiagram
-    participant U as 👤 User / Sovereign UI
-    participant G as 🛡️ Gateway (RBAC + KMS)
-    participant B as 🧠 Brain (Orchestrator)
-    participant P as 📐 Planner (DAG Builder)
-    participant E as ⚡ Executor (Semaphore: 4)
-    participant A as 🤖 Agent Swarm
-    participant M as 💾 Memory Vault
-
-    U->>G: POST /api/v1/orchestrator/mission
-    G->>G: RBAC Check + Rate Limit Gate
-    G->>G: AES-256-GCM Encrypt PII
-    G->>B: Authorized Secure Payload
-    B->>B: Intent Audit + Goal Decomposition
-    B->>P: Build Topological Task Graph (DAG)
-    P->>P: Dependency Resolution + Wave Sorting
-    loop Each Wave
-        P->>E: Enqueue Wave (N tasks)
-        E->>E: Acquire GPU Slot (Semaphore)
-        E->>A: Dispatch Tasks in Parallel
-        A->>A: Execute in Docker Sandbox
-        A->>A: HardRule AST/JSON Validation
-        A->>E: Return ToolResult + Fidelity Score
-        E->>E: Release GPU Slot
-    end
-    E->>B: Aggregate Wave Results
-    B->>B: Fidelity Audit: S = (LLM×0.6)+(Rule×0.4)
-    alt Fidelity Score >= 0.85
-        B->>M: Crystallize to Training Corpus
-    end
-    B->>M: Quad-Persistence Sync
-    M->>G: Mission Complete Pulse
-    G->>U: SSE zLib Compressed Final Result
-```
-
----
-
-## ⚛️ 4.3.1 Mathematical Foundations of Sovereignty [NEW]
-All mission quality and cost metrics are grounded in deterministic, non-probabilistic formulas.
-
-### The Fidelity Score (S)
-Output quality is determined by a **60/40 weighted formula** combining neural appraisal and hard-rule truth:
-
-```
-S = (LLM_Appraisal × 0.6) + (Rule_Truth × 0.4)
-```
-
-| Component | Weight | Source | Description |
-| :--- | :--- | :--- | :--- |
-| **LLM Appraisal** | 60% | `CriticAgent` | Qualitative reasoning and coherence review. |
-| **Rule Truth** | 40% | `HardRuleAgent` | Deterministic AST/JSON/schema verification. |
-| **Crystallization Gate** | S > 0.85 | `LearningLoop` | Patterns above this threshold enter the training corpus. |
-
-### Cognitive Unit (CU) Cost Model
-Resource consumption is tracked per task node for mission billing and complexity warning:
-
-```
-CU_per_node = 1.0 + ((prompt_tokens + completion_tokens) / 1000)
-Mission_CU  = SUM(CU_per_node × latency_seconds) for all nodes
-```
-
-| Threshold | Action | Description |
+| Tier | Technology | Purpose |
 | :--- | :--- | :--- |
-| CU > 50 | ⚠️ Warning Pulse | High complexity mission detected. |
-| CU > 100 | 🔴 Cognitive Alert | Mission approaching resource ceiling. |
-| CU > 200 | ⛔ Abort Gate | Mission auto-aborted to prevent VRAM OOM. |
+| **Working Memory** | Redis | Transient task state and inter-agent messaging (Blackboard). |
+| **Episodic Memory**| PostgreSQL | Audit logs, task history, and tenant metadata. |
+| **Relational Memory**| Neo4j | Entity-relationship mapping and knowledge triplets. |
+| **Semantic Memory** | FAISS | Vector-based RAG and high-recall context retrieval. |
 
 ---
 
-## 🤖 4.3.2 Sovereign Swarm Registry — 14-Agent Certification Grid (v14.0)
-Every agent in the swarm is a specialized micro-intelligence with a unique logic-gate, runtime protection, and E2E certification.
+## 🛰️ 8.0 Inference Layer
+The system utilizes a hybrid inference model to balance local privacy with computational scalability:
 
-| # | Agent | Module | Tier | Status | Logic Gate | Fidelity |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| 01 | **Artisan** | `CodeAgent` | L4 | ✅ AUTONOMOUS | Rootless Docker | S > 0.95 |
-| 02 | **Scout** | `SearchAgent` | L2 | ✅ AUTONOMOUS | Egress Proxy | S > 0.90 |
-| 03 | **Critic** | `CriticAgent` | L3 | ✅ AUTONOMOUS | Reflection Loop | S > 0.98 |
-| 04 | **Coder** | `PythonRepl` | L3 | ✅ AUTONOMOUS | AST/PyLint | S > 0.95 |
-| 05 | **Analyst** | `DocAgent` | L2 | ✅ AUTONOMOUS | Schema Guard | S > 0.90 |
-| 06 | **HardRule** | `TaskAgent` | L1 | ✅ AUTONOMOUS | Hard-match | S = 1.00 |
-| 07 | **SwarmCtrl** | `Consensus` | L4 | ✅ AUTONOMOUS | Swarm v14.0 | S > 0.98 |
-| 08 | **Optimizer** | `Optimize` | L3 | ✅ AUTONOMOUS | Token Budget | S > 0.85 |
-| 09 | **Memory** | `MemAgent` | L2 | ✅ AUTONOMOUS | Uniqueness | S > 0.90 |
-| 10 | **Diagnostic**| `DiagAgent` | L1 | ✅ AUTONOMOUS | CircuitAware | S > 0.95 |
-| 11 | **Imaging** | `ImageAgent` | L3 | ✅ AUTONOMOUS | Prompt Shield | S > 0.90 |
-| 12 | **Video** | `VideoAgent` | L3 | ✅ AUTONOMOUS | Frame Logic | S > 0.85 |
-| 13 | **Researcher**| `ResAgent` | L2 | ✅ AUTONOMOUS | Rate-limited | S > 0.90 |
-| 14 | **Relay** | `RelayStub` | L1 | ✅ AUTONOMOUS | Stub Guard | S > 1.00 |
-
-> [!TIP]
-> **Fidelity (S)**: v14.0 agents now use **Autonomous Strategy Selection** to guarantee S > 0.90 across all mission types.
-
-> [!TIP]
-> **Fidelity (S)**: Missions below S=0.60 trigger automatic compensation; missions above S=0.85 enter the LearningLoop for pattern crystallization.
+- **Local Inference (Ollama)**: Primary execution layer using GGUF-based models (e.g., Llama 3.1 8B, Phi-3 Mini).
+- **Cloud Fallback**: Automated offloading for routing high-complexity tasks to cloud providers (Groq/OpenAI) when local VRAM is saturated.
+- **Resource Gating**: Semaphore-based concurrency control (`Semaphore(4)`) to prevent OOM events on local hardware.
 
 ---
 
-## 📊 4.4 System Utilization & Performance (RC1) [UPDATED]
-#### GPU Utilization Model (VRAM/Inference)
-- **Idle (0–25%)**: `[▒▒▒░░░░░░░░░░░░░]` Dreaming / Pulse Heartbeat
-- **Balanced (25–75%)**: `[▒▒▒▒▒▒▒▒▒▒░░░░░░]` 2–3 Concurrent L1/L2 Sessions
-- **Saturated (75–95%)**: `[▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒░]` **4 Concurrent L3/L4 Missions**
-- **Hazard (>95%)**: **CUDA OOM PREVENTATIVE AUTO-GATE ACTIVE**
+## 🛡️ 9.0 Security Model
+Multi-layered defense-in-depth pipeline protecting data and execution environments.
 
----
-
-## 4.3 Resource & Flow Control [UPDATED]
-- **GPU Guard**: `asyncio.Semaphore(4)` manages neural activity. This "Safety First" setting prioritizes stack stability over raw throughput.
-- **Circuit Breaker**: If Redis or Postgres latency exceeds 500ms, the system automatically pauses background tasks.
-- **Pulse Broadcast**: Telemetry is streamed via **zlib-compressed SSE**.
-
----
-
-## 4.4 The Mission Heartbeat (DCN Sync) [HARDENED]
-The **Distributed Cognitive Network (DCN)** synchronizes inter-node intelligence via **HMAC-SHA256 signed** and **TLS-encrypted** pulses.
-> [!IMPORTANT]
-> **Production Status**: DCN Multi-Node is **Hardened-Ready**. It supports **Sticky Coordinator election** and TLS-enabled Redis gossip. Multi-physical-server mesh is now pre-certified for the Q3 2026 launch.
-
----
-
-## 🚧 4.5 System Limitations & Scaling [UPDATED]
-#### Real-World Operational Limitations
-1. **Local Concurrency**: Local system is gated at **4 parallel inference tasks** for stability.
-2. **Hybrid Burst**: Missions exceeding local capacity are routed to cloud burst nodes.
-3. **Docker Exposure**: Uses a **Rootless Unix Socket** to prevent container escapes.
-
----
-
-## 🛠️ 4.6 Operational Commands (v14.0) [NEW]
-| Task | Command |
+### 9.1 Threat Model & Mitigations
+| Threat | Mitigation Strategy |
 | :--- | :--- |
-| **Monitor Burst** | `docker logs levi-backend | grep -i "burst"` |
-| **Run Red Team** | `python -m backend.scripts.red_team` |
-| **Manual Wipe (GDPR)** | `POST /api/v1/privacy/rtbf?user_id={uid}` |
-| **Neural Audit** | `GET /api/v1/trainer/ce-report` |
+| **Prompt Injection**| NER Boundary Enforcement + PromptShield Filtration. |
+| **Data Exposure** | AES-256-GCM encryption at rest + PII masking in transit. |
+| **Container Escape**| Rootless Docker Sandboxing with restricted Unix sockets. |
+| **Resource Exhaustion**| Sliding-window rate limiting & semaphore task gating. |
+
+### 9.2 Security Pipeline
+- **Injection Shield**: Real-time filtering of malicious prompt patterns.
+- **PII Masking**: De-identification of sensitive user data using SystemKMS.
+- **RBAC Gate**: Tiered access control (User, Provider, Core).
+- **Egress Control**: Deny-by-default network policy for all agents.
 
 ---
 
-## 🗄️ 9.0 Persistent Memory & Durability [UPDATED]
-| Tier | Backend | Persistence Policy |
-| :--- | :--- | :--- |
-| **T1: Working** | Redis | `appendfsync everysec` (Confirmed) |
-| **T2: Episodic** | Postgres | Mission & Message Ledger |
-| **T3: Semantic** | FAISS | HNSW (efSearch: 64) |
-
-### 9.1 Backup & Disaster Recovery [HARDENED]
-- **RTO < 300s**: Automated restore drill (weekly) verifies cognitive re-hydration.
-- **Asymmetric Encryption**: Backups are encrypted with **age** before off-site sync.
-- **Off-site Sync (rclone)**: Automated synchronization to remote S3/MinIO targets.
-- **Retention**: Rolling 14-day local backup policy enforced.
-
----
-
-## 🏆 10.0 Production Readiness Checklist (28/28 Points) [UPDATED]
-| Audit Point | Implementation Detail | Status |
-| :--- | :--- | :--- |
-| **07. DAG Execution** | **Semaphore(4) Guard** | ✅ |
-| **08. Fidelity Score S** | **60/40 Neural/Literal Weighting** | ✅ |
-| **16. Pattern Approval** | **HITL Review for Logic Promotion** | ✅ |
-| **23. Rate Limiting** | **Sliding Window (Redis-backed)** | ✅ |
-| **25. Security Headers** | **Hardened CSP/HSTS Policy** | ✅ |
-| **27. DCN Gossip** | **HMAC-SHA256 Pulse [PREVIEW]** | ✅ |
-
----
-
-## 📜 CHANGELOG (v14.0.0-Autonomous-SOVEREIGN)
-### [2026-04-07] — Sovereign Autonomous Graduation
-- **[CERT]** System promoted to **v14.0 Autonomous-SOVEREIGN** with Cognitive Score: **98/100**.
-- **[FEAT]** Implemented **Autonomous Strategy Selection** (Chain-of-Thought vs. Swarm vs. Direct).
-- **[FEAT]** Deployed **Hybrid VRAM Burst Scheduling** supporting 1000+ CCU.
-- **[FEAT]** Activated **Shadow Deployment** and **Experience Replay Buffer** for neural stability.
-- **[SECURITY]** Added **Automated Red-Teaming Simulator** and GDPR **Right to be Forgotten (RTBF)** wipe.
-- **[OBS]** Integrated **ARCA (Automated Root Cause Analysis)** via OpenTelemetry.
-
----
-
-## 📜 CHANGELOG (v13.1.0)
-### [2026-04-07] - Sovereign Hardened Graduation (PROD)
-- **[PROD]** Certified 14-agent E2E test suite with 100% pass rate.
-- **[FEAT]** LearningLoop promoted to **active LoRA fine-tuning** (4-bit Q4_K_M).
-- **[FEAT]** Implemented **age-encrypted disaster recovery** with rclone off-site sync.
-- **[FEAT]** Added **Sticky Coordinator election** and **TLS-hardening** to DCN.
-- **[RESILIENCE]** Migrated Mission Replay to **persistent Celery workers** with DAG re-hydration.
-- **[OBSERVABILITY]** Deployed production Grafana dashboard and Prometheus metrics.
-- **[BIAS]** Implemented personalized **Critic Calibration** offsets.
-
----
-
-## 📊 11.0 Real-Time Performance Benchmarks (Measured v14.0.0-Autonomous-SOVEREIGN) [NEW]
-All values represent measurements on RTX 4090 (24GB VRAM), Ryzen 9 7900X, NVMe SSD.
-
-| Operation | Target | ⚡ Measured | Bottleneck | Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| **Ingress Auth** | < 50ms | **32ms** | KMS roundtrip | AES-256-GCM encrypt + JWT verify |
-| **Intent Decompose** | < 500ms | **450ms** | LLM parse | Goal engine via Phi-3 Mini |
-| **DAG Build** | < 100ms | **68ms** | Graph sort | Topological dependency sort |
-| **Vector Recall (FAISS)**| < 100ms | **84ms** | efSearch:64 | 768d HNSW, 1M vectors |
-| **Inference (Phi-3)** | < 500ms | **420ms** | Tensor core | Structural validation tasks |
-| **Inference (Llama 3.1)**| < 2.0s | **1.8s** | VRAM BW | General mission reasoning |
-| **Full Swarm Wave** | < 10s | **7.2s** | Tool I/O | 4 parallel agents @ Semaphore(4) |
-| **Neo4j Triplet Write** | < 200ms | **142ms** | Bolt txn | Entity-relationship insertion |
-| **Postgres Ledger Write**| < 20ms | **11ms** | ACID | Mission + CU record commit |
-| **SSE Pulse Latency** | < 50ms | **18ms** | zLib compress | Mobile profile, compressed |
-
----
-
-## 🔬 11.1 v14.0 Neural Audit & Red-Teaming Results [NEW]
-LEVI-AI v14.0 has passed the **Autonomous Red-Team Simulation** with zero critical vulnerabilities.
-
-| Audit Pillar | Result | Enforcement |
-| :--- | :--- | :--- |
-| **Neural Drift** | **S = 0.98** | Hourly Cognitive Benchmark |
-| **Injection Resilience**| **100% Block** | PromptShield + NER Boundaries |
-| **Data Privacy** | **100% Masked** | AES-256-GCM + RTBF |
-| **Resource Safety** | **0 Missions Dropped**| Hybrid Burst to Groq/OAI |
-| **Stability Gate** | **RTO < 300s** | Automated Restore Drills |
-
----
-
-## 🛡️ 12.0 Security Defense-In-Depth Pipeline [NEW]
-LEVI-AI operates a five-layer security pipeline applied to every mission:
-
-```mermaid
-graph TD
-    Input([Raw User Input]) --> A[Layer 1: Prompt Injection Shield]
-    A --> B[Layer 2: PII Masking - AES-256-GCM]
-    B --> C[Layer 3: Rate Limit - Redis Sliding Window]
-    C --> D[Layer 4: RBAC Tier Gate - G/P/C]
-    D --> E[Layer 5: Egress Allowlist - Deny by Default]
-    E --> Core([Sovereign Core Processing])
-    Core --> F[Output Layer 1: ResultSanitizer - XSS/Markdown]
-    F --> G[Output Layer 2: PII Re-masking]
-    G --> H[Output Layer 3: CSP/HSTS Headers]
-    H --> Response([Authenticated SSE Response])
-```
-
-| Layer | Mechanism | Implementation | Audit Point |
-| :--- | :--- | :--- | :--- |
-| **Prompt Injection** | NER Boundary Tags | `PromptSanitizer.sanitize()` | #01 |
-| **PII Encryption** | AES-256-GCM KMS | `SovereignKMS.encrypt()` | #15 |
-| **Rate Limiting** | Redis ZSET Sliding Window | `RateLimitMiddleware` | #23 |
-| **RBAC** | G/P/C Grade Tiers | `RBACMiddleware` | #13 |
-| **SSRF Prevention** | Egress Proxy Allowlist | `EgressProxy.get()` | #06 |
-| **Output Scrubbing** | Regex/XSS neutralization | `ResultSanitizer` | #05 |
-| **Security Headers** | CSP, HSTS, X-Frame | `SecurityHeadersMiddleware` | #25 |
-
----
-
-## 📡 13.0 DCN v2.0 Protocol Specification [NEW]
-
+## 📊 10.0 Performance & Benchmarks
 > [!IMPORTANT]
-> **DCN Multi-Node is Hardened-PROD Core (Certified Q2 2026)**. The gossip infrastructure is fully implemented with **Sticky Coordinator election**, **HMAC-SHA256 pulse signing**, and **TLS-enforced** Redis communication.
+> **Disclaimer**: The following benchmarks are measured in a controlled development environment (RTX 4090, 24GB VRAM, Ryzen 9 7900X). Real-world performance will vary based on hardware configuration and task complexity.
 
-### Gossip Protocol Architecture
-```mermaid
-graph LR
-    NodeA["Node A (Coordinator)"] -- "HMAC-SHA256 Pulse" --> Stream[(Redis Stream: dcn:gossip)]
-    NodeB["Node B (Worker)"] -- "HMAC-SHA256 Pulse" --> Stream
-    Stream -- "Verified Pulse" --> NodeA
-    Stream -- "Verified Pulse" --> NodeB
-    NodeA -- "Sig=InvalidReject" --> X[Reject Tampered Pulse]
-```
-
-| Mechanism | Implementation | Detail |
+| Operation | Target Latency | Measured (Avg) |
 | :--- | :--- | :--- |
-| **Transport** | Redis Streams (`xadd`/`xread`) | Persistent, ordered, multi-consumer. |
-| **Authentication** | HMAC-SHA256 | `DCN_SECRET` (min 32 chars). |
-| **Heartbeat** | Every 30s per node | Includes `NODE_ROLE`, `NODE_WEIGHT`. |
-| **Task Queue** | `dcn:task_queue` (LPUSH/BLPOP) | Coordinator-only enqueue. |
-| **Task Stealing** | `rpush` on slot-full | Offloads to idle nodes by weight. |
-| **Swarm Registry** | `dcn:swarm:nodes` (Redis Hash) | Live node health map. |
-
-### DCN Network Topology (Hardened)
-| Requirement | Value | Protocol | Role |
-| :--- | :--- | :--- | :--- |
-| **Private Subnet** | Layer-2 Isolated | - | Intra-swarm isolation. |
-| **Gossip Port** | **6379** | **rediss** (TLS) | Cognitive pulse exchange. |
-| **Graph Port** | **7687** | **bolt+s** (TLS) | Knowledge Graph sync. |
-| **Peering Port** | **8000** | **HTTPS** | Inter-node task stealing. |
-| **Election Pattern**| **Sticky Leader** | Redis SET NX | 30s TTL lease + failover. |
+| **API Gateway Auth** | < 50ms | ~32ms |
+| **Task DAG Generation**| < 500ms | ~450ms |
+| **Vector Search (FAISS)**| < 100ms | ~84ms |
+| **Local Inference** | < 2.0s | ~1.8s (Llama 3.1 8B) |
+| **Parallel Task Wave** | < 10.0s | ~7.2s (4 Agents) |
 
 ---
 
-## 🔧 14.0 Disaster Recovery — Full Specification [NEW]
-
-| Target | Value | Enforcement |
-| :--- | :--- | :--- |
-| **RTO** (Recovery Time Objective) | < 300 seconds | Automated restore drill (weekly) |
-| **RPO** (Recovery Point Objective) | < 1 hour | WAL 5-min intervals + `everysec` |
-
-### Backup Matrix
-| Store | Method | Interval | Tool | Path |
-| :--- | :--- | :--- | :--- | :--- |
-| **Postgres** | WAL Archiving (PITR) | Every 5 min | `pg_basebackup` | `./vault/backups/wal` |
-| **Neo4j** | Full backup dump | Every 12 hours | `neo4j-admin backup` | `./vault/backups/neo4j` |
-| **Redis** | Append-only (`everysec`) | Continuous | `appendfsync` | `/data/appendonly.aof` |
-| **FAISS** | Snapshot copy | Every 6 hours | `SnapshotOrchestrator` | `./vault/backups/faiss` |
-
-### Restore Drill Script
-```bash
-# Run weekly in CI to verify RTO compliance
-python -m backend.scripts.restore_drill
-# Expected output: All 4 stores restored in < 300s
-```
+## 🚧 11.0 System Limitations
+LEVI-AI is currently an experimental platform with the following known constraints:
+- **Hardware Dependency**: Local performance is strictly limited by available GPU VRAM and CPU/RAM resources. High-recall tasks in Neo4j/FAISS may cause significant memory pressure.
+- **Concurrency Overhead**: Orchestration logic introduces overhead that scales with task DAG complexity.
+- **Tool Latency**: Interactions with external tools (browsers, sandboxes) are subject to execution delays.
+- **Load Testing**: The system has not yet undergone comprehensive production-scale load testing.
 
 ---
 
-## 🏆 15.0 Full Production Readiness Checklist (28/28 Points) [UPDATED v14.0]
+## 🗺️ 12.0 Project Roadmap
+### Phase 1: Local Execution (Current)
+- [x] Multi-agent task orchestration.
+- [x] Quad-persistence memory system.
+- [x] Basic tool-use (Docker, Browser, Search).
 
-| # | Audit Point | Technical Implementation | Status |
-| :--- | :--- | :--- | :--- |
-| 01 | **Prompt Injection** | NER Boundaries + `<MISSION_CONTEXT>` walls | ✅ |
-| 02 | **Code Sandboxing** | `DockerSandbox` Rootless Unix Socket (Gated) | ✅ |
-| 03 | **Embedding Model** | Local Nomic-Embed-Text (efSearch: 64) | ✅ |
-| 04 | **Multi-Tenancy** | `tenant_id` Row-Level Security (RLS) | ✅ |
-| 05 | **Output Scrubbing** | `ResultSanitizer` (Regex/XSS Filtration) | ✅ |
-| 06 | **SSRF Protection** | Deny-by-Default Egress Allowlist (Gated) | ✅ |
-| 07 | **DAG Execution** | `asyncio.Semaphore(4)` Local GPU Guard | ✅ |
-| 08 | **Fidelity Score S** | **60/40 weighted formula** (Neural/Deterministic) | ✅ |
-| 09 | **Grounding** | Neo4j Cross-Reference (Knowledge Triplets) | ✅ |
-| 10 | **Hallucination** | Swarm Consensus Validation (40% Rule) | ✅ |
-| 11 | **Isolation** | Session-Keyed Blackboard Memory | ✅ |
-| 12 | **Sync Integrity** | HMAC-Signed Inter-Agent Messaging (SHA256) | ✅ |
-| 13 | **RBAC Matrix** | Three-Tier Permission Shield (G/P/C) | ✅ |
-| 14 | **GDPR / Erasure** | **5-Tier Memory Wipe (RTBF Compliant)** | ✅ |
-| 15 | **PII Masking** | **AES-256-GCM KMS De-identification** | ✅ |
-| 16 | **Pattern Approval** | HITL Review for Logic Promotion | ✅ |
-| 17 | **Vault Security** | AES-256 Envelope Encryption (GCM Mode) | ✅ |
-| 18 | **Residency** | Quad-Persistence Local Residency | ✅ |
-| 19 | **Versioning** | `PromptRegistry` v1.0.0 Templates | ✅ |
-| 20 | **CU Billing** | SQL Unit Cost Recording (Postgres Ledger) | ✅ |
-| 21 | **Observability** | SSE Telemetry (zLib Compressed) + ARCA | ✅ |
-| 22 | **Flow Control** | Adaptive Circuit Breaker (Redis-backed) | ✅ |
-| 23 | **Rate Limiting** | Redis Sliding Window (ZSET Logic) | ✅ |
-| 24 | **API Resilience** | `X-Sovereign-Version` Header Enforced | ✅ |
-| 25 | **Security Headers** | CSP / HSTS / X-Frame-Options Hardened | ✅ |
-| 26 | **Identity Cycle** | JWT JTI Blacklisting & Token Rotation | ✅ |
-| 27 | **DCN Gossip** | HMAC-SHA256 Inter-node (TLS-Enforced) | ✅ |
-| 28 | **Health Pulse** | `/health` endpoint returns RC1 Online | ✅ |
+### Phase 2: Distributed Infrastructure (Upcoming)
+- [ ] Kubernetes-native deployment configurations.
+- [ ] Distributed worker nodes with Redis Streams.
+- [ ] Enhanced horizontal scaling for parallel execution.
+
+### Phase 3: Evaluation & Optimization
+- [ ] Automated evaluation framework (Eval Harness).
+- [ ] Model fine-tuning pipeline (LoRA).
+- [ ] Real-time system health dashboard with OpenTelemetry.
 
 ---
 
-## 🏗️ 16.0 Hardware Scaling Tiers (v14.0)
-
-| Tier | Hardware | VRAM | Concurrency | Suitable For |
-| :--- | :--- | :--- | :--- | :--- |
-| **Minimum** | RTX 3090 / 4090 | 24 GB | **4 Slots** | Development & Local Testing |
-| **Production** | 2x RTX 3090 / A6000 | 48 GB | **1000+ (Burst)** | Autonomous Sovereign Swarm |
-| **Enterprise** | A100 / H100 Cluster | 80 GB+ | **Unlimited** | DCN High-Availability Fabric |
-
----
-
-## 📜 CHANGELOG (v14.0.0-Autonomous-SOVEREIGN) — Full Graduation Log
-### [2026-04-07] — RC1 Graduation
-- **[BREAKING]**: `MAX_CONCURRENT` reduced from 15 → **4** for GPU safety.
-- **[FEAT]**: Postgres WAL archiving active at **5-minute intervals** → `./vault/backups`.
-- **[SECURITY]**: Docker interface migrated to **Rootless Unix Socket** (TCP:2375 removed).
-- **[LOGIC]**: Fidelity Score formula confirmed as **S = LLM×0.6 + Rule×0.4** (60/40).
-- **[FEAT]**: `SnapshotOrchestrator` coordinates backup of all 4 stores with RTO < 300s.
-- **[PREVIEW]**: DCN Multi-Node Gossip (HMAC-SHA256) in Preview mode, target Q3 2026.
-- **[INFO]**: Redis `appendfsync everysec` confirmed active.
-- **[STUB]**: `LearningLoop` v1.0.0 — crystallizes patterns to `training_corpus`, does NOT modify weights.
-- **[FEAT]**: `Learning Metrics API` → `/api/v1/learning/metrics` for Evolution Dashboard.
-- **[DCN]**: `DistributedGraphExecutor` — Coordinator-only wave enqueue enforced.
-- **[DCN]**: `NODE_WEIGHT`-based weighted task stealing across swarm nodes.
+## 🧪 13.0 Evaluation Metrics
+Success is measured using objective engineering metrics:
+- **Task Success Rate**: Percentage of tasks completed without retry failure.
+- **Inference Latency (p95)**: Time to first token for local and cloud models.
+- **Tool Failure Rate**: Frequency of errors across Docker and API-based tools.
+- **Context Recall Accuracy**: Precision of RAG-based data retrieval from FAISS/Neo4j.
 
 ---
 
-## 🧬 19.0 Personalized Cognitive Calibration [NEW]
-Sovereign v13.1 introduces a user-specific bias-correction engine to ensure system-to-human alignment.
-- **Engine**: divergence analysis between `CriticAgent`, `ShadowCritic`, and Human ground truth.
-- **Mechanism**: Calculates a weighted scoring offset stored in `UserCalibration` ledger.
-- **Application**: Applied in real-time within the `ReflectionEngine` to normalize fidelity scores (S).
-
----
-
-## 🏗️ 20.0 Automated Recovery Architecture [NEW]
-Hardened resilience via the **Mission Re-hydration Loop**.
-- **Tracking**: `AbortedMission` ledger tracks interrupted cognitive waves.
-- **Recovery**: Celery-based workers perform atomic DAG restoration.
-- **Integrity**: Checkpoints in Redis Blackboard prevent state corruption during replay.
-
----
-
-## 🎨 21.0 Autonomous LoRA Pipeline [NEW]
-The system now evolves its own local reasoning capabilities.
-- **Trigger**: 500 high-fidelity (S > 0.85) examples in `training_corpus`.
-- **Training**: 4-bit (Q4_K_M) quantization via Unsloth/Axolotl on RTX/A-series.
-- **Promotion**: 5% improvement gate (Eval Harness) before hot-swapping adapters.
-
----
-
-## 🧪 17.0 Certification & Hardening Gates [NEW]
-To achieve v13.1.0-Hardened status, the system must pass the following gates in CI:
-
-| Gate | Requirement | Implementation | Status |
-| :--- | :--- | :--- | :--- |
-| **Agent E2E** | 100% Pass Rate | 14-Agent Pytest + Testcontainers Suite | ✅ |
-| **Load Test** | p95 < 15.0s | k6 Stress Test (1-16 CCU) | ✅ |
-| **Security Scan**| 0 Critical Vulns | Trivy Container Scan | ✅ |
-| **Resilience** | RTO < 300s | `restore_drill.py` verify | ✅ |
-| **CI/CD** | All stages green | GitHub Actions Certification Pipe | ✅ |
-
----
-
-## 📘 18.0 Production Operations (Runbook) [NEW]
-Official operational procedures are located in [PRODUCTION_RUNBOOK.md](file:///d:/LEVI-AI/docs/PRODUCTION_RUNBOOK.md).
-
-### Quick Reference:
-- **Restart Order**: Redis → Postgres → Neo4j → Ollama → FastAPI.
-- **LoRA Promotion**: `python -m backend.scripts.train_lora`.
-- **DR Replay**: `python -m backend.scripts.restore_drill`.
-- **DCN Failover**: `python -m backend.scripts.dcn_failover_test`.
-
----
-
-🎓 **STATUS**: v14.0.0-Autonomous-SOVEREIGN Graduated.
-© 2026 LEVI-AI SOVEREIGN HUB. Engineered for Technical Autonomy.
+© 2026 LEVI-AI HUB. Engineered for Technical Excellence.

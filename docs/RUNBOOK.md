@@ -1,6 +1,6 @@
-# 🏃 LEVI-AI Operational Runbook (v14.0.0-Autonomous-SOVEREIGN)
+# 🏃 LEVI-AI Operational Runbook (v14.0 Production)
 
-Operations and recovery procedures for the LEVI-AI v14.0.0-Autonomous-SOVEREIGN Absolute Monolith.
+Operations and recovery procedures for the LEVI-AI v14.0 Production Architecture.
 
 ---
 
@@ -13,7 +13,7 @@ docker-compose up -d
 # 2. Verify all containers are healthy
 docker-compose ps
 
-# 3. Run 28-point graduation audit
+# 3. Run production readiness audit
 pytest tests/production_readiness_suite.py -v
 
 # 4. Confirm Ollama models are ready
@@ -50,7 +50,7 @@ curl http://localhost:11434/api/tags
 ### Telemetry Health
 ```powershell
 curl http://localhost:8000/health
-# Expected: {"status": "online", "version": "v14.0.0-Autonomous-SOVEREIGN"}
+# Expected: {"status": "online", "version": "v14.0.0"}
 ```
 
 ---
@@ -62,10 +62,10 @@ curl http://localhost:8000/health
 python -m backend.scripts.restore_drill
 ```
 
-### 3.2 Mission Blackboard Corruption
+### 3.2 Task State Corruption
 ```powershell
 # Clear transient Redis state
-redis-cli --scan --pattern "mission:*" | ForEach-Object { redis-cli del $_ }
+redis-cli --scan --pattern "task:*" | ForEach-Object { redis-cli del $_ }
 
 # Restart services
 docker-compose restart
@@ -88,7 +88,7 @@ nvidia-smi
 pg_restore -d levidb ./vault/backups/wal/latest.dump
 
 # Verify data integrity
-psql $DATABASE_URL -c "SELECT COUNT(*) FROM missions;"
+psql $DATABASE_URL -c "SELECT COUNT(*) FROM sessions;"
 ```
 
 ### 3.5 FAISS Index Corruption
@@ -107,7 +107,7 @@ python -m backend.core.snapshot restore --store faiss
 | **FAISS Reindex** | Monthly | `python -c "from backend.core.vector_store import VectorStore; VectorStore().rebuild_index()"` |
 | **FAISS Snapshot** | Every 6h | Automatic via `SnapshotOrchestrator` |
 | **Postgres WAL** | Every 5min | Automatic via `postgresql.conf` |
-| **Graduation Audit** | On every deploy | `pytest tests/production_readiness_suite.py` |
+| **Readiness Audit** | On every deploy | `pytest tests/production_readiness_suite.py` |
 
 ---
 
@@ -119,7 +119,7 @@ python -m backend.core.snapshot restore --store faiss
 | **Vector Recall** | < 100ms | Rebuild FAISS index |
 | **Inference (L3.1)** | < 2.5s | Check VRAM pressure, review Semaphore(4) |
 | **DB Write** | < 50ms | Check Postgres WAL lag |
-| **Fidelity Score (S)** | avg > 0.85 | Review Critic agent configuration |
+| **Evaluation Score (S)** | avg > 0.85 | Review Critic agent configuration |
 
 ---
 
@@ -138,4 +138,4 @@ curl -N http://localhost:8000/api/v1/telemetry/stream
 
 ---
 
-© 2026 LEVI-AI SOVEREIGN HUB — Operational Runbook v14.0.0-Autonomous-SOVEREIGN
+© 2026 LEVI-AI HUB — Operational Runbook v14.0 Production Stable

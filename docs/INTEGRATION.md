@@ -1,17 +1,17 @@
-# 🔌 System Integration Master Spec (v14.0.0-Autonomous-SOVEREIGN)
+# 🔌 System Integration Master Spec (v14.0 Production)
 
-The LEVI-AI Distributed Stack exposes a production-ready API for real-time mission orchestration via the central Brain Controller.
+The LEVI-AI Distributed Stack exposes a production-ready API for real-time task orchestration via the central Orchestration Controller.
 
 ---
 
 ## ⚡ 1. Primary Execution Endpoint
 
-### **POST `/api/v1/orchestrator/mission`**
-Executes a cognitive mission with real-time SSE telemetry pulses.
+### **POST `/api/v1/orchestrator/task`**
+Executes a system task with real-time SSE event telemetry.
 
 - **Request Headers:**
     - `Authorization: Bearer <JWT_TOKEN>`
-    - `X-Sovereign-Version: v14.0.0-Autonomous-SOVEREIGN`
+    - `X-System-Version: v14.0.0`
     - `Content-Type: application/json`
 
 - **Request Body (JSON):**
@@ -25,24 +25,24 @@ Executes a cognitive mission with real-time SSE telemetry pulses.
 
 ---
 
-## 📡 2. Telemetry Pulse (SSE)
+## 📡 2. Event Telemetry (SSE)
 
-Every mission emits a sequence of SSE Telemetry Pulse events for real-time observability.
+Every task emits a sequence of SSE Event Telemetry updates for real-time observability.
 
 | Event Type | Description | Schema / Payload |
 | :--- | :--- | :--- |
-| `metadata` | Mission ID and Stack Version. | `{request_id: "m-...", version: "v14.0.0-Autonomous-SOVEREIGN"}` |
+| `metadata` | Task ID and System Version. | `{request_id: "t-...", version: "v14.0.0"}` |
 | `activity` | Human-readable service updates. | `"Scout Agent: Searching Tavily API..."` |
 | `graph` | The full DAG-based TaskGraph. | `TaskGraph.to_dict()` (JSON) |
 | `results` | Sanitized agent execution outputs. | `[AgentResult, ...]` |
-| `fidelity` | Final mission fidelity score (S). | `{request_id: "...", score: 0.94}` |
+| `evaluation`| Final task evaluation score (S). | `{request_id: "...", score: 0.94}` |
 
 ---
 
 ## 🧠 3. Memory & Context Retrieval
 
 ### **GET `/api/v1/memory/profile`**
-Fetches the user's persistent cognitive memory profile.
+Fetches the user's persistent system memory profile.
 
 - **Response:**
 ```json
@@ -57,11 +57,11 @@ Fetches the user's persistent cognitive memory profile.
 
 ## 🛠️ 4. Tool Registry Integration
 
-To integrate a third-party API into the LEVI-AI fabric, use the **Agent Tool Registry**:
+To integrate a third-party API into the LEVI-AI platform, use the **Agent Tool Registry**:
 1.  **Define Tool Metadata**: Provide the OpenAPI specification or function signature.
-2.  **Generate Wrapper**: The system generates the execution wrapper for the `WorkerQueue`.
+2.  **Generate Wrapper**: The system generates the execution wrapper for the task queue.
 3.  **Sandbox Execution**: The tool is executed within an isolated Docker container with strict egress controls.
 
 ---
 
-© 2026 LEVI-AI SOVEREIGN HUB.
+© 2026 LEVI-AI HUB. Engineered for Technical Excellence.

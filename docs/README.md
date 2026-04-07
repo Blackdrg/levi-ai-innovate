@@ -1,16 +1,16 @@
-# 🧠 LEVI-AI Documentation (v14.0.0-Autonomous-SOVEREIGN)
+# 🧠 LEVI-AI Documentation (v14.0 Production)
 
-Welcome to the technical hub for the LEVI-AI Sovereign OS (v14.0.0-Autonomous-SOVEREIGN).
+Welcome to the technical documentation hub for the LEVI-AI distributed task orchestration platform.
 
 ---
 
 ## 🗂️ 1. Technical Manuals
 | Manual | Description |
 | :--- | :--- |
-| **[MASTERS](file:///d:/LEVI-AI/docs/MASTERS.md)** | Technical specifications for the cognitive core. |
-| **[SECURITY](file:///d:/LEVI-AI/docs/SECURITY.md)** | Security Middleware, SHA-256 PII Masking, and Docker Sandboxing. |
-| **[INTEGRATION](file:///d:/LEVI-AI/docs/INTEGRATION.md)** | API contracts, SSE schemas, and X-Sovereign-Version headers. |
-| **[MAINTENANCE](file:///d:/LEVI-AI/docs/MAINTENANCE.md)** | Background tasks, Memory Pruning, and DB Maintenance. |
+| **[MASTERS](file:///d:/LEVI-AI/docs/MASTERS.md)** | Technical specifications for the system architecture. |
+| **[SECURITY](file:///d:/LEVI-AI/docs/SECURITY.md)** | Security Middleware, PII Masking, and Docker Sandboxing. |
+| **[INTEGRATION](file:///d:/LEVI-AI/docs/INTEGRATION.md)** | API contracts, event schemas, and system versioning. |
+| **[MAINTENANCE](file:///d:/LEVI-AI/docs/MAINTENANCE.md)** | Background tasks, memory optimization, and database maintenance. |
 
 ---
 
@@ -18,19 +18,18 @@ Welcome to the technical hub for the LEVI-AI Sovereign OS (v14.0.0-Autonomous-SO
 | Manual | Description |
 | :--- | :--- |
 | **[DEPLOYMENT](file:///d:/LEVI-AI/docs/DEPLOYMENT.md)** | Service topology (Postgres, Redis, Neo4j, FAISS, Ollama). |
-| **[RUNBOOK](file:///d:/LEVI-AI/docs/RUNBOOK.md)** | Cold start, Local Backup, and emergency recovery procedures. |
-| **[DIAGNOSTICS](file:///d:/LEVI-AI/docs/DIAGNOSTICS_MASTER.md)** | 360-degree health monitoring and Telemetry Pulse logs. |
-| **[CHECKLIST](file:///d:/LEVI-AI/docs/DEPLOYMENT_CHECKLIST.MD)** | Pre-launch verification and Graduation Audit checkpoints. |
+| **[RUNBOOK](file:///d:/LEVI-AI/docs/RUNBOOK.md)** | Startup procedures, backup, and emergency recovery. |
+| **[DIAGNOSTICS](file:///d:/LEVI-AI/docs/DIAGNOSTICS_MASTER.md)** | System health monitoring and event telemetry. |
 
 ---
 
-## 🗺️ 3. Project Soul
+## 🗺️ 3. Project Roadmap
 | Manual | Description |
 | :--- | :--- |
-| **[CHANGELOG](file:///d:/LEVI-AI/docs/CHANGELOG.md)** | Evolution history from v13 to v14.0.0-Autonomous-SOVEREIGN. |
-| **[MANIFEST](file:///d:/LEVI-AI/docs/LAUNCH_MANIFEST.md)** | The complete v14.0.0-Autonomous-SOVEREIGN production service set. |
-| **[TODO](file:///d:/LEVI-AI/docs/TODO.md)** | Roadmap for v14.0+ Sovereign OS expansion. |
+| **[CHANGELOG](file:///d:/LEVI-AI/docs/CHANGELOG.md)** | System version history and release notes. |
+| **[MANIFEST](file:///d:/LEVI-AI/docs/LAUNCH_MANIFEST.md)** | The complete v14.0 production service specification. |
+| **[TODO](file:///d:/LEVI-AI/docs/TODO.md)** | Future roadmap for LEVI-AI platform expansion. |
 
 ---
 
-© 2026 LEVI-AI SOVEREIGN HUB.
+© 2026 LEVI-AI HUB. Engineered for Technical Excellence.

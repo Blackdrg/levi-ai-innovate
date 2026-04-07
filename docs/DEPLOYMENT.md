@@ -1,7 +1,7 @@
-# 🚢 LEVI-AI: Deployment Guide (v14.0.0-Autonomous-SOVEREIGN)
+# 🚢 LEVI-AI: Deployment Guide (v14.0 Production)
 
-> **LEVI-AI v14.0.0-Autonomous-SOVEREIGN Production Specification**
-> This architecture coordinates five primary services (FastAPI, Redis, Postgres, Neo4j, Celery) for absolute data residency and high-performance mission orchestration at local-first sovereign standard.
+> **LEVI-AI v14.0 Production Specification**
+> This architecture coordinates five primary services (FastAPI, Redis, Postgres, Neo4j, Celery) for secure local data residency and high-performance task orchestration at a production-grade standard.
 
 ---
 
@@ -25,7 +25,7 @@ graph TD
         Worker --> Neo4j
     end
     
-    subgraph "Distributed Preview (DCN v2.0)"
+    subgraph "Distributed Preview (v14.0)"
         Gateway -->|HMAC Pulse| GossipStream[(Redis Stream: dcn:gossip)]
         GossipStream -->|Task Distribution| TaskQueue[(Redis: dcn:task_queue)]
     end
@@ -33,11 +33,11 @@ graph TD
 
 ---
 
-## 2. Hardware Matrix [UPDATED]
+## 2. Hardware Matrix
 
 | Service | Minimum | Recommended | Primary Role |
 | :--- | :--- | :--- | :--- |
-| **API Gateway** | 4 vCPU, 8GB RAM | 8 vCPU, 16GB RAM | Orchestration & Mission Planning |
+| **API Gateway** | 4 vCPU, 8GB RAM | 8 vCPU, 16GB RAM | Orchestration & Task Planning |
 | **Persistence Hub**| 2 vCPU, 4GB RAM | 4 vCPU, 8GB RAM | Postgres & Neo4j data storage |
 | **Memory Bus** | 1 vCPU, 2GB RAM | 2 vCPU, 4GB RAM | Redis Working Memory & Task Queue |
 | **Inference Layer** | 12GB VRAM | **24GB VRAM** | Local LLM (llama3.1:8b, Semaphore: 4) |
@@ -50,16 +50,16 @@ graph TD
 | Enterprise | A100 / H100 | 80 GB | 32+ slots |
 
 > [!NOTE]
-> `MAX_CONCURRENT = 4` is the RC1 **Safety-First** default. Exceeding this on 24GB hardware causes CUDA OOM. Tasks queue rather than fail when all slots are busy.
+> `MAX_CONCURRENT = 4` is the production **Safety-First** default. Exceeding this on 24GB hardware may cause CUDA OOM. Tasks queue rather than fail when all slots are busy.
 
 ---
 
-## 3. Boot Sequence [UPDATED]
+## 3. Boot Sequence
 
 ### Step 1 — Environment Preparation
 ```env
 # Core Identity
-SOVEREIGN_VERSION=v14.0.0-Autonomous-SOVEREIGN
+SYSTEM_VERSION=v14.0.0
 ENVIRONMENT=production
 
 # Service Connectivity
@@ -70,9 +70,9 @@ OLLAMA_BASE_URL=http://host.docker.internal:11434
 
 # Security (REQUIRED — generate your own)
 DCN_SECRET=<64-char-hex>
-AUDIT_CHAIN_SECRET=<64-char-hex>
+SYSTEM_KMS_SECRET=<64-char-hex>
 
-# Sovereignty Defaults
+# System Defaults
 CLOUD_FALLBACK_ENABLED=false
 DISTRIBUTED_MODE=false
 NODE_ROLE=coordinator
@@ -91,21 +91,21 @@ ollama pull phi3:mini
 ollama pull nomic-embed-text
 ```
 
-### Step 4 — Run Graduation Audit
+### Step 4 — Run Production Audit
 ```bash
 pytest tests/production_readiness_suite.py -v
-# Expected: 28 passed
+# Expected: All tests passed
 ```
 
-### Step 5 — Resonance Check
-Open the **Evolution Dashboard** at `http://localhost:3000` and observe:
-- 🟢 Pulse: Active
-- 🟢 DCN Heartbeat streaming
-- 🟢 Learning Metrics populated
+### Step 5 — Monitoring Check
+Open the **System Dashboard** at `http://localhost:3000` and observe:
+- 🟢 System Heartbeat: Active
+- 🟢 DCN Event Stream streaming
+- 🟢 Performance Metrics populated
 
 ---
 
-## 4. Disaster Recovery Boot [NEW]
+## 4. Disaster Recovery
 
 If restoring from a backup event:
 
@@ -114,16 +114,16 @@ If restoring from a backup event:
 python -m backend.scripts.restore_drill
 
 # 2. Verify RTO compliance (must complete in < 300s)
-# 3. Re-run graduation audit to confirm integrity
+# 3. Re-run production audit to confirm integrity
 pytest tests/production_readiness_suite.py -v
 ```
 
 ---
 
-## 5. DCN Multi-Node Boot (Preview) [NEW]
+## 5. Distributed Node Boot (Preview)
 
 > [!IMPORTANT]
-> DCN multi-physical-server deployment is **Preview (Q3 2026)**. The following activates task distribution within a shared Redis environment only.
+> Multi-node deployment is currently in **Preview**. The following activates task distribution within a shared Redis environment.
 
 ```env
 # On Coordinator Node
@@ -141,4 +141,4 @@ DCN_NODE_ID=node-beta
 
 ---
 
-© 2026 LEVI-AI SOVEREIGN HUB — Deployment Specification v14.0.0-Autonomous-SOVEREIGN
+© 2026 LEVI-AI HUB — Deployment Specification v14.0 Production Stable
