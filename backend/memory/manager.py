@@ -21,6 +21,7 @@ from backend.db.models import UserProfile
 from sqlalchemy import select
 
 from backend.services.learning.logic import UserPreferenceModel
+from .consistency import MemoryConsistencyManager as MCM
 
 logger = logging.getLogger(__name__)
 
@@ -202,6 +203,12 @@ class MemoryManager:
         
         logger.info("[MemoryManager] Storing interaction: %s", session_id)
         
+        event = MCM.register_event(user_id, {
+            "type": "interaction",
+            "origin_task": perception.get("request_id"),
+            "derived_from": [r.agent for r in results] if results else [],
+        })
+        
         # 1. Short-term/Episodic (Redis/Postgres)
         if not policy or policy.redis:
             await self.store_memory(user_id, session_id, user_input, response)
@@ -237,6 +244,7 @@ class MemoryManager:
             # 1. Store Relational Triplets (Neo4j) - Respect Policy
             if triplets and (not policy or policy.neo4j):
                 for t in triplets:
+                    e = MCM.register_event(user_id, {"type": "triplet", "payload": t})
                     asyncio.create_task(self.graph.upsert_triplet(
                         user_id, t["subject"], t["relation"], t["object"],
                         tenant_id=extraction.get("tenant_id", "default")
@@ -254,7 +262,16 @@ class MemoryManager:
 
                 for i, fact in enumerate(new_facts):
                     importance = scores[i] if i < len(scores) else 0.5
-                    await SovereignVectorStore.store_fact(user_id, fact["fact"], category=fact["category"], importance=importance)
+                    content_hash = str(hash(fact["fact"]))
+                    if MCM.should_deduplicate(user_id, content_hash):
+                        continue
+                    await SovereignVectorStore.store_fact(
+                        user_id,
+                        fact["fact"],
+                        category=fact["category"],
+                        importance=importance,
+                        success_impact=extraction.get("success_impact", 0.5),
+                    )
 
             # 3. Trigger Evolutionary Distillation
             await self._trigger_distillation(user_id)

@@ -5,6 +5,7 @@ Centralized type definitions for the LEVI AI Brain orchestrator pipeline.
 """
 import uuid
 from enum import Enum
+import logging
 from dataclasses import dataclass
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Dict, Any, Generic, TypeVar
@@ -38,11 +39,42 @@ class MemoryPolicy(BaseModel):
     faiss: bool = True
 
 
+class FailurePolicy(BaseModel):
+    """Standardized failure handling for deterministic execution."""
+    on_failure: str = "abort"  # abort | retry | compensate
+    max_retries: int = 2
+    compensate: bool = False
+
+
+class ExecutionBudget(BaseModel):
+    """Global execution budget per mission."""
+    cpu_time_limit_ms: int = 30000
+    token_limit: int = 200000
+    tool_call_limit: int = 20
+    max_dag_depth: int = 6
+    recompute_cycles: int = 3
+
+
 class ExecutionPolicy(BaseModel):
     """Runtime constraints for the executor."""
     parallel_waves: int = 2
     max_retries: int = 1
     sandbox_required: bool = False
+    budget: ExecutionBudget = Field(default_factory=ExecutionBudget)
+
+
+class TaskExecutionContract(BaseModel):
+    """
+    Task Execution Contract (TEC): explicit execution contract per node.
+    """
+    task_id: str
+    input_schema: Dict[str, Any] = Field(default_factory=dict)
+    output_schema: Dict[str, Any] = Field(default_factory=dict)
+    timeout_ms: int = 15000
+    max_retries: int = 2
+    allowed_tools: List[str] = Field(default_factory=list)
+    memory_scope: str = "session"
+    failure_policy: FailurePolicy = Field(default_factory=FailurePolicy)
 
 
 class LLMPolicy(BaseModel):

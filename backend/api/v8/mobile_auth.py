@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from typing import Any, Optional
 from datetime import datetime, timedelta
 
-from backend.utils.auth import get_current_user
+from backend.api.utils.auth import get_current_user
 from backend.memory.cache import MemoryCache
 
 logger = logging.getLogger(__name__)

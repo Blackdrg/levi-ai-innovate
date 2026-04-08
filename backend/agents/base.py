@@ -85,21 +85,6 @@ class SovereignAgent(abc.ABC, Generic[T, R]):
             except Exception as e:
                 self.logger.error(f"Failed to parse loaded state: {e}")
 
-    async def send(self, to_agent: str, data: Dict[str, Any]):
-        """Alias for send_message to comply with Phase 2 specs."""
-        await self.send_message(to_agent, data)
-
-    async def send_message(self, to_agent: str, message: Dict[str, Any]):
-        """Directly send a message via the Agent Bus."""
-        if self.bus:
-            await self.bus.send(to_agent.lower(), message)
-
-    async def receive_message(self) -> Optional[Dict[str, Any]]:
-        """Wait for a message from the Agent Bus."""
-        if self.bus:
-            return await self.bus.receive(self.name.lower())
-        return None
-
     async def execute(self, input_data: T, lang: str = "en", **kwargs) -> AgentResult:
         """
         Main execution wrapper for Agentic Missions.

@@ -30,6 +30,7 @@ from backend.broadcast_utils import (
     PULSE_MISSION_EXECUTED, 
     PULSE_MISSION_AUDITED
 )
+from backend.db.redis import r as redis_sync, HAS_REDIS as HAS_REDIS_SYNC
 
 logger = logging.getLogger(__name__)
 
@@ -135,6 +136,16 @@ class LeviBrainV14:
             task_graph = await self.planner.build_task_graph(goal, perception, decision=decision)
             SovereignBroadcaster.publish(PULSE_MISSION_PLANNED, {"request_id": request_id, "goal": goal.objective}, user_id=user_id)
 
+            # Backpressure: degrade complexity under VRAM pressure
+            try:
+                if HAS_REDIS_SYNC:
+                    pressure = redis_sync.get("vram:pressure")
+                    if pressure and str(pressure).lower() == "true":
+                        decision.enable_agents["critic"] = False
+                        decision.execution_policy.parallel_waves = 1
+            except Exception:
+                pass
+
             # 5. EXECUTION (Enforcing Policy Limits)
             results = await self.executor.execute(task_graph, perception, user_id=user_id, policy=decision.execution_policy)
             SovereignBroadcaster.publish(PULSE_MISSION_EXECUTED, {"request_id": request_id}, user_id=user_id)
@@ -145,7 +156,7 @@ class LeviBrainV14:
             
             if decision.enable_agents.get("critic", False):
                 refinement_count = 0
-                max_refs = decision.execution_policy.max_retries
+                max_refs = min(decision.execution_policy.max_retries, decision.execution_policy.budget.recompute_cycles)
                 while refinement_count < max_refs:
                     reflection = await self.reflection.evaluate(draft_response, goal, perception, results)
                     if reflection["is_satisfactory"]:

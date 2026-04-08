@@ -12,6 +12,9 @@ from typing import Any, Dict, Optional
 
 from .brain import LeviBrainV14
 from backend.db.redis import get_redis_client, check_exact_match, store_exact_match, check_semantic_match
+from .execution_state import CentralExecutionState, MissionState
+from backend.evaluation.tracing import CognitiveTracer
+from backend.utils.logging_context import log_request_id, log_user_id, log_session_id
 
 logger = logging.getLogger(__name__)
 
@@ -41,9 +44,20 @@ class Orchestrator:
         Includes Blue-Green routing for safe version migration.
         """
         request_id = f"mission_{uuid.uuid4().hex[:8]}"
+        try:
+            log_request_id.set(request_id)
+            log_user_id.set(user_id)
+            log_session_id.set(session_id)
+        except Exception:
+            pass
+        CognitiveTracer.start_trace(request_id, user_id, "mission")
+        sm = CentralExecutionState(request_id, trace_id=request_id, user_id=user_id)
+        sm.initialize(MissionState.CREATED)
         
         # 0.1 GDPR Soft-Delete Check (v14.0)
         if await self.is_soft_deleted(user_id):
+            sm.transition(MissionState.FAILED)
+            CognitiveTracer.end_trace(request_id, "blocked")
             return {
                 "response": "This consciousness has been flagged for erasure and cannot initiate new missions.",
                 "status": "blocked",
@@ -72,6 +86,8 @@ class Orchestrator:
                 logger.info(f"[Orchestrator] 📟 Traffic Routed to GREEN (Candidate) for {user_id}")
         
         logger.info(f"[Orchestrator] Initiating Mission: {request_id} (Engine: {active_engine})")
+        sm.transition(MissionState.PLANNED)  # provisional planning start
+        CognitiveTracer.add_step(request_id, "routing_decision", {"engine": active_engine})
 
         # 1. Fast Cache Layer (Exact & Semantic)
         if not kwargs.get("bypass_cache", False):
@@ -81,6 +97,9 @@ class Orchestrator:
             
             if cached:
                 logger.info("[Orchestrator] Cache Hit. Mission skipped.")
+                sm.transition(MissionState.COMPLETE)
+                CognitiveTracer.add_step(request_id, "cache_hit", {"route": "cache"})
+                CognitiveTracer.end_trace(request_id, "cache")
                 return {
                     "response": cached,
                     "request_id": request_id,
@@ -96,17 +115,32 @@ class Orchestrator:
         try:
             # Note: For streaming, the brain.run would need to be an async generator
             if streaming:
+                 sm.transition(MissionState.SCHEDULED)
+                 CognitiveTracer.add_step(request_id, "scheduled", {})
+                 sm.transition(MissionState.RUNNING)
                  return self.brain.stream(user_input, user_id, session_id, request_id=request_id, **kwargs)
             
+            sm.transition(MissionState.SCHEDULED)
+            CognitiveTracer.add_step(request_id, "scheduled", {})
+            sm.transition(MissionState.RUNNING)
             result = await self.brain.run(user_input, user_id, session_id, request_id=request_id, **kwargs)
+            CognitiveTracer.add_step(request_id, "executed", {"results_count": len(result.get("results", [])) if isinstance(result, dict) else 0})
             
             # Post-Mission: Cache the successful result
             if result.get("response"):
                 store_exact_match(user_id, user_input, kwargs.get("mood", "philosophical"), result["response"])
-            
+            sm.transition(MissionState.VALIDATING)
+            CognitiveTracer.add_step(request_id, "validating", {})
+            sm.transition(MissionState.PERSISTED)
+            CognitiveTracer.add_step(request_id, "persisted", {})
+            sm.transition(MissionState.COMPLETE)
+            CognitiveTracer.end_trace(request_id, "success")
             return result
         except Exception as e:
             logger.exception("[Orchestrator] Mission failure: %s", e)
+            sm.transition(MissionState.FAILED)
+            CognitiveTracer.add_step(request_id, "failed", {"error": str(e)})
+            CognitiveTracer.end_trace(request_id, "failed")
             return {
                 "response": "The thought stream was interrupted by a quantum fluctuation.",
                 "error": str(e),
