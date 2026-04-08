@@ -1,9 +1,15 @@
 # backend/config/system.py
-"""Centralized configuration for LEVI-AI v14.0.0-Autonomous-SOVEREIGN."""
+"""Centralized configuration for LEVI-AI stability-locked v14 runtime."""
 import os
 
 SOVEREIGN_VERSION = os.getenv("SOVEREIGN_VERSION", "v14.0.0-Autonomous-SOVEREIGN")
-ENVIRONMENT = os.getenv("ENVIRONMENT", "production")
+STABILITY_BASELINE_TAG = os.getenv("STABILITY_BASELINE_TAG", "v14.0.0-STABLE-BASELINE")
+ARCHITECTURE_FREEZE = {
+    "agent_registry": "frozen",
+    "dag_structure_format": "frozen",
+    "memory_schema": "frozen",
+}
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 
 TIERS = {
     "guest": {

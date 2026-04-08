@@ -7,6 +7,7 @@ Refactored to point to the tiered backend structure.
 import logging
 from typing import Dict, Any, Optional
 from backend.utils.network import standard_retry, ai_service_breaker
+from backend.core.execution_guardrails import AgentSandbox
 
 # Importing from the new tiered agent ecosystem (V8 Hardened)
 from backend.core.v8.agents.chat import ChatAgentV8
@@ -71,13 +72,30 @@ async def call_tool(name: str, params: Dict[str, Any], context: Dict[str, Any] =
             "error": f"The '{name}' neural link is currently severed.",
             "agent": name
         }
+    if not AgentSandbox.tool_allowed(name):
+        logger.warning("Tool boundary violation blocked for '%s'", name)
+        return {
+            "success": False,
+            "error": f"Tool boundary violation: '{name}' is not permitted for this task.",
+            "agent": name,
+        }
     
     try:
+        sandbox_ctx = AgentSandbox.current()
+        call_context = dict(context or {})
+        if sandbox_ctx.get("memory_scope_key"):
+            call_context["session_id"] = sandbox_ctx["memory_scope_key"]
+            params = {
+                **params,
+                "__memory_scope_key__": sandbox_ctx["memory_scope_key"],
+                "__allowed_tools__": sorted(sandbox_ctx.get("allowed_tools", set())),
+            }
+
         # Standard resilient call pattern for V8
         async def _core_call():
              # Most agents use the standardized 'execute' method from base.py
              if hasattr(agent, "execute"):
-                 return await agent.execute(params, **(context or {}))
+                 return await agent.execute(params, **call_context)
              # Fallback for non-standard tools if any
              return await agent(params)
 

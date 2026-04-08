@@ -10,7 +10,7 @@ import sys
 import os
 from datetime import datetime
 from pythonjsonlogger import json
-from .logging_context import log_request_id, log_user_id
+from .logging_context import log_request_id, log_user_id, log_session_id
 
 class LeviJSONFormatter(json.JsonFormatter):
     """
@@ -26,8 +26,15 @@ class LeviJSONFormatter(json.JsonFormatter):
         
         # Inject Context Variables
         log_record['request_id'] = log_request_id.get()
+        log_record['trace_id'] = getattr(record, "trace_id", None) or log_request_id.get()
         log_record['user_id'] = log_user_id.get()
-        
+        log_record['session_id'] = getattr(record, "session_id", None) or log_session_id.get()
+        log_record['mission_id'] = getattr(record, "mission_id", None)
+        log_record['node_id'] = getattr(record, "node_id", None)
+        log_record['agent'] = getattr(record, "agent", None)
+        log_record['duration_ms'] = getattr(record, "duration_ms", None)
+        log_record['status'] = getattr(record, "status", None)
+
         # Environment metadata
         log_record['env'] = os.getenv("ENVIRONMENT", "development")
         log_record['version'] = "5.0-hardened"

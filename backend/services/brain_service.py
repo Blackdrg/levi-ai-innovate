@@ -99,14 +99,14 @@ class BrainService:
         policy = BrainPolicy(
             mode=decision.mode.value,
             enable={
-                "critic": decision.enable_agents.get("critic", False),
-                "neo4j": decision.memory_policy.neo4j,
-                "faiss": decision.memory_policy.faiss,
-                "sandbox": decision.execution_policy.sandbox_required
+                **decision.enable_agents,
+                "sandbox": decision.execution_policy.sandbox_required,
             },
             execution={
                 "parallel_waves": decision.execution_policy.parallel_waves,
-                "max_retries": decision.execution_policy.max_retries
+                "max_retries": decision.execution_policy.max_retries,
+                "retry_strategy": decision.execution_policy.retry_strategy,
+                "budget": decision.execution_policy.budget.model_dump(),
             },
             llm={
                 "local_only": decision.llm_policy.local_only,
@@ -116,14 +116,15 @@ class BrainService:
                 "redis": decision.memory_policy.redis,
                 "postgres": decision.memory_policy.postgres,
                 "neo4j": decision.memory_policy.neo4j,
+                "faiss": decision.memory_policy.faiss,
             }
         )
         # 5. Log decision trace (v14.0)
         await DecisionLogger.log_decision(
             request_id=(context or {}).get("request_id", f"gen_{uuid.uuid4().hex[:8]}"),
             query=query,
-            scores=scores.dict(),
-            policy=policy.dict()
+            scores=scores.model_dump(),
+            policy=policy.model_dump()
         )
         
         # 6. Broadcast Neural Pulse (Real-time Telemetry)

@@ -28,9 +28,14 @@ What is implemented and verified:
 - Workflow contracts are explicit and inspectable.
 - DAG validation, retries, sandbox boundaries, and mission budgets are enforced in the executor path.
 - Backpressure now uses VRAM, CPU, RAM, and queue depth rather than VRAM alone.
-- `/health` reports runtime pulse and startup checks, while `/ready` reports dependency and production-readiness state.
+- `/health` now performs real dependency checks for Redis, Postgres, and `Ollama /api/tags`, while `/ready` reports dependency and production-readiness state.
 - `GET /api/v1/telemetry/workflow` exposes the designated workflow manifest and core contract metrics.
 - Prometheus metrics, OpenTelemetry tracing, Kubernetes rollout manifests, and CI validation are wired into the active runtime.
+- Structured agent and executor logging now emits `trace_id`, `mission_id`, `node_id`, `duration_ms`, and `status`.
+- RBAC hardening tests now cover missing tokens, expired tokens, and wrong-role tokens.
+- Mission idempotency has a concurrent regression test that verifies only one identical in-flight mission executes.
+- Executor compensation is now exercised in tests instead of being documentation-only.
+- Live Ollama smoke tests exist and can be enabled for non-mocked integration verification.
 
 Targeted production wiring suite currently passes:
 
@@ -41,12 +46,15 @@ Targeted production wiring suite currently passes:
 Verified result on 2026-04-08:
 
 - `19 passed`
+- Additional hardening regression suite: `9 passed`
 
 Known remaining gaps:
 
-- Large-scale live load validation for 100 to 1000 concurrent missions is not yet fully proven in deployed environments.
-- Full chaos drills against real Redis, Neo4j, GPU saturation, and timeout scenarios still need broader execution.
+- Large-scale live load validation for 10+ to 1000 concurrent missions is not yet fully proven in deployed environments.
+- Full chaos drills against real Redis, Postgres sync failure, Neo4j, GPU saturation, and timeout scenarios still need broader execution.
 - Route-by-route smoke coverage for every feature surface is not complete yet.
+- Alembic-based production migration flow is now wired into the active backend entrypoint, but it still needs full live upgrade and rollback rehearsal against production-like data.
+- Graceful shutdown now drains tracked background mission tasks before exit, but broader task-path coverage still needs expansion.
 
 ---
 
@@ -79,6 +87,7 @@ Known remaining gaps:
 - **Worker Isolation**: Scoped memory and tool sandboxing for every task.
 - **RBAC**: Fine-grained role-based access control for tenants and resources.
 - **Audit Ledger**: Immutable, monthly-partitioned log with HMAC-SHA256 integrity chains.
+- **Default Secret Guardrails**: Startup checks and pre-commit hooks flag insecure placeholder secrets.
 
 ---
 
@@ -331,8 +340,10 @@ TOGETHER_API_KEY=your_key
 TAVILY_API_KEY=your_key
 
 # Security
-AUDIT_CHAIN_SECRET=genesis_key
-ENCRYPTION_KEY=kms_master_key
+AUDIT_CHAIN_SECRET=replace-with-real-secret
+ENCRYPTION_KEY=replace-with-real-key
+JWT_SECRET=replace-with-real-jwt-secret
+INTERNAL_SERVICE_KEY=replace-with-real-service-key
 ```
 
 ### Installation Steps
@@ -340,14 +351,14 @@ ENCRYPTION_KEY=kms_master_key
 1. **Infrastructure**: Start services via Docker Compose.
 
    ```bash
-   docker-compose up -d redis postgres neo4j faiss
+   docker compose up -d
    ```
 
 2. **Backend**: Install dependencies and initialize DB.
 
    ```bash
    pip install -r requirements.txt
-   python backend/db/main.py init
+   alembic -c backend/alembic.ini upgrade head
    ```
 
 3. **Frontend**: Install dependencies and build.
@@ -391,7 +402,7 @@ ENCRYPTION_KEY=kms_master_key
 
 ### Compensation Engine
 
-If a critical task node fails after all retries, the **Compensation Engine** executes rollback actions defined in the TEC (e.g., reverting database changes or emitting a failure pulse to the user).
+If a critical task node fails after all retries, the **Compensation Engine** executes rollback actions defined in the TEC (e.g., reverting database changes or emitting a failure pulse to the user). The executor now records executed compensation metadata on terminal node failure; broader live rollback workflows still need more chaos coverage.
 
 ---
 
@@ -405,6 +416,14 @@ Every request carries a `TRACE_ID` injected at the Gateway. Spans are recorded f
 - **Execution**: Node start/stop, Latency, Tool output.
 - **Persistence**: MCM sync status, DB commit latency.
 - **Replay**: Mission input, reasoning strategy, and simulated graph shape.
+
+Structured logs also include:
+
+- `trace_id`
+- `mission_id`
+- `node_id`
+- `duration_ms`
+- `status`
 
 ### 12.2 Health Graph
 
@@ -432,6 +451,8 @@ LEVI-AI employs a multi-layered testing strategy to ensure reliability across it
 - **Memory Consistency**: Tests verify that writes to Redis are correctly synchronized to Postgres, Neo4j, and FAISS.
 - **DCN Gossip**: Pulses are simulated to ensure nodes correctly process swarm telemetry.
 - **Replay & Idempotency**: Tests verify duplicate mission suppression and deterministic replay payload capture.
+- **RBAC Negatives**: Protected routes are tested for no token, expired token, and wrong-role token handling.
+- **Live Ollama Smoke**: Optional non-mocked tests validate real local inference when `RUN_LIVE_OLLAMA_TESTS=1`.
 
 ### 13.3 Chaos & Reliability
 
@@ -444,6 +465,12 @@ python -m pytest tests/
 
 # Run chaos tests
 ENABLE_CHAOS=true python -m pytest tests/chaos/
+
+# Run live Ollama smoke tests
+RUN_LIVE_OLLAMA_TESTS=1 python -m pytest tests/integration/test_live_ollama_smoke.py
+
+# Run shutdown-drain regression
+python -m pytest backend/tests/test_runtime_shutdown.py
 ```
 
 ## 14. Contribution & Development
@@ -511,8 +538,10 @@ The following environment variables configure the Sovereign OS. Defaults are saf
 | TRACE_SAMPLING_RATE      | 1.0                               | Portion of requests to instrument (0.0 – 1.0)                               |
 | MAX_PARALLEL_WAVES       | 2                                 | Default parallel wave budget                                                |
 | VRAM_PRESSURE_KEY        | vram:pressure                     | Redis key used to signal backpressure                                      |
-| AUDIT_CHAIN_SECRET       | change-me                         | HMAC seed for immutable audit chain                                         |
-| ENCRYPTION_KEY           | kms_master_key                    | KMS envelope key alias                                                      |
+| AUDIT_CHAIN_SECRET       | none                              | HMAC seed for immutable audit chain. Must not use placeholder values.       |
+| ENCRYPTION_KEY           | none                              | KMS envelope key alias. Must not use placeholder values.                    |
+| JWT_SECRET               | none                              | JWT signing key. Startup checks fail production readiness on insecure value. |
+| INTERNAL_SERVICE_KEY     | none                              | Service-to-service auth secret. Must be unique outside local development.   |
 | LOG_LEVEL                | INFO                              | Logging level (DEBUG, INFO, WARN, ERROR)                                    |
 | MODEL_ROUTER_PROVIDER    | local                             | Model router primary provider                                               |
 | CLOUD_FALLBACK_PROVIDER  | none                              | Backup provider (together, openai, groq)                                    |
@@ -706,6 +735,13 @@ Expected:
 ---
 
 ## 24. Performance Tuning
+
+### 24.1 Live Chaos & Load
+
+```bash
+python scripts/chaos/run_live_chaos.py --service redis --outage-seconds 10
+k6 run tests/load/missions_k6.js
+```
 
 - Increase `MAX_PARALLEL_WAVES` only with sufficient VRAM headroom.
 - Raise `TRACE_SAMPLING_RATE` selectively for problematic routes.

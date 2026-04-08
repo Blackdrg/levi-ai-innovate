@@ -9,6 +9,7 @@ from typing import Dict, Any, Optional, List
 from backend.db.redis import r as redis_client, HAS_REDIS
 from backend.core.orchestrator_types import ToolResult, ExecutionPlan
 from backend.core.task_graph import TaskGraph, TaskNode
+from backend.memory.consistency import MemoryConsistencyManager
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,7 @@ class ReplayEngine:
         # 1. Extract plan and inputs
         state = ctx["state"]
         trace = ctx["trace"]
+        replay = state.get("replay", {})
         
         # In a real system, we'd have the serialized ExecutionPlan in the state
         # For now, we simulate by iterating over the trace steps
@@ -81,7 +83,26 @@ class ReplayEngine:
         return {
             "request_id": request_id,
             "status": state.get("state"),
-            "results": [r.dict() for r in replay_results]
+            "input": replay.get("user_input"),
+            "graph": replay.get("task_graph"),
+            "reasoning": replay.get("reasoning"),
+            "deterministic": bool(replay),
+            "memory_state_checksum": replay.get("memory_state_checksum"),
+            "results": [r.model_dump() for r in replay_results]
+        }
+
+    @staticmethod
+    def validate_replay_consistency(first_payload: Dict[str, Any], second_payload: Dict[str, Any]) -> Dict[str, Any]:
+        first_checksum = first_payload.get("memory_state_checksum") or MemoryConsistencyManager.summarize_memory_state(
+            first_payload.get("memory_events", [])
+        )
+        second_checksum = second_payload.get("memory_state_checksum") or MemoryConsistencyManager.summarize_memory_state(
+            second_payload.get("memory_events", [])
+        )
+        return {
+            "deterministic": first_checksum == second_checksum,
+            "first_checksum": first_checksum,
+            "second_checksum": second_checksum,
         }
 
 if __name__ == "__main__":

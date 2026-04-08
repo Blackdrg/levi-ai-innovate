@@ -8,6 +8,7 @@ import logging
 import uuid
 import os
 import time
+import hashlib
 from typing import Any, Dict, Optional
 
 from .brain import LeviBrainV14
@@ -43,7 +44,10 @@ class Orchestrator:
         Routes a user request through the cognitive pipeline.
         Includes Blue-Green routing for safe version migration.
         """
-        request_id = f"mission_{uuid.uuid4().hex[:8]}"
+        idempotency_key = kwargs.get("idempotency_key") or hashlib.sha256(
+            f"{user_id}:{session_id}:{user_input.strip().lower()}".encode("utf-8")
+        ).hexdigest()
+        request_id = kwargs.get("request_id") or f"mission_{idempotency_key[:16]}"
         try:
             log_request_id.set(request_id)
             log_user_id.set(user_id)
@@ -53,6 +57,14 @@ class Orchestrator:
         CognitiveTracer.start_trace(request_id, user_id, "mission")
         sm = CentralExecutionState(request_id, trace_id=request_id, user_id=user_id)
         sm.initialize(MissionState.CREATED)
+        if not sm.claim_idempotency(user_id, idempotency_key, request_id):
+            existing_mission = sm.get_claimed_mission(user_id, idempotency_key)
+            return {
+                "response": "An equivalent mission is already in flight. Returning the existing mission handle.",
+                "status": "duplicate",
+                "request_id": existing_mission or request_id,
+            }
+        sm.attach_metadata(idempotency_key=idempotency_key, user_input=user_input, session_id=session_id)
         
         # 0.1 GDPR Soft-Delete Check (v14.0)
         if await self.is_soft_deleted(user_id):
@@ -86,7 +98,7 @@ class Orchestrator:
                 logger.info(f"[Orchestrator] 📟 Traffic Routed to GREEN (Candidate) for {user_id}")
         
         logger.info(f"[Orchestrator] Initiating Mission: {request_id} (Engine: {active_engine})")
-        sm.transition(MissionState.PLANNED)  # provisional planning start
+        sm.transition(MissionState.PLANNED)
         CognitiveTracer.add_step(request_id, "routing_decision", {"engine": active_engine})
 
         # 1. Fast Cache Layer (Exact & Semantic)
@@ -115,16 +127,23 @@ class Orchestrator:
         try:
             # Note: For streaming, the brain.run would need to be an async generator
             if streaming:
-                 sm.transition(MissionState.SCHEDULED)
-                 CognitiveTracer.add_step(request_id, "scheduled", {})
-                 sm.transition(MissionState.RUNNING)
+                 sm.transition(MissionState.EXECUTING)
+                 CognitiveTracer.add_step(request_id, "executing", {})
                  return self.brain.stream(user_input, user_id, session_id, request_id=request_id, **kwargs)
             
-            sm.transition(MissionState.SCHEDULED)
-            CognitiveTracer.add_step(request_id, "scheduled", {})
-            sm.transition(MissionState.RUNNING)
+            sm.transition(MissionState.EXECUTING)
+            CognitiveTracer.add_step(request_id, "executing", {})
             result = await self.brain.run(user_input, user_id, session_id, request_id=request_id, **kwargs)
             CognitiveTracer.add_step(request_id, "executed", {"results_count": len(result.get("results", [])) if isinstance(result, dict) else 0})
+            sm.attach_replay_payload(
+                {
+                    "user_input": user_input,
+                    "result": result.get("response") if isinstance(result, dict) else None,
+                    "task_graph": result.get("reasoning", {}).get("simulation", {}).get("dry_run") if isinstance(result, dict) else None,
+                    "reasoning": result.get("reasoning") if isinstance(result, dict) else None,
+                    "memory_state_checksum": result.get("memory", {}).get("checksum") if isinstance(result, dict) else None,
+                }
+            )
             
             # Post-Mission: Cache the successful result
             if result.get("response"):

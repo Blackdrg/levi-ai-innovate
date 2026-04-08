@@ -1,18 +1,26 @@
 import pytest
 import asyncio
+import os
 from typing import Dict, Any
 from backend.core.tool_registry import call_tool
 from backend.core.orchestrator_types import ToolResult
 
-# Mocking external neural services for integration tests to ensure isolation
 @pytest.fixture(autouse=True)
 def mock_neural_inference(monkeypatch):
-    """Mocks the underlying LLM call to ensure tests are deterministic and fast."""
+    """
+    Default deterministic mode for CI.
+    Set RUN_LIVE_OLLAMA_TESTS=1 to exercise the real local LLM path instead.
+    """
+    if os.getenv("RUN_LIVE_OLLAMA_TESTS", "0") == "1":
+        yield
+        return
+
     async def mock_call(*args, **kwargs):
         return {"message": "Success", "quality_score": 0.9, "data": {"status": "verified"}}
     
     # We mock the SovereignGenerator inside the agents
     monkeypatch.setattr("backend.engines.chat.generation.SovereignGenerator.council_of_models", mock_call)
+    yield
 
 class TestSovereignAgentsE2E:
     """
