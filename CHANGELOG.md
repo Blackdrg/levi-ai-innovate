@@ -9,11 +9,27 @@
 - `[CI]` Documentation records the targeted workflow and stability verification path and the clean `19 passed` result used for current status reporting.
 - `[CLEANUP]` Pydantic v2 `.dict()` deprecation paths were removed in favor of `model_dump()`, leaving the targeted suite warning-free.
 
+### Additional Hardening Tranche
+
+- `[MIGRATIONS]` Added Alembic scaffold under `backend/alembic/` and wired the active backend entrypoint to run `alembic -c backend/alembic.ini upgrade head`.
+- `[DEPLOYMENT]` Docker Compose now maps the API as `8000:8080` and checks health on the correct internal port.
+- `[SHUTDOWN]` Added tracked runtime task draining through `backend/utils/runtime_tasks.py` and integrated it into FastAPI lifespan shutdown.
+- `[ORCHESTRATION]` Background mission finalization in `backend/api/v8/orchestrator.py` now uses tracked tasks and rejects new missions during drain.
+- `[TESTING]` Added `backend/tests/test_runtime_shutdown.py` and extended CI to run shutdown, auth hardening, and idempotency concurrency tests.
+- `[CHAOS]` Added `scripts/chaos/run_live_chaos.py` for live Redis and Postgres outage drills against Docker Compose.
+- `[LOAD]` Added `tests/load/missions_k6.js` for focused mission dispatch load testing.
+
+### Verification
+
+- `[VERIFY]` Shutdown, auth, and idempotency tranche completed with `6 passed`.
+
 ### Honest Remaining Gaps
 
 - `[GAP]` Large-scale live load validation is still not fully proven.
 - `[GAP]` Full chaos drills against real external dependencies are still pending broader execution.
 - `[GAP]` Wider route-by-route smoke validation remains incomplete.
+- `[GAP]` Alembic upgrade and rollback still need broader production-like rehearsal.
+- `[GAP]` Graceful shutdown coverage is implemented for tracked paths but not yet universal across every legacy background task path.
 
 ---
 ## [14.0.0-Autonomous-SOVEREIGN] — 2026-04-07 (Production Graduation)

@@ -1,4 +1,8 @@
+import asyncio
+import json
+import logging
 import os
+from typing import Any, Dict, Optional
 from sqlalchemy import select, insert, desc, func
 from backend.db.postgres import PostgresDB
 from backend.db.models import TrainingPattern
@@ -17,7 +21,26 @@ class LearningLoop:
     FIDELITY_THRESHOLD = 0.85
     TRAINING_TRIGGER_COUNT = 500
     DATASET_PATH = "backend/data/sovereign_dataset.jsonl"
+    STRATEGY_LEDGER_PATH = "backend/data/strategy_templates.json"
     ENABLED = True
+
+    @classmethod
+    async def capture_outcome(
+        cls,
+        mission_id: str,
+        query: str,
+        result: str,
+        fidelity: float,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        metadata = metadata or {}
+        await cls.crystallize_pattern(mission_id, query, result, fidelity)
+        cls._update_strategy_ledger(metadata, fidelity)
+
+    @classmethod
+    def get_best_strategy(cls, intent_type: str) -> Dict[str, Any]:
+        ledger = cls._load_strategy_ledger()
+        return ledger.get(intent_type, {})
 
     @classmethod
     async def crystallize_pattern(cls, mission_id: str, query: str, result: str, fidelity: float):
@@ -58,7 +81,7 @@ class LearningLoop:
         """Append a high-fidelity example to the local JSONL training corpus."""
         try:
             os.makedirs(os.path.dirname(cls.DATASET_PATH), exist_ok=True)
-            with open(cls.DATASET_PATH, "a") as f:
+            with open(cls.DATASET_PATH, "a", encoding="utf-8") as f:
                 f.write(json.dumps({
                     "instruction": query,
                     "output": result,
@@ -66,6 +89,51 @@ class LearningLoop:
                 }) + "\n")
         except Exception as e:
             logger.error(f"[LearningLoop] Dataset append failed: {e}")
+
+    @classmethod
+    def _load_strategy_ledger(cls) -> Dict[str, Any]:
+        if not os.path.exists(cls.STRATEGY_LEDGER_PATH):
+            return {}
+        try:
+            with open(cls.STRATEGY_LEDGER_PATH, "r", encoding="utf-8") as handle:
+                return json.load(handle)
+        except Exception as exc:
+            logger.error("[LearningLoop] Strategy ledger load failed: %s", exc)
+            return {}
+
+    @classmethod
+    def _save_strategy_ledger(cls, ledger: Dict[str, Any]) -> None:
+        try:
+            os.makedirs(os.path.dirname(cls.STRATEGY_LEDGER_PATH), exist_ok=True)
+            with open(cls.STRATEGY_LEDGER_PATH, "w", encoding="utf-8") as handle:
+                json.dump(ledger, handle, indent=2, sort_keys=True)
+        except Exception as exc:
+            logger.error("[LearningLoop] Strategy ledger save failed: %s", exc)
+
+    @classmethod
+    def _update_strategy_ledger(cls, metadata: Dict[str, Any], fidelity: float) -> None:
+        intent_type = metadata.get("intent_type")
+        graph_signature = metadata.get("graph_signature")
+        if not intent_type or not graph_signature:
+            return
+
+        ledger = cls._load_strategy_ledger()
+        current = ledger.get(intent_type, {})
+        previous_uses = int(current.get("uses", 0))
+        previous_avg = float(current.get("avg_fidelity", 0.0))
+        uses = previous_uses + 1
+        avg_fidelity = round(((previous_avg * previous_uses) + fidelity) / uses, 4)
+
+        candidate = {
+            "graph_signature": graph_signature,
+            "avg_fidelity": avg_fidelity,
+            "uses": uses,
+            "last_strategy": metadata.get("reasoning_strategy", {}),
+            "graph_template": metadata.get("graph_template", current.get("graph_template")),
+        }
+        if not current or avg_fidelity >= float(current.get("avg_fidelity", 0.0)):
+            ledger[intent_type] = candidate
+            cls._save_strategy_ledger(ledger)
 
     @classmethod
     async def _check_training_trigger(cls):

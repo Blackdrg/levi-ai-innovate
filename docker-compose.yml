@@ -36,7 +36,6 @@ services:
       POSTGRES_DB: levi_db
     volumes:
       - ${LEVI_DATA_DIR:-./data}/postgres:/var/lib/postgresql/data
-      - ./backend/migrations/v13_migration.sql:/docker-entrypoint-initdb.d/init.sql
       - ./infrastructure/postgres/postgresql.conf:/etc/postgresql/postgresql.conf
       - ./vault/backups:/vault/backups
     command: postgres -c config_file=/etc/postgresql/postgresql.conf
@@ -66,7 +65,7 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "8000:8000"
+      - "8000:8080"
     environment:
       - DATABASE_URL=postgresql+asyncpg://levi:sovereign_pass@postgres:5432/levi_db
       - REDIS_URL=redis://redis:6379/0
@@ -98,7 +97,7 @@ services:
       - neo4j
       - ollama
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/health"]
       interval: 30s
       timeout: 10s
       retries: 3

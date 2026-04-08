@@ -20,6 +20,7 @@ from backend.core.brain import LeviBrainV14
 from backend.engines.utils.security import SovereignSecurity
 from sqlalchemy import text
 from backend.utils.audit import AuditLogger
+from backend.utils.runtime_tasks import create_tracked_task, is_shutting_down
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="", tags=["Orchestration v13"])
@@ -44,6 +45,9 @@ async def orchestrate_mission_endpoint(
     user_id = current_user.uid if hasattr(current_user, "uid") else "guest"
     mission_id = f"mission_{uuid.uuid4().hex[:12]}"
     session_id = request.session_id or f"sess_{uuid.uuid4().hex[:8]}"
+
+    if is_shutting_down():
+        raise HTTPException(status_code=503, detail="Runtime is draining in-flight missions. Try again shortly.")
     
     logger.info(f"[Orchester-v13] Async Mission {mission_id} received for {user_id}")
     
@@ -83,7 +87,7 @@ async def orchestrate_mission_endpoint(
             if HAS_REDIS:
                 redis_client.setex(f"mission:{mission_id}", 3600, json.dumps({"status": "FAILED", "error": str(e)}))
 
-    asyncio.create_task(_run_and_finalize())
+    create_tracked_task(_run_and_finalize(), name=f"mission-finalize:{mission_id}")
     
     return {
         "status": "ACCEPTED",

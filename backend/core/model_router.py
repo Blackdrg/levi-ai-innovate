@@ -13,6 +13,12 @@ class ModelRouter:
     SHADOW_MODE = os.getenv("SHADOW_DEPLOYMENT_ACTIVE", "false").lower() == "true"
     CANDIDATE_MODEL = os.getenv("MODEL_CANDIDATE", "llama3-fine-tuned:latest")
     SHADOW_TRAFFIC_PCT = float(os.getenv("SHADOW_TRAFFIC_PERCENT", "10.0"))
+    TIER_MAP = {
+        "L1": os.getenv("MODEL_TIER_L1", "llama3.1:8b"),
+        "L2": os.getenv("MODEL_TIER_L2", "llama3.1:8b"),
+        "L3": os.getenv("MODEL_TIER_L3", "llama3.1:70b"),
+        "L4": os.getenv("MODEL_TIER_L4", "llama3.1:70b"),
+    }
 
     @classmethod
     def get_model_for_tier(cls, tier: str, session_id: str = None) -> str:

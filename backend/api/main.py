@@ -6,12 +6,14 @@ Central Gateway & Service Orchestrator.
 import os
 import logging
 import time
+import uuid
 from datetime import datetime, timezone
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from typing import Dict, Any, List, Optional
 from backend.utils.metrics import MetricsHub
+from backend.utils.tracing import setup_tracing
 
 from backend.config.system import SOVEREIGN_VERSION, CLOUD_FALLBACK_ENABLED, CORS_ORIGINS
 
@@ -42,6 +44,9 @@ from backend.db.postgres_db import verify_resonance
 from backend.db.partitions import ensure_audit_partitions
 from backend.broadcast_utils import SovereignBroadcaster
 from backend.core.model_router import ModelRouter
+from backend.utils.startup import collect_startup_checks
+from backend.utils.health import probe_dependencies
+from backend.utils.runtime_tasks import begin_shutdown, create_tracked_task, is_shutting_down
 
 logger = logging.getLogger(__name__)
 
@@ -69,11 +74,11 @@ async def lifespan(app: FastAPI):
         dcn = DCNProtocol()
         if dcn.is_active:
             # 1. Start Listener
-            asyncio.create_task(dcn.start_listener(gossip_handler))
+            create_tracked_task(dcn.start_listener(gossip_handler), name="dcn-listener")
             
             # 2. Start Autonomous Heartbeat
             os.environ["NODE_ROLE"] = os.getenv("NODE_ROLE", "coordinator")
-            asyncio.create_task(dcn.start_heartbeat(interval=30))
+            create_tracked_task(dcn.start_heartbeat(interval=30), name="dcn-heartbeat")
             logger.info(f"[DCN] Swarm Presence: [ESTABLISHED] Mode: {os.environ['NODE_ROLE']}")
 
             # 3. Start Distributed Worker Loop
@@ -81,7 +86,7 @@ async def lifespan(app: FastAPI):
                 from backend.core.executor.distributed import DistributedGraphExecutor
                 from backend.db.redis import r_async as redis_client
                 dist_executor = DistributedGraphExecutor(redis_client)
-                asyncio.create_task(dist_executor.worker_loop())
+                create_tracked_task(dist_executor.worker_loop(), name="dcn-worker-loop")
                 logger.info("[DCN] Distributed Worker Loop: [ACTIVE]")
     except Exception as e:
         logger.error(f"[DCN] Failed to initialize gossip/worker: {e}")
@@ -89,6 +94,12 @@ async def lifespan(app: FastAPI):
     yield
     # --- Shutdown logic if needed ---
     logger.info("🔌 Sovereign OS shutting down...")
+    await begin_shutdown()
+    try:
+        from backend.db.postgres_db import close_resonance
+        await close_resonance()
+    except Exception as exc:
+        logger.warning("Shutdown DB close anomaly: %s", exc)
 
 app = FastAPI(
     title="LEVI-AI Distributed Stack",
@@ -96,6 +107,7 @@ app = FastAPI(
     description="Sovereign AI Operating System (v14.0.0-Autonomous-SOVEREIGN Graduation)",
     lifespan=lifespan
 )
+setup_tracing(app)
 
 # 1. Security Hardening (CORS)
 app.add_middleware(
@@ -108,12 +120,21 @@ app.add_middleware(
 
 # 1.5. Sovereign Security Hardening (Audit Prep)
 app.add_middleware(SecurityHeadersMiddleware)
-app.add_middleware(RateLimitMiddleware, limit=100, window=60) # 100 RPM limit
+app.add_middleware(RateLimitMiddleware)
 
 # 2. Global Versioning & Telemetry Middleware
 @app.middleware("http")
 async def global_sovereign_middleware(request: Request, call_next):
+    if is_shutting_down() and request.url.path not in {"/health", "/ready", "/metrics", "/api/v1/health", "/api/v1/ready"}:
+        return Response(
+            content='{"status":"shutting_down"}',
+            media_type="application/json",
+            status_code=503,
+            headers={"Retry-After": "5"},
+        )
     start_time = time.time()
+    trace_id = request.headers.get("X-Trace-ID") or str(uuid.uuid4())
+    request.state.trace_id = trace_id
     
     # Process Request
     response = await call_next(request)
@@ -121,6 +142,7 @@ async def global_sovereign_middleware(request: Request, call_next):
     # Inject Production Headers (RC1)
     response.headers["X-Sovereign-Version"] = SOVEREIGN_VERSION
     response.headers["X-Cloud-Fallback"] = str(CLOUD_FALLBACK_ENABLED).lower()
+    response.headers["X-Trace-ID"] = trace_id
     
     latency_ms = (time.time() - start_time) * 1000
     
@@ -128,6 +150,7 @@ async def global_sovereign_middleware(request: Request, call_next):
     SovereignBroadcaster.broadcast({
         "type": "TELEMETRY_PULSE",
         "path": request.url.path,
+        "trace_id": trace_id,
         "latency_ms": latency_ms,
         "status": response.status_code,
         "version": SOVEREIGN_VERSION,
@@ -174,37 +197,37 @@ async def gossip_handler(pulse: Dict[str, Any]):
 @app.get("/health")
 async def health_status():
     """Official Pulse of the Distributed AI Stack."""
+    startup = collect_startup_checks()
+    dependency_health = await probe_dependencies()
     return {
-        "status": "online",
+        "status": dependency_health["status"],
         "version": SOVEREIGN_VERSION,
-        "environment": os.getenv("ENVIRONMENT", "production"),
+        "environment": os.getenv("ENVIRONMENT", "development"),
         "cloud_fallback": CLOUD_FALLBACK_ENABLED,
         "model_assignments": ModelRouter.get_all_assignments(),
-        "resonance": "GRADUATED"
+        "resonance": "GRADUATED",
+        "dependencies": dependency_health,
+        "startup": startup,
     }
 
 @app.get("/api/v1/ready")
 @app.get("/ready")
 async def ready_status():
     """Surgical readiness probe for Docker/K8s."""
-    from backend.db.redis import r_async as redis
-    from backend.db.postgres_db import verify_resonance
-    
-    redis_alive = False
-    try:
-        await redis.ping()
-        redis_alive = True
-    except:
-        pass
-        
-    db_alive = await verify_resonance()
-    
-    status = "ready" if redis_alive and db_alive else "degraded"
-    
+    startup = collect_startup_checks()
+    dependency_health = await probe_dependencies()
+    redis_alive = dependency_health["checks"]["redis"]["ok"]
+    db_alive = dependency_health["checks"]["postgres"]["ok"]
+    ollama_alive = dependency_health["checks"]["ollama"]["ok"]
+    status = "ready" if redis_alive and db_alive and ollama_alive and startup["ready_for_production"] else "degraded"
+
     return {
         "status": status,
         "redis": "connected" if redis_alive else "disconnected",
         "postgres": "resonant" if db_alive else "offline",
+        "ollama": "reachable" if ollama_alive else "offline",
+        "dependencies": dependency_health,
+        "startup": startup,
         "ts": datetime.now(timezone.utc).isoformat()
     }
 

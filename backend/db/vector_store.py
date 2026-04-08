@@ -81,3 +81,13 @@ class SovereignVectorStore:
 
 # Graduation Alias for the Sovereign OS v14.0.0
 VectorStoreV14 = SovereignVectorStore
+
+
+class VectorStoreV13(SovereignVectorStore):
+    """
+    Legacy compatibility adapter for older dreaming/distillation flows.
+    """
+
+    async def search(self, user_id: str, query: str, limit: int = 5) -> List[Dict[str, Any]]:
+        db = await VectorDB.get_user_collection(user_id, "memory")
+        return await db.search(query, limit=limit)

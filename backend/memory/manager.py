@@ -207,6 +207,7 @@ class MemoryManager:
             "type": "interaction",
             "origin_task": perception.get("request_id"),
             "derived_from": [r.agent for r in results] if results else [],
+            "content_hash": MCM.compute_content_hash({"user_input": user_input, "response": response}),
         })
         
         # 1. Short-term/Episodic (Redis/Postgres)
@@ -219,6 +220,7 @@ class MemoryManager:
                 if len(user_input.split()) > 4 or len(results) > 1:
                     # Pass policy to extraction logic if it were to be refactored further
                     asyncio.create_task(self.process_extraction(user_id, user_input, response, policy=policy))
+        return event
 
     async def store_memory(self, user_id: str, session_id: str, user_input: str, bot_response: str):
         history = await self.get_short_term(session_id)
@@ -244,11 +246,15 @@ class MemoryManager:
             # 1. Store Relational Triplets (Neo4j) - Respect Policy
             if triplets and (not policy or policy.neo4j):
                 for t in triplets:
-                    e = MCM.register_event(user_id, {"type": "triplet", "payload": t})
-                    asyncio.create_task(self.graph.upsert_triplet(
-                        user_id, t["subject"], t["relation"], t["object"],
-                        tenant_id=extraction.get("tenant_id", "default")
-                    ))
+                    try:
+                        MCM.register_event(user_id, {"type": "triplet", "payload": t})
+                        asyncio.create_task(self.graph.upsert_triplet(
+                            user_id, t["subject"], t["relation"], t["object"],
+                            tenant_id=extraction.get("tenant_id", "default")
+                        ))
+                    except Exception as exc:
+                        logger.warning("[MemoryManager] Neo4j write deferred: %s", exc)
+                        MCM.enqueue_retry(user_id, {"type": "triplet", "payload": t, "error": str(exc)}, store="neo4j")
 
             # 2. Store Atomic Facts (FAISS/Mongo) - Respect Policy
             if new_facts and (not policy or policy.faiss):
@@ -262,16 +268,24 @@ class MemoryManager:
 
                 for i, fact in enumerate(new_facts):
                     importance = scores[i] if i < len(scores) else 0.5
-                    content_hash = str(hash(fact["fact"]))
+                    content_hash = MCM.compute_content_hash(fact)
                     if MCM.should_deduplicate(user_id, content_hash):
                         continue
-                    await SovereignVectorStore.store_fact(
-                        user_id,
-                        fact["fact"],
-                        category=fact["category"],
-                        importance=importance,
-                        success_impact=extraction.get("success_impact", 0.5),
-                    )
+                    try:
+                        await SovereignVectorStore.store_fact(
+                            user_id,
+                            fact["fact"],
+                            category=fact["category"],
+                            importance=importance,
+                            success_impact=extraction.get("success_impact", 0.5),
+                        )
+                    except Exception as exc:
+                        logger.warning("[MemoryManager] Vector write deferred: %s", exc)
+                        MCM.enqueue_retry(
+                            user_id,
+                            {"type": "fact", "payload": fact, "importance": importance, "error": str(exc)},
+                            store="vector",
+                        )
 
             # 3. Trigger Evolutionary Distillation
             await self._trigger_distillation(user_id)

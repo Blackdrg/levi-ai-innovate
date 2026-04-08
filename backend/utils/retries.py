@@ -1,4 +1,5 @@
 import logging
+import random
 import requests
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
@@ -32,3 +33,26 @@ def safe_request(method, url, **kwargs):
     except requests.exceptions.RequestException as e:
         logger.error(f"API request failed to {url}: {e}")
         raise
+
+
+def compute_backoff_delay(
+    attempt: int,
+    strategy: str = "exp_backoff_jitter",
+    base_delay: float = 0.5,
+    max_delay: float = 10.0,
+    jitter_ratio: float = 0.25,
+) -> float:
+    """Returns a bounded retry delay that de-synchronizes bursts under load."""
+    bounded_attempt = max(1, int(attempt))
+    normalized = (strategy or "exp_backoff_jitter").lower()
+
+    if normalized == "fixed":
+        delay = base_delay
+    else:
+        delay = min(max_delay, base_delay * (2 ** (bounded_attempt - 1)))
+
+    if "jitter" in normalized:
+        jitter_span = delay * max(0.0, jitter_ratio)
+        delay += random.uniform(0.0, jitter_span)
+
+    return round(min(max_delay, delay), 3)

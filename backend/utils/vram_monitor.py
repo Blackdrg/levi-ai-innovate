@@ -2,6 +2,7 @@ import subprocess
 import logging
 import asyncio
 from backend.db.redis import r_async as redis_client
+from backend.utils.metrics import MetricsHub
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,7 @@ async def vram_monitor_loop():
                 # Check for pressure (threshold < 3000MB)
                 pressure = "true" if free_mb < 3000 else "false"
                 await redis_client.set("vram:pressure", pressure, ex=10)
+                MetricsHub.set_backpressure("vram", pressure == "true")
                 
                 if pressure == "true":
                     logger.warning(f"[VRAM Monitor] CRITICAL: VRAM Pressure detected! Free: {free_mb}MB")

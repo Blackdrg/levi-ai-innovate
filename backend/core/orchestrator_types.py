@@ -53,6 +53,9 @@ class ExecutionBudget(BaseModel):
     tool_call_limit: int = 20
     max_dag_depth: int = 6
     recompute_cycles: int = 3
+    max_cpu_percent: int = 85
+    max_ram_percent: int = 85
+    queue_depth_limit: int = 32
 
 
 class ExecutionPolicy(BaseModel):
@@ -60,6 +63,7 @@ class ExecutionPolicy(BaseModel):
     parallel_waves: int = 2
     max_retries: int = 1
     sandbox_required: bool = False
+    retry_strategy: str = "exp_backoff_jitter"
     budget: ExecutionBudget = Field(default_factory=ExecutionBudget)
 
 
@@ -72,6 +76,8 @@ class TaskExecutionContract(BaseModel):
     output_schema: Dict[str, Any] = Field(default_factory=dict)
     timeout_ms: int = 15000
     max_retries: int = 2
+    strict_schema: bool = True
+    retry_strategy: str = "exp_backoff_jitter"
     allowed_tools: List[str] = Field(default_factory=list)
     memory_scope: str = "session"
     failure_policy: FailurePolicy = Field(default_factory=FailurePolicy)

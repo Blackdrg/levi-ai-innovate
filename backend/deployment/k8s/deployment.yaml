@@ -6,6 +6,9 @@ metadata:
     app: levi-brain
 spec:
   replicas: 3
+  minReadySeconds: 15
+  revisionHistoryLimit: 5
+  progressDeadlineSeconds: 600
   selector:
     matchLabels:
       app: levi-brain
@@ -22,11 +25,15 @@ spec:
         prometheus.io/scrape: "true"
         prometheus.io/port: "8000"
     spec:
+      terminationGracePeriodSeconds: 30
       containers:
       - name: brain
         image: gcr.io/levi-ai/brain:latest
         ports:
         - containerPort: 8000
+        env:
+        - name: ENVIRONMENT
+          value: production
         envFrom:
         - configMapRef:
             name: brain-config
@@ -39,6 +46,12 @@ spec:
           limits:
             cpu: "1000m"
             memory: "2Gi"
+        startupProbe:
+          httpGet:
+            path: /ready
+            port: 8000
+          failureThreshold: 30
+          periodSeconds: 10
         livenessProbe:
           httpGet:
             path: /health
@@ -47,10 +60,14 @@ spec:
           periodSeconds: 10
         readinessProbe:
           httpGet:
-            path: /health
+            path: /ready
             port: 8000
           initialDelaySeconds: 15
           periodSeconds: 5
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/sh", "-c", "sleep 10"]
 ---
 apiVersion: v1
 kind: Service

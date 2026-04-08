@@ -8,8 +8,9 @@ import logging
 import asyncio
 import json
 import os
-from typing import Dict, Any, List, Set, Coroutine, Optional
-from ..orchestrator_types import ToolResult, IntentResult
+import time
+from typing import Dict, Any, List, Set, Optional
+from ..orchestrator_types import ToolResult, IntentResult, AgentResult
 from ..tool_registry import call_tool
 from ..blackboard import MissionBlackboard
 from backend.broadcast_utils import SovereignBroadcaster, PULSE_NODE_COMPLETED
@@ -25,6 +26,11 @@ from ..dcn_protocol import DCNProtocol
 from backend.db.redis import r_async as redis_client, HAS_REDIS_ASYNC as HAS_REDIS
 from ..execution_state import CentralExecutionState
 from ...evaluation.tracing import CognitiveTracer
+from ...utils.retries import compute_backoff_delay
+from ...utils.metrics import MetricsHub
+from ...utils.chaos import ChaosMonkey
+from ...utils.tracing import traced_span
+from ..execution_guardrails import AgentSandbox, ExecutionBudgetTracker, capture_resource_pressure
 
 
 logger = logging.getLogger(__name__)
@@ -43,10 +49,19 @@ class GraphExecutor:
     MAX_WAVES = 8
     WARNING_THRESHOLD = 8
 
-    async def execute(self, graph: Any, perception: Dict[str, Any], user_id: str = "global", policy: Optional[Any] = None) -> List[ToolResult]:
+    def __init__(self):
+        self._node_breakers: Dict[str, Dict[str, float]] = {}
+        self._wave_lock = asyncio.Lock()
+
+    async def execute(self, graph: Any, perception: Dict[str, Any], user_id: str = "global", policy: Optional[Any] = None, safe_mode: bool = False) -> List[ToolResult]:
 
 
         logger.info("[V13.1 Executor] Executing Task Graph...")
+        if hasattr(graph, "validate_dag"):
+            max_depth = getattr(getattr(policy, "budget", None), "max_dag_depth", None)
+            graph.validate_dag(max_depth=max_depth)
+            if hasattr(graph, "max_depth"):
+                MetricsHub.observe_dag_depth(graph.max_depth())
         results: Dict[str, ToolResult] = {}
         completed_ids: Set[str] = set()
         
@@ -56,8 +71,12 @@ class GraphExecutor:
         remaining_nodes = list(graph.nodes)
         wave_count = 0
         total_nodes_executed = 0
-        tool_calls = 0
         mission_sm = CentralExecutionState(mission_id)
+        budget = getattr(policy, "budget", None)
+        budget_tracker = ExecutionBudgetTracker(
+            token_limit=getattr(budget, "token_limit", 200000),
+            tool_call_limit=getattr(budget, "tool_call_limit", 20),
+        )
 
         
         while remaining_nodes:
@@ -69,14 +88,19 @@ class GraphExecutor:
                 break
 
             # 2. Identify executable nodes (all deps satisfied)
-            executable_nodes = [
-                n for n in remaining_nodes 
-                if all(dep in completed_ids for dep in n.dependencies)
-            ]
+            async with self._wave_lock:
+                executable_nodes = [
+                    n for n in remaining_nodes
+                    if all(dep in completed_ids for dep in n.dependencies)
+                ]
             
             if not executable_nodes:
                 if remaining_nodes:
-                    logger.error("[V8 Executor] Dependency deadlock in graph.")
+                    logger.error(
+                        "[V8 Executor] Dependency deadlock in graph. Remaining=%s completed=%s",
+                        [n.id for n in remaining_nodes],
+                        sorted(completed_ids),
+                    )
                 break
             
             # Audit Point 07: Execution Guards
@@ -89,15 +113,31 @@ class GraphExecutor:
             logger.debug("[V13.1 Executor] Executing Wave %d: %s", wave_count, [n.id for n in executable_nodes])
             
             # 2. Parallel Execution of Wave (Limited by Policy)
-            max_parallel = policy.parallel_waves if policy else len(executable_nodes)
+            max_parallel = 1 if safe_mode else (policy.parallel_waves if policy else len(executable_nodes))
+            queue_depth = len(remaining_nodes)
+            pressure = capture_resource_pressure(vram_pressure=False, queue_depth=queue_depth)
             try:
                 if HAS_REDIS:
-                    pressure = await redis_client.get("vram:pressure")
-                    if pressure and str(pressure).lower() == "true":
+                    vram_pressure = await redis_client.get("vram:pressure")
+                    pressure = capture_resource_pressure(
+                        vram_pressure=bool(vram_pressure and str(vram_pressure).lower() == "true"),
+                        queue_depth=queue_depth,
+                    )
+                    if pressure.vram_pressure:
                         max_parallel = max(1, min(max_parallel, 1))
             except Exception:
                 pass
+            if "cpu" in pressure.active_dimensions or "ram" in pressure.active_dimensions:
+                max_parallel = max(1, min(max_parallel, 1))
+            if "queue" in pressure.active_dimensions:
+                max_parallel = max(1, min(max_parallel, 2))
+            if budget_tracker.remaining_tool_calls() <= 0:
+                logger.error("[Shield] Mission %s aborted: Tool call budget exhausted before scheduling.", mission_id)
+                MetricsHub.reject_budget("tool_calls")
+                break
+            max_parallel = min(max_parallel, budget_tracker.remaining_tool_calls())
             nodes_to_run = executable_nodes[:max_parallel]
+            MetricsHub.observe_wave(len(nodes_to_run), queue_depth)
             
             total_nodes_executed += len(nodes_to_run)
             
@@ -111,24 +151,29 @@ class GraphExecutor:
                 break
 
             tasks = [self._execute_node(n, results, perception, blackboard=blackboard, user_id=user_id, wave_count=wave_count, policy=policy, mission_sm=mission_sm) for n in nodes_to_run]
+            budget_tracker.reserve_tool_calls(len(nodes_to_run))
             SovereignBroadcaster.publish("WAVE_STARTED", {"nodes": [n.id for n in nodes_to_run], "current_wave": wave_count}, user_id=user_id)
 
             # --- Distributed Wave Management (v2.0-Hardened) ---
             try:
-                if os.getenv("DISTRIBUTED_MODE", "false").lower() == "true" and HAS_REDIS:
+                if (
+                    os.getenv("DISTRIBUTED_MODE", "false").lower() == "true"
+                    and os.getenv("CHAOS_REDIS_OUTAGE", "false").lower() != "true"
+                    and HAS_REDIS
+                ):
                     from .distributed import DistributedGraphExecutor
                     dist_executor = DistributedGraphExecutor(redis_client)
                     
                     # 1. Enqueue Wave
-                    previous_results_serializable = {k: v.dict() for k, v in results.items()}
-                    await dist_executor.enqueue_wave(mission_id, executable_nodes, perception, previous_results_serializable)
+                    previous_results_serializable = {k: v.model_dump() for k, v in results.items()}
+                    await dist_executor.enqueue_wave(mission_id, nodes_to_run, perception, previous_results_serializable)
                     
                     # 2. Reactive Result Management (v2.1-Hardened)
                     pubsub = redis_client.pubsub()
                     event_channel = f"dcn:mission:{mission_id}:events"
                     await pubsub.subscribe(event_channel)
                     
-                    pending_node_ids = set(n.id for n in executable_nodes)
+                    pending_node_ids = set(n.id for n in nodes_to_run)
                     wave_results_map = {}
                     
                     # Audit Point: Pre-check for results before long-wait subscription
@@ -170,7 +215,7 @@ class GraphExecutor:
                     if pending_node_ids:
                         logger.error(f"🚨 [DCN] Wave timeout. Missing: {pending_node_ids}. Attempting LOCAL FALLBACK...")
                         # Partial local fallback for timed-out nodes
-                        timeout_nodes = [n for n in executable_nodes if n.id in pending_node_ids]
+                        timeout_nodes = [n for n in nodes_to_run if n.id in pending_node_ids]
                         fallback_tasks = [self._execute_node(n, results, perception, blackboard=blackboard, user_id=user_id, wave_count=wave_count) for n in timeout_nodes]
                         fallback_results = await asyncio.gather(*fallback_tasks)
                         for n, res in zip(timeout_nodes, fallback_results):
@@ -192,10 +237,14 @@ class GraphExecutor:
                 results[n.id] = res
                 completed_ids.add(n.id)
                 remaining_nodes.remove(n)
-                tool_calls += 1
-                if policy and getattr(policy, "budget", None) and tool_calls >= policy.budget.tool_call_limit:
-                    logger.error(f"[Shield] Mission {mission_id} aborted: Tool call limit ({policy.budget.tool_call_limit}) reached.")
-                    break
+                if not budget_tracker.add_tokens(n.agent, getattr(res, "total_tokens", 0)):
+                    logger.error(
+                        "[Shield] Mission %s aborted: Token limit (%s) reached.",
+                        mission_id,
+                        getattr(policy.budget, "token_limit", 0) if policy and getattr(policy, "budget", None) else 0,
+                    )
+                    MetricsHub.reject_budget("tokens")
+                    return list(results.values())
                 
             # 4. Critical Path Failure Check
             critical_failure = False
@@ -207,7 +256,9 @@ class GraphExecutor:
                     break
             
             if critical_failure:
-                break
+                if safe_mode:
+                    break
+                safe_mode = True
         # 5. DCN Synchrony (Audit Point 12)
         if all(r.success for r in results.values()):
             dcn = DCNProtocol()
@@ -220,6 +271,7 @@ class GraphExecutor:
     async def _execute_node(self, node: Any, previous_results: Dict[str, ToolResult], perception: Dict[str, Any], blackboard: MissionBlackboard = None, user_id: str = "global", wave_count: int = 0, policy: Optional[Any] = None, mission_sm: Optional[CentralExecutionState] = None) -> ToolResult:
         """Executes a single node with template-resolved inputs, retries and fallbacks."""
         agent_name = node.agent
+        mission_id = perception.get("request_id") or "global"
         start_time = asyncio.get_event_loop().time()
         # 0. Override Policy Constraints
         max_retries = 1
@@ -246,199 +298,279 @@ class GraphExecutor:
             "input": perception.get("input"),
             "__blackboard__": blackboard.serialize() if blackboard else "" # Injected compressed swarm state
         }
+        strict_schema = bool(
+            getattr(node, "strict_schema", True)
+            and getattr(getattr(node, "contract", None), "strict_schema", True)
+        )
+        validation_payload = dict(resolved_inputs)
+        validation_payload.setdefault("input", perception.get("input"))
+        try:
+            self._validate_payload_schema(
+                validation_payload,
+                getattr(getattr(node, "contract", None), "input_schema", {}),
+                strict_schema=strict_schema,
+                label=f"{node.id} input",
+            )
+        except Exception as exc:
+            if mission_sm:
+                mission_sm.record_node(node.id, "failed", {"agent": agent_name, "error": str(exc)})
+            return ToolResult(
+                success=False,
+                error=str(exc),
+                agent=agent_name,
+                message="",
+                data={"validation": "input"},
+            )
+
+        circuit_state = self._get_circuit_state(node)
+        if circuit_state["open_until"] > time.time():
+            remaining_ms = int((circuit_state["open_until"] - time.time()) * 1000)
+            message = f"Circuit open for node {node.id}; cooldown active for {remaining_ms}ms"
+            if mission_sm:
+                mission_sm.record_node(node.id, "circuit_open", {"agent": agent_name, "cooldown_ms": remaining_ms})
+            return ToolResult(
+                success=False,
+                error=message,
+                agent=agent_name,
+                message=getattr(node, "fallback_output", {}).get("message", ""),
+                data={"circuit_breaker": dict(getattr(node, "circuit_breaker", {}))},
+                retryable=True,
+            )
 
         attempts = 0
         last_error = None
+        retry_strategy = (
+            getattr(getattr(node, "contract", None), "retry_strategy", None)
+            or getattr(node, "retry_strategy", None)
+            or getattr(policy, "retry_strategy", "exp_backoff_jitter")
+        )
         
         # Timeline recorder: node start
         try:
             CognitiveTracer.add_step(perception.get("request_id", "global"), "node_start", {"node_id": node.id, "agent": agent_name})
         except Exception:
             pass
+        logger.info(
+            "executor_node_started",
+            extra={
+                "trace_id": mission_id,
+                "mission_id": mission_id,
+                "node_id": node.id,
+                "agent": agent_name,
+                "status": "started",
+                "duration_ms": 0,
+            },
+        )
+        memory_scope = "session"
+        if node.contract:
+            memory_scope = node.contract.memory_scope
+        sandbox_token = AgentSandbox.activate(
+            mission_id=mission_id,
+            node_id=node.id,
+            allowed_tools=getattr(getattr(node, "contract", None), "allowed_tools", []),
+            memory_scope=memory_scope,
+        )
+        try:
+            while attempts <= max_retries:
+                try:
+                    attempts += 1
 
-        while attempts <= max_retries:
-            try:
-                attempts += 1
-                
-                # 2.5 Rate Limit Check (v9.8.1 Protection)
-                if not await check_agent_limit(user_id, agent_name, limit=60): # 60/hr/agent default
-                    return ToolResult(
-                        success=False, 
-                        error=f"Sovereign Rate Limit Exceeded for agent '{agent_name}'. Please wait before next mission.", 
-                        agent=agent_name
-                    )
-
-                # 3. Check for Swarm Consensus Requirements (v9.8.1)
-                # Trigged if node is 'fragile', 'high_friction', or 'consensus' is explicitly requested
-                is_fragile = getattr(node, 'is_fragile', False) or getattr(node, 'high_friction', False)
-                
-                if is_fragile and attempts == 1:
-                    logger.info(f"[V8 Swarm] Mission Fragility Detected for node {node.id}. Activating Consensus Adjudication.")
-                    
-                    # Parallel Swarm Run: Execute multiple perspectives
-                    # We run the primary agent vs a 'Corrective' profile (Critic) and an 'Optimized' profile
-                    swarm_tasks = [
-                        ai_service_breaker.async_call(call_tool, agent_name, merged_params, perception.get("context", {})), # Primary
-                        ai_service_breaker.async_call(call_tool, "Critic", merged_params, perception.get("context", {})),  # Critic
-                        ai_service_breaker.async_call(call_tool, "Optimizer", merged_params, perception.get("context", {})) # Optimizer
-                    ]
-                    
-                    candidate_results = await asyncio.gather(*swarm_tasks, return_exceptions=True)
-                    valid_candidates = []
-                    
-                    for cr in candidate_results:
-                        if isinstance(cr, Exception): continue
-                        if isinstance(cr, dict): valid_candidates.append(AgentResult(**cr) if "success" in cr else AgentResult(success=True, message=str(cr), agent="unknown"))
-                        elif isinstance(cr, ToolResult): valid_candidates.append(cr)
-                        else: valid_candidates.append(cr) # Assume it's a result object
-                    
-                    # 4. Consensus Adjudication (v13.1)
-                    consensus_agent = ConsensusAgentV11()
-                    from ...agents.consensus_agent import ConsensusInput, FidelityRubric
-                    
-                    # Synthesize rubrics from candidates if available
-                    candidate_rubrics = [
-                        FidelityRubric(
-                            syntax_correctness=getattr(c, 'syntax_score', 0.9),
-                            logical_consistency=getattr(c, 'logic_score', 0.8),
-                            factual_grounding=getattr(c, 'grounding_score', 0.85),
-                            sovereign_resonance=getattr(c, 'resonance_score', 0.9)
-                        ) for c in valid_candidates
-                    ]
-
-                    consensus_res = await consensus_agent.execute(ConsensusInput(
-                        goal=perception.get("input", "Synchronous mission"),
-                        candidates=valid_candidates,
-                        rubrics=candidate_rubrics,
-                        context=perception.get("context", {})
-                    ))
-                    
-                    if consensus_res.success:
-                        # Extract the winning candidate from the consensus data
-                        winner_data = consensus_res.data.get("winner", {})
-                        result = ToolResult(
-                            success=True, 
-                            message=winner_data.get("message", "Consensus selected winner."),
-                            agent=winner_data.get("agent", agent_name),
-                            data=winner_data.get("data", {}),
-                            fidelity_score=consensus_res.fidelity_score
+                    if not await check_agent_limit(user_id, agent_name, limit=60):
+                        return ToolResult(
+                            success=False,
+                            error=f"Sovereign Rate Limit Exceeded for agent '{agent_name}'. Please wait before next mission.",
+                            agent=agent_name,
                         )
-                    else:
-                        # Fallback to the first valid candidate if consensus fails
-                        result = valid_candidates[0] if valid_candidates else ToolResult(success=False, error="Swarm failure", agent=agent_name)
-                
-                # Standard Single-Agent Execution
-                # 1. Determine Timeout (Contract > Budget > Default)
-                timeout = 15
-                if node.contract and node.contract.timeout_ms:
-                    timeout = node.contract.timeout_ms / 1000.0
-                elif policy and getattr(policy, "budget", None):
-                    timeout = policy.budget.cpu_time_limit_ms / 1000.0
 
-                # 2. Check Allowed Tools (Contract Enforcement)
-                if node.contract and node.contract.allowed_tools:
-                    # Logic to restrict agent tool usage if the agent supports dynamic tool binding
-                    pass
+                    is_fragile = getattr(node, "is_fragile", False) or getattr(node, "high_friction", False)
+                    if is_fragile and attempts == 1:
+                        logger.info(f"[V8 Swarm] Mission Fragility Detected for node {node.id}. Activating Consensus Adjudication.")
+                        swarm_tasks = [
+                            ai_service_breaker.async_call(call_tool, agent_name, merged_params, perception.get("context", {})),
+                            ai_service_breaker.async_call(call_tool, "Critic", merged_params, perception.get("context", {})),
+                            ai_service_breaker.async_call(call_tool, "Optimizer", merged_params, perception.get("context", {})),
+                        ]
+                        candidate_results = await asyncio.gather(*swarm_tasks, return_exceptions=True)
+                        valid_candidates = []
 
-                # 3. Worker Isolation: memory_scope & sandbox
-                memory_scope = "session"
-                if node.contract:
-                    memory_scope = node.contract.memory_scope
-                
-                # Bounded execution quota check (token_limit, tool_call_limit)
-                if policy and policy.budget:
-                    if tool_calls >= policy.budget.tool_call_limit:
-                         return ToolResult(success=False, error="Tool call limit exceeded", agent=agent_name)
-                    # Note: token_limit is usually checked post-execution or via agent-level callbacks
-                
-                logger.debug(f"[TEC] Executing {node.id} with timeout={timeout}s, scope={memory_scope}")
-                
-                # Standard Single-Agent Execution
-                raw_res = await asyncio.wait_for(
-                    ai_service_breaker.async_call(
-                        call_tool, 
-                        agent_name, 
-                        {**merged_params, "__memory_scope__": memory_scope, "__sandbox__": policy.sandbox_required if policy else False}, 
-                        {**perception.get("context", {}), "model_tier": getattr(node, "model_tier", "L2")}
-                    ),
-                    timeout=timeout
-                )
-                    
+                        for cr in candidate_results:
+                            if isinstance(cr, Exception):
+                                continue
+                            if isinstance(cr, dict):
+                                valid_candidates.append(
+                                    AgentResult(**cr) if "success" in cr else AgentResult(success=True, message=str(cr), agent="unknown")
+                                )
+                            elif isinstance(cr, ToolResult):
+                                valid_candidates.append(cr)
+                            else:
+                                valid_candidates.append(cr)
+
+                        consensus_agent = ConsensusAgentV11()
+                        from ...agents.consensus_agent import ConsensusInput, FidelityRubric
+
+                        candidate_rubrics = [
+                            FidelityRubric(
+                                syntax_correctness=getattr(c, "syntax_score", 0.9),
+                                logical_consistency=getattr(c, "logic_score", 0.8),
+                                factual_grounding=getattr(c, "grounding_score", 0.85),
+                                sovereign_resonance=getattr(c, "resonance_score", 0.9),
+                            )
+                            for c in valid_candidates
+                        ]
+
+                        consensus_res = await consensus_agent.execute(
+                            ConsensusInput(
+                                goal=perception.get("input", "Synchronous mission"),
+                                candidates=valid_candidates,
+                                rubrics=candidate_rubrics,
+                                context=perception.get("context", {}),
+                            )
+                        )
+
+                        if consensus_res.success:
+                            winner_data = consensus_res.data.get("winner", {})
+                            result = ToolResult(
+                                success=True,
+                                message=winner_data.get("message", "Consensus selected winner."),
+                                agent=winner_data.get("agent", agent_name),
+                                data=winner_data.get("data", {}),
+                                fidelity_score=consensus_res.fidelity_score,
+                            )
+                        else:
+                            result = valid_candidates[0] if valid_candidates else ToolResult(success=False, error="Swarm failure", agent=agent_name)
+
+                    timeout = 15
+                    if node.contract and node.contract.timeout_ms:
+                        timeout = node.contract.timeout_ms / 1000.0
+                    elif policy and getattr(policy, "budget", None):
+                        timeout = policy.budget.cpu_time_limit_ms / 1000.0
+
+                    logger.debug(f"[TEC] Executing {node.id} with timeout={timeout}s, scope={memory_scope}")
+
+                    async with traced_span(
+                        "executor.node",
+                        mission_id=mission_id,
+                        node_id=node.id,
+                        agent=agent_name,
+                        wave=wave_count,
+                    ):
+                        if ChaosMonkey.is_enabled():
+                            if os.getenv("CHAOS_AGENT_TIMEOUT", "").lower() == agent_name.lower():
+                                await ChaosMonkey.simulate_agent_timeout(agent_name, timeout_ms=int(timeout * 1000))
+                            if os.getenv("CHAOS_TOOL_CRASH", "").lower() == agent_name.lower():
+                                ChaosMonkey.simulate_tool_crash(agent_name, failure_rate=1.0)
+                        raw_res = await asyncio.wait_for(
+                            ai_service_breaker.async_call(
+                                call_tool,
+                                agent_name,
+                                {
+                                    **merged_params,
+                                    "__memory_scope__": memory_scope,
+                                    "__sandbox__": policy.sandbox_required if policy else False,
+                                },
+                                {
+                                    **perception.get("context", {}),
+                                    "model_tier": getattr(node, "model_tier", "L2"),
+                                    "trace_id": mission_id,
+                                    "mission_id": mission_id,
+                                    "node_id": node.id,
+                                    "request_id": mission_id,
+                                },
+                            ),
+                            timeout=timeout,
+                        )
+
                     if not isinstance(raw_res, ToolResult):
                         result = ToolResult(**raw_res) if isinstance(raw_res, dict) else ToolResult(success=True, message=str(raw_res), agent=agent_name)
                     else:
                         result = raw_res
-                
-                # Success Check
-                if result.success:
-                    result.latency_ms = int((asyncio.get_event_loop().time() - start_time) * 1000)
-                    
-                    # Audit Point 05: Output Sanitization
-                    result.message = ResultSanitizer.sanitize_bot_response(result.message or "")
-                    
-                    # Audit Point 20: CU Billing / Usage Tracking
-                    prompt_tokens = getattr(result, "prompt_tokens", 0)
-                    completion_tokens = getattr(result, "completion_tokens", 0)
-                    # Simplified CU calculation: 1.0 per task + tokens/1000
-                    calculated_cu = 1.0 + (prompt_tokens + completion_tokens) / 1000.0
-                    
-                    try:
-                        async with PostgresDB._session_factory() as session:
-                            usage = CognitiveUsage(
-                                mission_id=mission_id,
-                                user_id=user_id,
-                                agent=agent_name,
-                                prompt_tokens=prompt_tokens,
-                                completion_tokens=completion_tokens,
-                                latency_ms=result.latency_ms,
-                                cu_cost=calculated_cu
-                            )
-                            session.add(usage)
-                            await session.commit()
-                    except Exception as e:
-                        logger.error(f"[V13.1 Executor] Failed to log CU usage: {e}")
+                    self._validate_payload_schema(
+                        result.model_dump(),
+                        getattr(getattr(node, "contract", None), "output_schema", {}),
+                        strict_schema=strict_schema,
+                        label=f"{node.id} output",
+                    )
 
-                    # 5. Blackboard Update
-                    if isinstance(result.data, dict) and "blackboard_update" in result.data:
-                        for k, v in result.data["blackboard_update"].items():
-                            blackboard.add_artifact(k, v)
-                    
-                    if hasattr(result, "insight") and result.insight:
-                        blackboard.update_insight(agent_name, result.insight)
-                    
-                    # Telemetry
-                    SovereignBroadcaster.publish(PULSE_NODE_COMPLETED, {
-                        "node_id": node.id, 
-                        "agent": agent_name,
-                        "success": True,
-                        "latency": result.latency_ms,
-                        "fidelity": getattr(result, 'fidelity_score', 0.0),
-                        "current_wave": wave_count
-                    }, user_id=user_id)
-                    
-                    if mission_sm:
-                        mission_sm.record_node(node.id, "completed", {"agent": agent_name, "latency_ms": result.latency_ms})
-                    try:
-                        CognitiveTracer.add_step(perception.get("request_id", "global"), "node_complete", {"node_id": node.id, "agent": agent_name, "latency_ms": result.latency_ms})
-                    except Exception:
-                        pass
-                    
-                    return result
-                
-                else:
+                    if result.success:
+                        self._record_circuit_success(node)
+                        result.latency_ms = int((asyncio.get_event_loop().time() - start_time) * 1000)
+                        result.message = ResultSanitizer.sanitize_bot_response(result.message or "")
+
+                        prompt_tokens = getattr(result, "prompt_tokens", 0)
+                        completion_tokens = getattr(result, "completion_tokens", 0)
+                        calculated_cu = 1.0 + (prompt_tokens + completion_tokens) / 1000.0
+
+                        try:
+                            async with PostgresDB._session_factory() as session:
+                                usage = CognitiveUsage(
+                                    mission_id=mission_id,
+                                    user_id=user_id,
+                                    agent=agent_name,
+                                    prompt_tokens=prompt_tokens,
+                                    completion_tokens=completion_tokens,
+                                    latency_ms=result.latency_ms,
+                                    cu_cost=calculated_cu,
+                                )
+                                session.add(usage)
+                                await session.commit()
+                        except Exception as e:
+                            logger.error(f"[V13.1 Executor] Failed to log CU usage: {e}")
+
+                        if isinstance(result.data, dict) and "blackboard_update" in result.data:
+                            for k, v in result.data["blackboard_update"].items():
+                                blackboard.add_artifact(k, v)
+
+                        if hasattr(result, "insight") and result.insight:
+                            blackboard.update_insight(agent_name, result.insight)
+
+                        SovereignBroadcaster.publish(PULSE_NODE_COMPLETED, {
+                            "node_id": node.id,
+                            "agent": agent_name,
+                            "success": True,
+                            "latency": result.latency_ms,
+                            "fidelity": getattr(result, 'fidelity_score', 0.0),
+                            "current_wave": wave_count
+                        }, user_id=user_id)
+
+                        if mission_sm:
+                            mission_sm.record_node(node.id, "completed", {"agent": agent_name, "latency_ms": result.latency_ms})
+                        try:
+                            CognitiveTracer.add_step(perception.get("request_id", "global"), "node_complete", {"node_id": node.id, "agent": agent_name, "latency_ms": result.latency_ms})
+                        except Exception:
+                            pass
+                        MetricsHub.observe_node(agent_name, node.id, result.latency_ms)
+                        MetricsHub.record_tool_call(agent_name)
+                        logger.info(
+                            "executor_node_completed",
+                            extra={
+                                "trace_id": mission_id,
+                                "mission_id": mission_id,
+                                "node_id": node.id,
+                                "agent": agent_name,
+                                "status": "success",
+                                "duration_ms": int(result.latency_ms),
+                            },
+                        )
+
+                        return result
+
                     last_error = result.error or "Unknown failure"
+                    self._record_circuit_failure(node)
                     logger.warning(f"[V8 Executor] Agent {agent_name} failed (Attempt {attempts}/{max_retries+1}): {last_error}")
 
-            except asyncio.TimeoutError:
-                last_error = f"Timeout ({timeout}s)"
-                logger.error(f"[V8 Executor] Agent {agent_name} timed out.")
-            except Exception as e:
-                last_error = str(e)
-                logger.exception(f"[V8 Executor] Agent {agent_name} crashed: {e}")
+                except asyncio.TimeoutError:
+                    last_error = f"Timeout ({timeout}s)"
+                    self._record_circuit_failure(node)
+                    logger.error(f"[V8 Executor] Agent {agent_name} timed out.")
+                except Exception as e:
+                    last_error = str(e)
+                    self._record_circuit_failure(node)
+                    logger.exception(f"[V8 Executor] Agent {agent_name} crashed: {e}")
 
-            if attempts <= max_retries:
-                # Optional: Exponential Backoff delay
-                await asyncio.sleep(2 ** attempts)
+                if attempts <= max_retries:
+                    await asyncio.sleep(compute_backoff_delay(attempts, retry_strategy))
+        finally:
+            AgentSandbox.deactivate(sandbox_token)
 
         # 6. Fallback mechanism
         if getattr(node, 'fallback_node_id', None):
@@ -447,9 +579,130 @@ class GraphExecutor:
              # and the executor would then pick up the fallback node.
              # For now, we return a failure result indicating fallback is needed.
 
+        compensation = self._run_compensation(node, mission_id=mission_id, agent_name=agent_name, error=last_error, mission_sm=mission_sm)
         if mission_sm:
             mission_sm.record_node(node.id, "failed", {"agent": agent_name, "error": last_error})
-        return ToolResult(success=False, error=f"Max retries exceeded: {last_error}", agent=agent_name)
+        fallback_output = getattr(node, "fallback_output", None) or {}
+        logger.error(
+            "executor_node_failed",
+            extra={
+                "trace_id": mission_id,
+                "mission_id": mission_id,
+                "node_id": node.id,
+                "agent": agent_name,
+                "status": "failed",
+                "duration_ms": int((asyncio.get_event_loop().time() - start_time) * 1000),
+            },
+        )
+        return ToolResult(
+            success=False,
+            error=f"Max retries exceeded: {last_error}",
+            agent=agent_name,
+            message=fallback_output.get("message", ""),
+            data={
+                "fallback_output": fallback_output,
+                "compensation_action": getattr(node, "compensation_action", None),
+                "compensation": compensation,
+            },
+        )
+
+    def _run_compensation(
+        self,
+        node: Any,
+        mission_id: str,
+        agent_name: str,
+        error: Optional[str],
+        mission_sm: Optional[CentralExecutionState],
+    ) -> Optional[Dict[str, Any]]:
+        action = getattr(node, "compensation_action", None)
+        if not action:
+            return None
+        compensation = {
+            "action": action,
+            "status": "executed",
+            "error": error,
+        }
+        if mission_sm:
+            mission_sm.record_node(node.id, "compensated", {"agent": agent_name, **compensation})
+        logger.warning(
+            "executor_compensation_executed",
+            extra={
+                "trace_id": mission_id,
+                "mission_id": mission_id,
+                "node_id": getattr(node, "id", None),
+                "agent": agent_name,
+                "status": "compensated",
+                "duration_ms": 0,
+            },
+        )
+        return compensation
+
+    def _validate_payload_schema(
+        self,
+        payload: Dict[str, Any],
+        schema: Dict[str, Any],
+        strict_schema: bool,
+        label: str,
+    ) -> None:
+        if not schema:
+            return
+        allowed_keys = set(schema.keys())
+        if strict_schema:
+            extras = sorted(set(payload.keys()) - allowed_keys)
+            if extras:
+                raise ValueError(f"{label} contains unexpected fields: {extras}")
+        for field, rules in schema.items():
+            required = bool(rules.get("required", False))
+            expected = rules.get("type")
+            if required and field not in payload:
+                raise ValueError(f"{label} missing required field '{field}'")
+            if field in payload and expected:
+                self._assert_type(payload[field], expected, label, field)
+
+    def _assert_type(self, value: Any, expected: str, label: str, field: str) -> None:
+        if value is None and expected.startswith("optional["):
+            return
+        normalized = expected.replace("optional[", "").replace("]", "")
+        type_map = {
+            "str": str,
+            "dict": dict,
+            "list": list,
+            "bool": bool,
+            "int": int,
+            "float": (int, float),
+        }
+        expected_type = type_map.get(normalized)
+        if expected_type is None:
+            return
+        if normalized == "bool":
+            is_valid = isinstance(value, bool)
+        elif normalized == "int":
+            is_valid = isinstance(value, int) and not isinstance(value, bool)
+        else:
+            is_valid = isinstance(value, expected_type)
+        if not is_valid:
+            raise ValueError(f"{label} field '{field}' expected {expected}, got {type(value).__name__}")
+
+    def _breaker_key(self, node: Any) -> str:
+        return f"{node.agent}:{node.id}"
+
+    def _get_circuit_state(self, node: Any) -> Dict[str, float]:
+        key = self._breaker_key(node)
+        return self._node_breakers.setdefault(key, {"failures": 0.0, "open_until": 0.0})
+
+    def _record_circuit_failure(self, node: Any) -> None:
+        state = self._get_circuit_state(node)
+        config = getattr(node, "circuit_breaker", {}) or {}
+        threshold = max(1, int(config.get("fail_threshold", 3)))
+        cooldown_ms = max(1000, int(config.get("cooldown_ms", 10000)))
+        state["failures"] += 1
+        if state["failures"] >= threshold:
+            state["open_until"] = time.time() + (cooldown_ms / 1000.0)
+
+    def _record_circuit_success(self, node: Any) -> None:
+        state = self._get_circuit_state(node)
+        state["failures"] = 0.0
+        state["open_until"] = 0.0
 
     def _resolve_inputs(self, inputs: Dict[str, Any], previous_results: Dict[str, ToolResult]) -> Dict[str, Any]:
         """Resolves template placeholders like {{t_search.result}}."""

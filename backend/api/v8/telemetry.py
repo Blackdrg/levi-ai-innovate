@@ -16,6 +16,9 @@ from backend.broadcast_utils import SovereignBroadcaster
 from backend.db.vector_store import VectorDB
 from backend.utils.encryption import SovereignVault
 from backend.api.utils.auth import get_current_user
+from backend.core.workflow_contract import validate_workflow_integrity
+from backend.core.task_graph import TaskGraph, TaskNode
+from backend.core.orchestrator_types import ToolResult
 
 router = APIRouter(prefix="", tags=["Telemetry v13"])
 logger = logging.getLogger(__name__)
@@ -142,3 +145,43 @@ async def get_swarm_status():
     except Exception as e:
         logger.error(f"[DCN] Swarm status retrieval failed: {e}")
         return {"status": "error", "message": str(e)}
+
+
+@router.get("/workflow")
+async def get_pipeline_workflow(current_user: Any = Depends(get_current_user)):
+    """
+    Returns the designated end-to-end workflow manifest for operational inspection.
+    """
+    user_id = current_user.uid if hasattr(current_user, "uid") else "guest"
+    sample_graph = TaskGraph(
+        nodes=[
+            TaskNode(
+                id="t_core",
+                agent="chat_agent",
+                description="Primary reasoning pass",
+                inputs={"input": "workflow probe"},
+            )
+        ]
+    )
+    workflow = validate_workflow_integrity(
+        request_id=f"workflow_probe:{user_id}",
+        perception={"intent": {"intent_type": "chat"}},
+        goal=type("Goal", (), {"objective": "Serve response through designated workflow"})(),
+        task_graph=sample_graph,
+        results=[ToolResult(success=True, message="ok", agent="chat_agent", data={})],
+        memory_event={"id": "probe", "checksum": "n/a", "version": 1},
+    )
+    return {
+        "status": "connected",
+        "workflow": workflow,
+        "contracts": {
+            "trace_headers": ["X-Trace-ID", "X-Sovereign-Version", "X-Cloud-Fallback"],
+            "core_metrics": [
+                "node_latency_ms",
+                "dag_depth_distribution",
+                "executor_queue_depth",
+                "tool_budget_rejections_total",
+                "alerts_total",
+            ],
+        },
+    }

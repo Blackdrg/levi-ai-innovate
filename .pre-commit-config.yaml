@@ -1,0 +1,8 @@
+repos:
+  - repo: local
+    hooks:
+      - id: block-default-secrets
+        name: Block Default Secrets
+        entry: python scripts/ci/check_default_secrets.py
+        language: system
+        files: '(^|/)(\.env(\..+)?|env(\..+)?|README\.md|docker-compose\.yml)$'

@@ -15,12 +15,15 @@ from .policy_engine import BrainPolicyEngine
 from .goal_engine import GoalEngine
 from .planner import DAGPlanner
 from .executor import GraphExecutor
+from .reasoning_core import ReasoningCore
 from .failure_engine import FailurePolicyEngine
 from .reflection import ReflectionEngine
 from .workflow_engine import WorkflowEngine
 from .context_manager import ContextManager
+from .learning_loop import LearningLoop
 from backend.memory.manager import MemoryManager
-from .orchestrator_types import ToolResult, BrainDecision, BrainMode, FailureType, FailureAction
+from .orchestrator_types import ToolResult, BrainDecision, FailureType, FailureAction
+from .workflow_contract import bridge_policy, validate_workflow_integrity
 from backend.services.brain_service import brain_service
 from ..utils.kafka import SovereignKafka
 from backend.broadcast_utils import (
@@ -31,6 +34,9 @@ from backend.broadcast_utils import (
     PULSE_MISSION_AUDITED
 )
 from backend.db.redis import r as redis_sync, HAS_REDIS as HAS_REDIS_SYNC
+from backend.utils.metrics import MetricsHub
+from backend.utils.tracing import traced_span
+from backend.core.executor.guardrails import capture_resource_pressure
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +53,7 @@ class LeviBrainV14:
         self.goal_engine = GoalEngine()
         self.planner = DAGPlanner()
         self.executor = GraphExecutor()
+        self.reasoning_core = ReasoningCore()
         self.failure_engine = FailurePolicyEngine()
         self.reflection = ReflectionEngine()
         self.workflow_engine = WorkflowEngine()
@@ -86,68 +93,80 @@ class LeviBrainV14:
         decision = None
         
         try:
+            MetricsHub.mission_started()
             # 1. PERCEPTION
-            SovereignBroadcaster.publish(PULSE_MISSION_STARTED, {"request_id": request_id, "user_input": user_input}, user_id=user_id)
-            asyncio.create_task(SovereignKafka.emit_event("brain_events", {"event": "MISSION_STARTED", "request_id": request_id}))
-            perception = await self.perception.perceive(user_input, user_id, session_id, **kwargs)
+            async with traced_span("brain.perception", request_id=request_id, user_id=user_id):
+                SovereignBroadcaster.publish(PULSE_MISSION_STARTED, {"request_id": request_id, "user_input": user_input}, user_id=user_id)
+                asyncio.create_task(SovereignKafka.emit_event("brain_events", {"event": "MISSION_STARTED", "request_id": request_id}))
+                perception = await self.perception.perceive(user_input, user_id, session_id, **kwargs)
 
             # 2. BRAIN POLICY (v14.0 Controlled)
-            policy = await brain_service.generate_policy(user_input, perception["context"])
+            async with traced_span("brain.policy", request_id=request_id):
+                policy = await brain_service.generate_policy(user_input, perception["context"])
             logger.info(f"[V14 Brain] Policy Locked: {policy.mode} (ID: {policy.policy_id})")
             
             # Policy Enforcement: Fail Mission if Policy Generation fails (Sovereign Requirement)
             if not policy:
                 raise Exception("Sovereign Policy Violation: Failed to generate execution pulse.")
 
-            # 2.1 Bridge Service Policy to Internal BrainDecision (v14.0 Monolith compatibility)
-            from .orchestrator_types import BrainDecision, MemoryPolicy, ExecutionPolicy, LLMPolicy, BrainMode
-            
-            # Map string mode to BrainMode enum
-            try:
-                bm = BrainMode(policy.mode)
-            except ValueError:
-                bm = BrainMode.BALANCED
-
-            decision = BrainDecision(
-                mode=bm,
-                enable_agents=policy.enable,
-                memory_policy=MemoryPolicy(
-                    redis=policy.memory.get("redis", True),
-                    postgres=policy.memory.get("postgres", True),
-                    neo4j=policy.memory.get("neo4j", False),
-                    faiss=policy.memory.get("faiss", True)
-                ),
-                execution_policy=ExecutionPolicy(
-                    parallel_waves=policy.execution.get("parallel_waves", 2),
-                    max_retries=policy.execution.get("max_retries", 1),
-                    sandbox_required=policy.enable.get("sandbox", False)
-                ),
-                llm_policy=LLMPolicy(
-                    local_only=policy.llm.get("local_only", True),
-                    cloud_fallback=policy.llm.get("fallback_allowed", False)
-                ),
-                complexity_score=policy.dict().get("scores", {}).get("complexity_score", 0.5)
-            )
+            decision = bridge_policy(policy)
 
             # 3. GOAL CREATION (Controlled by Policy)
-            goal = await self.goal_engine.create_goal(perception, decision=decision)
+            async with traced_span("brain.goal", request_id=request_id):
+                goal = await self.goal_engine.create_goal(perception, decision=decision)
 
-            # 4. PLANNING (DAG)
-            task_graph = await self.planner.build_task_graph(goal, perception, decision=decision)
+            # 4. PLANNING + REASONING CORE
+            perception["request_id"] = request_id
+            async with traced_span("brain.planner", request_id=request_id):
+                task_graph = await self.planner.build_task_graph(goal, perception, decision=decision)
+                task_graph = self.reasoning_core.enrich_for_resilience(task_graph)
+                reasoning = await self.reasoning_core.evaluate_plan(goal, perception, task_graph, decision=decision)
+                task_graph = reasoning["graph"]
+            if reasoning["strategy"]["requires_refinement"] or reasoning["confidence"] < self.reasoning_core.MIN_CONFIDENCE:
+                critique_reflection = {
+                    "issues": reasoning["critique"]["issues"] or reasoning["critique"]["warnings"],
+                    "fix": "Strengthen the weak parts of the execution plan and preserve fallback behavior.",
+                }
+                async with traced_span("brain.reasoning.refine", request_id=request_id):
+                    task_graph = await self.planner.refine_plan(task_graph, critique_reflection, goal, perception)
+                    task_graph.metadata.setdefault("reasoning_passes", []).append("plan_refinement")
+                    reasoning = await self.reasoning_core.evaluate_plan(goal, perception, task_graph, decision=decision)
+                    task_graph = reasoning["graph"]
             SovereignBroadcaster.publish(PULSE_MISSION_PLANNED, {"request_id": request_id, "goal": goal.objective}, user_id=user_id)
 
-            # Backpressure: degrade complexity under VRAM pressure
+            # Backpressure: degrade complexity under CPU/RAM/VRAM/queue pressure
             try:
+                forced_gpu_overload = os.getenv("CHAOS_GPU_OVERLOAD", "false").lower() == "true"
+                pressure = capture_resource_pressure(
+                    vram_pressure=forced_gpu_overload,
+                    queue_depth=len(getattr(task_graph, "nodes", [])),
+                )
                 if HAS_REDIS_SYNC:
-                    pressure = redis_sync.get("vram:pressure")
-                    if pressure and str(pressure).lower() == "true":
+                    vram_pressure = redis_sync.get("vram:pressure")
+                    pressure = capture_resource_pressure(
+                        vram_pressure=forced_gpu_overload or bool(vram_pressure and str(vram_pressure).lower() == "true"),
+                        queue_depth=len(getattr(task_graph, "nodes", [])),
+                    )
+                    if pressure.vram_pressure:
                         decision.enable_agents["critic"] = False
                         decision.execution_policy.parallel_waves = 1
+                if pressure.active_dimensions:
+                    if "queue" in pressure.active_dimensions or "cpu" in pressure.active_dimensions or "ram" in pressure.active_dimensions:
+                        decision.enable_agents["critic"] = False
+                        decision.execution_policy.parallel_waves = 1
+                    MetricsHub.record_alert("latency_breach", severity="warning", active="queue" in pressure.active_dimensions)
             except Exception:
                 pass
 
             # 5. EXECUTION (Enforcing Policy Limits)
-            results = await self.executor.execute(task_graph, perception, user_id=user_id, policy=decision.execution_policy)
+            async with traced_span("brain.executor", request_id=request_id):
+                results = await self.executor.execute(
+                    task_graph,
+                    perception,
+                    user_id=user_id,
+                    policy=decision.execution_policy,
+                    safe_mode=reasoning["strategy"]["safe_mode"],
+                )
             SovereignBroadcaster.publish(PULSE_MISSION_EXECUTED, {"request_id": request_id}, user_id=user_id)
 
             # 6. REFLECTION Loop
@@ -167,33 +186,65 @@ class LeviBrainV14:
                     draft_response = await synthesize_response(results, perception["context"])
             
             final_response = draft_response
+            memory_event = None
             
             # 7. MEMORY SYNC (Tiered Routing)
             try:
-                await self.memory.store(user_id, session_id, user_input, final_response, perception, results, policy=decision.memory_policy)
+                async with traced_span("brain.memory", request_id=request_id):
+                    memory_event = await self.memory.store(user_id, session_id, user_input, final_response, perception, results, policy=decision.memory_policy)
             except Exception as mem_err:
                 logger.error(f"[V14 Brain] Background Memory Sync Error: {mem_err}")
+                MetricsHub.record_alert("memory_mismatch", severity="critical")
 
             # 8. AUDITING
             from backend.evaluation.evaluator import AutomatedEvaluator
             latency = (datetime.now(timezone.utc) - mission_start).total_seconds() * 1000
-            audit = await AutomatedEvaluator.evaluate_transaction(
-                user_id=user_id, session_id=session_id, user_input=user_input,
-                response=final_response, goals=[goal.objective], 
-                tool_results=[r.dict() for r in results], latency_ms=latency
+            async with traced_span("brain.audit", request_id=request_id):
+                audit = await AutomatedEvaluator.evaluate_transaction(
+                    user_id=user_id, session_id=session_id, user_input=user_input,
+                    response=final_response, goals=[goal.objective], 
+                    tool_results=[r.model_dump() for r in results], latency_ms=latency
+                )
+            await LearningLoop.capture_outcome(
+                mission_id=request_id,
+                query=user_input,
+                result=final_response,
+                fidelity=audit["total_score"],
+                metadata={
+                    "intent_type": perception.get("intent").intent_type if perception.get("intent") else "chat",
+                    "graph_signature": task_graph.metadata.get("graph_signature"),
+                    "graph_template": task_graph.metadata.get("graph_template"),
+                    "memory_state_checksum": memory_event.get("checksum") if isinstance(memory_event, dict) else None,
+                    "reasoning_strategy": reasoning["strategy"],
+                },
             )
             SovereignBroadcaster.publish(PULSE_MISSION_AUDITED, {"request_id": request_id, "score": audit["total_score"]}, user_id=user_id)
+            MetricsHub.mission_finished(success=True)
+            workflow = validate_workflow_integrity(request_id, perception, goal, task_graph, results, memory_event)
 
             return {
                 "response": final_response,
                 "request_id": request_id,
                 "mode": policy.mode,
-                "results": [r.dict() for r in results],
-                "policy": policy.dict()
+                "results": [r.model_dump() for r in results],
+                "policy": policy.model_dump(),
+                "reasoning": {
+                    "confidence": reasoning["confidence"],
+                    "critique": reasoning["critique"],
+                    "simulation": reasoning["simulation"],
+                    "strategy": reasoning["strategy"],
+                },
+                "memory": {
+                    "event_id": memory_event.get("id") if isinstance(memory_event, dict) else None,
+                    "checksum": memory_event.get("checksum") if isinstance(memory_event, dict) else None,
+                    "version": memory_event.get("version") if isinstance(memory_event, dict) else None,
+                },
+                "workflow": workflow,
             }
 
         except Exception as e:
             logger.error(f"[V14 Brain] Structural Failure: {e}")
+            MetricsHub.mission_finished(success=False, stage="brain")
             # Recovery Action Logic
             if decision:
                 failure_type = FailureType.LLM_ERROR if "LLM" in str(e).upper() else FailureType.DAG_CONFLICT
@@ -215,6 +266,7 @@ class LeviBrainV14:
         **kwargs
     ) -> AsyncGenerator[Dict[str, Any], None]:
         request_id = request_id or f"v14_stream_{uuid.uuid4().hex[:8]}"
+        decision = None
         yield {"event": "metadata", "data": {"request_id": request_id, "status": "pulsing"}}
 
         try:
@@ -230,39 +282,24 @@ class LeviBrainV14:
             if not policy:
                 raise Exception("Sovereign Policy Violation: Failed to generate execution pulse.")
             
-            # 2.1 Bridge to internal Decision
-            from .orchestrator_types import BrainDecision, MemoryPolicy, ExecutionPolicy, LLMPolicy, BrainMode
-            try:
-                bm = BrainMode(policy.mode)
-            except ValueError:
-                bm = BrainMode.BALANCED
-
-            decision = BrainDecision(
-                mode=bm,
-                enable_agents=policy.enable,
-                memory_policy=MemoryPolicy(
-                    redis=policy.memory.get("redis", True),
-                    postgres=policy.memory.get("postgres", True),
-                    neo4j=policy.memory.get("neo4j", False),
-                    faiss=policy.memory.get("faiss", True)
-                ),
-                execution_policy=ExecutionPolicy(
-                    parallel_waves=policy.execution.get("parallel_waves", 2),
-                    max_retries=policy.execution.get("max_retries", 1),
-                    sandbox_required=policy.enable.get("sandbox", False)
-                ),
-                llm_policy=LLMPolicy(
-                    local_only=policy.llm.get("local_only", True),
-                    cloud_fallback=policy.llm.get("fallback_allowed", False)
-                )
-            )
+            decision = bridge_policy(policy)
 
             # 3. Goal & Planning
             goal = await self.goal_engine.create_goal(perception, decision=decision)
+            perception["request_id"] = request_id
             task_graph = await self.planner.build_task_graph(goal, perception, decision=decision)
+            task_graph = self.reasoning_core.enrich_for_resilience(task_graph)
+            reasoning = await self.reasoning_core.evaluate_plan(goal, perception, task_graph, decision=decision)
+            task_graph = reasoning["graph"]
             
             # 4. Execution (Enforcing Policy)
-            results = await self.executor.execute(task_graph, perception, user_id=user_id, policy=decision.execution_policy)
+            results = await self.executor.execute(
+                task_graph,
+                perception,
+                user_id=user_id,
+                policy=decision.execution_policy,
+                safe_mode=reasoning["strategy"]["safe_mode"],
+            )
             
             # 5. Streaming Synthesis
             from .engine import synthesize_streaming_response

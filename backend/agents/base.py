@@ -95,7 +95,21 @@ class SovereignAgent(abc.ABC, Generic[T, R]):
             await self.load_state(session_id)
 
         start_time = time.perf_counter()
+        trace_id = kwargs.get("trace_id") or kwargs.get("mission_id") or kwargs.get("request_id")
+        mission_id = kwargs.get("mission_id") or kwargs.get("request_id")
+        node_id = kwargs.get("node_id")
         self.logger.info(f"Agent {self.name} received mission.")
+        self.logger.info(
+            "agent_call_started",
+            extra={
+                "trace_id": trace_id,
+                "mission_id": mission_id,
+                "node_id": node_id,
+                "agent": self.name,
+                "status": "started",
+                "duration_ms": 0,
+            },
+        )
         
         try:
             # 1. Mission Execution
@@ -154,6 +168,17 @@ class SovereignAgent(abc.ABC, Generic[T, R]):
             from backend.utils.metrics import record_agent_mission
             tenant_id = getattr(input_data, "tenant_id", "global")
             record_agent_mission(self.name, "success", latency, tenant_id=tenant_id)
+            self.logger.info(
+                "agent_call_completed",
+                extra={
+                    "trace_id": trace_id,
+                    "mission_id": mission_id,
+                    "node_id": node_id,
+                    "agent": self.name,
+                    "status": "success",
+                    "duration_ms": int(latency),
+                },
+            )
             
             return agent_res
             
@@ -165,6 +190,17 @@ class SovereignAgent(abc.ABC, Generic[T, R]):
             from backend.utils.metrics import record_agent_mission
             tenant_id = getattr(input_data, "tenant_id", "global")
             record_agent_mission(self.name, "error", latency, tenant_id=tenant_id)
+            self.logger.error(
+                "agent_call_failed",
+                extra={
+                    "trace_id": trace_id,
+                    "mission_id": mission_id,
+                    "node_id": node_id,
+                    "agent": self.name,
+                    "status": "failed",
+                    "duration_ms": int(latency),
+                },
+            )
             
             return AgentResult(
                 success=False,

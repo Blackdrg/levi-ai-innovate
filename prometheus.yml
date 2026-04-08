@@ -1,6 +1,8 @@
 # prometheus.yml
 global:
   scrape_interval: 15s
+rule_files:
+  - infrastructure/prometheus/alerts.yml
 
 scrape_configs:
   - job_name: 'levi_api'

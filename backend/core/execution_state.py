@@ -9,6 +9,7 @@ from backend.db.redis import r as redis_client, HAS_REDIS
 class MissionState(str, enum.Enum):
     CREATED = "CREATED"
     PLANNED = "PLANNED"
+    EXECUTING = "EXECUTING"
     SCHEDULED = "SCHEDULED"
     RUNNING = "RUNNING"
     VALIDATING = "VALIDATING"
@@ -20,9 +21,10 @@ class MissionState(str, enum.Enum):
 
 _ALLOWED_TRANSITIONS: Dict[MissionState, List[MissionState]] = {
     MissionState.CREATED: [MissionState.PLANNED, MissionState.FAILED],
-    MissionState.PLANNED: [MissionState.SCHEDULED, MissionState.FAILED],
-    MissionState.SCHEDULED: [MissionState.RUNNING, MissionState.FAILED],
-    MissionState.RUNNING: [MissionState.VALIDATING, MissionState.FAILED],
+    MissionState.PLANNED: [MissionState.EXECUTING, MissionState.SCHEDULED, MissionState.FAILED],
+    MissionState.EXECUTING: [MissionState.VALIDATING, MissionState.FAILED],
+    MissionState.SCHEDULED: [MissionState.RUNNING, MissionState.EXECUTING, MissionState.FAILED],
+    MissionState.RUNNING: [MissionState.VALIDATING, MissionState.EXECUTING, MissionState.FAILED],
     MissionState.VALIDATING: [MissionState.PERSISTED, MissionState.FAILED],
     MissionState.PERSISTED: [MissionState.COMPLETE, MissionState.FAILED],
     MissionState.FAILED: [MissionState.COMPENSATED, MissionState.DEAD],
@@ -65,10 +67,18 @@ class CentralExecutionState:
             "mission_id": self.mission_id,
             "trace_id": self.trace_id,
             "user_id": self.user_id,
+            "baseline_tag": "v14.0.0-STABLE-BASELINE",
             "state": initial.value,
+            "idempotency_key": None,
             "history": [{"state": initial.value, "ts": time.time()}],
             "nodes": {},
+            "replay": {},
         }
+        self._save(data)
+
+    def attach_metadata(self, **metadata: Any) -> None:
+        data = self._load()
+        data.update(metadata)
         self._save(data)
 
     def transition(self, new_state: MissionState) -> bool:
@@ -84,6 +94,13 @@ class CentralExecutionState:
         self._save(data)
         return True
 
+    def attach_replay_payload(self, payload: Dict[str, Any]) -> None:
+        data = self._load()
+        replay = data.get("replay", {})
+        replay.update(payload)
+        data["replay"] = replay
+        self._save(data)
+
     def record_node(self, node_id: str, status: str, info: Optional[Dict[str, Any]] = None) -> None:
         data = self._load()
         nodes = data.get("nodes", {})
@@ -92,6 +109,23 @@ class CentralExecutionState:
         nodes[node_id] = node
         data["nodes"] = nodes
         self._save(data)
+
+    @staticmethod
+    def claim_idempotency(user_id: str, idempotency_key: str, mission_id: str, ttl_seconds: int = 900) -> bool:
+        if not HAS_REDIS:
+            return True
+        claim_key = f"mission:{idempotency_key}:lock"
+        claimed = redis_client.set(claim_key, mission_id, nx=True, ex=ttl_seconds)
+        return bool(claimed)
+
+    @staticmethod
+    def get_claimed_mission(user_id: str, idempotency_key: str) -> Optional[str]:
+        if not HAS_REDIS:
+            return None
+        raw: Any = redis_client.get(f"mission:{idempotency_key}:lock")
+        if isinstance(raw, (bytes, bytearray)):
+            raw = raw.decode("utf-8")
+        return str(raw) if raw else None
 
     @staticmethod
     def get_state(mission_id: str) -> Optional[str]:

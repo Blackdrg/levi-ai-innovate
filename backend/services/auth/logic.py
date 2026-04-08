@@ -15,6 +15,7 @@ from backend.db.postgres_db import get_write_session
 from backend.db.models import UserProfile
 from sqlalchemy import select
 from backend.utils.logger import get_logger
+from backend.auth.jwt_provider import JWTProvider
 
 logger = get_logger("auth")
 
@@ -82,7 +83,19 @@ async def get_current_user(request: Request, cred: Optional[HTTPAuthorizationCre
                 redis_client.setex(cache_key, 1800, json.dumps(user_data))
             return user_data
 
-        if os.getenv("ENVIRONMENT") == "production":
+        sovereign_jwt = JWTProvider.verify_token(token)
+        if sovereign_jwt:
+            uid = sovereign_jwt.get("sub")
+            email = sovereign_jwt.get("email")
+            jti = sovereign_jwt.get("jti") or sovereign_jwt.get("sub")
+            user_data = {
+                "uid": uid,
+                "username": sovereign_jwt.get("username") or (email.split("@")[0] if email else f"user_{uid[:8]}"),
+                "email": email,
+                "role": sovereign_jwt.get("role", "user"),
+                "tier": sovereign_jwt.get("tier", "pro"),
+            }
+        elif os.getenv("ENVIRONMENT") == "production":
             try:
                 decoded = firebase_auth.verify_id_token(token, check_revoked=True)
                 uid = decoded.get("uid")
@@ -92,13 +105,10 @@ async def get_current_user(request: Request, cred: Optional[HTTPAuthorizationCre
             except Exception:
                 raise credentials_exception
         else:
-            # Local/Dev Fallback
-            uid = "dev_user_777"
-            email = "sovereign@levi.ai"
-            jti = "dev_jti_pulse"
+            raise credentials_exception
         
         # 3. User Sync (Hybrid Firestore -> Postgres fallback)
-        user_data = None
+        user_data = user_data if 'user_data' in locals() else None
         if firestore_db:
             try:
                 user_ref = firestore_db.collection("users").document(uid)

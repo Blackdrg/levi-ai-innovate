@@ -4,11 +4,13 @@ set -e
 
 echo "=== LEVI Backend Startup (Gateway Mode) ==="
 
-# 1. Skip Alembic Migrations (Firestore Native)
-# Alembic is for SQL-based analytics/legacy DBs which are not used in Cloud Run production.
-echo "[1/2] Skipping SQL migrations (Firestore native detected)..."
+if [ "${SKIP_MIGRATIONS:-false}" = "true" ]; then
+  echo "[1/2] Skipping Alembic migrations (SKIP_MIGRATIONS=true)..."
+else
+  echo "[1/2] Running Alembic migrations..."
+  alembic -c backend/alembic.ini upgrade head
+fi
 
-# 2. Start application via Gateway
 echo "[2/2] Starting Uvicorn with Gateway..."
 exec uvicorn backend.api.main:app \
   --host 0.0.0.0 \

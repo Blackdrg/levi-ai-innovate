@@ -52,9 +52,9 @@ def _create_ha_clients():
         # Resolve SSL Paradox: Strip SSL parameters for local dev machines
         kwargs = {"decode_responses": True}
         if _is_local_url(REDIS_URL):
-            kwargs["ssl"] = False
             # Some versions of redis-py pass ssl_cert_reqs even if ssl=False, which triggers errors
             # We use from_url for its robust parsing but sanitize the URL if needed.
+            pass
 
         if REDIS_MODE == "sentinel" and SENTINEL_NODES:
             from redis.sentinel import Sentinel
