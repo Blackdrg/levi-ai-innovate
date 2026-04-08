@@ -66,3 +66,26 @@ class ChaosMonkey:
              pass 
         except Exception as e:
              logger.error(f"Chaos Redis error: {e}")
+
+    @staticmethod
+    def simulate_neo4j_slowdown(latency_ms: int = 2000):
+        """Injects latency into Neo4j queries."""
+        if ChaosMonkey.is_enabled():
+            logger.warning(f"🐒 [Chaos] Injecting {latency_ms}ms latency into Neo4j query...")
+            return asyncio.sleep(latency_ms / 1000.0)
+        return asyncio.sleep(0)
+
+    @staticmethod
+    def simulate_tool_crash(tool_name: str, failure_rate: float = 0.5):
+        """Simulates a crash for a specific tool."""
+        if ChaosMonkey.is_enabled() and random.random() < failure_rate:
+            logger.warning(f"🐒 [Chaos] Injecting intentional crash for tool: {tool_name}")
+            raise RuntimeError(f"Chaos Tool Crash: {tool_name}")
+
+    @staticmethod
+    def simulate_agent_timeout(agent_name: str, timeout_ms: int = 10000):
+        """Simulates a timeout for a specific agent."""
+        if ChaosMonkey.is_enabled():
+            logger.warning(f"🐒 [Chaos] Injecting intentional timeout for agent: {agent_name}")
+            return asyncio.sleep(timeout_ms / 1000.0)
+        return asyncio.sleep(0)

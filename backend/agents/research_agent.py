@@ -171,13 +171,6 @@ class ResearchAgent(SovereignAgent[ResearchInput, AgentResult]):
         # ── 8. Persist to SQL ─────────────────────────────────────────
         await self._persist_insight(session_id, topic, {"summary": summary, "vectors": len(sub_questions)})
 
-        # ── 9. Critic bridge ──────────────────────────────────────────
-        await self.send_message("critic", {"from": "research", "goal": topic, "data": summary})
-        feedback = await self.receive_message()
-        if feedback and feedback.get("success") is False:
-            summary = f"{summary}\n\n[REFINEMENT]: {feedback.get('feedback')}"
-            bundle.summary = summary
-
         return {
             "message": summary,
             "citations": [s.url for s in bundle.sources],

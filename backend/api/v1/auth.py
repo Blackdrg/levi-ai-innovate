@@ -76,10 +76,9 @@ async def signup(payload: dict):
     """
     email = payload.get("email")
     password = payload.get("password")
-    username = payload.get("username") or email.split('@')[0]
-    
     if not email or not password:
         raise LEVIException("Email and password are required for initialization.", status_code=400)
+    username = payload.get("username") or email.split("@")[0]
     
     try:
         from firebase_admin import auth as firebase_auth
@@ -145,16 +144,35 @@ async def login_for_access_token(payload: dict):
 async def track_share(current_user: dict = Depends(get_current_user)):
     """Track viral shares and reward bonus credits."""
     uid = current_user.get("uid")
-    # Note: firestore_db and firestore.Increment need to be imported or available.
-    # Fixing potential issue in original code.
     from backend.db.firebase import db as firestore_db
-    import firebase_admin.firestore as firestore
+    try:
+        from google.cloud.firestore_v1 import Increment  # type: ignore
+    except Exception:
+        Increment = None  # type: ignore
     
+    # Check if the document exists before updating to avoid 404
     user_ref = firestore_db.collection("users").document(uid)
-    user_ref.update({"share_count": firestore.Increment(1)})
+    doc = user_ref.get()
+    if not doc.exists:
+        # Initialize user in firestore if missing (graduation path)
+        user_ref.set({
+            "uid": uid,
+            "share_count": 1,
+            "credits": 0,
+            "email": current_user.get("email")
+        })
+        return {"status": "success", "message": "Initialized identity in cosmic memory."}
+
+    if Increment:
+        user_ref.update({"share_count": Increment(1)})
+    else:
+        user_ref.update({"share_count": 1})
     
     new_shares = current_user.get("share_count", 0) + 1
     if new_shares % 5 == 0:
-        user_ref.update({"credits": firestore.Increment(50)})
+        if Increment:
+            user_ref.update({"credits": Increment(50)})
+        else:
+            user_ref.update({"credits": 50})
         return {"status": "rewarded", "bonus": 50}
     return {"status": "success"}

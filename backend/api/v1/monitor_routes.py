@@ -6,6 +6,7 @@ Provides real-time transparency into LEVI's adaptive routing.
 """
 
 import logging
+import time
 from fastapi import APIRouter, Depends
 from backend.auth.logic import verify_admin
 from backend.db.redis import r as redis_client, HAS_REDIS
@@ -97,3 +98,49 @@ async def get_prompt_performance(is_admin: bool = Depends(verify_admin)):
     except Exception as e:
         logger.error(f"Failed to fetch prompt stats: {e}")
         return {"variants": [], "error": str(e)}
+
+@router.get("/health/graph")
+async def get_system_health_graph(is_admin: bool = Depends(verify_admin)):
+    """
+    v14.0 System Health Graph: Aggregates real-time stability metrics.
+    """
+    if not HAS_REDIS:
+        return {"status": "degraded", "error": "Redis offline"}
+
+    try:
+        # 1. Resource Metrics (from vram_monitor.py)
+        vram_free = int(redis_client.get("vram:live") or 0)
+        vram_pressure = redis_client.get("vram:pressure") == "true"
+        
+        # 2. Performance Metrics
+        redis_latency = float(redis_client.get("metrics:redis_latency_ms") or 0.0)
+        neo4j_latency = float(redis_client.get("metrics:neo4j_latency_ms") or 0.0)
+        
+        # 3. Execution Metrics
+        queue_depth = redis_client.llen("mission:queue") if redis_client.type("mission:queue") == "list" else 0
+        failure_rate = float(redis_client.get("stats:failure_rate") or 0.0)
+        
+        # 4. Latency Distribution
+        latencies = redis_client.lrange("metrics:latency_ms", 0, 99)
+        avg_latency = 0
+        if latencies:
+            avg_latency = sum(int(l) for l in latencies) / len(latencies)
+
+        return {
+            "status": "online",
+            "resources": {
+                "vram_free_mb": vram_free,
+                "vram_pressure": vram_pressure,
+                "redis_latency_ms": redis_latency,
+                "neo4j_latency_ms": neo4j_latency
+            },
+            "throughput": {
+                "queue_depth": queue_depth,
+                "mission_failure_rate": failure_rate,
+                "avg_mission_latency_ms": round(avg_latency, 2)
+            },
+            "timestamp": time.time()
+        }
+    except Exception as e:
+        logger.error(f"[Monitor] Failed to collect health graph: {e}")
+        return {"status": "error", "error": str(e)}

@@ -6,6 +6,7 @@ Defines the structure of cognitive missions with explicit dependencies.
 import logging
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
+from .orchestrator_types import TaskExecutionContract
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,7 @@ class TaskNode(BaseModel):
     condition: Optional[str] = None # Lambda-like string to evaluate before running
     tier: str = "L2" # L1, L2, L3, L4 (Tiers for resource/model mapping)
     result: Optional[Any] = None # Added for active state tracking
+    contract: Optional[TaskExecutionContract] = None
 
     def dict(self, *args, **kwargs):
         return super().model_dump(*args, **kwargs)

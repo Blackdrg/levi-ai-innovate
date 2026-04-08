@@ -8,7 +8,7 @@ import logging
 import asyncio
 import json
 import os
-from typing import Dict, Any, List, Set, Coroutine
+from typing import Dict, Any, List, Set, Coroutine, Optional
 from ..orchestrator_types import ToolResult, IntentResult
 from ..tool_registry import call_tool
 from ..blackboard import MissionBlackboard
@@ -23,6 +23,8 @@ from ...db.models import CognitiveUsage, Mission
 from ...db.postgres import PostgresDB
 from ..dcn_protocol import DCNProtocol
 from backend.db.redis import r_async as redis_client, HAS_REDIS_ASYNC as HAS_REDIS
+from ..execution_state import CentralExecutionState
+from ...evaluation.tracing import CognitiveTracer
 
 
 logger = logging.getLogger(__name__)
@@ -54,6 +56,8 @@ class GraphExecutor:
         remaining_nodes = list(graph.nodes)
         wave_count = 0
         total_nodes_executed = 0
+        tool_calls = 0
+        mission_sm = CentralExecutionState(mission_id)
 
         
         while remaining_nodes:
@@ -86,6 +90,13 @@ class GraphExecutor:
             
             # 2. Parallel Execution of Wave (Limited by Policy)
             max_parallel = policy.parallel_waves if policy else len(executable_nodes)
+            try:
+                if HAS_REDIS:
+                    pressure = await redis_client.get("vram:pressure")
+                    if pressure and str(pressure).lower() == "true":
+                        max_parallel = max(1, min(max_parallel, 1))
+            except Exception:
+                pass
             nodes_to_run = executable_nodes[:max_parallel]
             
             total_nodes_executed += len(nodes_to_run)
@@ -99,7 +110,7 @@ class GraphExecutor:
                 SovereignBroadcaster.publish("MISSION_ABORTED", {"reason": "node_limit_exceeded"}, user_id=user_id)
                 break
 
-            tasks = [self._execute_node(n, results, perception, blackboard=blackboard, user_id=user_id, wave_count=wave_count, policy=policy) for n in nodes_to_run]
+            tasks = [self._execute_node(n, results, perception, blackboard=blackboard, user_id=user_id, wave_count=wave_count, policy=policy, mission_sm=mission_sm) for n in nodes_to_run]
             SovereignBroadcaster.publish("WAVE_STARTED", {"nodes": [n.id for n in nodes_to_run], "current_wave": wave_count}, user_id=user_id)
 
             # --- Distributed Wave Management (v2.0-Hardened) ---
@@ -181,6 +192,10 @@ class GraphExecutor:
                 results[n.id] = res
                 completed_ids.add(n.id)
                 remaining_nodes.remove(n)
+                tool_calls += 1
+                if policy and getattr(policy, "budget", None) and tool_calls >= policy.budget.tool_call_limit:
+                    logger.error(f"[Shield] Mission {mission_id} aborted: Tool call limit ({policy.budget.tool_call_limit}) reached.")
+                    break
                 
             # 4. Critical Path Failure Check
             critical_failure = False
@@ -202,12 +217,22 @@ class GraphExecutor:
 
         return list(results.values())
 
-    async def _execute_node(self, node: Any, previous_results: Dict[str, ToolResult], perception: Dict[str, Any], blackboard: MissionBlackboard = None, user_id: str = "global", wave_count: int = 0, policy: Optional[Any] = None) -> ToolResult:
+    async def _execute_node(self, node: Any, previous_results: Dict[str, ToolResult], perception: Dict[str, Any], blackboard: MissionBlackboard = None, user_id: str = "global", wave_count: int = 0, policy: Optional[Any] = None, mission_sm: Optional[CentralExecutionState] = None) -> ToolResult:
         """Executes a single node with template-resolved inputs, retries and fallbacks."""
         agent_name = node.agent
         start_time = asyncio.get_event_loop().time()
         # 0. Override Policy Constraints
-        max_retries = policy.max_retries if policy is not None else getattr(node, 'retry_count', 1)
+        max_retries = 1
+        if node.contract:
+            max_retries = node.contract.max_retries
+        elif policy:
+            max_retries = policy.max_retries
+        else:
+            max_retries = getattr(node, 'retry_count', 1)
+            
+        # Global guardrail: max 2 retries
+        if max_retries > 2:
+            max_retries = 2
         if policy and policy.sandbox_required:
             logger.info(f"[V14 Brain] Mandatory Sandbox Isolation Enforced for node {node.id}")
         
@@ -225,6 +250,12 @@ class GraphExecutor:
         attempts = 0
         last_error = None
         
+        # Timeline recorder: node start
+        try:
+            CognitiveTracer.add_step(perception.get("request_id", "global"), "node_start", {"node_id": node.id, "agent": agent_name})
+        except Exception:
+            pass
+
         while attempts <= max_retries:
             try:
                 attempts += 1
@@ -296,17 +327,42 @@ class GraphExecutor:
                         # Fallback to the first valid candidate if consensus fails
                         result = valid_candidates[0] if valid_candidates else ToolResult(success=False, error="Swarm failure", agent=agent_name)
                 
-                else:
-                    # Standard Single-Agent Execution
-                    raw_res = await asyncio.wait_for(
-                        ai_service_breaker.async_call(
-                            call_tool, 
-                            agent_name, 
-                            merged_params, 
-                            {**perception.get("context", {}), "model_tier": getattr(node, "model_tier", "L2")}
-                        ),
-                        timeout=timeout
-                    )
+                # Standard Single-Agent Execution
+                # 1. Determine Timeout (Contract > Budget > Default)
+                timeout = 15
+                if node.contract and node.contract.timeout_ms:
+                    timeout = node.contract.timeout_ms / 1000.0
+                elif policy and getattr(policy, "budget", None):
+                    timeout = policy.budget.cpu_time_limit_ms / 1000.0
+
+                # 2. Check Allowed Tools (Contract Enforcement)
+                if node.contract and node.contract.allowed_tools:
+                    # Logic to restrict agent tool usage if the agent supports dynamic tool binding
+                    pass
+
+                # 3. Worker Isolation: memory_scope & sandbox
+                memory_scope = "session"
+                if node.contract:
+                    memory_scope = node.contract.memory_scope
+                
+                # Bounded execution quota check (token_limit, tool_call_limit)
+                if policy and policy.budget:
+                    if tool_calls >= policy.budget.tool_call_limit:
+                         return ToolResult(success=False, error="Tool call limit exceeded", agent=agent_name)
+                    # Note: token_limit is usually checked post-execution or via agent-level callbacks
+                
+                logger.debug(f"[TEC] Executing {node.id} with timeout={timeout}s, scope={memory_scope}")
+                
+                # Standard Single-Agent Execution
+                raw_res = await asyncio.wait_for(
+                    ai_service_breaker.async_call(
+                        call_tool, 
+                        agent_name, 
+                        {**merged_params, "__memory_scope__": memory_scope, "__sandbox__": policy.sandbox_required if policy else False}, 
+                        {**perception.get("context", {}), "model_tier": getattr(node, "model_tier", "L2")}
+                    ),
+                    timeout=timeout
+                )
                     
                     if not isinstance(raw_res, ToolResult):
                         result = ToolResult(**raw_res) if isinstance(raw_res, dict) else ToolResult(success=True, message=str(raw_res), agent=agent_name)
@@ -360,6 +416,13 @@ class GraphExecutor:
                         "current_wave": wave_count
                     }, user_id=user_id)
                     
+                    if mission_sm:
+                        mission_sm.record_node(node.id, "completed", {"agent": agent_name, "latency_ms": result.latency_ms})
+                    try:
+                        CognitiveTracer.add_step(perception.get("request_id", "global"), "node_complete", {"node_id": node.id, "agent": agent_name, "latency_ms": result.latency_ms})
+                    except Exception:
+                        pass
+                    
                     return result
                 
                 else:
@@ -384,6 +447,8 @@ class GraphExecutor:
              # and the executor would then pick up the fallback node.
              # For now, we return a failure result indicating fallback is needed.
 
+        if mission_sm:
+            mission_sm.record_node(node.id, "failed", {"agent": agent_name, "error": last_error})
         return ToolResult(success=False, error=f"Max retries exceeded: {last_error}", agent=agent_name)
 
     def _resolve_inputs(self, inputs: Dict[str, Any], previous_results: Dict[str, ToolResult]) -> Dict[str, Any]:

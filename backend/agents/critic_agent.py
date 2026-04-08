@@ -53,22 +53,9 @@ class CriticAgent(SovereignAgent[CriticInput, AgentResult]):
         
         generator = SovereignGenerator()
         
-        if not input_data.goal and self.bus:
-            # 1a. Listen for asynchronous missions on the bus
-            self.logger.info("Critic Pulse: Waiting for asynchronous mission on Agent Bus.")
-            message = await self.receive_message()
-            if message and "data" in message:
-                self.logger.info(f"Critic Mission received from: {message.get('from', 'unknown')}")
-                target_agent = message.get("from")
-                goal = message.get("goal", "Collaborative refinement mission")
-                agent_output = message.get("data")
-            else:
-                return {"message": "Critic idle. No missions received.", "success": True}
-        else:
-            # Standard mission from Goal engine
-            goal = input_data.goal
-            agent_output = input_data.agent_output
-            target_agent = None
+        # Standard mission from Goal engine
+        goal = input_data.goal
+        agent_output = input_data.agent_output
 
         # 2. Evaluation Logic
         raw_json = await generator.council_of_models([
@@ -99,11 +86,6 @@ class CriticAgent(SovereignAgent[CriticInput, AgentResult]):
                     "hallucination": hallucination
                 }
             }
-
-            # 3. Synchronous Reply via Agent Bus
-            if target_agent:
-                self.logger.info(f"Critic Mission completed. Sending feedback back to {target_agent}.")
-                await self.send_message(target_agent, result)
 
             return result
             
