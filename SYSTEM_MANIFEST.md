@@ -1,76 +1,66 @@
-# LEVI-AI SYSTEM MANIFEST (v14.0.0)
-This manifest serves as the authoritative source of truth for all components within the LEVI-AI Sovereign OS.
+# LEVI-AI System Manifest
 
-## 1. Core Services
-| Service | Path | Description |
+This manifest summarizes the currently active and documented runtime surfaces in the repository as of 2026-04-08.
+
+## Designated Workflow
+
+`Gateway -> Orchestrator -> Goal -> Planner -> Reasoning -> Executor -> Agents -> Memory -> Response`
+
+The workflow contract is implemented in `backend/core/workflow_contract.py` and is inspectable at `GET /api/v1/telemetry/workflow`.
+
+## Core Runtime Services
+
+| Service | Path | Current role |
 | :--- | :--- | :--- |
-| **FastAPI Gateway** | `backend/api/main.py` | Entry point for all external requests, handling routing and security. |
-| **Orchestrator** | `backend/core/orchestrator.py` | Manages mission lifecycles and high-level routing. |
-| **Goal Engine** | `backend/core/goal_engine.py` | Translates user intent into structured mission objectives. |
-| **Planner** | `backend/core/planner.py` | Generates execution DAGs (Task Graphs) based on mission goals. |
-| **Executor** | `backend/core/executor/__init__.py` | Executes DAG nodes, handling wave scheduling and agent coordination. |
-| **Memory Manager** | `backend/memory/manager.py` | Orchestrates the 4-tier memory system (Short, Mid, Long, Relational). |
+| FastAPI gateway | `backend/api/main.py` | Primary HTTP entrypoint, middleware, health, readiness, tracing, metrics, and router registration. |
+| Compatibility gateway | `backend/main.py` | Backward-compatible import surface exposing `app` and legacy helpers. |
+| Orchestrator | `backend/core/orchestrator.py` | Mission lifecycle coordination. |
+| Goal engine | `backend/core/goal_engine.py` | Converts user input into structured objectives. |
+| Planner | `backend/core/planner.py` | Builds DAG plans and supports compatibility helpers used by memory and learning paths. |
+| Reasoning core | `backend/core/brain.py` | Performs reasoning pass, critique, refinement, and policy bridging. |
+| Executor | `backend/core/executor/__init__.py` | Runs DAG waves, retries, backpressure, and budget enforcement. |
+| Execution guardrails | `backend/core/execution_guardrails.py` | Shared guardrail logic for budgets, sandboxing, and enforcement boundaries. |
+| Workflow contract | `backend/core/workflow_contract.py` | Validates and reports designated workflow integrity. |
 
-## 2. Autonomous Agents (Registry)
-| Agent | Role | Specialized Function |
+## Persistence and State
+
+| Component | Path | Current role |
 | :--- | :--- | :--- |
-| **CodeAgent** | Artisan | High-fidelity code generation and architectural design. |
-| **SearchAgent** | Scout | Real-time web discovery and information retrieval. |
-| **CriticAgent** | Critic | Qualitative validation and self-correction loops. |
-| **PythonReplAgent** | Coder | Secure code execution and iterative debugging in sandboxes. |
-| **ResearchAgent** | Researcher | Multi-source synthesis and citation bundle generation. |
-| **DocumentAgent** | Analyst | Document parsing, matrix analysis, and knowledge extraction. |
-| **TaskAgent** | HardRule | Recursive task decomposition and intent logic enforcement. |
-| **ConsensusAgent** | SwarmCtrl | Adjudication across parallel agent outputs for collective resonance. |
-| **OptimizerAgent** | Optimizer | Performance tuning and token-efficient reasoning. |
-| **MemoryAgent** | Memory | Relational triplet extraction and Neo4j graph population. |
-| **DiagnosticAgent** | Diagnostic | System health analysis and troubleshooting. |
-| **ImageAgent** | Imaging | Generative visual content creation. |
-| **VideoAgent** | Video | Frame-consistent video generation. |
-| **RelayAgent** | Relay | Cross-service communication and DCN pulse management. |
+| Redis | `backend/db/redis.py` | Runtime state, queues, cache, rate limiting, readiness dependency. |
+| Postgres | `backend/db/postgres_db.py` | Resonance verification and persistent data surfaces. |
+| Neo4j | `backend/db/neo4j_client.py` | Relational memory and graph surfaces. |
+| Vector store | `backend/db/vector_store.py` | Semantic retrieval plus compatibility adapter for legacy flows. |
+| Task graph | `backend/core/task_graph.py` | DAG structure, validation, and depth reporting. |
 
-## 3. Infrastructure & Persistence
-| Component | Implementation | Role |
+## Runtime Guarantees Added in the Current Pass
+
+- stricter DAG validation
+- bounded retries with backoff behavior
+- sandbox and tool-boundary enforcement
+- mission token-budget enforcement
+- mission tool-call-budget enforcement
+- multi-signal backpressure using VRAM, CPU, RAM, and queue depth
+- startup readiness contract reporting
+
+## Observability Surfaces
+
+| Surface | Path | Current role |
 | :--- | :--- | :--- |
-| **Redis** | `backend/db/redis.py` | Source of truth for runtime state, caching, and rate limiting. |
-| **PostgreSQL** | `backend/db/postgres.py` | Persistent store for immutable history, user profiles, and audit logs. |
-| **Neo4j** | `backend/db/neo4j_client.py` | Graph database for relational memory and entity mapping. |
-| **Vector DB** | `backend/db/vector_store.py` | HNSW/FAISS for semantic memory and long-term retrieval. |
-| **Docker Sandbox** | `backend/utils/sandbox.py` | Bounded isolation for secure code execution. |
-| **Celery** | `backend/celery_app.py` | Distributed task queue for long-running asynchronous jobs. |
-| **Kafka** | `backend/utils/kafka.py` | Event streaming for cross-module telemetry and pulse emission. |
-| **MongoDB** | `backend/db/mongo.py` | Flexible document store for raw mission data and cache backups. |
+| Metrics hub | `backend/utils/metrics.py` | Prometheus metrics export. |
+| Tracing setup | `backend/utils/tracing.py` | OpenTelemetry setup with non-blocking runtime posture. |
+| Evaluation tracing | `backend/evaluation/tracing.py` | Request and reasoning trace propagation. |
+| Telemetry API | `backend/api/v8/telemetry.py` | SSE telemetry, swarm status, and workflow manifest endpoint. |
+| Startup checks | `backend/utils/startup.py` | Production-readiness checks surfaced through `/health` and `/ready`. |
 
-## 4. Runtime & Orchestration Systems
-| System | Description |
-| :--- | :--- |
-| **DAG Engine** | `backend/core/task_graph.py` - Manages task dependencies and execution flow. |
-| **Wave Scheduler** | `backend/core/executor/__init__.py` - Groups DAG nodes for parallel execution. |
-| **Retry Engine** | `backend/core/executor/__init__.py` - Handles node-level failures with backoff logic. |
-| **Compensation Engine**| `backend/core/failure_engine.py` - Executes rollback or recovery tasks on failure. |
-| **Circuit Breaker** | `backend/circuit_breaker.py` - Prevents cascading failures across services. |
-| **State Machine** | `backend/core/execution_state.py` - Central authoritative state tracking for missions. |
-| **Consistency Manager**| `backend/memory/consistency.py` - Enforces write ordering and deduplication across stores. |
+## Deployment Surfaces
 
-## 5. Security & Protection
-| System | Implementation |
-| :--- | :--- |
-| **RBAC** | `backend/auth/logic.py` - Role-based access control for API and resources. |
-| **KMS Encryption** | `backend/utils/kms.py` - Key management for sensitive data and model keys. |
-| **Prompt Shield** | `backend/utils/shield.py` - Prevents prompt injection and jailbreak attempts. |
-| **Egress Filter** | `backend/utils/egress.py` - Monitors and restricts external network requests. |
+| Surface | Path | Current role |
+| :--- | :--- | :--- |
+| Kubernetes deployment | `backend/deployment/k8s/deployment.yaml` | Rolling deployment, startup/liveness/readiness probes, graceful termination. |
+| Kubernetes HPA | `backend/deployment/k8s/hpa.yaml` | CPU and memory autoscaling behavior. |
+| Kubernetes PDB | `backend/deployment/k8s/pdb.yaml` | Disruption protection. |
+| CI workflow | `.github/workflows/test.yml` | Targeted workflow/stability tests plus manifest validation. |
 
-## 6. Inference & Cognitive Layer
-| Component | Description |
-| :--- | :--- |
-| **Ollama Local** | `backend/services/local_llm.py` - Local inference engine for privacy and low-cost tasks. |
-| **Model Router** | `backend/core/model_router.py` - Adaptive routing between local and cloud LLMs. |
-| **Embedding Pipeline**| `backend/embeddings.py` - Vectorizes data for semantic memory indexing. |
+## Verified Status
 
-## 7. Observability & Telemetry
-| System | Implementation |
-| :--- | :--- |
-| **Logging** | `backend/utils/logger.py` - Standardized system-wide logging. |
-| **Telemetry** | `backend/broadcast_utils.py` - Publishes live system pulses (DCN). |
-| **SSE Stream** | `backend/services/chat/router.py` - Real-time event streaming to the frontend. |
-| **Tracing** | `backend/evaluation/tracing.py` - Global trace ID tracking across request lifecycles. |
+The targeted production wiring suite used for the current status report passed on 2026-04-08 with `19 passed`.

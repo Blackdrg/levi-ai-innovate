@@ -1,41 +1,29 @@
-# LEVI-AI Roadmap & TODO (v14.0.0-Autonomous-SOVEREIGN)
+# LEVI-AI Remaining Work
 
-This document tracks the technical evolution of the LEVI-AI orchestration platform.
+This file tracks the honest remaining work after the current hardening and documentation pass.
 
-## 🏁 Phase 1: Core Foundation [x]
-- [x] Service-Oriented Architecture (FastAPI).
-- [x] Local Quad-Persistence (Postgres, Redis, Neo4j, HNSW).
-- [x] Functional Agent Registry (Search, Code).
-- [x] Deterministic DAG Planner.
+## Completed and Verified
 
-## 🧠 Phase 2: Implementation Hardening [x]
-- [x] **Local Inference**: 100% Local Inference via Ollama.
-- [x] **Security Middleware**: PII Masking and Instruction Boundaries.
-- [x] **Deterministic Evaluation**: 60/40 weighted scoring (Neural + Rule-based).
-- [x] **DCN Event Layer**: HMAC-signed inter-node synchronization.
-- [x] **Access Control**: RBAC-based permission shielding.
+- Designated pipeline wiring is connected end-to-end.
+- Workflow contract reporting exists.
+- Reasoning, executor, and memory-related hardening tests are passing.
+- Health, readiness, tracing, metrics, Kubernetes rollout files, and CI validation are in place.
+- Targeted local verification passed with `19 passed` on 2026-04-08.
 
-## 🎓 Phase 3: Technical Finality [x]
-- [x] **Event Telemetry**: Compressed SSE streams with versioned headers.
-- [x] **Production Scaling**: Docker Compose orchestration for distributed stack.
-- [x] **Relational Persistence**: 100% Postgres-backed session management.
-- [x] **Production Readiness**: All technical audit points verified via automated suite.
+## Still Needed Before Full Production Proof
 
-## 🛡️ Phase 4: Production Release [x]
-- [x] **Certification Gate**: 100% Agent E2E suite + Load Testing.
-- [x] **Hardened Distributed Cluster**: Coordinator election + TLS-enforced DCN.
-- [x] **System Optimization**: Performance-driven adaptation pipeline.
-- [x] **Resilience**: Encrypted disaster recovery + background task recovery.
-- [x] **Observability**: System monitoring dashboard and localized metrics.
+- Run real load campaigns across 100, 500, and 1000 concurrent missions.
+- Run long-DAG tests with depth greater than 10 under realistic dependency pressure.
+- Run mixed-workload tests covering chat, research, and code flows together.
+- Execute chaos drills against real Redis failure, Neo4j lag, agent timeout, and GPU overload behavior.
+- Expand smoke coverage across more API routes and feature surfaces.
+- Verify alert thresholds under stress, not just configuration presence.
+- Validate replay determinism and memory consistency under multi-service failure and delayed sync conditions.
 
-## 🚀 Phase 5: Adaptive Orchestration [x]
-- [x] **Adaptive Strategy Selection**: Dynamic task pathing and decomposition.
-- [x] **Hybrid Resource Scheduling**: Managed cloud fallback for high-load periods.
-- [x] **Performance Monitoring**: Automated system benchmarks.
-- [x] **Deployment Stability**: Verification for neural state stability.
-- [x] **Data Governance**: PII Masking and Data Erasure (GDPR).
-- [x] **System Analysis**: Automated Root Cause Analysis (ARCA).
+## Status
 
----
-**Status**: PRODUCTION READY (v14.0.0-Autonomous-SOVEREIGN).
-**Version**: v14.0.0 Production Release (Autonomous-SOVEREIGN)
+Current status is best described as:
+
+- design wiring: complete
+- targeted integration and hardening: verified
+- full production proof under stress: still in progress

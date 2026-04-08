@@ -1,56 +1,96 @@
-# LEVI-AI Production Runbook (v14.0 Production)
+# LEVI-AI Production Runbook
 
-This document provides the standard operational procedures for the LEVI-AI system. 
+This runbook reflects the current runtime behavior in the repository as of 2026-04-08.
 
-## 🏗️ Service Dependency & Boot Order
-To ensure proper state synchronization and system consistency, services must be started in the following order:
+## Boot Order
 
-1.  **Redis**: Centralized state and task queue management.
-2.  **Postgres**: Session and user data persistence.
-3.  **Neo4j**: Knowledge Graph and relationship mapping.
-4.  **Ollama**: Local inference engine (Wait for model loading).
-5.  **FastAPI (Main Gateway)**: Orchestration and API layer.
+Start dependencies in this order:
 
----
+1. Redis
+2. Postgres
+3. Neo4j
+4. Ollama
+5. FastAPI gateway
 
-## 🏗️ Disaster Recovery & Resilience
-### Executing the Restore Drill
-If a system failure occurs, verify the 300s RTO (Recovery Time Objective):
-1.  Navigate to `backend/scripts/`.
-2.  Run `python -m restore_drill`.
-3.  Monitor the `[DR-Replay]` logs to ensure tasks are re-hydrated from the `sessions_aborted` ledger.
+The gateway entrypoint is `backend/api/main.py`. A compatibility import surface is also exposed at `backend/main.py`.
 
-### Manual LoRA Promotion
-To promote a new model adapter manually:
-1.  Invoke the `LearningLoop.promote_adapter("adapter_name")` function.
-2.  Verify that the `Modelfile.lora` is updated.
-3.  Restart the Ollama service to hot-swap the inference weights.
+## Health and Readiness
 
----
+Use these endpoints during operations:
 
-## 🛡️ Security & Privacy Operations
-### JWT Revocation
-To revoke a compromised batch of JWTs:
--   Issue a `REVOKE_ALL` signal to the `MemoryAgent` with the target `user_id` or `jid_prefix`.
--   This triggers a blacklist update in Redis (TTL 24h).
+- `GET /health` or `GET /api/v1/health`: runtime pulse, version, environment, model assignments, and startup checks.
+- `GET /ready` or `GET /api/v1/ready`: readiness probe for Docker and Kubernetes. This checks Redis, Postgres resonance, and startup production-readiness conditions.
+- `GET /metrics`: Prometheus metrics endpoint.
+- `GET /api/v1/telemetry/workflow`: designated workflow manifest and contract-level telemetry surface.
 
-### GDPR Erasure
-To trigger a full data erasure for a user:
-1.  Run `python -m backend.scripts.gdpr_purge --user_id <USER_ID>`.
-2.  This will cascade delete data from Postgres, Neo4j, and the Vector Store (FAISS).
+`/ready` only returns `ready` when:
 
----
+- Redis is reachable.
+- Postgres resonance verification succeeds.
+- Startup checks report `ready_for_production=true`.
 
-## 📈 Performance & Scaling
-### Response to VRAM_PRESSURE Alert
-An alert will trigger if VRAM headroom falls below 2GB:
-1.  **Immediate Action**: The `GraphExecutor` will automatically pause new task dispatches.
-2.  **Manual Intervention**: Review preferred models in the orchestrator configuration.
+## Startup Checks
 
----
+The gateway startup contract currently verifies:
 
-## 🧪 HITL & Human Review
-To manually approve a queued HITL item:
-1.  Navigate to the **System Dashboard** in the frontend.
-2.  Review the `primary_score` vs `shadow_score` divergence.
-3.  Accept or modify the response to trigger the final record in the `LearningLoop`.
+- `JWT_SECRET`
+- `INTERNAL_SERVICE_KEY`
+- `CORS_ORIGINS`
+- `OTEL_EXPORTER_OTLP_ENDPOINT`
+- `REDIS_URL`
+
+In `production`, missing secure values are surfaced as readiness warnings.
+
+## Backpressure and Budget Enforcement
+
+The executor now applies:
+
+- VRAM-aware throttling
+- CPU-aware throttling
+- RAM-aware throttling
+- queue-depth-aware throttling
+- mission `token_limit` enforcement
+- mission `tool_call_limit` enforcement
+
+If the system degrades under pressure, the executor can reduce concurrency or fall back to safer execution behavior.
+
+## Deployment Checks
+
+Kubernetes rollout files live under `backend/deployment/k8s/`:
+
+- `deployment.yaml`
+- `hpa.yaml`
+- `pdb.yaml`
+
+Current runtime assumptions in those manifests:
+
+- `ENVIRONMENT=production`
+- readiness probe uses `/ready`
+- liveness probe uses `/health`
+- startup probe uses `/ready`
+
+## CI Validation
+
+The repository test workflow currently runs the targeted stability and workflow suite plus Kubernetes manifest validation:
+
+```bash
+pytest backend/tests/test_gateway_workflow_manifest.py backend/tests/test_pipeline_workflow.py backend/tests/test_stability_hardening.py backend/tests/test_reasoning_core_upgrade.py backend/tests/test_state_and_replay_upgrade.py --tb=short
+```
+
+The broader local verification that was recently used for status updates also includes:
+
+```bash
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_gateway_workflow_manifest.py backend/tests/test_pipeline_workflow.py backend/tests/test_production_wiring.py backend/tests/test_stability_hardening.py backend/tests/test_reasoning_core_upgrade.py backend/tests/test_state_and_replay_upgrade.py -q
+```
+
+Verified result on 2026-04-08:
+
+- `19 passed`
+
+## Known Gaps
+
+This repository is better wired for production, but these areas still need more proof before claiming full real-world readiness:
+
+- high-concurrency live load runs
+- real dependency chaos drills
+- broader route-by-route smoke validation

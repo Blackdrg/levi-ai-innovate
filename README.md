@@ -6,6 +6,8 @@ LEVI-AI is a high-fidelity, predictable, and failure-isolated distributed AI ope
 
 ## 1. Overview
 
+The active v14 runtime now inserts a mandatory **Reasoning Core** between planning and execution. Every mission can go through critique, dry-run simulation, confidence scoring, and plan refinement before the Executor runs the DAG.
+
 LEVI-AI is designed as a **Cognitive Operating System** that manages the lifecycle of AI missions—from intent classification and goal generation to parallelized agent execution and multi-tier memory synchronization. It addresses the inherent unpredictability of large language models by enforcing strict execution contracts, centralized state tracking, and a unified memory consistency layer.
 
 ### Core Philosophy
@@ -14,6 +16,37 @@ LEVI-AI is designed as a **Cognitive Operating System** that manages the lifecyc
 - **Deterministic**: Every action is planned in a DAG before execution begins.
 - **Sovereign**: Absolute control over data, memory, and model routing.
 - **Distributed**: Built for high-availability across multiple cognitive nodes (DCN).
+
+### Current Status (2026-04-08)
+
+The designated workflow is connected end-to-end:
+
+`Gateway -> Orchestrator -> Goal -> Planner -> Reasoning -> Executor -> Agents -> Memory -> Response`
+
+What is implemented and verified:
+
+- Workflow contracts are explicit and inspectable.
+- DAG validation, retries, sandbox boundaries, and mission budgets are enforced in the executor path.
+- Backpressure now uses VRAM, CPU, RAM, and queue depth rather than VRAM alone.
+- `/health` reports runtime pulse and startup checks, while `/ready` reports dependency and production-readiness state.
+- `GET /api/v1/telemetry/workflow` exposes the designated workflow manifest and core contract metrics.
+- Prometheus metrics, OpenTelemetry tracing, Kubernetes rollout manifests, and CI validation are wired into the active runtime.
+
+Targeted production wiring suite currently passes:
+
+```bash
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_gateway_workflow_manifest.py backend/tests/test_pipeline_workflow.py backend/tests/test_production_wiring.py backend/tests/test_stability_hardening.py backend/tests/test_reasoning_core_upgrade.py backend/tests/test_state_and_replay_upgrade.py -q
+```
+
+Verified result on 2026-04-08:
+
+- `19 passed`
+
+Known remaining gaps:
+
+- Large-scale live load validation for 100 to 1000 concurrent missions is not yet fully proven in deployed environments.
+- Full chaos drills against real Redis, Neo4j, GPU saturation, and timeout scenarios still need broader execution.
+- Route-by-route smoke coverage for every feature surface is not complete yet.
 
 ---
 
@@ -24,6 +57,8 @@ LEVI-AI is designed as a **Cognitive Operating System** that manages the lifecyc
 - **Goal Engine**: Translates raw user input into structured, multi-step mission objectives.
 - **DAG Planner**: Generates an optimized Task Graph with explicit dependencies and contracts.
 - **Central Execution State Machine**: Authoritative tracking from `CREATED` to `COMPLETE`.
+- **Reasoning Core**: Validates DAG logic, simulates outcomes before execution, scores plan confidence, and can force a second planning pass.
+- **Mission Idempotency**: Duplicate mission protection prevents equivalent in-flight requests from executing twice.
 
 ### 2.2 Memory System
 
@@ -31,12 +66,13 @@ LEVI-AI is designed as a **Cognitive Operating System** that manages the lifecyc
 - **Factual**: Immutable Interaction Log in PostgreSQL for long-term persistence.
 - **Relational**: Neo4j knowledge graph for mapping entities and semantic relationships.
 - **Semantic**: Vector DB (FAISS/HNSW) for RAG and similarity-based discovery.
+- **Decision-Aware Recall**: A lightweight strategy ledger captures which graph shapes worked best for each intent.
 
 ### 2.3 Inference Layer
 
 - **Local (Ollama)**: Primary execution path for sensitive or low-complexity tasks.
 - **Cloud Fallback**: Adaptive routing to Together/Groq/OpenAI when local resources are under pressure.
-- **VRAM Backpressure**: Automatically throttles concurrency based on live GPU telemetry.
+- **Multi-Signal Backpressure**: Automatically throttles concurrency based on VRAM, CPU, RAM, and executor queue depth.
 
 ### 2.4 Security & Governance
 
@@ -57,7 +93,8 @@ graph TD
     Auth --> Orchestrator[Orchestrator]
     Orchestrator --> Goal[Goal Engine]
     Goal --> Planner[DAG Planner]
-    Planner --> Executor[Graph Executor]
+    Planner --> Reasoning[Reasoning Core]
+    Reasoning --> Executor[Graph Executor]
     Executor --> Wave[Wave Scheduler]
     Wave --> Agents[Specialized Agents]
     Agents --> Tools[Isolated Tools]
@@ -68,12 +105,12 @@ graph TD
 ### 3.2 Memory Flow (Single Write Authority)
 
 ```mermaid
-graph LR
-    Runtime[Runtime State] --> Redis[Redis (Source of Truth)]
-    Redis --> MCM[Memory Consistency Manager]
-    MCM --> Postgres[PostgreSQL (Immutable History)]
-    MCM --> Neo4j[Neo4j (Relational Knowledge)]
-    MCM --> Vector[Vector DB (Semantic Memory)]
+graph LR;
+    Runtime["Runtime State"] --> Redis["Redis - Source of Truth"];
+    Redis --> MCM["Memory Consistency Manager"];
+    MCM --> Postgres["PostgreSQL - Immutable History"];
+    MCM --> Neo4j["Neo4j - Relational Knowledge"];
+    MCM --> Vector["Vector DB - Semantic Memory"];
 ```
 
 ### 3.3 Agent System Hierarchy
@@ -88,6 +125,58 @@ graph TD
     Swarm --> Creative[Creative: Image, Video]
 ```
 
+### 3.4 Complete System Architecture
+
+```mermaid
+graph TD;
+  subgraph Gateway;
+    GW["FastAPI Gateway"];
+    SH["RBAC and Shield"];
+  end;
+
+  subgraph Orchestrator;
+    ORC["Orchestrator"];
+    SM["Central State Machine"];
+  end;
+
+  subgraph Planning;
+    GE["Goal Engine"];
+    PL["Planner (DAG Generator)"];
+    RC["Reasoning Core"];
+  end;
+
+  subgraph Execution;
+    EX["Graph Executor"];
+    WS["Wave Scheduler"];
+    AG["Agents and Tools"];
+  end;
+
+  subgraph Memory;
+    RED["Redis - Runtime"];
+    MCM2["Memory Consistency Manager"];
+    PG["PostgreSQL - History"];
+    NEO["Neo4j - Relations"];
+    VEC["Vector DB - Semantics"];
+  end;
+
+  subgraph Observability;
+    TR["Trace IDs and Timeline"];
+    MET["Metrics and Health Graph"];
+  end;
+
+  GW --> SH --> ORC;
+  ORC --> GE --> PL --> RC --> EX;
+  EX --> WS --> AG;
+  AG --> MCM2;
+  MCM2 --> RED;
+  MCM2 --> PG;
+  MCM2 --> NEO;
+  MCM2 --> VEC;
+  ORC --> SM;
+  ORC --> TR;
+  TR --> MET;
+```
+
 ---
 
 ## 4. Core Components (System Blueprint)
@@ -98,9 +187,11 @@ graph TD
 | **Orchestrator** | Mission Lifecycle | User Intent | Final Response | Goal Engine, Planner |
 | **Goal Engine** | Objective Generation | Perception | Mission Goals | Memory Manager |
 | **Planner** | DAG Generation | Goal | Task Graph (DAG) | Brain Policy, LLM |
+| **Reasoning Core** | Plan Critique & Simulation | Task Graph | Confidence, Strategy, Refined Graph | Planner, Replay Metadata |
 | **Executor** | Parallel Wave Execution | DAG | Node Results | Agents, Redis |
 | **Memory Manager** | Tiered Sync & Retrieval | Events | Merged Context | MCM, Neo4j, FAISS |
 | **MCM** | Memory Consistency | Memory Events | Versioned State | Redis, Pipeline |
+| **Learning Loop** | Outcome Capture & Strategy Reuse | Mission Audit | Best DAG Templates | Evaluator, Corpus, Strategy Ledger |
 
 ---
 
@@ -114,13 +205,37 @@ Every mission is decomposed into a directed acyclic graph (DAG) of task nodes. E
 - **`max_retries`**: Capped retry attempts (default: 2).
 - **`allowed_tools`**: Restricted tool access per agent.
 - **`memory_scope`**: Scoped memory access (`session`, `mission`, `global`).
+- **`fallback_output`**: Safe result returned if a node exhausts retries.
+- **`compensation_action`**: Recovery action recorded for failure handling and replay.
 
-### 5.2 Wave Scheduling & Backpressure
+### 5.2 Mandatory Reasoning Pass
+
+Before the DAG reaches the Executor, the Reasoning Core performs:
+
+- **Plan Critique**: Detects missing dependencies, shallow plans, and weak resilience structure.
+- **Simulation Pass**: Dry-runs the DAG with mock outputs to expose blocked branches.
+- **Confidence Scoring**: Produces a per-plan confidence score used to trigger refinement.
+- **Execution Strategy Selection**: Chooses normal DAG execution or `safe_mode` linear fallback.
+
+The planner now supports a minimum two-pass flow when the first graph is weak: generation, critique, then refinement.
+
+### 5.3 Wave Scheduling & Backpressure
 
 The Executor processes the DAG in parallel "waves." A wave consists of all nodes whose dependencies are satisfied.
 
-- **Adaptive Concurrency**: Parallelism is dynamically throttled (e.g., down to 1 wave) based on system resources like VRAM pressure.
+- **Adaptive Concurrency**: Parallelism is dynamically throttled based on VRAM, CPU, RAM, and queue pressure.
 - **Budgeting**: Enforces mission-wide `token_limit` and `tool_call_limit` to prevent resource exhaustion.
+- **Safe Mode**: Forces linear execution when the plan is risky or partially blocked.
+
+### 5.4 Workflow Introspection
+
+The runtime exposes the designated workflow manifest at `GET /api/v1/telemetry/workflow`.
+
+That endpoint reports:
+
+- The expected stage order through the core pipeline.
+- Contract-level integration details such as trace headers.
+- Core production metrics used by dashboards and alerts.
 
 ---
 
@@ -138,6 +253,16 @@ The Executor processes the DAG in parallel "waves." A wave consists of all nodes
 - Acts as the runtime arbiter for all writes.
 - Implements versioned events to prevent conflict resolution issues in distributed nodes.
 - Provides deduplication markers to prevent redundant vector storage.
+- Adds per-event checksums for source-of-truth verification.
+- Supports retry queue handoff for delayed derived-store synchronization.
+
+### 6.1 Mission Learning Loop
+
+Each completed mission is treated as a training signal:
+
+- **Outcome Evaluator**: Scores fidelity, grounding, and latency.
+- **Pattern Capture**: High-quality missions are stored in the training corpus.
+- **Strategy Ledger**: Best-performing graph signatures are retained per intent and reused during planning.
 
 ---
 
@@ -259,9 +384,10 @@ ENCRYPTION_KEY=kms_master_key
 | **DAG Conflict** | Planner Validation | Regenerate linear plan | Abort mission |
 | **Tool Failure** | Executor Exception | Node retry (max 2) | Fallback to Chat |
 | **Agent Timeout** | TEC Enforcement | Exponential backoff | Compensate node |
-| **Memory Desync** | MCM Version Mismatch | Force Redis re-sync | Log Audit |
+| **Memory Desync** | MCM Version or checksum mismatch | Force source-of-truth verification | Log Audit |
 | **VRAM Overload** | VRAM Monitor Pulse | Disable Critic loops | Linear execution |
 | **Cloud Fallback** | Model Router Pulse | Switch to local Ollama | Service Degraded |
+| **Duplicate Mission** | Idempotency claim collision | Return existing mission handle | Suppress duplicate execution |
 
 ### Compensation Engine
 
@@ -275,9 +401,10 @@ If a critical task node fails after all retries, the **Compensation Engine** exe
 
 Every request carries a `TRACE_ID` injected at the Gateway. Spans are recorded for:
 
-- **Planning**: Intent, Goal, DAG Generation.
+- **Planning**: Intent, Goal, DAG Generation, critique, simulation, and refinement.
 - **Execution**: Node start/stop, Latency, Tool output.
 - **Persistence**: MCM sync status, DB commit latency.
+- **Replay**: Mission input, reasoning strategy, and simulated graph shape.
 
 ### 12.2 Health Graph
 
@@ -296,7 +423,7 @@ LEVI-AI employs a multi-layered testing strategy to ensure reliability across it
 ### 13.1 Unit Testing
 
 - **Agents**: Every agent in the registry is tested for input/output schema adherence.
-- **Engines**: The Goal Engine and Planner are tested for DAG validity and cycle detection.
+- **Engines**: The Goal Engine, Planner, and Reasoning Core are tested for DAG validity, simulation behavior, and confidence scoring.
 - **Utils**: Security filters and sanitizers are tested against known injection patterns.
 
 ### 13.2 Integration Testing
@@ -304,6 +431,7 @@ LEVI-AI employs a multi-layered testing strategy to ensure reliability across it
 - **End-to-End Missions**: Simulated user requests are routed through the entire pipeline to verify completion.
 - **Memory Consistency**: Tests verify that writes to Redis are correctly synchronized to Postgres, Neo4j, and FAISS.
 - **DCN Gossip**: Pulses are simulated to ensure nodes correctly process swarm telemetry.
+- **Replay & Idempotency**: Tests verify duplicate mission suppression and deterministic replay payload capture.
 
 ### 13.3 Chaos & Reliability
 
@@ -346,13 +474,14 @@ To add a new agent to the swarm:
 - **Hardware**: Strongly dependent on `nvidia-smi` for backpressure logic; non-NVIDIA environments will default to linear execution.
 - **Connectivity**: Cloud fallback requires active internet; local mode disables high-cost reasoning but ensures 100% data sovereignty.
 - **Latency**: High-complexity DAGs (depth > 6) may incur significant reasoning overhead due to recursive validation steps.
+- **Runtime Coupling**: Some legacy runtime paths still assume Redis-first startup, which can complicate isolated local module boot.
 
 ### Roadmap (v14.x - v15.0)
 
 - **Phase 2: Swarm Intelligence**: Hardening of multi-agent consensus protocols and shadow-critic calibration.
 - **Phase 3: DCN Peering**: Official release of the peer-to-peer cognitive network for global mission distribution.
 - **Phase 4: Deterministic Replay**: Full UI integration for step-by-step mission debugging and forensic analysis.
-- **Phase 5: Evolutionary Learning**: Autonomous LoRA fine-tuning based on high-fidelity interaction patterns.
+- **Phase 5: Evolutionary Learning**: Promote strategy-led mission templates into deeper adaptive planner behavior.
 - **Phase 6: Multi-Modal Context**: Native support for video and spatial audio context in the long-term memory graph.
 
 ---

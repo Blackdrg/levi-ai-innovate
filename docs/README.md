@@ -1,35 +1,31 @@
-# 🧠 LEVI-AI Documentation (v14.0.0-Autonomous-SOVEREIGN)
+# LEVI-AI Documentation
 
-Welcome to the technical documentation hub for the LEVI-AI distributed task orchestration platform.
+This directory contains the project-owned technical and operational documentation for the current LEVI-AI runtime.
 
----
+## Current Status
 
-## 🗂️ 1. Technical Manuals
-| Manual | Description |
+As of 2026-04-08:
+
+- The designated workflow is `Gateway -> Orchestrator -> Goal -> Planner -> Reasoning -> Executor -> Agents -> Memory -> Response`.
+- The targeted production wiring suite is passing with `19 passed`.
+- Health, readiness, workflow introspection, tracing, metrics, and Kubernetes rollout files are present in the active runtime.
+- Broad live load validation, real infra chaos drills, and wider feature smoke coverage are still not fully proven.
+
+## Key Documents
+
+| Document | Purpose |
 | :--- | :--- |
-| **[MASTERS](file:///d:/LEVI-AI/docs/MASTERS.md)** | Technical specifications for the system architecture. |
-| **[SECURITY](file:///d:/LEVI-AI/docs/SECURITY.md)** | Security Middleware, PII Masking, and Docker Sandboxing. |
-| **[INTEGRATION](file:///d:/LEVI-AI/docs/INTEGRATION.md)** | API contracts, event schemas, and system versioning. |
-| **[MAINTENANCE](file:///d:/LEVI-AI/docs/MAINTENANCE.md)** | Background tasks, memory optimization, and database maintenance. |
+| `../README.md` | Main project overview and exact current status. |
+| `PRODUCTION_RUNBOOK.md` | Operational boot, health, readiness, and incident-response guidance. |
+| `DEPLOYMENT.md` | Deployment topology, Kubernetes rollout surfaces, and CI validation notes. |
+| `../SYSTEM_MANIFEST.md` | Current system component manifest and runtime surfaces. |
+| `../CHANGELOG.md` | Root release and hardening changelog. |
+| `TODO.md` | Remaining work before full production proof. |
+| `SECURITY.md` | Security controls and related references. |
+| `INTEGRATION.md` | Integration contracts and protocol references. |
+| `DIAGNOSTICS_MASTER.md` | Diagnostics and observability references. |
 
----
+## Notes
 
-## 🏗️ 2. Operational Framework
-| Manual | Description |
-| :--- | :--- |
-| **[DEPLOYMENT](file:///d:/LEVI-AI/docs/DEPLOYMENT.md)** | Service topology (Postgres, Redis, Neo4j, HNSW, Ollama). |
-| **[RUNBOOK](file:///d:/LEVI-AI/docs/RUNBOOK.md)** | Startup procedures, backup, and emergency recovery. |
-| **[DIAGNOSTICS](file:///d:/LEVI-AI/docs/DIAGNOSTICS_MASTER.md)** | System health monitoring and event telemetry. |
-
----
-
-## 🗺️ 3. Project Roadmap
-| Manual | Description |
-| :--- | :--- |
-| **[CHANGELOG](file:///d:/LEVI-AI/docs/CHANGELOG.md)** | System version history and release notes. |
-| **[MANIFEST](file:///d:/LEVI-AI/docs/LAUNCH_MANIFEST.md)** | The complete v14.0.0 production service specification. |
-| **[TODO](file:///d:/LEVI-AI/docs/TODO.md)** | Future roadmap for LEVI-AI platform expansion. |
-
----
-
-© 2026 LEVI-AI Sovereign OS. Engineered for Technical Excellence.
+- Prefer the root `README.md` and root `CHANGELOG.md` as the canonical top-level status documents.
+- Historical documents in this folder may describe planned or preview capabilities; they should not be read as proof that every capability is fully production-validated.
