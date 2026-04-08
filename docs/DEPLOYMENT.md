@@ -1,144 +1,90 @@
-# 🚢 LEVI-AI: Deployment Guide (v14.0.0-Autonomous-SOVEREIGN)
+# LEVI-AI Deployment Guide
 
-> **LEVI-AI v14.0.0-Autonomous-SOVEREIGN Production Specification**
-> This architecture coordinates five primary services (FastAPI, Redis, Postgres, Neo4j, Celery) for secure local data residency and high-performance task orchestration at a production-grade standard.
+This guide reflects the deployment surfaces that exist in the repository today.
 
----
+## Active Runtime Topology
 
-## 1. Service Topology (Hardened)
+The current runtime centers on:
 
-```mermaid
-graph TD
-    User((User / Client)) -->|HTTPS / SSE| Gateway[FastAPI Gateway]
+- FastAPI gateway
+- Redis
+- Postgres
+- Neo4j
+- Ollama
+- Prometheus and Grafana integration surfaces
 
-    subgraph "Core Stack"
-        Gateway -->|Identity & Audit| Postgres[(Postgres: Episodic Memory)]
-        Gateway -->|Task Queue & Blackboard| Redis[(Redis: Working Memory)]
-        Gateway -->|Relational Graph| Neo4j[(Neo4j: Knowledge Graph)]
-        Gateway -->|Semantic Search| HNSW[[HNSW: Semantic Vault]]
-        Gateway -->|Local Inference| Ollama[Ollama: Inference Layer]
-    end
-    
-    subgraph "Background Layer"
-        Redis --> Worker[Celery: Background Workers]
-        Worker --> Postgres
-        Worker --> Neo4j
-    end
-    
-    subgraph "Distributed Preview (v14.0)"
-        Gateway -->|HMAC Pulse| GossipStream[(Redis Stream: dcn:gossip)]
-        GossipStream -->|Task Distribution| TaskQueue[(Redis: dcn:task_queue)]
-    end
-```
+Some historical documents also mention other components and previews. Treat those as contextual, not as proof that every deployment mode is fully production-proven.
 
----
+## Primary Entrypoints
 
-## 2. Hardware Matrix
+- Gateway app: `backend/api/main.py`
+- Compatibility import surface: `backend/main.py`
+- Workflow manifest endpoint: `GET /api/v1/telemetry/workflow`
+- Metrics endpoint: `GET /metrics`
+- Liveness pulse: `GET /health`
+- Readiness probe: `GET /ready`
 
-| Service | Minimum | Recommended | Primary Role |
-| :--- | :--- | :--- | :--- |
-| **API Gateway** | 4 vCPU, 8GB RAM | 8 vCPU, 16GB RAM | Orchestration & Task Planning |
-| **Persistence Hub**| 2 vCPU, 4GB RAM | 4 vCPU, 8GB RAM | Postgres & Neo4j data storage |
-| **Memory Bus** | 1 vCPU, 2GB RAM | 2 vCPU, 4GB RAM | Redis Working Memory & Task Queue |
-| **Inference Layer** | 12GB VRAM | **24GB VRAM** | Local LLM (llama3.1:8b, Semaphore: 4) |
+## Kubernetes Manifests
 
-### GPU Scaling Tiers
-| Tier | Hardware | VRAM | Concurrency |
-| :--- | :--- | :--- | :--- |
-| Minimum | RTX 3090 / 4090 | 24 GB | **4 slots** |
-| Production | 2x RTX 3090 / A6000 | 48 GB | 12 slots |
-| Enterprise | A100 / H100 | 80 GB | 32+ slots |
+Current Kubernetes files:
 
-> [!NOTE]
-> `MAX_CONCURRENT = 4` is the production **Safety-First** default. Exceeding this on 24GB hardware may cause CUDA OOM. Tasks queue rather than fail when all slots are busy.
+- `backend/deployment/k8s/deployment.yaml`
+- `backend/deployment/k8s/hpa.yaml`
+- `backend/deployment/k8s/pdb.yaml`
 
----
+Current manifest behavior:
 
-## 3. Boot Sequence
+- Deployment replicas: `3`
+- `minReadySeconds: 15`
+- rolling update with `maxSurge: 1` and `maxUnavailable: 0`
+- `startupProbe` uses `/ready`
+- `readinessProbe` uses `/ready`
+- `livenessProbe` uses `/health`
+- `terminationGracePeriodSeconds: 30`
+- HPA min replicas: `2`
+- HPA max replicas: `10`
+- HPA scales on CPU and memory utilization
+- PDB requires `minAvailable: 2`
 
-### Step 1 — Environment Preparation
+## Environment Expectations
+
+At minimum, production deployment should set:
+
 ```env
-# Core Identity
-SYSTEM_VERSION=v14.0.0
 ENVIRONMENT=production
-
-# Service Connectivity
-DATABASE_URL=postgresql+asyncpg://leviuser:pass@postgres:5432/levidb
-REDIS_URL=redis://redis:6379/0
-NEO4J_URI=bolt://neo4j:7687
-OLLAMA_BASE_URL=http://host.docker.internal:11434
-
-# Security (REQUIRED — generate your own)
-DCN_SECRET=<64-char-hex>
-SYSTEM_KMS_SECRET=<64-char-hex>
-
-# System Defaults
-CLOUD_FALLBACK_ENABLED=false
-DISTRIBUTED_MODE=false
-NODE_ROLE=coordinator
-NODE_WEIGHT=4
+DATABASE_URL=...
+REDIS_URL=...
+NEO4J_URI=...
+OLLAMA_BASE_URL=...
+JWT_SECRET=...
+INTERNAL_SERVICE_KEY=...
+CORS_ORIGINS=...
+OTEL_EXPORTER_OTLP_ENDPOINT=...
 ```
 
-### Step 2 — Launch Services
-```bash
-docker-compose up -d --build
-```
+The startup contract in `backend/utils/startup.py` reports readiness warnings when production-critical values are missing.
 
-### Step 3 — Pull Inference Models
-```bash
-ollama pull llama3.1:8b
-ollama pull phi3:mini
-ollama pull nomic-embed-text
-```
+## Validation
 
-### Step 4 — Run Production Audit
-```bash
-pytest tests/production_readiness_suite.py -v
-# Expected: All tests passed
-```
+GitHub Actions currently validates:
 
-### Step 5 — Monitoring Check
-Open the **System Dashboard** at `http://localhost:3000` and observe:
-- 🟢 System Heartbeat: Active
-- 🟢 DCN Event Stream streaming
-- 🟢 Performance Metrics populated
+1. Targeted stability and workflow tests
+2. Kubernetes YAML parsing for the active manifest set
 
----
-
-## 4. Disaster Recovery
-
-If restoring from a backup event:
+Recent local status verification also included:
 
 ```bash
-# 1. Restore all stores from latest snapshot
-python -m backend.scripts.restore_drill
-
-# 2. Verify RTO compliance (must complete in < 300s)
-# 3. Re-run production audit to confirm integrity
-pytest tests/production_readiness_suite.py -v
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_gateway_workflow_manifest.py backend/tests/test_pipeline_workflow.py backend/tests/test_production_wiring.py backend/tests/test_stability_hardening.py backend/tests/test_reasoning_core_upgrade.py backend/tests/test_state_and_replay_upgrade.py -q
 ```
 
----
+Verified result on 2026-04-08:
 
-## 5. Distributed Node Boot (Preview)
+- `19 passed`
 
-> [!IMPORTANT]
-> Multi-node deployment is currently in **Preview**. The following activates task distribution within a shared Redis environment.
+## Honest Status
 
-```env
-# On Coordinator Node
-NODE_ROLE=coordinator
-NODE_WEIGHT=4
-DISTRIBUTED_MODE=true
-DCN_NODE_ID=node-alpha
+The repository is substantially more production-shaped than before, but these are still open:
 
-# On Worker Node
-NODE_ROLE=worker
-NODE_WEIGHT=8
-DISTRIBUTED_MODE=true
-DCN_NODE_ID=node-beta
-```
-
----
-
-© 2026 LEVI-AI Sovereign OS — Deployment Specification v14.0.0 Production Stable
+- full live load characterization
+- real dependency failure drills in deployed environments
+- broader end-to-end route coverage

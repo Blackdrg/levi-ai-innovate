@@ -1,3 +1,21 @@
+## [14.0.0-DOCS-REALITY-LOCK] - 2026-04-08 (Current Status Alignment)
+### Current Runtime Status
+
+- `[DOCS]` Root and operational markdown files updated to match the current code and test-validated runtime state.
+- `[PIPELINE]` Designated workflow contract documented as `Gateway -> Orchestrator -> Goal -> Planner -> Reasoning -> Executor -> Agents -> Memory -> Response`.
+- `[HARDENING]` Executor and workflow docs now reflect DAG validation, retry guardrails, sandbox boundaries, token budgets, tool-call budgets, and multi-signal backpressure.
+- `[OBSERVABILITY]` Documentation now includes `/health`, `/ready`, `/metrics`, and `/api/v1/telemetry/workflow` as active operational surfaces.
+- `[DEPLOYMENT]` Docs now reflect Kubernetes startup, readiness, liveness, HPA, and PDB behavior from the active manifest set.
+- `[CI]` Documentation records the targeted workflow and stability verification path and the clean `19 passed` result used for current status reporting.
+- `[CLEANUP]` Pydantic v2 `.dict()` deprecation paths were removed in favor of `model_dump()`, leaving the targeted suite warning-free.
+
+### Honest Remaining Gaps
+
+- `[GAP]` Large-scale live load validation is still not fully proven.
+- `[GAP]` Full chaos drills against real external dependencies are still pending broader execution.
+- `[GAP]` Wider route-by-route smoke validation remains incomplete.
+
+---
 ## [14.0.0-Autonomous-SOVEREIGN] — 2026-04-07 (Production Graduation)
 ### **Production Hardening & System Stability**
 
@@ -53,3 +71,15 @@
 - Orchestrator-driven architectural transition.
 - Quad-Persistence Memory Layer implementation.
 - Functional Agent Registry integration.
+## [14.0.0-STABLE-BASELINE] - 2026-04-08 (Reality Lock)
+### Core Stabilization
+
+- `[FREEZE]` Locked baseline for agent registry, DAG shape format, and memory schema.
+- `[HARDENING]` Deterministic mission IDs and Redis `SETNX` mission locks for idempotent execution.
+- `[HARDENING]` Strict DAG validation added: duplicate detection, resolvable dependencies, cycle detection, and orphan/disconnected graph rejection.
+- `[HARDENING]` Task contracts now default to `strict_schema=true` with deterministic output envelopes.
+- `[HARDENING]` Executor retry policy upgraded to exponential backoff with jitter and node-level circuit breakers.
+- `[HARDENING]` Memory consistency layer now verifies checksums, detects version conflicts, tracks content hashes, and queues lagged writes for replay.
+- `[HARDENING]` Replay engine can validate deterministic memory state equality from stored mission payloads.
+- `[OPTIMIZATION]` Reasoning core now supports conditional activation, confidence calibration with historical success, and DAG template reuse.
+
