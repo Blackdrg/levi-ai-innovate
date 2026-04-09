@@ -200,7 +200,7 @@ graph TD;
   end
 
   %% === Execution & Distributed Network ===
-  subgraph Distributed Execution Network (DCN)
+  subgraph DCN_NET ["Distributed Execution Network (DCN)"]
     EX["Graph Executor (Wave Parallelism)"]
     SCHED["Wave Scheduler & Priority Queues"]
     VRAM["GPU Backpressure (VRAMGuard)"]
