@@ -51,10 +51,26 @@ def detect_sensitivity(text: str) -> bool:
         return True
     return any(re.search(pattern, text) for pattern in PII_PATTERNS.values())
 
+# v14.1 Prebuilt Optimized Templates
+HARD_TEMPLATES = {
+    "search": [
+        {"id": "t_search", "agent": "search_agent", "description": "Search pass", "critical": True},
+        {"id": "t_synth", "agent": "chat_agent", "description": "Synthesis pass", "dependencies": ["t_search"]}
+    ],
+    "code": [
+        {"id": "t_code", "agent": "code_agent", "description": "Code generation", "critical": True},
+        {"id": "t_verify", "agent": "python_repl_agent", "description": "Sandbox verification", "dependencies": ["t_code"]}
+    ],
+    "research": [
+        {"id": "t_search", "agent": "search_agent", "description": "Initial search", "critical": True},
+        {"id": "t_browse", "agent": "browser_agent", "description": "Deep research", "dependencies": ["t_search"]},
+        {"id": "t_synth", "agent": "chat_agent", "description": "Final report", "dependencies": ["t_browse"]}
+    ]
+}
+
 class DAGPlanner:
     """
-    LeviBrain v14.0: DAG-Based Planner.
-    Architecture: Follows DAG Shape Governance from Brain Policy.
+    LeviBrain v14.1: DAG-Based Planner with Prebuilt Templates.
     """
 
     async def build_task_graph(self, goal: Any, perception: Dict[str, Any], decision: Optional[BrainDecision] = None) -> TaskGraph:
@@ -62,6 +78,17 @@ class DAGPlanner:
         intent_type = intent.intent_type if intent else "chat"
         user_input = perception.get("input", "")
         mode = decision.mode if decision else BrainMode.BALANCED
+        
+        # v14.1 Template Escalation
+        if intent_type in HARD_TEMPLATES:
+            logger.info(f"[Planner] Using hardcoded template for intent: {intent_type}")
+            graph = self._build_from_static_template(HARD_TEMPLATES[intent_type], user_input, perception, decision)
+            if graph:
+                # Enforce Hard Depth Cap
+                max_depth = decision.execution_policy.budget.max_dag_depth if decision else 6
+                graph.validate_dag(max_depth=max_depth)
+                return graph
+
         learned_strategy = LearningLoop.get_best_strategy(intent_type)
         
         graph = TaskGraph()

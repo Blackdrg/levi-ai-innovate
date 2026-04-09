@@ -67,29 +67,35 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"❌ Startup Audit failed: {e}")
 
-    # 🛡️ DCN Gossip Layer (v14.0.0-Autonomous)
+    # 🛡️ DCN Gossip & Resilience Layer (v14.1.0)
     try:
         import asyncio
-        from backend.core.dcn_protocol import DCNProtocol
-        dcn = DCNProtocol()
-        if dcn.is_active:
-            # 1. Start Listener
-            create_tracked_task(dcn.start_listener(gossip_handler), name="dcn-listener")
-            
-            # 2. Start Autonomous Heartbeat
-            os.environ["NODE_ROLE"] = os.getenv("NODE_ROLE", "coordinator")
-            create_tracked_task(dcn.start_heartbeat(interval=30), name="dcn-heartbeat")
-            logger.info(f"[DCN] Swarm Presence: [ESTABLISHED] Mode: {os.environ['NODE_ROLE']}")
+        from backend.core.dcn.gossip import DCNGossip
+        from backend.core.dcn.consistency import ConsistencyEngine
+        from backend.services.learning.hygiene import MemoryPruningManager
+        
+        # 1. Leader Election & Gossip
+        gossip = DCNGossip()
+        create_tracked_task(gossip.start_election_loop(), name="dcn-election-loop")
+        
+        # 2. State Reconciliation (Anti-Entropy)
+        node_id = os.getenv("DCN_NODE_ID", "node-alpha")
+        consistency = ConsistencyEngine(node_id=node_id)
+        create_tracked_task(consistency.start_reconciliation_loop(interval=60), name="dcn-reconcile-loop")
+        
+        # 3. Memory Hygiene (24h cycles)
+        hygiene = MemoryPruningManager()
+        async def run_hygiene_periodically():
+            while not is_shutting_down():
+                await hygiene.run_hygiene_cycle()
+                await asyncio.sleep(86400) # Once a day
+        
+        create_tracked_task(run_hygiene_periodically(), name="memory-hygiene-job")
+        
+        logger.info(f"[DCN] Resilience Loops: [ACTIVE] node={node_id}")
 
-            # 3. Start Distributed Worker Loop
-            if os.getenv("DISTRIBUTED_MODE", "false").lower() == "true":
-                from backend.core.executor.distributed import DistributedGraphExecutor
-                from backend.db.redis import r_async as redis_client
-                dist_executor = DistributedGraphExecutor(redis_client)
-                create_tracked_task(dist_executor.worker_loop(), name="dcn-worker-loop")
-                logger.info("[DCN] Distributed Worker Loop: [ACTIVE]")
     except Exception as e:
-        logger.error(f"[DCN] Failed to initialize gossip/worker: {e}")
+        logger.error(f"[DCN] Failed to initialize resilience loops: {e}")
         
     yield
     # --- Shutdown logic if needed ---

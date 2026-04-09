@@ -58,6 +58,28 @@ class LeviBrainV14:
         self.reflection = ReflectionEngine()
         self.workflow_engine = WorkflowEngine()
         self.context = ContextManager()
+        self.learning_loop = LearningLoop()
+
+    def _prune_context(self, context: Dict[str, Any], user_id: str) -> Dict[str, Any]:
+        """
+        Hardens context window by pruning history and non-essential metadata.
+        Target: ~2000 tokens for context to leave room for plan and results.
+        """
+        pruned = context.copy()
+        history = pruned.get("history", [])
+        
+        # 1. History Pruning (Keep last 5 turns)
+        if len(history) > 5:
+            logger.info(f"[Pruning] Reducing history from {len(history)} to 5 turns for {user_id}")
+            pruned["history"] = history[-5:]
+
+        # 2. Metadata Stripping (Remove excessive technical blobs)
+        internal_keys = ["raw_logs", "debug_trace", "intermediate_steps"]
+        for key in internal_keys:
+            if key in pruned:
+                del pruned[key]
+                
+        return pruned
 
     async def route(
         self, 
@@ -94,12 +116,43 @@ class LeviBrainV14:
         
         try:
             MetricsHub.mission_started()
-            # 1. PERCEPTION
-            async with traced_span("brain.perception", request_id=request_id, user_id=user_id):
-                SovereignBroadcaster.publish(PULSE_MISSION_STARTED, {"request_id": request_id, "user_input": user_input}, user_id=user_id)
+            # 1. PERCEPTION (v14.0 Multi-Tier)
+            async with traced_span("brain.perception", request_id=request_id):
                 from backend.utils.runtime_tasks import create_tracked_task
                 create_tracked_task(SovereignKafka.emit_event("brain_events", {"event": "MISSION_STARTED", "request_id": request_id}), name=f"kafka-mission-start-{request_id}")
+                
+                # 🛡️ SECURITY GATE (v14.1)
+                from backend.core.security.anomaly_detector import SecurityAnomalyDetector
+                from backend.core.security.alerting import AlertingEngine
+                
+                threat_score = SecurityAnomalyDetector.analyze_payload(user_input)
+                if SecurityAnomalyDetector.should_block(threat_score):
+                    logger.critical(f"[Security] Mission Blocked! Threat Score: {threat_score} | request_id: {request_id}")
+                    await AlertingEngine.send_alert(
+                        "MISSION_BLOCKED_THREAT", 
+                        {"request_id": request_id, "score": threat_score, "input": user_input[:50]}
+                    )
+                    raise Exception(f"Sovereign Security Violation: Mission blocked by automated guardrails (Score: {threat_score}).")
+
                 perception = await self.perception.perceive(user_input, user_id, session_id, **kwargs)
+
+            # 1.1 FAST PATH (v14.1)
+            from .fast_path import FastPathRouter
+            fast_result = await FastPathRouter.try_fast_route(user_input, perception["intent"], user_id, session_id)
+            if fast_result:
+                MetricsHub.mission_finished(success=True)
+                return fast_result
+
+            # 1.2 T2 SEMANTIC CACHE (v14.1)
+            from backend.services.cache_manager import CacheManager
+            semantic_cached = await CacheManager.get_semantic_response(user_input)
+            if semantic_cached:
+                MetricsHub.mission_finished(success=True, stage="semantic_cache")
+                return semantic_cached
+
+            # 1.3 CONTEXT PRUNING (v14.1 Hardened)
+            # Ensure the perception context is within token limits before policy generation
+            perception["context"] = self._prune_context(perception.get("context", {}), user_id)
 
             # 2. BRAIN POLICY (v14.0 Controlled)
             async with traced_span("brain.policy", request_id=request_id):
@@ -274,6 +327,14 @@ class LeviBrainV14:
             # 1. Perception
             perception = await self.perception.perceive(user_input, user_id, session_id, **kwargs)
             yield {"event": "activity", "data": f"Intent: {perception['intent'].intent_type.upper()}"}
+
+            # FAST PATH (v14.1 Stream Bypass)
+            from .fast_path import FastPathRouter
+            fast_result = await FastPathRouter.try_fast_route(user_input, perception["intent"], user_id, session_id)
+            if fast_result:
+                yield {"event": "token", "token": fast_result["response"]}
+                yield {"event": "metadata", "data": fast_result}
+                return
             
             # 2. Brain Policy (v14.0 Controlled)
             policy = await brain_service.generate_policy(user_input, perception["context"])

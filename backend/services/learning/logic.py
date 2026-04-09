@@ -354,15 +354,24 @@ class AdaptivePromptManager:
     ]
 
     async def get_best_variant(self, mood: str) -> Tuple[str, int, float]:
-        """Returns (prompt, idx, temperature) weighted by rating Performance."""
-        scores = await self._load_scores()
-        if not scores:
-            mood_map = {"stoic": 2, "zen": 3, "philosophical": 0}
-            idx = mood_map.get(mood.lower(), 0)
-        else:
-            idx = max(scores.keys(), key=lambda k: scores[k])
+        """
+        Returns (prompt, idx, temperature) with Epsilon-Greedy A/B Testing (Exploration).
+        """
+        import random
+        epsilon = float(os.getenv("LEARNING_EXPLORATION_RATE", "0.15"))
         
-        return self.PROMPT_VARIANTS[idx], idx, 0.75
+        scores = await self._load_scores()
+        
+        # Exploration: Pick a random variant
+        if not scores or random.random() < epsilon:
+            idx = random.randint(0, len(self.PROMPT_VARIANTS) - 1)
+            logger.info(f"[A/B Testing] EXPLORING variant {idx}")
+            return self.PROMPT_VARIANTS[idx], idx, 0.8
+            
+        # Exploitation: Pick the winner
+        idx = max(scores.keys(), key=lambda k: scores[k])
+        logger.debug(f"[A/B Testing] EXPLOITING variant {idx} (score={scores[idx]:.2f})")
+        return self.PROMPT_VARIANTS[idx], idx, 0.7
 
     async def evolve_variants(self):
         """Autonomous Evolution: Mutates lowest-performing variant using success patterns."""

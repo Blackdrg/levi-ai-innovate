@@ -15,27 +15,66 @@ class SurvivalGater:
     """
 
     @staticmethod
-    async def purge_low_fidelity_memories(user_id: str = "system", collection: str = "memory"):
+    async def purge_low_fidelity_memories(user_id: str):
         """
-        Scans HNSW Vault for memories with Resonance < 0.5 or Age > 90 days.
+        Scans Vector Store for memories with Resonance < 0.4 and archives them.
         """
-        logger.info(f"[Hygiene-v13] Initiating Survival Audit: {user_id}/{collection}")
+        logger.info(f"[Hygiene] Initiating Survival Audit for {user_id}")
         
         try:
-            # v13.0: Absolute HNSW Residency
-            # The search logic here would normally involve metadata filtering 
-            # for 'resonance_score' or 'created_at'.
+            from backend.memory.vector_store import SovereignVectorStore
+            from backend.memory.resonance import MemoryResonance
             
-            # For the Sovereign OS, we perform a thorough audit of the user's vector space.
-            # In a production FAISS/HNSW setup, we would query for high-risk nodes.
+            # 1. Fetch all facts for user (limit 100 for batch)
+            facts = await SovereignVectorStore.search_facts(user_id, "", limit=100)
             
-            # Placeholder for the graduated pruning sequence:
-            # 1. Fetch metadata snippets
-            # 2. Identify indices for deletion
-            # 3. Commit destruction to the vault
-            
-            logger.info(f"[Hygiene-v13] MISSION_AUDIT_PASS: Neural integrity verified for '{collection}'.")
-            return 0
+            to_archive = []
+            for fact in facts:
+                # Calculate resonance based on importance and age
+                created_at = datetime.fromisoformat(fact["created_at"])
+                age_days = (datetime.now(timezone.utc) - created_at).days
+                
+                resonance = MemoryResonance.calculate_resonance(
+                    importance=fact.get("importance", 0.5),
+                    age_days=age_days,
+                    foa=1.0 # Focus of Attention (simulated)
+                )
+                
+                if resonance < 0.4:
+                    to_archive.append(fact)
+
+            if to_archive:
+                logger.info(f"[Hygiene] Archiving {len(to_archive)} low-resonance memories for {user_id}")
+                await SurvivalGater._archive_memories(user_id, to_archive)
+                # In a real setup, we'd also delete from VectorDB index
+                # await SovereignVectorStore.delete_facts(user_id, [f["fact_id"] for f in to_archive])
+
+            return len(to_archive)
         except Exception as e:
-            logger.error(f"[Hygiene-v13] Survival sequence failed: {e}")
+            logger.error(f"[Hygiene] Survival sequence failed: {e}")
             return 0
+
+    @staticmethod
+    async def _archive_memories(user_id: str, facts: list):
+        """Tier 3: Move to Cold Storage (Postgres Archive)."""
+        from backend.db.postgres import PostgresDB
+        from sqlalchemy import text
+        
+        async with PostgresDB._session_factory() as session:
+            for fact in facts:
+                await session.execute(
+                    text("INSERT INTO memory_archive (user_id, content, metadata_json) VALUES (:uid, :content, :meta)"),
+                    {"uid": user_id, "content": fact["fact"], "meta": json.dumps(fact)}
+                )
+            await session.commit()
+
+class MemoryPruningManager:
+    """Orchestrates the 3-tier memory cycle."""
+    
+    @classmethod
+    async def run_cycle(cls):
+        """Triggered by Celery Beat."""
+        # Find active users (last 24h)
+        # For each user, run SurvivalGater
+        logger.info("[PruningManager] Starting global memory cycle...")
+        # (Implementation would iterate users)
