@@ -12,6 +12,10 @@ Snapshot updated for the current hardening pass on 2026-04-08.
 
 ## Current Hardening State
 
+- **Audit-Ready**: SSRF Allowlist Wall implemented and explicitly denies non-approved outbound domain requests.
+- **Audit-Ready**: Strict Security Headers (CSP, HSTS, X-Frame-Options) injected across all production endpoints via middleware.
+- **Audit-Ready**: Sliding Window Rate Limiter guards endpoints by assigning strict Tiered API quotas.
+- Integration tests written and actively enforce SSRF bounds, rate limits, and security headers.
 - `/health` performs real Redis, Postgres, and `Ollama /api/tags` checks
 - `/ready` gates on dependency reachability plus startup production-readiness checks
 - Structured logs include `trace_id`, `mission_id`, `node_id`, `duration_ms`, and `status`

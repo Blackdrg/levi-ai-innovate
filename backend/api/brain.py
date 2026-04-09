@@ -47,17 +47,20 @@ async def brain_strategy_endpoint(
     logger.info(f"[BrainAPI] Strategic analysis started for {identity.user_id}")
     
     try:
-        # 1. Strategic Intent Detection (v7 Core)
-        intent_data = await detect_intent(request.message)
+        import asyncio
         
-        # 2. Parallel Synthesis (Fusion)
-        # We provide an immediate cognitive insight using the FusionEngine
-        # and dummy results for a fast pulse
-        fusion_result = await FusionEngine.fuse_results(
-            query=request.message,
-            results=[{"agent": "KNOWLEDGE", "message": "Analyzing multidimensional resonance...", "success": True}],
-            lang="en"
+        # 1 & 2. Parallel Strategic Intent Detection & Synthesis
+        intent_task = asyncio.create_task(detect_intent(request.message))
+        fusion_task = asyncio.create_task(
+            FusionEngine.fuse_results(
+                query=request.message,
+                results=[{"agent": "KNOWLEDGE", "message": "Analyzing multidimensional resonance...", "success": True}],
+                lang="en",
+                fast_mode=True
+            )
         )
+        
+        intent_data, fusion_result = await asyncio.gather(intent_task, fusion_task)
         
         return {
             "strategy": intent_data.intent_type,

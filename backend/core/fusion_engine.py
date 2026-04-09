@@ -15,7 +15,7 @@ class FusionEngine:
     """
     
     @staticmethod
-    async def fuse_results(query: str, results: List[Dict], lang: str = "en", mood: str = "philosophical") -> str:
+    async def fuse_results(query: str, results: List[Dict], lang: str = "en", mood: str = "philosophical", fast_mode: bool = False) -> str:
         """
         Takes multiple agent results and fuses them into a structured output.
         Prioritizes Document Vault > Knowledge Base > Web Pulse.
@@ -23,6 +23,10 @@ class FusionEngine:
         """
         logger.info(f"[FusionEngine] Fusing {len(results)} agent contributions for '{query[:30]}'")
         
+        if fast_mode:
+            manifest = [res.get("message", "") if isinstance(res, dict) else getattr(res, "message", "") for res in results if (res.get("success", True) if isinstance(res, dict) else getattr(res, "success", True))]
+            return "\n\n---\n\n".join(manifest) or SovereignI18n.get_prompt("error_fallback", lang)
+
         # 1. 📂 Extract facts and citations from each agent
         manifest = []
         for res in results:

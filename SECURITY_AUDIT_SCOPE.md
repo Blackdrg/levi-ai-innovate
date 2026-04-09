@@ -11,6 +11,8 @@
 - **JWT Forgery**: Validation of JWT implementation, including RS256/HS256 transitions, key leakage, and token theft.
 - **Docker Attack Surface**: Probing for Docker socket exposure, container breakout, and insecure volume mounts on the Sovereign OS.
 - **EgressProxy**: Testing for SSRF via allowlist bypass (e.g., DNS rebinding, URL encoding).
+- **Rate Limiting**: Testing bypass of the sliding-window tiered rate limits using distributed IPs and parallel requests.
+- **Security Headers**: Validation of CSP stringency against cross-site exploitation.
 
 ### 2. Agent Ecosystem & LLM Injection
 - **14 Agent Endpoints**: Focused prompt injection testing via all 14 specialized agent endpoints.
