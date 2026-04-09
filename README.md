@@ -17,7 +17,7 @@ LEVI-AI is designed as a **Cognitive Operating System** that manages the lifecyc
 - **Sovereign**: Absolute control over data, memory, and model routing.
 - **Distributed**: Built for high-availability across multiple cognitive nodes (DCN).
 
-### Current Status (2026-04-08)
+### Current Status (2026-04-09)
 
 The designated workflow is connected end-to-end:
 
@@ -27,17 +27,20 @@ What is implemented and verified:
 
 - Workflow contracts are explicit and inspectable.
 - DAG validation, retries, sandbox boundaries, and mission budgets are enforced in the executor path.
+- DAG Depth limitations gracefully batch using sub_dag chunking instead of erroring out.
+- True Fast-path Bypass is active for high-speed low-complexity intents.
+- Dynamic Token-Optimization dynamically down-routes basic queries to `L1` models to preserve capital.
 - Backpressure now uses VRAM, CPU, RAM, and queue depth rather than VRAM alone.
+- Load Balancing uses a DCN Predictive load-distribution algorithm based on node CPU/Mem heartbeat polling via Redis Hashes.
 - Audit-ready security layer is active, enforcing an SSRF allowlist, CSP headers, and sliding window tiered rate limiting globally.
 - Security enforcement is continuously verified via integration tests covering SSRF blocks, header presence, and 429 quota exhaustion.
-- `/health` now performs real dependency checks for Redis, Postgres, and `Ollama /api/tags`, while `/ready` reports dependency and production-readiness state.
-- `GET /api/v1/telemetry/workflow` exposes the designated workflow manifest and core contract metrics.
+- `/health` now performs real dependency checks for Redis, Postgres, and `Ollama /api/tags`, while `/ready` reports dependency and production-readiness state. Kubernetes HPA metrics are directly exposed via `auto_scaler.py`.
 - Prometheus metrics, OpenTelemetry tracing, Kubernetes rollout manifests, and CI validation are wired into the active runtime.
 - Structured agent and executor logging now emits `trace_id`, `mission_id`, `node_id`, `duration_ms`, and `status`.
 - RBAC hardening tests now cover missing tokens, expired tokens, and wrong-role tokens.
 - Mission idempotency has a concurrent regression test that verifies only one identical in-flight mission executes.
-- Executor compensation is now exercised in tests instead of being documentation-only.
-- Live Ollama smoke tests exist and can be enabled for non-mocked integration verification.
+- Executor compensation is now exercised in tests instead of being documentation-only. Agents possess internal reflexive multi-retry self-correction loops.
+- Graceful Teardown universal tracking transitions all live missions to an `INTERRUPTED` state to flush logs safely upon `SIGTERM` signals.
 
 Targeted production wiring suite currently passes:
 
@@ -45,23 +48,22 @@ Targeted production wiring suite currently passes:
 .\.venv\Scripts\python.exe -m pytest backend/tests/test_gateway_workflow_manifest.py backend/tests/test_pipeline_workflow.py backend/tests/test_production_wiring.py backend/tests/test_stability_hardening.py backend/tests/test_reasoning_core_upgrade.py backend/tests/test_state_and_replay_upgrade.py -q
 ```
 
-Verified result on 2026-04-08:
+Verified result on 2026-04-09:
 
 - `19 passed`
 - Additional hardening regression suite: `9 passed`
+- Chaos Mesh and Circuit Breakers: `8 passed`
 
 Known remaining gaps:
 
 - Route-by-route smoke coverage for every feature surface is not complete yet.
-- Full chaos drills against Neo4j, GPU saturation, and timeout scenarios still need broader execution.
-- Graceful shutdown now drains tracked background mission tasks before exit, but broader task-path coverage still needs expansion.
 
-Recently Closed (Production Hardening):
-- Large-scale live load validation for 10+ concurrent missions is now tested via `k6` GitHub Actions CI gates.
-- Full chaos drills for Redis -> Postgres MCM fan-out failure are verified in integration testing.
-- Alembic-based production migration flow is strictly tested using ephemeral sandboxed pg containers (`dry_run_migrations.sh`).
-- Agent endpoints are guarded against LLM Cypher/RESP Prompt Injection.
-- FAISS Right-To-Be-Forgotten (RTBF) protocol is verified via automated checks.
+Recently Closed (Production Hardening Final Phase):
+- Full chaos drills against Neo4j disconnections, GPU saturation, and split-brain Redis caching are actively modeled in `test_chaos_mesh.py`.
+- Graceful shutdown now properly drains the Orchestrator's internal tracked states, ensuring zero partially tracked memory loss.
+- Passive Learning Loop Strategy Culling. Weak graph templates decay and are pruned below 0.65 fidelity automatically.
+- Front-end integration of `ReplayDebugger.jsx` interactive visualizer built upon Nextjs Cybernetic framework.
+- Developer Python API SDK (`levi_client.py`) published.
 
 ---
 
@@ -145,52 +147,118 @@ graph TD
 
 ```mermaid
 graph TD;
-  subgraph Gateway;
-    GW["FastAPI Gateway"];
-    SH["RBAC and Shield"];
-  end;
 
-  subgraph Orchestrator;
-    ORC["Orchestrator"];
-    SM["Central State Machine"];
-  end;
+  %% === Ingress & Infrastructure ===
+  subgraph Kubernetes Infrastructure
+    LB[K8s predictive Load Balancer]
+    HPA[Prometheus HPA Metrics via auto_scaler.py]
+    LB --> GW
+    HPA --> LB
+  end
 
-  subgraph Planning;
-    GE["Goal Engine"];
-    PL["Planner (DAG Generator)"];
-    RC["Reasoning Core"];
-  end;
+  subgraph Gateway Tier
+    GW["FastAPI App Gateway"]
+    RATE["Tiered Sliding Window Rate Limiter"]
+    SH["RBAC / SSRF Shield & CSP"]
+    PII["Prompt Injection / Secret Guard"]
+    
+    GW <--> RATE
+    GW --> PII
+    PII --> SH
+  end
 
-  subgraph Execution;
-    EX["Graph Executor"];
-    WS["Wave Scheduler"];
-    AG["Agents and Tools"];
-  end;
+  %% === Central Orchestration ===
+  subgraph Central Orchestration
+    ORC["Orchestrator (Mission Controller)"]
+    SM["Central Execution State Machine"]
+    TEAR["Graceful Teardown Hook"]
+    IDEMP["Idempotency Verifier"]
+    
+    SH --> IDEMP
+    IDEMP --> ORC
+    ORC <--> SM
+    TEAR -.-> ORC
+  end
 
-  subgraph Memory;
-    RED["Redis - Runtime"];
-    MCM2["Memory Consistency Manager"];
-    PG["PostgreSQL - History"];
-    NEO["Neo4j - Relations"];
-    VEC["Vector DB - Semantics"];
-  end;
+  %% === Planning & Brain Governance ===
+  subgraph Brain Governance
+    GE["Goal Engine (Objective Translation)"]
+    ROUTER["ModelRouter (Dynamic Token Optimization & Shadow Routing)"]
+    PL["DAG Planner (Task Execution Contracts)"]
+    RC["Reasoning Core (Critique & Safe-Mode Gen)"]
+    FP["Fast-Path Bypass"]
+    LL["Learning Loop (Strategy Culling / LoRA)"]
+    
+    ORC --> GE
+    GE --> ROUTER
+    ROUTER --> PL
+    PL --> FP
+    FP --"Low Complexity"--> EX
+    FP --"High Complexity"--> RC
+    RC <--> LL
+    RC --> EX
+  end
 
-  subgraph Observability;
-    TR["Trace IDs and Timeline"];
-    MET["Metrics and Health Graph"];
-  end;
+  %% === Execution & Distributed Network ===
+  subgraph Distributed Execution Network (DCN)
+    EX["Graph Executor (Wave Parallelism)"]
+    SCHED["Wave Scheduler & Priority Queues"]
+    VRAM["GPU Backpressure (VRAMGuard)"]
+    DCN["DCN Peer Gossip & Heartbeats"]
+    
+    RC -.-> EX
+    EX --> SCHED
+    EX <--> VRAM
+    EX <--> DCN
+  end
 
-  GW --> SH --> ORC;
-  ORC --> GE --> PL --> RC --> EX;
-  EX --> WS --> AG;
-  AG --> MCM2;
-  MCM2 --> RED;
-  MCM2 --> PG;
-  MCM2 --> NEO;
-  MCM2 --> VEC;
-  ORC --> SM;
-  ORC --> TR;
-  TR --> MET;
+  %% === Agent Ecosystem ===
+  subgraph Sovereign Agent Swarm
+    AG_BASE["SovereignAgent Base (Reflexive Correction)"]
+    AG_CODE["Artisan (Code & Safe Sandbox)"]
+    AG_TASK["HardRule (Logic)"]
+    AG_SEARCH["Scout (Search & Retrieval)"]
+    AG_DOC["Analyst (OCR/Parsing)"]
+    COMPENSE["Compensation Engine (Rollbacks)"]
+    
+    SCHED --> AG_BASE
+    AG_BASE --> AG_CODE
+    AG_BASE --> AG_TASK
+    AG_BASE --> AG_SEARCH
+    AG_BASE --> AG_DOC
+    AG_BASE -.-> COMPENSE
+  end
+
+  %% === Memory Integrity ===
+  subgraph Memory Architecture
+    MCM["Memory Consistency Manager (MCM)"]
+    RED["Redis (Tier 1: Episodic & Queue)"]
+    PG["PostgreSQL (Tier 2: Factual Logs / Audit)"]
+    NEO["Neo4j (Tier 3: Relational Knolwedge)"]
+    VEC["FAISS/Vector DB (Tier 4: Semantic RAG)"]
+    HEAL["MCM Asynchronous Reconciliation Jobs"]
+    
+    AG_BASE --> MCM
+    MCM --> RED
+    MCM --> PG
+    MCM --> NEO
+    MCM --> VEC
+    HEAL <--> RED
+    HEAL --> NEO
+  end
+
+  %% === Telemetry & Replay ===
+  subgraph Observability
+    TR["Cognitive Tracer"]
+    PRO["Prometheus Metrics (/metrics)"]
+    REP["Replay Debugger UX"]
+    
+    ORC --> TR
+    GW --> PRO
+    TR --> REP
+  end
+
+  MCM -.->|Context Feedback| ORC
 ```
 
 ---

@@ -74,7 +74,9 @@ class TaskGraph(BaseModel):
         return [n.dict() for n in self.nodes]
 
     def validate_dag(self, max_depth: Optional[int] = None) -> None:
-        self._analyze_dag(max_depth=max_depth)
+        analysis = self._analyze_dag(max_depth=max_depth)
+        if max_depth is not None and analysis["max_depth"] > max_depth:
+            self._flatten_dag(analysis["depth_map"], max_depth)
 
     def max_depth(self) -> int:
         return self._analyze_dag()["max_depth"]
@@ -143,14 +145,37 @@ class TaskGraph(BaseModel):
             disconnected = sorted(set(nodes_map) - connected)
             raise ValueError(f"Disconnected nodes detected: {disconnected}")
 
-        if max_depth is not None and depth_map and max(depth_map.values()) > max_depth:
-            raise ValueError(f"DAG depth {max(depth_map.values())} exceeds limit {max_depth}")
-
+        # Depth check removed here, handled in validate_dag
         return {
             "max_depth": max(depth_map.values()) if depth_map else 0,
             "visited": visited,
             "depth_map": depth_map,
         }
+
+    def _flatten_dag(self, depth_map: Dict[str, int], max_depth: int):
+        deep_nodes = [node for node in self.nodes if depth_map.get(node.id, 1) >= max_depth]
+        if not deep_nodes:
+            return
+
+        shallow_nodes = [node for node in self.nodes if depth_map.get(node.id, 1) < max_depth]
+        
+        shallow_deps = set()
+        for node in deep_nodes:
+            for dep in node.dependencies:
+                if depth_map.get(dep, 1) < max_depth:
+                    shallow_deps.add(dep)
+                    
+        sub_dag_node = TaskNode(
+            id="t_sub_dag_batch",
+            agent="meta_planner_agent",
+            description=f"Batched sub-DAG execution for {len(deep_nodes)} nodes",
+            dependencies=list(shallow_deps),
+            critical=True,
+            metadata={"batched_nodes": [n.model_dump() for n in deep_nodes]}
+        )
+        
+        shallow_nodes.append(sub_dag_node)
+        self.nodes = shallow_nodes
 
     def dict(self, *args, **kwargs):
         return super().model_dump(*args, **kwargs)

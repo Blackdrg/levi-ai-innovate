@@ -131,6 +131,15 @@ class LearningLoop:
             "last_strategy": metadata.get("reasoning_strategy", {}),
             "graph_template": metadata.get("graph_template", current.get("graph_template")),
         }
+        
+        # Strategy Evolution: Passive Culling of underperforming templates
+        if uses > 10 and avg_fidelity < 0.65:
+            logger.warning(f"[LearningLoop] Strategy for {intent_type} decayed ({avg_fidelity}). Culling from ledger.")
+            if intent_type in ledger:
+                del ledger[intent_type]
+            cls._save_strategy_ledger(ledger)
+            return
+
         if not current or avg_fidelity >= float(current.get("avg_fidelity", 0.0)):
             ledger[intent_type] = candidate
             cls._save_strategy_ledger(ledger)
