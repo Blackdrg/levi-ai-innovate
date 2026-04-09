@@ -1,0 +1,32 @@
+[
+  {
+    "id": "golden-001",
+    "query": "Hello LEVI, who are you?",
+    "expected_intent": "chat",
+    "description": "Basic greeting and identity check"
+  },
+  {
+    "id": "golden-002",
+    "query": "Write a python function to calculate fibonacci numbers.",
+    "expected_intent": "code",
+    "description": "Standard code generation request"
+  },
+  {
+    "id": "golden-003",
+    "query": "What is the capital of France?",
+    "expected_intent": "search",
+    "description": "Factual knowledge retrieval"
+  },
+  {
+    "id": "golden-004",
+    "query": "Summarize my last conversation about the quantum mechanics project.",
+    "expected_intent": "memory",
+    "description": "Contextual memory retrieval"
+  },
+  {
+    "id": "golden-005",
+    "query": "Help me plan a flight to Tokyo next week.",
+    "expected_intent": "search",
+    "description": "Multi-step tool-heavy intent"
+  }
+]

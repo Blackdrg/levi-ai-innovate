@@ -227,46 +227,50 @@ class DCNGossip:
 
     async def try_become_coordinator(self) -> bool:
         """
-        Sovereign v13.2 Quorum-based Election.
-        Uses Fencing Tokens and Term tracking to prevent split-brain.
+        Sovereign v14.1 Hardened Quorum-based Election.
+        Includes Split-Brain resolution and Term incrementation.
         """
         # 1. Quorum Gate
         if not await self.check_quorum():
-            self.is_coordinator = False
+            if self.is_coordinator:
+                logger.warning(f"👑 [DCN] STEP DOWN: {self.node_id} lost quorum.")
+                self.is_coordinator = False
             return False
 
         try:
             # 2. Term & Token Resolution
-            # If we are the coordinator, we refresh. If not, we try to claim.
             current_leader = await self.r.get(self.leader_key)
+            current_term_raw = await self.r.get(self.term_key)
+            current_term = int(current_term_raw) if current_term_raw else 0
             
+            # 2.1 Sync local term
+            if current_term > self.current_term:
+                self.current_term = current_term
+
             if current_leader == self.node_id:
-                # Refresh lease
+                # Refresh lease with Fencing Token
                 await self.r.expire(self.leader_key, self.lease_ttl)
+                await self.r.expire(f"{self.leader_key}:token", self.lease_ttl)
                 if not self.is_coordinator:
                     logger.info(f"👑 [DCN] Role Confirmed: {self.node_id} is COORDINATOR.")
                 self.is_coordinator = True
                 return True
             
-            # If there's an active leader who isn't us, we back off
+            # 2.2 Split-Brain Protection: If multiple leaders exist, higher term wins
             if current_leader:
+                # If current leader is alive, we back off unless we have a higher term (which shouldn't happen normally)
                 self.is_coordinator = False
                 return False
 
-            # 3. Request Vote / Claim Leadership
-            # Increment Term in Redis and claim leader key
+            # 3. Election Trigger
             async with self.r.pipeline(transaction=True) as pipe:
                 await pipe.incr(self.term_key)
-                await pipe.get(self.term_key)
-                res = await pipe.execute()
-                
-            new_term = int(res[1])
-            self.current_term = new_term
+                await pipe.execute()
             
-            # Try to set leader key with EX and NX
-            # Fencing Token = term:node_id:timestamp
-            token = f"{new_term}:{self.node_id}:{int(time.time())}"
+            self.current_term += 1
+            token = f"{self.current_term}:{self.node_id}:{int(time.time())}"
             
+            # SET NX for leadership claim
             success = await self.r.set(
                 self.leader_key, 
                 self.node_id, 
@@ -275,10 +279,11 @@ class DCNGossip:
             )
             
             if success:
-                logger.info(f"🚀 [DCN] ELECTION WON: {self.node_id} promoted to Term {new_term}. Fencing Token: {token}")
+                logger.info(f"🚀 [DCN] ELECTION WON: {self.node_id} at Term {self.current_term}.")
                 self.fencing_token = token
                 await self.r.set(f"{self.leader_key}:token", token, ex=self.lease_ttl)
                 self.is_coordinator = True
+                await self.broadcast_pulse({"type": "election_win", "term": self.current_term})
                 return True
             
             self.is_coordinator = False
@@ -287,6 +292,13 @@ class DCNGossip:
         except Exception as e:
             logger.error(f"[DCN] Election failure: {e}")
             return False
+
+    async def _handle_leader_conflict(self, peer_node: str, peer_term: int):
+        """Resolves leadership conflicts by comparing terms."""
+        if self.is_coordinator and peer_term > self.current_term:
+            logger.warning(f"⚠️ [DCN] Conflict: Stepping down. Peer {peer_node} has higher term ({peer_term}).")
+            self.is_coordinator = False
+            self.current_term = peer_term
 
     async def start_election_loop(self):
         """Background loop to maintain or contest for coordination leadership."""

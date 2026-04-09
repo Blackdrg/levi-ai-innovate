@@ -43,6 +43,9 @@ class ExecutionBudgetTracker:
         self.tool_call_limit = max(0, tool_call_limit)
         self.tokens_used = 0
         self.tool_calls = 0
+        self.agent_budgets: Dict[str, int] = {}
+        # Default per-agent limit (e.g., 50% of total)
+        self.max_per_agent = int(self.token_limit * 0.7)
 
     def can_schedule_next_tool(self) -> bool:
         return self.tool_calls < self.tool_call_limit
@@ -55,8 +58,18 @@ class ExecutionBudgetTracker:
 
     def add_tokens(self, agent: str, total_tokens: int) -> bool:
         total_tokens = max(0, int(total_tokens))
+        
+        # Track total mission usage
         self.tokens_used += total_tokens
         MetricsHub.record_token_usage(agent, total_tokens)
+        
+        # Track and enforce per-agent budget
+        self.agent_budgets[agent] = self.agent_budgets.get(agent, 0) + total_tokens
+        if self.agent_budgets[agent] > self.max_per_agent:
+            import logging
+            logging.getLogger(__name__).warning(f"[Security] Agent '{agent}' exceeded its per-mission budget.")
+            return False
+
         return self.tokens_used <= self.token_limit
 
 

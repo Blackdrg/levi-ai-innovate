@@ -79,161 +79,75 @@ class GraphExecutor:
         )
 
         
-        while remaining_nodes:
+        running_tasks: Dict[asyncio.Task, Any] = {}
+        
+        while remaining_nodes or running_tasks:
             # 1. Mission Cancellation Check
             from backend.utils.mission import MissionControl
-            mission_id = perception.get("request_id") or "global"
             if MissionControl.is_cancelled(mission_id):
-                logger.warning(f"[V8 Executor] Mission {mission_id} cancelled by user. Aborting...")
+                logger.warning(f"[V14.1 Executor] Mission {mission_id} cancelled. Aborting...")
+                for t in running_tasks: t.cancel()
                 break
 
-            # 2. Identify executable nodes (all deps satisfied)
+            # 2. Identify and Schedule Executable Nodes
             async with self._wave_lock:
                 executable_nodes = [
                     n for n in remaining_nodes
                     if all(dep in completed_ids for dep in n.dependencies)
                 ]
             
-            if not executable_nodes:
+            # Constraint check (Parallelism & Budget)
+            max_parallel = 1 if safe_mode else (policy.parallel_waves if policy else 4)
+            slots_available = max_parallel - len(running_tasks)
+            
+            if slots_available > 0 and executable_nodes:
+                nodes_to_start = executable_nodes[:slots_available]
+                for node in nodes_to_start:
+                    if budget_tracker.remaining_tool_calls() <= 0:
+                        logger.error("[Shield] Tool budget exhausted.")
+                        break
+                    
+                    # Wrap execution in a task
+                    task = asyncio.create_task(
+                        self._execute_node(node, results, perception, blackboard=blackboard, user_id=user_id, wave_count=wave_count, policy=policy, mission_sm=mission_sm)
+                    )
+                    running_tasks[task] = node
+                    remaining_nodes.remove(node)
+                    budget_tracker.reserve_tool_calls(1)
+                    total_nodes_executed += 1
+                    logger.debug(f"[Greedy] Started node {node.id}")
+
+            if not running_tasks:
                 if remaining_nodes:
-                    logger.error(
-                        "[V8 Executor] Dependency deadlock in graph. Remaining=%s completed=%s",
-                        [n.id for n in remaining_nodes],
-                        sorted(completed_ids),
-                    )
-                break
-            
-            # Audit Point 07: Execution Guards
-            wave_count += 1
-            if wave_count > self.MAX_WAVES:
-                logger.error(f"[Shield] Mission {mission_id} aborted: Wave limit ({self.MAX_WAVES}) exceeded.")
-                SovereignBroadcaster.publish("MISSION_ABORTED", {"reason": "wave_limit_exceeded"}, user_id=user_id)
+                    logger.error(f"[V14.1 Executor] Deadlock detected. Remaining: {[n.id for n in remaining_nodes]}")
                 break
 
-            logger.debug("[V13.1 Executor] Executing Wave %d: %s", wave_count, [n.id for n in executable_nodes])
+            # 3. Wait for any task to complete
+            done, _ = await asyncio.wait(running_tasks.keys(), return_when=asyncio.FIRST_COMPLETED)
             
-            # 2. Parallel Execution of Wave (Limited by Policy)
-            max_parallel = 1 if safe_mode else (policy.parallel_waves if policy else len(executable_nodes))
-            queue_depth = len(remaining_nodes)
-            pressure = capture_resource_pressure(vram_pressure=False, queue_depth=queue_depth)
-            try:
-                if HAS_REDIS:
-                    vram_pressure = await redis_client.get("vram:pressure")
-                    pressure = capture_resource_pressure(
-                        vram_pressure=bool(vram_pressure and str(vram_pressure).lower() == "true"),
-                        queue_depth=queue_depth,
-                    )
-                    if pressure.vram_pressure:
-                        max_parallel = max(1, min(max_parallel, 1))
-            except Exception:
-                pass
-            if "cpu" in pressure.active_dimensions or "ram" in pressure.active_dimensions:
-                max_parallel = max(1, min(max_parallel, 1))
-            if "queue" in pressure.active_dimensions:
-                max_parallel = max(1, min(max_parallel, 2))
-            if budget_tracker.remaining_tool_calls() <= 0:
-                logger.error("[Shield] Mission %s aborted: Tool call budget exhausted before scheduling.", mission_id)
-                MetricsHub.reject_budget("tool_calls")
-                break
-            max_parallel = min(max_parallel, budget_tracker.remaining_tool_calls())
-            nodes_to_run = executable_nodes[:max_parallel]
-            MetricsHub.observe_wave(len(nodes_to_run), queue_depth)
-            
-            total_nodes_executed += len(nodes_to_run)
-            
-            if total_nodes_executed >= self.WARNING_THRESHOLD and total_nodes_executed < self.MAX_MISSION_NODES:
-                logger.warning(f"[V13.1 Executor] Mission {mission_id} reaching complexity threshold ({total_nodes_executed} nodes).")
-                SovereignBroadcaster.publish("MISSION_WARNING", {"nodes_count": total_nodes_executed, "message": "High complexity mission detected. Approaching safety limit."}, user_id=user_id)
+            for task in done:
+                node = running_tasks.pop(task)
+                try:
+                    res = await task
+                    results[node.id] = res
+                    completed_ids.add(node.id)
+                    
+                    if not res.success and node.critical:
+                        logger.warning(f"[V14.1 Executor] Critical failure on {node.id}")
+                        if not safe_mode:
+                            logger.info("[Resilience] Escalating to Safe Mode (Linear).")
+                            safe_mode = True
+                    
+                    # Update budget
+                    budget_tracker.add_tokens(node.agent, getattr(res, "total_tokens", 0))
+                    
+                except Exception as e:
+                    logger.error(f"[Executor] Task crash for {node.id}: {e}")
+                    results[node.id] = ToolResult(success=False, error=str(e), agent=node.agent)
+                    completed_ids.add(node.id)
 
+            # Safeguard
             if total_nodes_executed > self.MAX_MISSION_NODES:
-                logger.error(f"[Shield] Mission {mission_id} aborted: Node limit ({self.MAX_MISSION_NODES}) exceeded.")
-                SovereignBroadcaster.publish("MISSION_ABORTED", {"reason": "node_limit_exceeded"}, user_id=user_id)
-                break
-
-            tasks = [self._execute_node(n, results, perception, blackboard=blackboard, user_id=user_id, wave_count=wave_count, policy=policy, mission_sm=mission_sm) for n in nodes_to_run]
-            budget_tracker.reserve_tool_calls(len(nodes_to_run))
-            SovereignBroadcaster.publish("WAVE_STARTED", {"nodes": [n.id for n in nodes_to_run], "current_wave": wave_count}, user_id=user_id)
-
-            # --- Distributed Wave Management (v2.0-Hardened) ---
-            try:
-                if (
-                    os.getenv("DISTRIBUTED_MODE", "false").lower() == "true"
-                    and os.getenv("CHAOS_REDIS_OUTAGE", "false").lower() != "true"
-                    and HAS_REDIS
-                ):
-                    from .distributed import DistributedGraphExecutor
-                    dist_executor = DistributedGraphExecutor(redis_client)
-                    
-                    # 1. Enqueue Wave
-                    previous_results_serializable = {k: v.model_dump() for k, v in results.items()}
-                    await dist_executor.enqueue_wave(mission_id, nodes_to_run, perception, previous_results_serializable)
-                    
-                    # 2. Reactive Result Management (v2.1-Hardened)
-                    pubsub = redis_client.pubsub()
-                    event_channel = f"dcn:mission:{mission_id}:events"
-                    await pubsub.subscribe(event_channel)
-                    
-                    pending_node_ids = set(n.id for n in nodes_to_run)
-                    wave_results_map = {}
-                    
-                    # Audit Point: Pre-check for results before long-wait subscription
-                    for node_id in list(pending_node_ids):
-                        result_key = f"dcn:mission:{mission_id}:result:{node_id}"
-                        cached_res = await redis_client.get(result_key)
-                        if cached_res:
-                            wave_results_map[node_id] = ToolResult(**json.loads(cached_res))
-                            pending_node_ids.remove(node_id)
-
-                    # Reactive Wait Loop
-                    start_time = asyncio.get_event_loop().time()
-                    timeout = 120 
-                    
-                    try:
-                        while pending_node_ids and (asyncio.get_event_loop().time() - start_time) < timeout:
-                            message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
-                            if message and message["type"] == "message":
-                                data = json.loads(message["data"])
-                                event_type = data.get("event")
-                                tgt_node_id = data.get("node_id")
-                                
-                                if event_type == "node_complete" and tgt_node_id in pending_node_ids:
-                                    result_key = f"dcn:mission:{mission_id}:result:{tgt_node_id}"
-                                    cached_res = await redis_client.get(result_key)
-                                    if cached_res:
-                                        wave_results_map[tgt_node_id] = ToolResult(**json.loads(cached_res))
-                                        pending_node_ids.remove(tgt_node_id)
-                                
-                                elif event_type == "node_failed" and tgt_node_id in pending_node_ids:
-                                    logger.warning(f"⚠️ [DCN] Node {tgt_node_id} reported failure. Re-evaluating...")
-                                    # For v2.1: Simple reactive retry or fallback can be triggered here
-                                    # Currently, we just let the loop continue or break if critical
-                                    pass
-                    finally:
-                        await pubsub.unsubscribe(event_channel)
-                        await pubsub.close()
-                    
-                    if pending_node_ids:
-                        logger.error(f"🚨 [DCN] Wave timeout. Missing: {pending_node_ids}. Attempting LOCAL FALLBACK...")
-                        # Partial local fallback for timed-out nodes
-                        timeout_nodes = [n for n in nodes_to_run if n.id in pending_node_ids]
-                        fallback_tasks = [self._execute_node(n, results, perception, blackboard=blackboard, user_id=user_id, wave_count=wave_count) for n in timeout_nodes]
-                        fallback_results = await asyncio.gather(*fallback_tasks)
-                        for n, res in zip(timeout_nodes, fallback_results):
-                            wave_results_map[n.id] = res
-
-                    wave_results = [wave_results_map.get(n.id, ToolResult(success=False, error="DCN Failure")) for n in nodes_to_run]
-                else:
-                    # Explicit Local Execution
-                    wave_results = await asyncio.gather(*tasks)
-            except Exception as e:
-                logger.error(f"🛡️ [Resilience] DCN Error: {e}. Falling back to MONOLITH MODE.")
-                # EMERGENCY LOCAL FALLBACK
-                wave_results = await asyncio.gather(*tasks)
-
-
-            
-            # 3. Update State
-            for n, res in zip(nodes_to_run, wave_results):
                 results[n.id] = res
                 completed_ids.add(n.id)
                 remaining_nodes.remove(n)

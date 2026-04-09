@@ -68,20 +68,25 @@ class BrainPolicyEngine:
         return decision
 
     def _select_mode(self, intent: IntentResult, complexity: float, risk_level: float) -> BrainMode:
-        """Logic for selecting the cognitive mode."""
+        """
+        Sovereign v14.1 Smart Mode Selection.
+        Defaults to FAST; escalates to BALANCED, DEEP, or RESEARCH only when triggers hit.
+        """
         if risk_level > 0.7:
             return BrainMode.SECURE
         
         if intent.intent_type == "search" or "research" in intent.intent_type:
             return BrainMode.RESEARCH
         
-        if complexity > 0.7:
+        # High-complexity escalation
+        if complexity > 0.8:
             return BrainMode.DEEP
         
-        if complexity < 0.3:
-            return BrainMode.FAST
+        if complexity > 0.5:
+            return BrainMode.BALANCED
             
-        return BrainMode.BALANCED
+        # Default to highest performance
+        return BrainMode.FAST
 
     def _allocate_agents(self, mode: BrainMode, intent: IntentResult, complexity: float) -> Dict[str, bool]:
         """Decides which agents should be activated."""

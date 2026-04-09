@@ -40,9 +40,23 @@ celery_app.conf.update(
     task_time_limit=300,  # default 5 mins
     worker_concurrency=int(os.getenv("CELERY_CONCURRENCY", "4")),
     
-    # ── Phase 11: Queue Routing ──
+    # ── Phase 11: Queue & Priority Routing ──
+    task_queues={
+        "high": {"exchange": "high", "routing_key": "high", "queue_arguments": {"x-max-priority": 10}},
+        "default": {"exchange": "default", "routing_key": "default", "queue_arguments": {"x-max-priority": 5}},
+        "heavy": {"exchange": "heavy", "routing_key": "heavy", "queue_arguments": {"x-max-priority": 1}},
+        "dlq": {"exchange": "dlq", "routing_key": "dlq"},
+    },
     task_routes={
+        # Critical Brain Tasks -> High Priority
+        "backend.core.critic_tasks.*": {"queue": "high", "priority": 10},
+        "backend.core.memory_tasks.flush_all_memory_buffers": {"queue": "high", "priority": 9},
+        
+        # Heavy Tasks -> Heavy Queue
         "backend.services.studio.tasks.generate_video_task": {"queue": "heavy"},
+        "backend.core.fine_tune_tasks.*": {"queue": "heavy"},
+        
+        # Everything Else -> Default
         "backend.services.studio.tasks.generate_image_task": {"queue": "default"},
         "backend.services.notifications.tasks.*": {"queue": "default"},
         "backend.services.payments.tasks.*": {"queue": "default"},
@@ -50,11 +64,19 @@ celery_app.conf.update(
         "*": {"queue": "default"},
     },
     
+    # ── Dead-Letter Queue (DLQ) Strategy ──
+    task_default_queue="default",
+    task_default_exchange="default",
+    task_default_routing_key="default",
+    
     # High-Priority / Heavy-Lift Overrides
     task_annotations={
         "backend.services.studio.tasks.generate_video_task": {
             "rate_limit": "2/m",        # Avoid overwhelming GPU/CPU
             "time_limit": 600,         # 10 mins for video
+        },
+        "*": {
+             "on_failure": "backend.core.failure_engine.handle_celery_failure" # Custom DLQ bridge
         }
     },
 

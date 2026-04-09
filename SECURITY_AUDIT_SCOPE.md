@@ -25,6 +25,12 @@
 - **Postgres SQL Injection**: Validation of parameterized query implementation and audit log integrity.
 - **GDPR Deletion Protocol**: Testing for data leakage of "erased" FAISS vectors.
 
+### 4. Advanced Resilience & Hardening (v14.1)
+- **Security Anomaly detector**: Testing for jailbreak and injection detection efficacy via the pre-perception filtration gate.
+- **Agent Resource Budgeting**: Probing the `ExecutionBudgetTracker` for budget bypass or resource exhaustion via specific node (e.g., 'researcher') runaway.
+- **DCN Integrity**: Testing for Sybil attacks or pulse forgery in the Distributed Cognitive Network (HMAC-SHA256 verification).
+- **Memory Hygiene**: Attempting to bypass the resonance-based archives to access or manipulate "cold" storage records.
+
 ## Budget & Remediation
 - **Remediation Buffer**: 1 week allocated in Phase 4 Graduation.
 - **Integrity**: Any critical (CVSS 9.0+) findings will trigger an immediate architectural freeze.

@@ -32,36 +32,52 @@ class ConsistencyEngine:
 
     async def reconcile(self):
         """
-        Performs a sweep of critical keys and resolves conflicts.
-        Uses Last-Writer-Wins (LWW) based on 'updated_at' and 'term'.
+        Performs a sweep of critical keys and resolves conflicts with peers.
+        Step 1: Fetch local state summary.
+        Step 2: Compare with Global Consensus State in Redis.
+        Step 3: Resolve missions where local state is stale.
         """
         if not HAS_REDIS_ASYNC:
             return
 
+        logger.info(f"[Consistency] Executing P2P Reconciliation Pulse node={self.node_id}...")
+        
         for prefix in self.critical_prefixes:
+            # 1. Broad scan of active missions
             keys = await redis_client.keys(f"{prefix}*")
             if not keys:
                 continue
 
             for key in keys:
-                # In a real DCN, we would compare with a sibling node here.
-                # For this implementation, we ensure the local key has proper metadata.
-                val_raw = await redis_client.get(key)
-                if not val_raw:
+                # 2. Check for Global Lock (Consensus)
+                consensus_key = f"consensus:{key}"
+                consensus_raw = await redis_client.get(consensus_key)
+                
+                local_raw = await redis_client.get(key)
+                if not local_raw:
                     continue
 
-                try:
-                    data = json.loads(val_raw)
-                    # 🛠️ Self-Healing: Ensure metadata exists
-                    if "metadata" not in data:
-                        data["metadata"] = {
-                            "origin": self.node_id,
-                            "updated_at": time.time(),
-                            "term": 1
-                        }
-                        await redis_client.set(key, json.dumps(data))
-                except json.JSONDecodeError:
-                    continue
+                local_data = json.loads(local_raw)
+                
+                if consensus_raw:
+                    # Consensus exists -> Check for drift
+                    consensus_data = json.loads(consensus_raw)
+                    if self._calculate_hash(local_data) != self._calculate_hash(consensus_data):
+                        logger.warning(f"[Consistency] State Drift detected for {key}. Resolving...")
+                        resolved = await self.resolve_conflict(key, local_data, consensus_data)
+                        if resolved != local_data:
+                            await redis_client.set(key, json.dumps(resolved))
+                else:
+                    # No consensus -> We attempt to push our state as candidate
+                    logger.debug(f"[Consistency] Promoting local state to consensus for {key}")
+                    await redis_client.set(consensus_key, json.dumps(local_data), ex=3600)
+
+    def _calculate_hash(self, data: Dict[str, Any]) -> str:
+        """Simple property-based hash for change detection."""
+        # Exclude metadata like 'updated_at' from hash to avoid false positives
+        clean_data = {k: v for k, v in data.items() if k != "metadata"}
+        import hashlib
+        return hashlib.md5(json.dumps(clean_data, sort_keys=True).encode()).hexdigest()
 
     async def resolve_conflict(self, key: str, local_data: Dict[str, Any], remote_data: Dict[str, Any]) -> Dict[str, Any]:
         """

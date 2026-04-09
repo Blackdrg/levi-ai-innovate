@@ -77,16 +77,54 @@ class ReasoningCore:
         if perception.get("fast_path_bypass") is True:
             return False
 
-        complexity = self._extract_complexity(perception, decision)
+        # v14.1 Strict Triggers
+        is_sensitive = perception.get("intent", {}).is_sensitive if hasattr(perception.get("intent"), "is_sensitive") else False
+        if is_sensitive:
+            logger.info("[ReasoningCore] Sensitivity trigger: Activating reasoning.")
+            return True
 
-        # Disable reasoning strictly for low-complexity / repetitive plans if small DAG
-        if complexity < self.COMPLEXITY_SKIP_THRESHOLD and len(graph.nodes) <= 3:
-            return False
+        complexity = self._compute_complexity_score(perception, decision, graph)
 
-        if len(graph.nodes) > 1:
+        # Only activate if complexity is high enough or DAG is deep
+        if complexity >= self.COMPLEXITY_SKIP_THRESHOLD:
             return True
             
-        return complexity >= self.COMPLEXITY_SKIP_THRESHOLD
+        if len(graph.nodes) > 3: # Always reason about complex multi-step DAGs
+            return True
+            
+        return False
+
+    def _compute_complexity_score(self, perception: Dict[str, Any], decision: Optional[Any], graph: TaskGraph) -> float:
+        """
+        v14.1 Complexity Scoring System.
+        Weights: Intent Type (40%), Input Length (20%), Tool Diversity (20%), DAG Shape (20%).
+        """
+        score = 0.0
+        
+        # 1. Intent Weight (40%)
+        intent = perception.get("intent")
+        if intent:
+            # Scale intent complexity (0-3) to 0.0-1.0
+            score += (intent.complexity_level / 3.0) * 0.4
+        
+        # 2. Input Length Weight (20%)
+        user_input = perception.get("input", "")
+        word_count = len(str(user_input).split())
+        score += min(1.0, word_count / 30.0) * 0.2
+        
+        # 3. Tool Diversity (20%)
+        unique_agents = len({node.agent for node in graph.nodes})
+        score += min(1.0, unique_agents / 4.0) * 0.2
+        
+        # 4. DAG Shape (20%)
+        depth = self._graph_depth(graph)
+        score += min(1.0, depth / 5.0) * 0.2
+        
+        return round(score, 3)
+
+    def _extract_complexity(self, perception: Dict[str, Any], decision: Optional[Any]) -> float:
+        """Legacy compatibility wrapper."""
+        return self._compute_complexity_score(perception, decision, TaskGraph())
 
     def _critique_graph(self, goal: Any, perception: Dict[str, Any], graph: TaskGraph) -> Dict[str, Any]:
         issues: List[str] = []
