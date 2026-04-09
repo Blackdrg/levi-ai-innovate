@@ -34,7 +34,8 @@ class SelfImprovementLoop:
         await LearningLoopV8.process_mission_outcome(user_id, outcome)
 
         # 1.5. Sovereign Persistence: Postgres Analytics (v13.0)
-        asyncio.create_task(record_mission_metrics(user_id, outcome))
+        from backend.utils.runtime_tasks import create_tracked_task
+        create_tracked_task(record_mission_metrics(user_id, outcome), name="record_mission_metrics")
 
         # 2. Long-term Structural Optimization (v8.14 logic)
         if not success:

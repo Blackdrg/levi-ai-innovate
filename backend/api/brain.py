@@ -49,15 +49,18 @@ async def brain_strategy_endpoint(
     try:
         import asyncio
         
+        from backend.utils.runtime_tasks import create_tracked_task
+        
         # 1 & 2. Parallel Strategic Intent Detection & Synthesis
-        intent_task = asyncio.create_task(detect_intent(request.message))
-        fusion_task = asyncio.create_task(
+        intent_task = create_tracked_task(detect_intent(request.message), name="detect_intent")
+        fusion_task = create_tracked_task(
             FusionEngine.fuse_results(
                 query=request.message,
                 results=[{"agent": "KNOWLEDGE", "message": "Analyzing multidimensional resonance...", "success": True}],
                 lang="en",
                 fast_mode=True
-            )
+            ),
+            name="fusion_task"
         )
         
         intent_data, fusion_result = await asyncio.gather(intent_task, fusion_task)

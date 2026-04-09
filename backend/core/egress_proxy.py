@@ -1,3 +1,8 @@
+"""
+LEVI-AI Sovereign OS v14.0.0-Autonomous-SOVEREIGN [ACTIVE V14 COMPONENT].
+Egress Proxy: Strict SSRF allowlist and cognitive isolation.
+"""
+
 import logging
 import httpx
 from urllib.parse import urlparse

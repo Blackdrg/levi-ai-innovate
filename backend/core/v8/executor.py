@@ -1,3 +1,8 @@
+"""
+LEVI-AI Sovereign OS v14.0.0-Autonomous-SOVEREIGN [ACTIVE V14 COMPONENT].
+Mission Executor: Bridges the task graph to the parallel agent swarm.
+"""
+
 import asyncio
 import json
 import uuid
@@ -139,7 +144,8 @@ class GraphExecutor:
                 
                 # Hybrid Persistence: Checkpoint mission state after each task
                 try:
-                    asyncio.create_task(self._checkpoint(user_id, session_id, perception.get("mission_id"), graph))
+                    from backend.utils.runtime_tasks import create_tracked_task
+                    create_tracked_task(self._checkpoint(user_id, session_id, perception.get("mission_id"), graph), name=f"mission-checkpoint-{session_id}")
                 except: pass
                 
                 # Telemetry & CU Accounting

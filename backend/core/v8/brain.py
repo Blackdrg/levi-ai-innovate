@@ -4,6 +4,7 @@ import asyncio
 import json
 from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional, AsyncGenerator, Union, Tuple
+from backend.utils.runtime_tasks import create_tracked_task
 
 from .goal_engine import GoalEngine
 from .planner import DAGPlanner
@@ -261,7 +262,7 @@ class LeviBrainCoreController:
         
         # 6.5 DCN Global Resonance Sync
         if execution_level < 4: # Only sync successful deterministic/engine outcomes
-             asyncio.create_task(SovereignSync.sync_with_collective_hub())
+             create_tracked_task(SovereignSync.sync_with_collective_hub(), name="sync_collective_hub")
 
         # 7. RESPONSE SYNCHRONIZATION
         broadcast_mission_event(user_id, "mission_complete", {
@@ -324,14 +325,14 @@ class LeviBrainCoreController:
                 yield {"event": "activity", "data": "Deterministic Rule Hit (v13). Returning solution..."}
                 final_response = metrics["rule_data"]
                 yield {"event": "neural_synthesis", "data": {"token": final_response, "done": True}}
-                asyncio.create_task(self._update_memory(user_input, final_response, perception, [], 1))
+                create_tracked_task(self._update_memory(user_input, final_response, perception, [], 1), name="update_memory_rule")
                 
             elif decision == "INTERNAL":
                 # LEVEL 1: INTERNAL BRAIN LOGIC
                 yield {"event": "activity", "data": "Processing via Sovereign OS Logic..."}
                 final_response = await self._solve_internally(perception, metrics)
                 yield {"event": "neural_synthesis", "data": {"token": final_response, "done": True}}
-                asyncio.create_task(self._update_memory(user_input, final_response, perception, [], 1))
+                create_tracked_task(self._update_memory(user_input, final_response, perception, [], 1), name="update_memory_internal")
                 
             elif decision == "ENGINE" and metrics["capable_engine"]:
                 # LEVEL 2: ENGINE EXECUTION (v13.0)
@@ -352,14 +353,14 @@ class LeviBrainCoreController:
                 yield {"event": "neural_synthesis", "data": {"token": tool_res["message"], "done": True}}
                 
                 self.metrics_registry["tasks_solved_engine"] += 1
-                asyncio.create_task(self._update_memory(user_input, tool_res["message"], perception, [tool_res], 2))
+                create_tracked_task(self._update_memory(user_input, tool_res["message"], perception, [tool_res], 2), name="update_memory_engine")
                 
             elif decision == "MEMORY" and metrics["memory_match_score"] > 0.75:
                  # LEVEL 1: MEMORY Shortcut (HNSW)
                  yield {"event": "activity", "data": "HNSW Vector Vault Match Detected. Skipping planner..."}
                  final_response = await self._solve_internally(perception, metrics)
                  yield {"event": "neural_synthesis", "data": {"token": final_response, "done": True}}
-                 asyncio.create_task(self._update_memory(user_input, final_response, perception, [], 1))
+                 create_tracked_task(self._update_memory(user_input, final_response, perception, [], 1), name="update_memory_shortcut")
 
             else:
                 # 3. NEURAL FALLBACK (v13.0 "Council of Models")
@@ -391,7 +392,7 @@ class LeviBrainCoreController:
                     if "token" in chunk: full_parts.append(chunk["token"])
                     yield chunk
 
-                asyncio.create_task(self._update_memory(user_input, "".join(full_parts), perception, results, 4))
+                create_tracked_task(self._update_memory(user_input, "".join(full_parts), perception, results, 4), name="update_memory_stream")
 
         except Exception as e:
             logger.error("[V13 Brain] Stream anomaly: %s", e)
@@ -511,7 +512,7 @@ class LeviBrainCoreController:
         user_id, session_id = perception["user_id"], perception["session_id"]
         if user_id and not str(user_id).startswith("guest:"):
             # 1. Episodic Memory Storage
-            asyncio.create_task(self.memory.store_memory(user_id, session_id, user_input, response))
+            create_tracked_task(self.memory.store_memory(user_id, session_id, user_input, response), name="store_memory")
             
             # 2. Self-Improvement Loop (v8.14)
             # This handles fragility, pattern promotion, and optimization
@@ -536,7 +537,7 @@ class LeviBrainCoreController:
                 "cost_usd": estimate_cost(total_mission_tokens),
                 "timestamp": datetime.now(timezone.utc).isoformat()
             }
-            asyncio.create_task(SelfImprovementLoop.process_mission(user_id, outcome))
+            create_tracked_task(SelfImprovementLoop.process_mission(user_id, outcome), name="process_mission_improvement")
             broadcast_mission_event(user_id, "learning_feedback", outcome)
             
             # 3. Evolution Learning Pass (v8.15)

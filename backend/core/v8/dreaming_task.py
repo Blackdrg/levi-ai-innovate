@@ -34,10 +34,12 @@ class DreamingTask:
             client.set(key, 0) # Reset
             
             # v11.0: Run insight compression and distillation
-            asyncio.create_task(cls.calculate_insight(user_id))
+            from backend.utils.runtime_tasks import create_tracked_task
+            create_tracked_task(cls.calculate_insight(user_id), name=f"dream-insight-{user_id}")
             
             distiller = MemoryDistiller()
-            asyncio.create_task(distiller.distill_user_memory(user_id))
+            from backend.utils.runtime_tasks import create_tracked_task
+            create_tracked_task(distiller.distill_user_memory(user_id), name=f"dream-distill-{user_id}")
             return True
             
         return False

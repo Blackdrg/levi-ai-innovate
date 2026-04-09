@@ -1,3 +1,8 @@
+"""
+LEVI-AI Sovereign OS v14.0.0-Autonomous-SOVEREIGN [ACTIVE V14 COMPONENT].
+VRAM Guard: Hardware-aware cognitive backpressure and resource safety.
+"""
+
 import os
 import logging
 import asyncio
@@ -64,6 +69,8 @@ class VRAMGuard:
     Supports Multi-GPU pooling by treating each GPU as a 'DeviceSlot'.
     """
 
+    CPU_FALLBACK_ACTIVE = False
+
     def __init__(self):
         self.device_slots = []
         self._refresh_lock = asyncio.Lock()
@@ -102,10 +109,12 @@ class VRAMGuard:
                     "utilization_percent": int(util),
                     "is_simulated": False
                 })
+            VRAMGuard.CPU_FALLBACK_ACTIVE = False
             return slots
 
         except Exception as e:
-            logger.debug(f"[VRAMGuard] Real hardware probe failed ({e}). Falling back to Heuristic Simulation.")
+            logger.warning(f"[VRAMGuard] DEGRADED MODE (CPU Fallback): NVIDIA-SMI probe failed ({e}).")
+            VRAMGuard.CPU_FALLBACK_ACTIVE = True
             return self._get_heuristic_slots()
 
     def _get_heuristic_slots(self) -> List[Dict[str, Any]]:

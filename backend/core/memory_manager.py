@@ -20,6 +20,7 @@ import asyncio
 import json
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
+from backend.utils.runtime_tasks import create_tracked_task
 
 from backend.db.redis import r as redis_client, HAS_REDIS
 from backend.db.postgres import PostgresDB
@@ -207,12 +208,12 @@ class MemoryManager:
         # 2. Tier 3/4 Extraction (Semantic & Evolution)
         if user_id and not str(user_id).startswith("guest:"):
             if len(user_input.split()) > 4 or len(results) > 1:
-                asyncio.create_task(self._process_fact_extraction(user_id, user_input, response))
+                create_tracked_task(self._process_fact_extraction(user_id, user_input, response), name="fact_extraction")
         
         # 3. Learning Loop Crystallization (v14.0.0-Autonomous-SOVEREIGN)
         if fidelity:
             from backend.core.learning_loop import LearningLoop
-            asyncio.create_task(LearningLoop.crystallize_pattern(session_id, user_input, response, fidelity))
+            create_tracked_task(LearningLoop.crystallize_pattern(session_id, user_input, response, fidelity), name="learning_crystallize")
 
     async def _store_working_memory(self, user_id: str, session_id: str, user_input: str, bot_response: str):
         """Updates the Redis session buffer."""
@@ -269,7 +270,7 @@ class MemoryManager:
             count = redis_client.incr(distill_key)
             if count >= 20: 
                 logger.info(f"[MemoryV8] Triggering evolutionary trait distillation for {user_id}")
-                asyncio.create_task(self.distill_core_memory(user_id))
+                create_tracked_task(self.distill_core_memory(user_id), name="distill_core_memory")
                 redis_client.set(distill_key, 0)
         except Exception: pass
 

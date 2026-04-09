@@ -110,15 +110,18 @@ async def collect_training_sample(
 
     # Pattern crystallization for high-quality interactions (5-star Hive Wisdom)
     if rating >= 5:
-        asyncio.create_task(AdaptiveThrottler.run_throttled(collect_global_pattern, user_message, bot_response, rating))
+        from backend.utils.runtime_tasks import create_tracked_task
+        create_tracked_task(AdaptiveThrottler.run_throttled(collect_global_pattern, user_message, bot_response, rating), name="learning-global-pattern")
 
     # Knowledge Base augmentation
     if rating >= MIN_QUALITY_SCORE:
-        asyncio.create_task(AdaptiveThrottler.run_throttled(_augment_knowledge_base, user_message, bot_response, mood))
+        from backend.utils.runtime_tasks import create_tracked_task
+        create_tracked_task(AdaptiveThrottler.run_throttled(_augment_knowledge_base, user_message, bot_response, mood), name="learning-knowledge-augmentation")
 
     # Memory Graph update
     if user_id:
-        asyncio.create_task(AdaptiveThrottler.run_throttled(update_memory_graph, user_id, user_message))
+        from backend.utils.runtime_tasks import create_tracked_task
+        create_tracked_task(AdaptiveThrottler.run_throttled(update_memory_graph, user_id, user_message), name="learning-memory-graph")
 
     # Update atomic analytics
     update_system_analytics("total_samples", 1)

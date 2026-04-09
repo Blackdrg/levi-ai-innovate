@@ -11,7 +11,7 @@ spec:
   maxReplicas: 10
   behavior:
     scaleUp:
-      stabilizationWindowSeconds: 60
+      stabilizationWindowSeconds: 30 # v14.0: Faster reactive scaling for burst missions
       policies:
       - type: Percent
         value: 100
@@ -28,7 +28,7 @@ spec:
       name: cpu
       target:
         type: Utilization
-        averageUtilization: 70
+        averageUtilization: 60 # v14.0 Hardening: Scale earlier for LLM bursts
   - type: Resource
     resource:
       name: memory

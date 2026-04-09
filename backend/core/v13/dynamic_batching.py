@@ -1,3 +1,8 @@
+"""
+LEVI-AI Sovereign OS v14.0.0-Autonomous-SOVEREIGN [ACTIVE V14 COMPONENT].
+Dynamic Batching: Multi-signal backpressure and cognitive load balancing.
+"""
+
 import asyncio
 import logging
 import time
@@ -26,7 +31,8 @@ class DynamicBatcher:
             if tier not in self.queues:
                 self.queues[tier] = asyncio.Queue()
                 # Start a consumer for this tier
-                asyncio.create_task(self._batch_processor(tier, handler))
+                from backend.utils.runtime_tasks import create_tracked_task
+                create_tracked_task(self._batch_processor(tier, handler), name=f"batch-processor-{tier}")
 
         # Create a future to receive the result
         future = asyncio.get_event_loop().create_future()

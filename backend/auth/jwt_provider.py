@@ -57,16 +57,16 @@ class JWTProvider:
             # We don't crash, but we log the critical failure
         
         # Record creation event (No need to await, fire and forget)
-        import asyncio
+        from backend.utils.runtime_tasks import create_tracked_task
         loop = asyncio.get_event_loop()
         if loop.is_running():
-             asyncio.create_task(AuditLogger.log_event(
+             create_tracked_task(AuditLogger.log_event(
                  event_type="AUTH",
                  action="Token Issued",
                  user_id=user_id,
                  status="success",
                  metadata={"ident_jti": ident_jti}
-             ))
+             ), name=f"auth-audit-{ident_jti}")
 
         return {
             "identity_token": ident_token,

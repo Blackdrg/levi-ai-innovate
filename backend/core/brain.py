@@ -1,7 +1,7 @@
 """
-LEVI-AI v14.0 Brain (Meta-Orchestrator).
-The cognitive heart of LEVI-AI.
-Centrally governs Strategy, Subsystem Activation, and Execution Policy.
+LEVI-AI Sovereign OS v14.0.0-Autonomous-SOVEREIGN.
+The Cognitive Brain: Multi-layer Reasoning, Strategy Calibration, and Mission Governance.
+Enforces strict reasoning contracts, cognitive drift detection, and 100% background task tracking compliance.
 """
 
 import logging
@@ -97,7 +97,8 @@ class LeviBrainV14:
             # 1. PERCEPTION
             async with traced_span("brain.perception", request_id=request_id, user_id=user_id):
                 SovereignBroadcaster.publish(PULSE_MISSION_STARTED, {"request_id": request_id, "user_input": user_input}, user_id=user_id)
-                asyncio.create_task(SovereignKafka.emit_event("brain_events", {"event": "MISSION_STARTED", "request_id": request_id}))
+                from backend.utils.runtime_tasks import create_tracked_task
+                create_tracked_task(SovereignKafka.emit_event("brain_events", {"event": "MISSION_STARTED", "request_id": request_id}), name=f"kafka-mission-start-{request_id}")
                 perception = await self.perception.perceive(user_input, user_id, session_id, **kwargs)
 
             # 2. BRAIN POLICY (v14.0 Controlled)
@@ -311,7 +312,8 @@ class LeviBrainV14:
 
             # 6. Memory Sync (Background)
             full_response = "".join(full_response_parts)
-            asyncio.create_task(self.memory.store(user_id, session_id, user_input, full_response, perception, results, policy=decision.memory_policy))
+            from backend.utils.runtime_tasks import create_tracked_task
+            create_tracked_task(self.memory.store(user_id, session_id, user_input, full_response, perception, results, policy=decision.memory_policy), name=f"stream-mem-sync-{request_id}")
 
         except Exception as e:
             logger.error("[V14 Brain] Stream Failure: %s", e)

@@ -67,8 +67,9 @@ async def main():
     # 🚀 Auto-Scaling Monitor (Coordinator Only)
     if os.getenv("NODE_ROLE") == "coordinator":
         from backend.services.autoscaler import AutoScaler
+        from backend.utils.runtime_tasks import create_tracked_task
         scaler = AutoScaler()
-        asyncio.create_task(scaler.start())
+        create_tracked_task(scaler.start(), name="dcn-autoscaler")
         logger.info("📐 Auto-Scaling: [ACTIVE]")
 
     worker = DistributedGraphExecutor(r_async)

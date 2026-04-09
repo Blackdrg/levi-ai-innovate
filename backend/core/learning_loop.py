@@ -71,7 +71,8 @@ class LearningLoop:
             cls._append_to_corpus(query, result, fidelity)
             
             # 🚀 Check for Training Trigger (Nightly LoRA Pipeline)
-            asyncio.create_task(cls._check_training_trigger())
+            from backend.utils.runtime_tasks import create_tracked_task
+            create_tracked_task(cls._check_training_trigger(), name="learning_trigger_check")
             
         except Exception as e:
             logger.error(f"[LearningLoop] Failed to crystallize pattern: {e}")

@@ -25,7 +25,8 @@ def run_autonomous_evolution():
     
     loop = asyncio.get_event_loop()
     if loop.is_running():
-        asyncio.create_task(AdaptiveThrottler.run_throttled(manager.evolve_variants))
+        from backend.utils.runtime_tasks import create_tracked_task
+        create_tracked_task(AdaptiveThrottler.run_throttled(manager.evolve_variants), name="autonomous-evolution")
     else:
         loop.run_until_complete(AdaptiveThrottler.run_throttled(manager.evolve_variants))
         

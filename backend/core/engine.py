@@ -1,7 +1,7 @@
 """
-Sovereign Orchestration Engine v13.0.0.
-Public interface for the Sovereign OS Brain.
-Bridges to the finalized v13.0 LeviBrainCoreController.
+LEVI-AI Sovereign OS v14.0.0-Autonomous-SOVEREIGN [ACTIVE V14 COMPONENT].
+Cognitive Engine: High-level mission planning and execution orchestration.
+Bridges to the finalized LeviBrainCoreController logic.
 """
 
 import logging

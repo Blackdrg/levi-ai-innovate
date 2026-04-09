@@ -24,8 +24,8 @@ class Goal(BaseModel):
 
 class GoalEngine:
     """
-    Sovereign OS v13.0.0: Evolutionary Goal Engine
-    Adapts mission parameters based on historical resonance, system fragility, and DCN status.
+    LEVI-AI Sovereign OS v14.0.0-Autonomous-SOVEREIGN [ACTIVE V14 COMPONENT].
+    Evolutionary Goal Engine: Adapts mission parameters based on historical resonance and DCN status.
     """
 
     async def create_goal(self, perception: Dict[str, Any]) -> Goal:

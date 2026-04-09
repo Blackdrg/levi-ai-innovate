@@ -70,11 +70,13 @@ class SovereignVectorStore:
             from backend.db.mongo import MongoDB
             db = await MongoDB.get_db()
             if db is not None:
-                asyncio.create_task(db.user_facts.insert_one(doc_data))
+                from backend.utils.runtime_tasks import create_tracked_task
+                create_tracked_task(db.user_facts.insert_one(doc_data), name=f"vector-mongo-backup-{user_id}")
             
-            asyncio.create_task(asyncio.to_thread(
+            from backend.utils.runtime_tasks import create_tracked_task
+            create_tracked_task(asyncio.to_thread(
                 lambda: firestore_db.collection("user_facts").document(doc_data["fact_id"]).set(doc_data)
-            ))
+            ), name=f"vector-firestore-backup-{user_id}")
 
         except Exception as e:
             logger.error(f"Vector Store insertion failed: {e}")

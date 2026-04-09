@@ -1,3 +1,8 @@
+"""
+LEVI-AI Sovereign OS v14.0.0-Autonomous-SOVEREIGN [ACTIVE V14 COMPONENT].
+Logic Sandbox: Secure code execution and resource-constrained simulation.
+"""
+
 import sys
 import io
 import logging
@@ -84,15 +89,15 @@ class SovereignSandbox:
                 stderr.write(f"Sovereign Sandbox Fault: Internal system error - {str(e)}")
 
         # 🛡️ Graduation Audit: Record Execution Attempt
-        import asyncio
         loop = asyncio.get_event_loop()
         if loop.is_running():
-            asyncio.create_task(AuditLogger.log_event(
+            from backend.utils.runtime_tasks import create_tracked_task
+            create_tracked_task(AuditLogger.log_event(
                 event_type="SECURITY",
                 action="REPL EXEC",
                 status="success" if success else "failed",
                 metadata={"code_len": len(code), "success": success}
-            ))
+            ), name="sandbox-audit-log")
 
         return {
             "success": success,

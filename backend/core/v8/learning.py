@@ -1,3 +1,8 @@
+"""
+LEVI-AI Sovereign OS v14.0.0-Autonomous-SOVEREIGN [ACTIVE V14 COMPONENT].
+Learning & Intelligence Calibration: Fragility Tracking, Pattern Promotion, and Neural Reinforcement.
+"""
+
 import logging
 import uuid
 from datetime import datetime, timezone, timedelta
@@ -12,8 +17,8 @@ logger = logging.getLogger(__name__)
 
 class FragilityTracker:
     """
-    Sovereign v8.7: Dynamic Fragility Tracking.
-    Monitors engine performance and calculates self-optimization weights.
+    LEVI-AI Sovereign OS v14.0.0-Autonomous-SOVEREIGN [ACTIVE V14 COMPONENT].
+    Dynamic Fragility Tracking: Monitors performance and calculates self-optimization weights.
     """
     
     @staticmethod
@@ -59,8 +64,8 @@ class FragilityTracker:
 
 class PatternRegistry:
     """
-    LeviBrain v10.0: Enhanced Pattern Registry.
-    Tracks repeated reasoning patterns with success scores to promote to rules.
+    LEVI-AI Sovereign OS v14.0.0-Autonomous-SOVEREIGN [ACTIVE V14 COMPONENT].
+    Pattern Registry: Tracks repeated reasoning patterns to promote to verified rules.
     """
     
     @staticmethod
@@ -92,8 +97,8 @@ class PatternRegistry:
 
 class CrystallizationEngine:
     """
-    Sovereign v8.7: Knowledge Crystallization.
-    Transforms high-fidelity reasoning patterns into reusable prototypes.
+    LEVI-AI Sovereign OS v14.0.0-Autonomous-SOVEREIGN [ACTIVE V14 COMPONENT].
+    Knowledge Crystallization: Transforms reasoning patterns into reusable prototypes.
     """
     
     @staticmethod
@@ -136,8 +141,8 @@ class CrystallizationEngine:
 
 class ReinforcementLearner:
     """
-    Sovereign v12.0: Neural Reinforcement Loop.
-    Calculates and stores path rewards: Reward = Success - Cost - Latency.
+    LEVI-AI Sovereign OS v14.0.0-Autonomous-SOVEREIGN [ACTIVE V14 COMPONENT].
+    Neural Reinforcement: Path reward calculations for strategy calibration.
     """
     @staticmethod
     def calculate_reward(success_score: float, latency_ms: float, tool_count: int, token_count: int) -> float:
@@ -180,8 +185,8 @@ from .rules_engine import RulesEngine
 
 class LearningLoopV13:
     """
-    LeviBrain v13.0.0: Evolutionary Intelligence Loop.
-    Autonomous strategic adjustment based on Sovereign OS outcomes.
+    LEVI-AI Sovereign OS v14.0.0-Autonomous-SOVEREIGN [ACTIVE V14 COMPONENT].
+    Intelligence Loop: Autonomous strategic adjustment based on Sovereign OS outcomes.
     """
     
     _rules_engine = RulesEngine()

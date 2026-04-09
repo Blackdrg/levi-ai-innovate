@@ -1,7 +1,6 @@
 """
-Sovereign Local Intelligence Core v7.
-Powered by llama-cpp-python (GGUF).
-Zero-cost, privacy-first inference for high-fidelity local execution.
+LEVI-AI Sovereign OS v14.0.0-Autonomous-SOVEREIGN [ACTIVE V14 COMPONENT].
+Local Intelligence Core: Privacy-first GGUF inference and dynamic VRAM management.
 """
 
 import os

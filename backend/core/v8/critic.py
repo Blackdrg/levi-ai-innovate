@@ -7,8 +7,8 @@ logger = logging.getLogger(__name__)
 
 class ReflectionEngine:
     """
-    LeviBrain v8: Reflection Engine (Critic v2)
-    Self-correction loop to evaluate and enhance reasoning quality.
+    LEVI-AI Sovereign OS v14.0.0-Autonomous-SOVEREIGN [ACTIVE V14 COMPONENT].
+    Reflection Engine (Critic Layer): Performs autonomous reasoning critique and plan refinement.
     """
 
     async def evaluate(self, response: str, goal: Any, perception: Dict[str, Any]) -> Dict[str, Any]:
@@ -65,7 +65,8 @@ class ReflectionEngine:
         requires_hitl = divergence > 0.15
         
         # Log calibration data for weekly offset calculation
-        asyncio.create_task(self._log_calibration(mission_id, fidelity_score, shadow_score, divergence))
+        from backend.utils.runtime_tasks import create_tracked_task
+        create_tracked_task(self._log_calibration(mission_id, fidelity_score, shadow_score, divergence), name=f"critic-calibration-{mission_id}")
         issues = metrics.get("issues", [])
         fix_strategy = metrics.get("fix", "Apply general refinement.")
         is_safe = not metrics.get("hallucination_detected", True)

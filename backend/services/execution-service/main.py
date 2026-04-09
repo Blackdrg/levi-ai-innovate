@@ -15,7 +15,8 @@ executor = GraphExecutor()
 async def startup():
     logger.info("Execution Service starting...")
     # 1. Start Kafka Consumer Loop
-    asyncio.create_task(LeviKafkaClient.consume_events("execution.missions", process_mission))
+    from backend.utils.runtime_tasks import create_tracked_task
+    create_tracked_task(LeviKafkaClient.consume_events("execution.missions", process_mission), name="kafka-execution-consumer")
 
 async def process_mission(mission_payload: Dict[str, Any]):
     request_id = mission_payload.get("request_id")

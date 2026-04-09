@@ -1,5 +1,5 @@
 # backend/config/system.py
-"""Centralized configuration for LEVI-AI stability-locked v14 runtime."""
+"""Centralized configuration for LEVI-AI Sovereign OS v14.0.0 Graduation."""
 import os
 
 SOVEREIGN_VERSION = os.getenv("SOVEREIGN_VERSION", "v14.0.0-Autonomous-SOVEREIGN")
@@ -60,7 +60,7 @@ CLOUD_FALLBACK_ENABLED = os.getenv("CLOUD_FALLBACK_ENABLED", "false").lower() ==
 
 # Cognitive Safety Gates
 # Calibrated via 'calibrate_cu.py' script. 
-# Re-calibrated (v13.1 Phase 5): 500 CU for L3 reasoning tasks.
+# Re-calibrated (v14.0 Graduation): 500 CU for L3 reasoning tasks.
 CU_ABORT_THRESHOLD = int(os.getenv("CU_ABORT_THRESHOLD", "500"))
 CU_WARNING_PERCENT = 0.7  # Trigger warning at 70% of ceiling
 HITL_STRICT_MODE = True  # Block DRAFT quality delivery
