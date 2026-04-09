@@ -1,7 +1,6 @@
 """
-Sovereign Orchestration Layer v8.
-The primary entry point for the LEVI-AI cognitive engine.
-Handles credit validation, budgeting, and high-level routing.
+LEVI-AI Sovereign OS v14.0.0-Autonomous-SOVEREIGN.
+Central Orchestration Layer: Mission Lifecycle & Resource Governance.
 """
 
 import logging

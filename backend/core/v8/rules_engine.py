@@ -1,6 +1,6 @@
 """
-Sovereign Rules Engine v13.0.0.
-High-fidelity reinforcement learning and pattern distillation.
+LEVI-AI Sovereign OS v14.0.0-Autonomous-SOVEREIGN [ACTIVE V14 COMPONENT].
+Rules Engine: Manages deterministic rules promoted from autonomous evolution cycles.
 Synchronized with the Sovereign OS SQL Fabric.
 """
 

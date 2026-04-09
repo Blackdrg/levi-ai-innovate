@@ -1,7 +1,7 @@
 """
-Sovereign Execution Engine v8.
-Executes the Task Graph (DAG) for cognitive missions.
-Handles parallelization, dependency resolution, and agent coordination.
+LEVI-AI Sovereign OS v14.0.0-Autonomous-SOVEREIGN.
+Distributed Task Graph (DAG) Execution Engine.
+Handles parallelization, dependency resolution, and mandatory task tracking.
 """
 
 import logging
@@ -264,7 +264,8 @@ class GraphExecutor:
             dcn = DCNProtocol()
             if dcn.is_active:
                 pulse = dcn.sign_pulse(mission_id, json.dumps({k: v.message for k, v in results.items()}))
-                asyncio.create_task(dcn.broadcast_gossip(pulse))
+                from backend.utils.runtime_tasks import create_tracked_task
+                create_tracked_task(dcn.broadcast_gossip(pulse), name=f"dcn-pulse-{mission_id}")
 
         return list(results.values())
 

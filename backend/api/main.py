@@ -206,11 +206,14 @@ async def health_status():
     """Official Pulse of the Distributed AI Stack."""
     startup = collect_startup_checks()
     dependency_health = await probe_dependencies()
+    from backend.core.v13.vram_guard import VRAMGuard
+
     return {
         "status": dependency_health["status"],
         "version": SOVEREIGN_VERSION,
         "environment": os.getenv("ENVIRONMENT", "development"),
         "cloud_fallback": CLOUD_FALLBACK_ENABLED,
+        "cpu_fallback": VRAMGuard.CPU_FALLBACK_ACTIVE,
         "model_assignments": ModelRouter.get_all_assignments(),
         "resonance": "GRADUATED",
         "dependencies": dependency_health,
@@ -226,7 +229,8 @@ async def ready_status():
     redis_alive = dependency_health["checks"]["redis"]["ok"]
     db_alive = dependency_health["checks"]["postgres"]["ok"]
     ollama_alive = dependency_health["checks"]["ollama"]["ok"]
-    status = "ready" if redis_alive and db_alive and ollama_alive and startup["ready_for_production"] else "degraded"
+    # Decouple Redis from readiness probe: system can start even if Redis is degraded.
+    status = "ready" if db_alive and ollama_alive and startup["ready_for_production"] else "degraded"
 
     return {
         "status": status,

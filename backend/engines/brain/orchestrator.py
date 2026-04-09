@@ -70,7 +70,8 @@ class BrainOrchestrator:
             yield {"event": "metadata", "data": {"latency_ms": state.latency_ms, "status": "completed"}}
             
             # 6. Automatic Memory Persistence (Background)
-            asyncio.create_task(self._persist_mission_memory(state))
+            from backend.utils.runtime_tasks import create_tracked_task
+            create_tracked_task(self._persist_mission_memory(state), name=f"mission-persistence-{user_id}")
 
         except Exception as e:
             logger.error(f"Orchestration Anomaly: {e}", exc_info=True)

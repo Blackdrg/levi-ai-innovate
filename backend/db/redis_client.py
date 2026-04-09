@@ -17,17 +17,21 @@ HAS_REDIS = False
 _memory_cache = {}
 
 try:
-    r = redis.from_url(REDIS_URL, socket_timeout=5)
-    r.ping()
-    HAS_REDIS = True
-    print(f"[Redis] Successfully connected to {REDIS_URL.split('@')[-1] if '@' in REDIS_URL else REDIS_URL}")
+    r = redis.from_url(REDIS_URL, socket_timeout=5, socket_connect_timeout=5)
+    try:
+        r.ping()
+        HAS_REDIS = True
+        print(f"[Redis] Successfully connected to {REDIS_URL.split('@')[-1] if '@' in REDIS_URL else REDIS_URL}")
+    except Exception as ping_err:
+        HAS_REDIS = False
+        print(f"[Redis] Initial pulse check failed (timeout/offline): {ping_err}")
 except Exception as e:
     HAS_REDIS = False
     is_prod = os.getenv("ENVIRONMENT") == "production"
     error_msg = f"[Redis] Critical: Connection to Redis failed ({e})."
     
     if is_prod:
-        print(f"CRITICAL: {error_msg} Starting in DEGRADED mode. Features requiring shared state across instances will be limited.")
+        print(f"CRITICAL: {error_msg} Starting in DEGRADED mode.")
     else:
         print(f"{error_msg} Falling back to in-memory cache (Local Dev).")
 

@@ -1,3 +1,8 @@
+"""
+LEVI-AI Sovereign OS v14.0.0-Autonomous-SOVEREIGN [ACTIVE V14 COMPONENT].
+Evolution Engine: Passive strategy culling and template drift optimization.
+"""
+
 import json
 import logging
 import os
@@ -93,7 +98,8 @@ class EvolutionEngine:
             try:
                 # In a real system, we'd export the rules to a JSONL first.
                 # For Phase 5, we trigger the automation pulse.
-                asyncio.create_task(self._async_trigger_ft())
+                from backend.utils.runtime_tasks import create_tracked_task
+                create_tracked_task(self._async_trigger_ft(), name="evolution-ft-trigger")
             except Exception as e:
                 logger.error(f"[Evolution] Failed to trigger FT: {e}")
 

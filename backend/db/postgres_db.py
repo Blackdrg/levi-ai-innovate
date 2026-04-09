@@ -27,7 +27,8 @@ engine = create_async_engine(
     echo=False,
     pool_size=20,
     max_overflow=40,
-    pool_pre_ping=True
+    pool_pre_ping=True,
+    connect_args={"command_timeout": 5}
 ) if DATABASE_URL else None
 
 SessionLocal = async_sessionmaker(
@@ -90,12 +91,20 @@ async def verify_resonance() -> bool:
     if not engine:
         return False
     try:
+        import asyncio
+        return await asyncio.wait_for(cls_verify(), timeout=5.0)
+    except Exception as e:
+        logger.error(f"[Postgres-v13] Resonance check failed (possible timeout): {e}")
+        return False
+
+async def cls_verify() -> bool:
+    """Internal resonance executor."""
+    try:
         async with get_read_session() as session:
             from sqlalchemy import text
             await session.execute(text("SELECT 1"))
             return True
-    except Exception as e:
-        logger.error(f"[Postgres-v13] Resonance check failed: {e}")
+    except Exception:
         return False
 
 async def close_resonance():

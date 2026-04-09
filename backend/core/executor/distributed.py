@@ -1,3 +1,8 @@
+"""
+LEVI-AI Sovereign OS v14.0.0-Autonomous-SOVEREIGN [ACTIVE V14 COMPONENT].
+Distributed Executor: Orchestrates cross-node mission waves and resource-aware task stealing.
+"""
+
 import os
 import json
 import asyncio
@@ -141,7 +146,8 @@ class DistributedGraphExecutor:
                             continue
 
                     # Execute task
-                    asyncio.create_task(self._process_task_v2(msg_id, task_pkg))
+                    from backend.utils.runtime_tasks import create_tracked_task
+                    create_tracked_task(self._process_task_v2(msg_id, task_pkg), name=f"dcn-task-{node_id}")
 
             except Exception as e:
                 logger.error(f"[DCN Worker] Loop error: {e}")

@@ -74,7 +74,8 @@ class GossipEngine:
     async def start_listening(self):
         """Starts the background gossip listener."""
         if not HAS_REDIS: return
-        self._sync_task = asyncio.create_task(self._listener_loop())
+        from backend.utils.runtime_tasks import create_tracked_task
+        self._sync_task = create_tracked_task(self._listener_loop(), name="dcn-gossip-listener")
         logger.info("[DCN] Gossip engine listener active.")
 
     async def _listener_loop(self):

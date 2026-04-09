@@ -21,7 +21,8 @@ class MemoryQuery(BaseModel):
 async def startup():
     logger.info("Memory Service starting...")
     # 1. Listen for memory update events (episodic/semantic)
-    asyncio.create_task(LeviKafkaClient.consume_events("memory.updates", process_memory_update))
+    from backend.utils.runtime_tasks import create_tracked_task
+    create_tracked_task(LeviKafkaClient.consume_events("memory.updates", process_memory_update), name="kafka-memory-consumer")
 
 async def process_memory_update(event: Dict[str, Any]):
     user_id = event.get("user_id")

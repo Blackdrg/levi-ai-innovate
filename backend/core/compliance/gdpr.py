@@ -51,7 +51,8 @@ class GDPRManager:
             await GDPRManager.set_soft_delete_flag(user_id, True)
             
             # 2. Background Wipe
-            asyncio.create_task(GDPRManager._execute_full_wipe(user_id))
+            from backend.utils.runtime_tasks import create_tracked_task
+            create_tracked_task(GDPRManager._execute_full_wipe(user_id), name=f"gdpr-wipe-{user_id}")
             
             return {
                 "status": "success",

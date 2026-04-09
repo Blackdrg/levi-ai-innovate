@@ -219,7 +219,8 @@ class MemoryManager:
             if not policy or (policy.neo4j or policy.faiss):
                 if len(user_input.split()) > 4 or len(results) > 1:
                     # Pass policy to extraction logic if it were to be refactored further
-                    asyncio.create_task(self.process_extraction(user_id, user_input, response, policy=policy))
+                    from backend.utils.runtime_tasks import create_tracked_task
+                    create_tracked_task(self.process_extraction(user_id, user_input, response, policy=policy), name=f"mem-extraction-{user_id}")
         return event
 
     async def store_memory(self, user_id: str, session_id: str, user_input: str, bot_response: str):
@@ -248,10 +249,12 @@ class MemoryManager:
                 for t in triplets:
                     try:
                         MCM.register_event(user_id, {"type": "triplet", "payload": t})
-                        asyncio.create_task(self.graph.upsert_triplet(
+                        MCM.register_event(user_id, {"type": "triplet", "payload": t})
+                        from backend.utils.runtime_tasks import create_tracked_task
+                        create_tracked_task(self.graph.upsert_triplet(
                             user_id, t["subject"], t["relation"], t["object"],
                             tenant_id=extraction.get("tenant_id", "default")
-                        ))
+                        ), name=f"mem-neo4j-upsert-{user_id}")
                     except Exception as exc:
                         logger.warning("[MemoryManager] Neo4j write deferred: %s", exc)
                         MCM.enqueue_retry(user_id, {"type": "triplet", "payload": t, "error": str(exc)}, store="neo4j")
@@ -303,7 +306,8 @@ class MemoryManager:
             count = redis_client.incr(distill_key)
             if count >= 15:
                 logger.info(f"[MemoryManager] Triggering cognitive distillation for {user_id}...")
-                asyncio.create_task(self.distill_user_memory(user_id))
+                from backend.utils.runtime_tasks import create_tracked_task
+                create_tracked_task(self.distill_user_memory(user_id), name=f"mem-distill-{user_id}")
                 redis_client.set(distill_key, 0)
                 redis_client.set(f"user:{user_id}:dream_ready", 1)
 

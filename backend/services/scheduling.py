@@ -49,9 +49,9 @@ async def trigger_scheduled_missions():
             logger.info(f"[Scheduled Mission] Triggering: {mission.name} for {mission.user_id}")
             
             # Execute mission (v13 Monolith Sync loop for workers)
-            # We use an async task to avoid blocking the scheduler loop
-            import asyncio
-            asyncio.create_task(run_one_scheduled_mission(mission))
+            # We use a tracked task to avoid blocking the scheduler loop and ensure shutdown-side consistency
+            from backend.utils.runtime_tasks import create_tracked_task
+            create_tracked_task(run_one_scheduled_mission(mission), name=f"scheduled-mission-{mission.id}")
             
     except Exception as e:
         logger.error(f"[Scheduling] Loop failure: {e}")

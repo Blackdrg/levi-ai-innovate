@@ -1,5 +1,6 @@
 """
-Sovereign Automated Root Cause Analysis (ARCA) v14.0.
+LEVI-AI Sovereign OS v14.0.0-Autonomous-SOVEREIGN [ACTIVE V14 COMPONENT].
+Sovereign Automated Root Cause Analysis (ARCA).
 Autonomous diagnostic engine that analyzes mission failures in real-time.
 Uses LLM-based meta-reasoning to identify patterns of cognitive drift.
 """
@@ -55,7 +56,8 @@ class ARCAEngine:
             logger.info(f"[ARCA] Analysis Complete: {analysis[:100]}...")
 
             if trigger_red_team:
-                asyncio.create_task(self.simulate_adversarial_attack(mission_id, trace_text))
+                from backend.utils.runtime_tasks import create_tracked_task
+                create_tracked_task(self.simulate_adversarial_attack(mission_id, trace_text), name=f"arca-red-team-{mission_id}")
 
             return {
                 "mission_id": mission_id,

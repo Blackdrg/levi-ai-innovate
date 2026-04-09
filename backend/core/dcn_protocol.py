@@ -106,7 +106,8 @@ class DCNProtocol:
                     logger.error(f"[DCN] Heartbeat error: {e}")
                     await asyncio.sleep(10) # Wait before retry
 
-        asyncio.create_task(heartbeat_loop())
+        from backend.utils.runtime_tasks import create_tracked_task
+        create_tracked_task(heartbeat_loop(), name="dcn-heartbeat")
 
     async def start_listener(self, handler: Callable):
         """
@@ -135,7 +136,8 @@ class DCNProtocol:
                 logger.error(f"[DCN] Integrity Check failure: {e}")
 
         logger.info(f"[DCN] Secure Listener: [ACTIVE] Node: {self.node_id}")
-        asyncio.create_task(self.gossip.listen(secure_handler))
+        from backend.utils.runtime_tasks import create_tracked_task
+        create_tracked_task(self.gossip.listen(secure_handler), name="dcn-gossip-listener")
 
     async def verify_pulse(self, pulse: DCNPulse) -> bool:
         """

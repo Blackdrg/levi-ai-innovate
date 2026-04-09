@@ -37,8 +37,8 @@ class ReflectionEngine:
         
         # 3. LEVI Learning Bridge: Log failures for prompt optimization
         if score < 0.6:
-            import asyncio
-            asyncio.create_task(learning_system.log_failure(user_input, response, score, issues))
+            from backend.utils.runtime_tasks import create_tracked_task
+            create_tracked_task(learning_system.log_failure(user_input, response, score, issues), name="learning-failure-log")
 
         return {
             "score": score,

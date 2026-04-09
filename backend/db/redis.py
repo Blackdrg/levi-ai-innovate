@@ -50,7 +50,12 @@ def _create_ha_clients():
 
     try:
         # Resolve SSL Paradox: Strip SSL parameters for local dev machines
-        kwargs = {"decode_responses": True}
+        kwargs = {
+            "decode_responses": True,
+            "socket_timeout": 5.0,
+            "socket_connect_timeout": 5.0,
+            "health_check_interval": 30
+        }
         if _is_local_url(REDIS_URL):
             # Some versions of redis-py pass ssl_cert_reqs even if ssl=False, which triggers errors
             # We use from_url for its robust parsing but sanitize the URL if needed.
@@ -79,7 +84,11 @@ def _create_ha_clients():
             r_async = async_redis.from_url(REDIS_URL, **kwargs)
             logger.info("Sovereign Redis: Standalone pulse detected.")
 
-        r.ping()
+        if r:
+            try:
+                r.ping()
+            except Exception as ping_err:
+                logger.warning(f"Sovereign Redis: Initial pulse check failed (timeout/offline): {ping_err}")
         HAS_REDIS = True
         HAS_REDIS_ASYNC = True
     except Exception as e:
@@ -89,8 +98,8 @@ def _create_ha_clients():
         else:
             logger.error(f"Sovereign Redis HA Failure: {e}. Defaulting to standalone fallback.")
             try:
-                r = redis.from_url(REDIS_URL, decode_responses=True)
-                r_async = async_redis.from_url(REDIS_URL, decode_responses=True)
+                r = redis.from_url(REDIS_URL, decode_responses=True, socket_timeout=5.0, socket_connect_timeout=5.0)
+                r_async = async_redis.from_url(REDIS_URL, decode_responses=True, socket_timeout=5.0, socket_connect_timeout=5.0)
             except: pass
 
 _create_ha_clients()

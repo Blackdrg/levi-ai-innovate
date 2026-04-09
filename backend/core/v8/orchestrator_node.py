@@ -89,7 +89,8 @@ class SovereignOrchestrator:
             response = await self.reflection.self_correct(response, evaluation, goal, perception)
             
         # 6. MEMORY CRYSTALLIZATION
-        asyncio.create_task(self.memory.store_memory(user_id, session_id, user_input, response))
+        from backend.utils.runtime_tasks import create_tracked_task
+        create_tracked_task(self.memory.store_memory(user_id, session_id, user_input, response), name=f"mem-crystallize-{request_id}")
         
         # 7. FINAL AUDIT
         from backend.evaluation.evaluator import AutomatedEvaluator
@@ -179,9 +180,10 @@ class SovereignOrchestrator:
             final_response = "".join(full_response_parts)
 
             # 6. REFLECTION & MEMORY (Background)
-            asyncio.create_task(self._finalize_mission_background(
+            from backend.utils.runtime_tasks import create_tracked_task
+            create_tracked_task(self._finalize_mission_background(
                 final_response, goal, perception, results, mission_start
-            ))
+            ), name=f"mission-finalize-{request_id}")
 
         except Exception as e:
             logger.error(f"[Orchestrator-Node] Streaming failure: {e}")

@@ -54,7 +54,8 @@ class MemoryVault:
             f.write(json.dumps(final_meta) + "\n")
             
         # Commit index to disk periodically (background)
-        asyncio.create_task(self._commit_index())
+        from backend.utils.runtime_tasks import create_tracked_task
+        create_tracked_task(self._commit_index(), name=f"vault-commit-{self.user_id}")
 
     async def _commit_index(self):
         """Persist FAISS index to disk."""
