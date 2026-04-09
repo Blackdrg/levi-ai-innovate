@@ -5,9 +5,10 @@
 - `[PIPELINE]` Designated workflow contract documented as `Gateway -> Orchestrator -> Goal -> Planner -> Reasoning -> Executor -> Agents -> Memory -> Response`.
 - `[HARDENING]` Executor and workflow docs now reflect DAG validation, retry guardrails, sandbox boundaries, token budgets, tool-call budgets, and multi-signal backpressure.
 - `[OBSERVABILITY]` Documentation now includes `/health`, `/ready`, `/metrics`, and `/api/v1/telemetry/workflow` as active operational surfaces.
-- `[DEPLOYMENT]` Docs now reflect Kubernetes startup, readiness, liveness, HPA, and PDB behavior from the active manifest set.
-- `[CI]` Documentation records the targeted workflow and stability verification path and the clean `19 passed` result used for current status reporting.
-- `[CLEANUP]` Pydantic v2 `.dict()` deprecation paths were removed in favor of `model_dump()`, leaving the targeted suite warning-free.
+- `[DEPLOYMENT]` Docs now reflect Kubernetes startup, readiness, liveness, HPA, and PDB behavior, along with `verify_production.ps1` for local dry runs.
+- `[NETWORK]` Shifted local development Redis mapping to `6380:6379` via `docker-compose.override.yml` to prevent native Windows host collisions.
+- `[DATABASE]` Upgraded Alembic execution in deploying scripts to handle smart timeout retry loops to sync natively with asynchronous PostgreSQL TCP readiness.
+- `[CI]` Documentation records the targeted workflow and stability verification path.
 
 ### Additional Hardening Tranche
 

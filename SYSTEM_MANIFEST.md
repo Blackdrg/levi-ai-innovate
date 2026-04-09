@@ -57,6 +57,7 @@ The workflow contract is implemented in `backend/core/workflow_contract.py` and 
 | Startup checks | `backend/utils/startup.py` | Production-readiness checks surfaced through `/health` and `/ready`. |
 | Live chaos runner | `scripts/chaos/run_live_chaos.py` | Local Docker Compose outage drill for Redis or Postgres. |
 | Mission load test | `tests/load/missions_k6.js` | Focused k6 mission dispatch load script. |
+| Launch verification | `scripts/deploy/verify_production.ps1` | Windows-native 10-step full deployment readiness checklist.
 
 ## Deployment Surfaces
 
