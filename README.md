@@ -380,6 +380,12 @@ INTERNAL_SERVICE_KEY=replace-with-real-service-key
    npm run dev
    ```
 
+5. **Production Verification (Windows)**: Run the integrated 10-step deploy checker.
+   
+   ```powershell
+   .\scripts\deploy\verify_production.ps1
+   ```
+
 ---
 
 ## 10. API Specification (v1.0)

@@ -52,3 +52,4 @@ Snapshot updated for the current hardening pass on 2026-04-08.
 - `SYSTEM_MANIFEST.md`
 - `docs/PRODUCTION_RUNBOOK.md`
 - `CHANGELOG.md`
+- `scripts/deploy/verify_production.ps1` (10-Step Launch Sequence)
