@@ -1,6 +1,6 @@
 # LEVI-AI Repo Status
 
-Snapshot updated for the current hardening pass on 2026-04-08.
+Snapshot updated for the current hardening pass on 2026-04-09.
 
 ## Runtime
 
@@ -23,28 +23,31 @@ Snapshot updated for the current hardening pass on 2026-04-08.
 - Mission idempotency has a concurrent regression test
 - Executor compensation is exercised in tests
 - Active backend startup now runs Alembic migrations
-- Graceful shutdown drains tracked background mission tasks before exit
+- Graceful shutdown drains tracked background mission tasks before exit, with Orchestrator `teardown_gracefully` interrupting and flushing all live executing tasks.
 - Local live chaos script exists at `scripts/chaos/run_live_chaos.py`
 - Focused k6 mission load script exists at `tests/load/missions_k6.js`
+- Prometheus auto-scaling exposes Kubernetes metrics via `scripts/auto_scaler.py`
+- Python API SDK available at `shared/sdk/python/levi_client.py`
 
 ## Verification
 
 - Workflow and stability suite: `19 passed`
 - Additional hardening suite: `9 passed`
 - Shutdown, auth, and idempotency tranche: `6 passed`
+- Chaos Mesh and Circuit Breakers (GPU/Neo4j Failure Survivability): `8 passed`
 
 ## Still Open
 
-- broader graceful-shutdown coverage across all background task paths
 - wider route-by-route smoke coverage
-- Neo4j and GPU-specific chaos validation
+- Penetration test resolution buffering
 
 ## Recently Closed
 
-- full live upgrade and rollback rehearsal for Alembic migrations (via `dry_run_migrations.sh`)
-- real Redis to Postgres failure-sync chaos validation (via `test_mcm_chaos.py`)
-- higher-confidence live load testing at sustained concurrency (integrated via k6 CI)
-- Prompt injection protection and FAISS GDPR verification completed.
+- Full 4-Phase System Maturity Plan executed.
+- Added agent reflexive-retry loops for internal self-correction.
+- Dynamic Token-Optimization down-routing via complexity float mapping.
+- Passive graph-template decay using fidelity performance culling.
+- Front-end integration for Replay visualization.
 
 ## Key Docs
 

@@ -21,11 +21,16 @@ class ModelRouter:
     }
 
     @classmethod
-    def get_model_for_tier(cls, tier: str, session_id: str = None) -> str:
+    def get_model_for_tier(cls, tier: str, session_id: str = None, complexity: float = 1.0) -> str:
         """
-        Sovereign v14.0: Shadow-Aware Routing.
-        Maps Agent Tiers to models, with optional A/B testing for fine-tuned candidates.
+        Sovereign v14.0: Shadow-Aware & Cost-Optimized Routing.
+        Maps Agent Tiers to models, with A/B testing and token-optimization overrides.
         """
+        # Overriding expensive tiers for extremely low complexity (Token Cost Optimization)
+        if tier in ["L3", "L4"] and complexity < 0.25:
+            logger.info(f"[ModelRouter] Token Optimization: Downgrading {tier} task due to low complexity ({complexity}).")
+            tier = "L1"
+
         base_model = cls.TIER_MAP.get(tier, cls.TIER_MAP["L2"])
         
         # 1. Shadow Deployment Logic (A/B Testing)

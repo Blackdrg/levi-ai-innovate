@@ -74,9 +74,18 @@ class ReasoningCore:
         decision: Optional[Any],
         graph: TaskGraph,
     ) -> bool:
+        if perception.get("fast_path_bypass") is True:
+            return False
+
+        complexity = self._extract_complexity(perception, decision)
+
+        # Disable reasoning strictly for low-complexity / repetitive plans if small DAG
+        if complexity < self.COMPLEXITY_SKIP_THRESHOLD and len(graph.nodes) <= 3:
+            return False
+
         if len(graph.nodes) > 1:
             return True
-        complexity = self._extract_complexity(perception, decision)
+            
         return complexity >= self.COMPLEXITY_SKIP_THRESHOLD
 
     def _critique_graph(self, goal: Any, perception: Dict[str, Any], graph: TaskGraph) -> Dict[str, Any]:
@@ -112,23 +121,35 @@ class ReasoningCore:
     def _simulate_graph(self, graph: TaskGraph) -> Dict[str, Any]:
         produced: Dict[str, str] = {}
         unresolved: List[str] = []
-        order: List[Dict[str, Any]] = []
+        order: List[List[Dict[str, Any]]] = []
 
-        for node in graph.nodes:
-            blocked = [dep for dep in node.dependencies if dep not in produced]
-            if blocked:
-                unresolved.append(node.id)
-                continue
-            mock_output = f"simulated:{node.agent}:{node.id}"
-            produced[node.id] = mock_output
-            order.append(
-                {
-                    "node_id": node.id,
-                    "agent": node.agent,
-                    "depends_on": list(node.dependencies),
-                    "mock_output": mock_output,
-                }
-            )
+        pending = {node.id: node for node in graph.nodes}
+
+        while pending:
+            ready = [
+                node for node_id, node in pending.items()
+                if all(dep in produced for dep in node.dependencies)
+            ]
+
+            if not ready:
+                unresolved.extend(pending.keys())
+                break
+            
+            layer = []
+            for node in ready:
+                mock_output = f"simulated:{node.agent}:{node.id}"
+                produced[node.id] = mock_output
+                layer.append(
+                    {
+                        "node_id": node.id,
+                        "agent": node.agent,
+                        "depends_on": list(node.dependencies),
+                        "mock_output": mock_output,
+                    }
+                )
+                del pending[node.id]
+            
+            order.append(layer)
 
         return {
             "status": "ok" if not unresolved else "blocked",

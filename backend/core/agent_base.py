@@ -43,9 +43,19 @@ class SovereignAgent(abc.ABC, Generic[T, R]):
         # Deep PII masking on input could be added here if needed
         
         try:
-            # 2. Iterative Mission Execution
-            result_data = await self._run(input_data, lang=lang, **kwargs)
-            
+            # 2. Iterative Mission Execution (Reflexive Correction Loop)
+            max_retries = kwargs.get("agent_max_retries", 2)
+            for attempt in range(max_retries + 1):
+                try:
+                    result_data = await self._run(input_data, lang=lang, **kwargs)
+                    break
+                except Exception as eval_err:
+                    if attempt >= max_retries:
+                        raise eval_err
+                    self.logger.warning(f"Agent {self.name} reflexive retry {attempt+1}/{max_retries} due to: {eval_err}")
+                    # Fast-path correction prompt context could be injected via kwargs here
+                    kwargs["last_error"] = str(eval_err)
+                    
             latency = (time.perf_counter() - start_time) * 1000
             
             # 3. Output Sanitization

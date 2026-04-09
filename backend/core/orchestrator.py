@@ -26,6 +26,7 @@ class Orchestrator:
     """
     def __init__(self):
         self.brain = LeviBrainV14()
+        self.active_missions = set()
 
 
     # Blue-Green Deployment Strategy (v14.0)
@@ -48,6 +49,21 @@ class Orchestrator:
             f"{user_id}:{session_id}:{user_input.strip().lower()}".encode("utf-8")
         ).hexdigest()
         request_id = kwargs.get("request_id") or f"mission_{idempotency_key[:16]}"
+        # 1. Fast Cache Layer (Exact & Semantic)
+        if not kwargs.get("bypass_cache", False):
+            cached = check_exact_match(user_id, user_input, kwargs.get("mood", "philosophical"))
+            if not cached:
+                cached = check_semantic_match(user_id, user_input, kwargs.get("mood", "philosophical"), threshold=0.95)
+            
+            if cached:
+                logger.info("[Orchestrator] Cache Hit. Mission skipped.")
+                # Return immediately without initialization overhead
+                return {
+                    "response": cached,
+                    "request_id": request_id,
+                    "route": "cache"
+                }
+
         try:
             log_request_id.set(request_id)
             log_user_id.set(user_id)
@@ -101,22 +117,7 @@ class Orchestrator:
         sm.transition(MissionState.PLANNED)
         CognitiveTracer.add_step(request_id, "routing_decision", {"engine": active_engine})
 
-        # 1. Fast Cache Layer (Exact & Semantic)
-        if not kwargs.get("bypass_cache", False):
-            cached = check_exact_match(user_id, user_input, kwargs.get("mood", "philosophical"))
-            if not cached:
-                cached = check_semantic_match(user_id, user_input, kwargs.get("mood", "philosophical"), threshold=0.95)
-            
-            if cached:
-                logger.info("[Orchestrator] Cache Hit. Mission skipped.")
-                sm.transition(MissionState.COMPLETE)
-                CognitiveTracer.add_step(request_id, "cache_hit", {"route": "cache"})
-                CognitiveTracer.end_trace(request_id, "cache")
-                return {
-                    "response": cached,
-                    "request_id": request_id,
-                    "route": "cache"
-                }
+        # Cache logic was moved to top of handle_mission for performance
 
         # 2. Credit Lock
         # We check intent roughly here or let the brain handle it. 
@@ -124,11 +125,13 @@ class Orchestrator:
         # But we need intent for credit cost. Let's let the brain perceive first.
 
         # 3. Cognitive Mission Execution
+        self.active_missions.add(request_id)
         try:
             # Note: For streaming, the brain.run would need to be an async generator
             if streaming:
                  sm.transition(MissionState.EXECUTING)
                  CognitiveTracer.add_step(request_id, "executing", {})
+                 self.active_missions.remove(request_id)
                  return self.brain.stream(user_input, user_id, session_id, request_id=request_id, **kwargs)
             
             sm.transition(MissionState.EXECUTING)
@@ -154,14 +157,16 @@ class Orchestrator:
             CognitiveTracer.add_step(request_id, "persisted", {})
             sm.transition(MissionState.COMPLETE)
             CognitiveTracer.end_trace(request_id, "success")
+            self.active_missions.discard(request_id)
             return result
         except Exception as e:
             logger.exception("[Orchestrator] Mission failure: %s", e)
             sm.transition(MissionState.FAILED)
             CognitiveTracer.add_step(request_id, "failed", {"error": str(e)})
             CognitiveTracer.end_trace(request_id, "failed")
+            self.active_missions.discard(request_id)
             return {
-                "response": "The thought stream was interrupted by a quantum fluctuation.",
+                "response": "The thought stream was interrupted.",
                 "error": str(e),
                 "request_id": request_id,
                 "status": "failed"
@@ -200,6 +205,22 @@ class Orchestrator:
         logger.info("[Vault] Initiating daily secret rotation for cognitive providers...")
         # Placeholder for Vault API interaction
         pass
+
+    async def teardown_gracefully(self):
+        logger.info(f"[Orchestrator] Tearing down thoughtfully. Halting {len(self.active_missions)} mission(s).")
+        for request_id in list(self.active_missions):
+            try:
+                # Flush trace logs if interrupted mid flight
+                CognitiveTracer.add_step(request_id, "interrupted", {"reason": "SIGTERM / Graceful Shutdown"})
+                CognitiveTracer.end_trace(request_id, "interrupted")
+                # Mark Central Execution State as failed/interrupted
+                sm = CentralExecutionState(request_id)
+                sm.transition(MissionState.FAILED)
+                # Cleanup cache footprint if any
+                get_redis_client().delete(f"mission:state:{request_id}")
+            except Exception as e:
+                logger.error(f"[Orchestrator] Failed safely closing mission {request_id}: {e}")
+        self.active_missions.clear()
 
 # --- Standard Entry Point ---
 _orchestrator = Orchestrator()

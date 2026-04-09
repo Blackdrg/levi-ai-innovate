@@ -94,6 +94,13 @@ async def lifespan(app: FastAPI):
     yield
     # --- Shutdown logic if needed ---
     logger.info("🔌 Sovereign OS shutting down...")
+    
+    try:
+        from backend.core.orchestrator import _orchestrator
+        await _orchestrator.teardown_gracefully()
+    except Exception as e:
+        logger.error(f"Orchestrator teardown failed: {e}")
+        
     await begin_shutdown()
     try:
         from backend.db.postgres_db import close_resonance

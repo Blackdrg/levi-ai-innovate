@@ -11,6 +11,7 @@ import asyncio
 from typing import Dict, Any, Optional, Callable
 from pydantic import BaseModel
 from .v13.vram_guard import VRAMGuard
+from .dcn.load_balancer import dcn_balancer
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +91,10 @@ class DCNProtocol:
                         "vram_total_mb": sum(s["vram_total_mb"] for s in device_slots),
                         "vram_free_mb": sum(s["vram_free_mb"] for s in device_slots)
                     }
+                    
+                    
+                    # Store in Redis Hash for O(1) Load Balancing
+                    dcn_balancer.register_node_heartbeat(self.node_id, metadata)
                     
                     await self.broadcast_gossip(
                         mission_id="swarm_pulse", 
