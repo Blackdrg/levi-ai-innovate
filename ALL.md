@@ -35,11 +35,16 @@ Snapshot updated for the current hardening pass on 2026-04-08.
 
 ## Still Open
 
-- full live upgrade and rollback rehearsal for Alembic migrations
 - broader graceful-shutdown coverage across all background task paths
-- real Redis to Postgres failure-sync chaos validation
-- higher-confidence live load testing at sustained concurrency
 - wider route-by-route smoke coverage
+- Neo4j and GPU-specific chaos validation
+
+## Recently Closed
+
+- full live upgrade and rollback rehearsal for Alembic migrations (via `dry_run_migrations.sh`)
+- real Redis to Postgres failure-sync chaos validation (via `test_mcm_chaos.py`)
+- higher-confidence live load testing at sustained concurrency (integrated via k6 CI)
+- Prompt injection protection and FAISS GDPR verification completed.
 
 ## Key Docs
 

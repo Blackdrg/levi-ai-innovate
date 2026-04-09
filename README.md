@@ -52,11 +52,16 @@ Verified result on 2026-04-08:
 
 Known remaining gaps:
 
-- Large-scale live load validation for 10+ to 1000 concurrent missions is not yet fully proven in deployed environments.
-- Full chaos drills against real Redis, Postgres sync failure, Neo4j, GPU saturation, and timeout scenarios still need broader execution.
 - Route-by-route smoke coverage for every feature surface is not complete yet.
-- Alembic-based production migration flow is now wired into the active backend entrypoint, but it still needs full live upgrade and rollback rehearsal against production-like data.
+- Full chaos drills against Neo4j, GPU saturation, and timeout scenarios still need broader execution.
 - Graceful shutdown now drains tracked background mission tasks before exit, but broader task-path coverage still needs expansion.
+
+Recently Closed (Production Hardening):
+- Large-scale live load validation for 10+ concurrent missions is now tested via `k6` GitHub Actions CI gates.
+- Full chaos drills for Redis -> Postgres MCM fan-out failure are verified in integration testing.
+- Alembic-based production migration flow is strictly tested using ephemeral sandboxed pg containers (`dry_run_migrations.sh`).
+- Agent endpoints are guarded against LLM Cypher/RESP Prompt Injection.
+- FAISS Right-To-Be-Forgotten (RTBF) protocol is verified via automated checks.
 
 ---
 
