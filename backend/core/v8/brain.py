@@ -27,6 +27,7 @@ from backend.memory.manager import MemoryManager
 from ..orchestrator_types import ToolResult
 from backend.api.v8.telemetry import broadcast_mission_event
 from backend.utils.usage import count_tokens, estimate_cost
+from backend.db.redis import r as redis_client, HAS_REDIS
 
 logger = logging.getLogger(__name__)
 
@@ -548,7 +549,6 @@ class LeviBrainCoreController:
             # v9.5 Recursive Patching: Persistent Self-Healing Queue
             if not outcome["success"]:
                 try:
-                    from backend.db.redis import r as redis_client, HAS_REDIS
                     if HAS_REDIS:
                         logger.info("[Sovereign] Logic Failure detected. Pushing to healing queue.")
                         redis_client.lpush("sovereign:failure_queue", json.dumps(outcome))

@@ -40,6 +40,7 @@ from backend.db.redis import (
     HAS_REDIS as HAS_REDIS_SYNC
 )
 from .execution_state import CentralExecutionState, MissionState
+from .dcn.registry import dcn_registry
 from backend.evaluation.tracing import CognitiveTracer
 from backend.utils.logging_context import log_request_id, log_user_id, log_session_id
 from backend.utils.metrics import MetricsHub
@@ -123,7 +124,8 @@ class Orchestrator:
             pass
         CognitiveTracer.start_trace(request_id, user_id, "mission")
         sm = CentralExecutionState(request_id, trace_id=request_id, user_id=user_id)
-        sm.initialize(MissionState.CREATED)
+        term = dcn_registry.get_gossip().current_term
+        sm.initialize(MissionState.CREATED, term=term)
         if not sm.claim_idempotency(user_id, idempotency_key, request_id):
             existing_mission = sm.get_claimed_mission(user_id, idempotency_key)
             return {
@@ -135,7 +137,7 @@ class Orchestrator:
         
         # 0.1 GDPR Soft-Delete Check (v14.0)
         if await self.is_soft_deleted(user_id):
-            sm.transition(MissionState.FAILED)
+            sm.transition(MissionState.FAILED, term=term)
             CognitiveTracer.end_trace(request_id, "blocked")
             return {
                 "response": "This consciousness has been flagged for erasure and cannot initiate new missions.",
@@ -161,7 +163,7 @@ class Orchestrator:
         
         has_credits = await billing_service.deduct_credits(user_id, amount=cost)
         if not has_credits:
-             sm.transition(MissionState.FAILED)
+             sm.transition(MissionState.FAILED, term=term)
              CognitiveTracer.end_trace(request_id, "billing_failure")
              return {
                  "response": "Cognitive credits exhausted. Please recharge to continue.",
@@ -180,7 +182,7 @@ class Orchestrator:
                 logger.info(f"[Orchestrator] 📟 Traffic Routed to GREEN (Candidate) for {user_id}")
         
         logger.info(f"[Orchestrator] Initiating Mission: {request_id} (Engine: {active_engine})")
-        sm.transition(MissionState.PLANNED)
+        sm.transition(MissionState.PLANNED, term=term)
         CognitiveTracer.add_step(request_id, "routing_decision", {"engine": active_engine})
 
         # Cache logic was moved to top of handle_mission for performance
@@ -196,12 +198,12 @@ class Orchestrator:
         
         try:
             if streaming:
-                 sm.transition(MissionState.EXECUTING)
+                 sm.transition(MissionState.EXECUTING, term=term)
                  CognitiveTracer.add_step(request_id, "executing", {})
                  self.active_missions.discard(request_id)
                  return self.stream_mission(user_input, user_id, session_id, request_id=request_id, **kwargs)
             
-            sm.transition(MissionState.EXECUTING)
+            sm.transition(MissionState.EXECUTING, term=term)
             CognitiveTracer.add_step(request_id, "executing", {})
             
             # --- START COGNITIVE PIPELINE ---
@@ -216,7 +218,7 @@ class Orchestrator:
                 threat_score = SecurityAnomalyDetector.analyze_payload(user_input, context=kwargs.get("context"))
                 if SecurityAnomalyDetector.should_block(threat_score):
                     logger.critical(f"[Security] BLOCKING MALICIOUS PAYLOAD for {user_id}. Score: {threat_score}")
-                    sm.transition(MissionState.FAILED)
+                    sm.transition(MissionState.FAILED, term=term)
                     return {
                         "response": "Security violation detected. This mission has been quarantined.",
                         "status": "security_block",
@@ -250,7 +252,7 @@ class Orchestrator:
                 final_response = res
                 # Minimal audit/sync
                 await self.memory.store(user_id, session_id, user_input, final_response, perception, [], policy=None)
-                sm.transition(MissionState.COMPLETE)
+                sm.transition(MissionState.COMPLETE, term=term)
                 return {
                     "response": final_response,
                     "request_id": request_id,
@@ -349,9 +351,9 @@ class Orchestrator:
             if final_response:
                 store_exact_match(user_id, user_input, kwargs.get("mood", "philosophical"), final_response)
             
-            sm.transition(MissionState.VALIDATING)
-            sm.transition(MissionState.PERSISTED)
-            sm.transition(MissionState.COMPLETE)
+            sm.transition(MissionState.VALIDATING, term=term)
+            sm.transition(MissionState.PERSISTED, term=term)
+            sm.transition(MissionState.COMPLETE, term=term)
             CognitiveTracer.end_trace(request_id, "success")
             self.active_missions.discard(request_id)
             
@@ -370,7 +372,7 @@ class Orchestrator:
 
         except Exception as e:
             logger.exception("[Orchestrator] Mission failure: %s", e)
-            sm.transition(MissionState.FAILED)
+            sm.transition(MissionState.FAILED, term=term)
             CognitiveTracer.add_step(request_id, "failed", {"error": str(e)})
             CognitiveTracer.end_trace(request_id, "failed")
             self.active_missions.discard(request_id)
@@ -473,7 +475,7 @@ class Orchestrator:
                 CognitiveTracer.end_trace(request_id, "interrupted")
                 # Mark Central Execution State as failed/interrupted
                 sm = CentralExecutionState(request_id)
-                sm.transition(MissionState.FAILED)
+                sm.transition(MissionState.FAILED, term=dcn_registry.get_gossip().current_term)
                 # Cleanup cache footprint if any
                 get_redis_client().delete(f"mission:state:{request_id}")
             except Exception as e:

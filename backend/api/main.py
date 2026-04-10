@@ -78,12 +78,12 @@ async def lifespan(app: FastAPI):
         from backend.services.learning.hygiene import MemoryPruningManager
         
         # 1. Leader Election & Gossip
-        gossip = DCNGossip()
+        from backend.core.dcn.registry import dcn_registry
+        gossip = dcn_registry.get_gossip()
         create_tracked_task(gossip.start_election_loop(), name="dcn-election-loop")
         
         # 2. State Reconciliation (Anti-Entropy)
-        node_id = os.getenv("DCN_NODE_ID", "node-alpha")
-        consistency = ConsistencyEngine(node_id=node_id)
+        consistency = dcn_registry.get_consistency()
         create_tracked_task(consistency.start_reconciliation_loop(interval=60), name="dcn-reconcile-loop")
         
         # 3. Memory Hygiene (24h cycles)
