@@ -197,6 +197,7 @@ class UserFact(Base):
     category = Column(String, default="general")
     importance = Column(Float, default=0.5)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    is_deleted = Column(Boolean, default=False)
 
     profile = relationship("UserProfile")
 
@@ -387,3 +388,16 @@ class AbortedMission(Base):
     aborted_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     mission = relationship("Mission", back_populates="aborted_record")
+
+class UserCredit(Base):
+    """
+    Sovereign v14.1 Monetization Layer.
+    Tracks user cognitive credits and subscription tier.
+    """
+    __tablename__ = "user_credits"
+
+    user_id = Column(String, primary_key=True, index=True)
+    credits_remaining = Column(Float, default=100.0) # Free credits baseline
+    tier = Column(String, default="seeker") # seeker, pro, creator
+    next_reset_at = Column(DateTime)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

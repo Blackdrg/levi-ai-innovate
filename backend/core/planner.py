@@ -175,7 +175,16 @@ class PolicyEngine:
         return policy
 
     def define_llm_policy(self, mode: BrainMode, risk_level: float) -> LLMPolicy:
+        # v14.1 Latency-Aware Depth Budgeting
+        from .executor.guardrails import capture_resource_pressure
+        pressure = capture_resource_pressure()
+        max_depth = 5 # Production baseline
+        if pressure.get("vram_pressure", 0) > 0.8:
+            max_depth = 3
+            logger.warning("[Policy] Resource pressure high: Capping DAG depth to 3.")
+            
         policy = LLMPolicy(local_only=True, cloud_fallback=False)
+        policy.max_dag_depth = max_depth
         if mode == BrainMode.DEEP and risk_level < 0.5: policy.cloud_fallback = True
         if mode == BrainMode.SECURE:
             policy.local_only = True
@@ -260,8 +269,10 @@ class DAGPlanner:
             logger.info(f"[Planner] Using hardcoded template for intent: {intent_type}")
             graph = self._build_from_static_template(HARD_TEMPLATES[intent_type], user_input, perception, decision)
             if graph:
-                # Enforce Hard Depth Cap
-                max_depth = decision.execution_policy.budget.max_dag_depth if decision else 6
+                # Enforce Hard Depth Cap (v14.1 baseline <= 5)
+                max_depth = 5
+                if decision and hasattr(decision.llm_policy, "max_dag_depth"):
+                    max_depth = decision.llm_policy.max_dag_depth
                 graph.validate_dag(max_depth=max_depth)
                 return graph
 
@@ -291,7 +302,9 @@ class DAGPlanner:
 
         cached_graph = self._restore_cached_template(learned_strategy, user_input, perception)
         if cached_graph is not None:
-            max_depth = decision.execution_policy.budget.max_dag_depth if decision else 8
+            max_depth = 5
+            if decision and hasattr(decision.llm_policy, "max_dag_depth"):
+                max_depth = decision.llm_policy.max_dag_depth
             cached_graph.metadata.update(graph.metadata)
             cached_graph.metadata["template_cache_hit"] = True
             cached_graph.validate_dag(max_depth=max_depth)
@@ -406,7 +419,9 @@ class DAGPlanner:
             ))
 
         # 4. Final Validation
-        max_depth = decision.execution_policy.budget.max_dag_depth if decision else 8
+        max_depth = 5
+        if decision and hasattr(decision.llm_policy, "max_dag_depth"):
+            max_depth = decision.llm_policy.max_dag_depth
         self.validate_graph(graph, max_depth=max_depth)
         graph.metadata["graph_template"] = self._serialize_template(graph)
 

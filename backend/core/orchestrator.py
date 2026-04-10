@@ -154,6 +154,21 @@ class Orchestrator:
                 "retry_after": limit_info['retry_after']
             }
 
+        # 0.2.1 Global Billing Enforcement (v14.1)
+        from backend.services.billing_service import billing_service
+        is_simplicity = kwargs.get("simplicity_mode", False)
+        cost = 1.0 if is_simplicity else 5.0
+        
+        has_credits = await billing_service.deduct_credits(user_id, amount=cost)
+        if not has_credits:
+             sm.transition(MissionState.FAILED)
+             CognitiveTracer.end_trace(request_id, "billing_failure")
+             return {
+                 "response": "Cognitive credits exhausted. Please recharge to continue.",
+                 "status": "billing_error",
+                 "request_id": request_id
+             }
+
         # 0.3 Blue-Green Routing Logic
         active_engine = self.DEPLOYMENT_STRATEGY
         if self.TRAFFIC_SPLIT_PCT > 0:
@@ -191,18 +206,24 @@ class Orchestrator:
             
             # --- START COGNITIVE PIPELINE ---
             MetricsHub.mission_started()
-            
-            # 1. PERCEPTION
+                      # 1. PERCEPTION
             async with traced_span("orchestrator.perception", request_id=request_id):
                 from backend.utils.runtime_tasks import create_tracked_task
                 create_tracked_task(SovereignKafka.emit_event("brain_events", {"event": "MISSION_STARTED", "request_id": request_id}), name=f"kafka-mission-start-{request_id}")
                 
                 # 🛡️ SECURITY GATE (v14.1)
                 from backend.core.security.anomaly_detector import SecurityAnomalyDetector
-                from backend.core.security.alerting import AlertingEngine
-                
-                threat_score = SecurityAnomalyDetector.analyze_payload(user_input)
-                # 0.1 DETERMINISTIC FAST-PATH (v14.1 Evolutionary Intelligence)
+                threat_score = SecurityAnomalyDetector.analyze_payload(user_input, context=kwargs.get("context"))
+                if SecurityAnomalyDetector.should_block(threat_score):
+                    logger.critical(f"[Security] BLOCKING MALICIOUS PAYLOAD for {user_id}. Score: {threat_score}")
+                    sm.transition(MissionState.FAILED)
+                    return {
+                        "response": "Security violation detected. This mission has been quarantined.",
+                        "status": "security_block",
+                        "request_id": request_id
+                    }
+
+                # 0.3 DETERMINISTIC FAST-PATH (v14.1 Evolutionary Intelligence)
                 from .evolution_engine import EvolutionaryIntelligenceEngine
                 evolved_rule = await EvolutionaryIntelligenceEngine.check_rules(user_input)
                 if evolved_rule:
@@ -218,25 +239,25 @@ class Orchestrator:
                                  "status": "success",
                                  "tag": evolved_rule["tag"]
                              }
-                         else:
-                             logger.info("[Orchestrator] 🔍 Deterministic Rule found, but requires Tier-1 Validation. Continuing...")
                 
-                # 0.15 PROBABILISTIC FAST-PATH (v14.1 Legacy Bridge)
-                from .fast_path import FastPathRouter
-                fast_res = await FastPathRouter.try_fast_route(user_input, perception["intent"], user_id, session_id)
-                if fast_res:
-                    logger.info(f"[Orchestrator] ⚡ Probabilistic Fast-Path Triggered for intent: {perception['intent'].intent_type}")
-                    return fast_res
-                
-                # 0.2 Rate Limit Security (Sovereign Tiered)
-                if SecurityAnomalyDetector.should_block(threat_score):
-                    logger.critical(f"[Security] Mission Blocked! Threat Score: {threat_score} | request_id: {request_id}")
-                    await AlertingEngine.send_alert("MISSION_BLOCKED_THREAT", {"request_id": request_id, "score": threat_score, "input": user_input[:50]})
-                    raise Exception(f"Security Violation: Mission blocked by automated guardrails (Score: {threat_score}).")
-
                 perception = await self.perception.perceive(user_input, user_id, session_id, **kwargs)
 
-            # 1.1 FAST PATH (Moved to top of orchestrator handle_mission for performance)
+            # 0.4 ULTRA-LIGHT EXECUTION MODE (v14.1)
+            if (perception["intent"].intent_type == "chat" and perception["intent"].complexity_level <= 1) or is_simplicity:
+                logger.info(f"[Orchestrator] 🕊️ Simplicity/Ultra-Light Mode triggered: {user_input[:20]}...")
+                from .engine import synthesize_response
+                res = await brain_service.call_local_llm(user_input)
+                final_response = res
+                # Minimal audit/sync
+                await self.memory.store(user_id, session_id, user_input, final_response, perception, [], policy=None)
+                sm.transition(MissionState.COMPLETE)
+                return {
+                    "response": final_response,
+                    "request_id": request_id,
+                    "status": "success",
+                    "route": "simplicity"
+                }
+
             # 1.2 CONTEXT PRUNING
             perception["context"] = self._prune_context(perception.get("context", {}), user_id)
 

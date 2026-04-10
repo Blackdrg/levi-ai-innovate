@@ -139,6 +139,27 @@ class BrainService:
         logger.info(f"[BrainService] Policy generated: {policy.policy_id} Mode: {policy.mode}")
         return policy
 
+    async def call_local_llm(self, prompt: str, model: str = "llama3.1:8b") -> str:
+        """Sovereign v14.1: Direct local LLM interface."""
+        from backend.utils.internal_client import internal_client
+        ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
+        
+        try:
+            response = await internal_client.request(
+                "POST", 
+                f"{ollama_url}/api/generate",
+                json_data={
+                    "model": model,
+                    "prompt": prompt,
+                    "stream": False
+                }
+            )
+            response.raise_for_status()
+            return response.json().get("response", "")
+        except Exception as e:
+            logger.error(f"[BrainService] Local LLM call failed: {e}")
+            return f"Error: {str(e)}"
+
     def verify_service_token(self, token: str) -> bool:
         """Validates internal service-to-service token."""
         return token == self.service_token

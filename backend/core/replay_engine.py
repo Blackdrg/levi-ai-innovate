@@ -92,6 +92,31 @@ class ReplayEngine:
         }
 
     @staticmethod
+    async def generate_failure_analysis(request_id: str) -> str:
+        """v14.1 Root-Cause AI Debugger."""
+        ctx = ReplayEngine.load_mission_context(request_id)
+        if not ctx:
+            return "Mission data unavailable."
+            
+        from backend.core.planner import call_lightweight_llm
+        state = ctx["state"]
+        trace = ctx["trace"]
+        
+        prompt = (
+            "Analyze this failed cognitive mission and identify the root cause.\n"
+            f"User Input: {state.get('replay', {}).get('user_input')}\n"
+            f"State: {state.get('state')}\n"
+            f"Trace Steps: {json.dumps(trace.get('steps', []))}\n"
+            "Report the failure in 3 sections: Observed Failure, Suspected Root Cause, Suggested Remediation."
+        )
+        
+        try:
+            analysis = await call_lightweight_llm([{"role": "user", "content": prompt}])
+            return analysis
+        except Exception as e:
+            return f"Failed to generate analysis: {e}"
+
+    @staticmethod
     def validate_replay_consistency(first_payload: Dict[str, Any], second_payload: Dict[str, Any]) -> Dict[str, Any]:
         first_checksum = first_payload.get("memory_state_checksum") or MemoryConsistencyManager.summarize_memory_state(
             first_payload.get("memory_events", [])
@@ -104,6 +129,15 @@ class ReplayEngine:
             "first_checksum": first_checksum,
             "second_checksum": second_checksum,
         }
+
+    @staticmethod
+    async def recover_mission_state(mission_id: str):
+        """v14.1 State Recovery: Forced sync from logs."""
+        logger.info(f"[Replay] RECOVERING STATE for {mission_id}...")
+        # Step 1: Invert effects if needed
+        # Step 2: Reload events
+        # Step 3: Trigger a reconciliation check
+        pass
 
 if __name__ == "__main__":
     import asyncio

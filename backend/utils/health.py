@@ -15,6 +15,7 @@ import httpx
 from backend.agents.registry import AGENT_REGISTRY
 from backend.db.postgres_db import verify_resonance
 from backend.db.redis import HAS_REDIS_ASYNC, r_async
+from backend.utils.internal_client import internal_client
 
 logger = logging.getLogger(__name__)
 
@@ -51,16 +52,15 @@ async def probe_dependencies() -> Dict[str, Any]:
     ollama_error = None
     ollama_tags: list[str] = []
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(f"{ollama_url}/api/tags")
-            response.raise_for_status()
-            body = response.json()
-            ollama_tags = [
-                model.get("name", "")
-                for model in body.get("models", [])
-                if isinstance(model, dict)
-            ]
-            ollama_ok = True
+        response = await internal_client.request("GET", f"{ollama_url}/api/tags")
+        response.raise_for_status()
+        body = response.json()
+        ollama_tags = [
+            model.get("name", "")
+            for model in body.get("models", [])
+            if isinstance(model, dict)
+        ]
+        ollama_ok = True
     except Exception as exc:
         ollama_error = str(exc)
 

@@ -293,6 +293,23 @@ class DCNGossip:
             logger.error(f"[DCN] Election failure: {e}")
             return False
 
+    async def force_re_election(self):
+        """
+        Sovereign v14.1.0: Administrative Failover Trigger.
+        Forces the cluster to undergo a new leader election by incrementing terms.
+        """
+        logger.warning(f"🚨 [DCN] FORCE RE-ELECTION triggered by {self.node_id}.")
+        self.is_coordinator = False
+        self.current_term += 1
+        
+        # Invalidate current leader and broadcast conflict pulse
+        await self.r.delete(self.leader_key)
+        await self.r.delete(f"{self.leader_key}:token")
+        await self.broadcast_pulse({"type": "election_force", "term": self.current_term})
+        
+        # Immediate attempt to re-elect or backoff
+        await self.try_become_coordinator()
+
     async def _handle_leader_conflict(self, peer_node: str, peer_term: int):
         """Resolves leadership conflicts by comparing terms."""
         if self.is_coordinator and peer_term > self.current_term:

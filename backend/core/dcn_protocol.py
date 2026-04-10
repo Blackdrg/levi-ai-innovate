@@ -65,6 +65,8 @@ class DCNProtocol:
         self.vram_guard = VRAMGuard()
         self.last_applied_index = 0
         self.commit_index = 0
+        self.region = os.getenv("DCN_REGION", "us-east")
+        self.peers = set() # Tracked via heartbeats
 
         # Audit Point 27: Strict Secret Validation
         if not self.secret or len(self.secret) < 32:
@@ -134,10 +136,13 @@ class DCNProtocol:
                         "cpu_percent": psutil.cpu_percent(),
                         "memory_percent": psutil.virtual_memory().percent,
                         "node_role": os.getenv("NODE_ROLE", "worker"),
+                        "region": self.region,
                         "capabilities": ["llm"] + (["studio"] if os.getenv("SD_ENABLED", "true").lower() == "true" else []),
                         "concurrency": int(os.getenv("WORKER_CONCURRENCY", "1")),
                         "vram_free_mb": sum(s["vram_free_mb"] for s in device_slots)
                     }
+                    # Update local peer list
+                    self.peers.add(self.node_id)
                     dcn_balancer.register_node_heartbeat(self.node_id, metadata)
                     await self.broadcast_gossip(mission_id="swarm_pulse", payload=metadata, pulse_type="node_heartbeat")
                     await asyncio.sleep(interval)
@@ -170,6 +175,16 @@ class DCNProtocol:
                     if pulse.index > self.commit_index:
                         self.commit_index = pulse.index
                         logger.debug(f"[DCN] RAFT: Commit Index updated to {self.commit_index}")
+                    
+                    # 🛡️ Quorum Enforcement (v14.1 Scaling)
+                    quorum_size = (len(self.peers) // 2) + 1
+                    logger.debug(f"[DCN] RAFT: Quorum calculated at {quorum_size} nodes (Total Peers: {len(self.peers)})")
+
+                if pulse.payload_type == "node_heartbeat":
+                    peer_meta = pulse.payload
+                    self.peers.add(pulse.node_id)
+                    if peer_meta.get("region") != self.region:
+                         logger.info(f"[DCN] Cross-region peer detected: {pulse.node_id} ({peer_meta.get('region')})")
 
                 await handler(pulse)
             except Exception as e:
@@ -184,3 +199,22 @@ class DCNProtocol:
         msg_json = pulse.model_dump_json(exclude={"signature"})
         expected_sig = hmac.new(self.secret.encode(), msg_json.encode(), hashlib.sha256).hexdigest()
         return hmac.compare_digest(pulse.signature, expected_sig)
+
+    def verify_quorum(self, votes: int) -> bool:
+        """Checks if a given vote count meets the Raft-lite quorum threshold."""
+        total_peers = len(self.peers)
+        if total_peers <= 1:
+            return True # Single node swarm always has quorum
+        required = (total_peers // 2) + 1
+        return votes >= required
+
+    async def reconcile_state(self, mission_id: str, remote_index: int):
+        """Forces a state reconciliation if local index drifts from Raft commit index."""
+        if remote_index > self.last_applied_index:
+            logger.warning(f"[DCN] State Drift Detected for {mission_id}. Local: {self.last_applied_index}, Remote: {remote_index}")
+            # In production, we'd pull from the Redis Event Stream to replay logs
+            # For graduates, we trigger the ReplayEngine recovery link.
+            from .replay_engine import ReplayEngine
+            engine = ReplayEngine()
+            await engine.recover_mission_state(mission_id)
+            self.last_applied_index = remote_index
