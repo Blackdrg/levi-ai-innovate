@@ -2,8 +2,8 @@
 """Centralized configuration for LEVI-AI Sovereign OS v14.0.0 Graduation."""
 import os
 
-SOVEREIGN_VERSION = os.getenv("SOVEREIGN_VERSION", "v14.0.0-Autonomous-SOVEREIGN")
-STABILITY_BASELINE_TAG = os.getenv("STABILITY_BASELINE_TAG", "v14.0.0-STABLE-BASELINE")
+SOVEREIGN_VERSION = os.getenv("SOVEREIGN_VERSION", "v14.1.0-Autonomous-SOVEREIGN")
+STABILITY_BASELINE_TAG = os.getenv("STABILITY_BASELINE_TAG", "v14.1.0-STABLE-BASELINE")
 ARCHITECTURE_FREEZE = {
     "agent_registry": "frozen",
     "dag_structure_format": "frozen",

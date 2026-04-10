@@ -1,4 +1,13 @@
 services:
+    # Adding Kafka for Event Bus (Step 2.3)
+  kafka:
+    image: apache/kafka:latest
+    ports:
+      - "29092:29092"
+    environment:
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:29092
+    restart: unless-stopped
+
   # ── Local LLM ──────────────────────────────────────────
   ollama:
     image: ollama/ollama:latest
@@ -32,7 +41,7 @@ services:
     image: postgres:16
     environment:
       POSTGRES_USER: levi
-      POSTGRES_PASSWORD: sovereign_pass
+      POSTGRES_PASSWORD: strongpassword
       POSTGRES_DB: levi_db
     volumes:
       - ${LEVI_DATA_DIR:-./data}/postgres:/var/lib/postgresql/data
@@ -51,7 +60,7 @@ services:
   neo4j:
     image: neo4j:5
     environment:
-      NEO4J_AUTH: neo4j/sovereign_graph
+      NEO4J_AUTH: neo4j/password
       NEO4J_PLUGINS: '["apoc"]'
     volumes:
       - ${LEVI_DATA_DIR:-./data}/neo4j:/data
@@ -61,17 +70,18 @@ services:
 
   # ── App ────────────────────────────────────────────────
   api:
+    image: levi-ai-api:latest
     build:
       context: .
       dockerfile: Dockerfile
     ports:
       - "8000:8080"
     environment:
-      - DATABASE_URL=postgresql+asyncpg://levi:sovereign_pass@postgres:5432/levi_db
+      - DATABASE_URL=postgresql+asyncpg://levi:strongpassword@postgres:5432/levi_db
       - REDIS_URL=redis://redis:6379/0
       - NEO4J_URI=bolt://neo4j:7687
       - NEO4J_USER=neo4j
-      - NEO4J_PASSWORD=sovereign_graph
+      - NEO4J_PASSWORD=password
       - OLLAMA_BASE_URL=http://ollama:11434
       - VECTOR_DB_PATH=/app/vault/vector_hnsw.index
       - SOVEREIGN_SHIELD=true
@@ -103,29 +113,30 @@ services:
       retries: 3
     restart: unless-stopped
 
-  artisan_sandbox:
-    image: levi-sandbox:latest
-    user: "1000:1000"          # non-root user
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    volumes:
-      # Mount Unix socket only — NEVER expose :2375 over TCP
-      - /run/user/1000/docker.sock:/var/run/docker.sock:ro
-    read_only: true
-    tmpfs:
-      - /tmp
+#  artisan_sandbox:
+#    image: levi-sandbox:latest
+#    user: "1000:1000"          # non-root user
+#    security_opt:
+#      - no-new-privileges:true
+#    cap_drop:
+#      - ALL
+#    volumes:
+#      # Mount Unix socket only — NEVER expose :2375 over TCP
+#      - /run/user/1000/docker.sock:/var/run/docker.sock:ro
+#    read_only: true
+#    tmpfs:
+#      - /tmp
 
   # ── Worker ─────────────────────────────────────────────
   worker:
+    image: levi-ai-worker:latest
     build:
       context: .
       dockerfile: Dockerfile
     command: celery -A backend.celery_app worker --loglevel=info -Q missions,agents,learning
     environment:
       - REDIS_URL=redis://redis:6379/0
-      - DATABASE_URL=postgresql+asyncpg://levi:sovereign_pass@postgres:5432/levi_db
+      - DATABASE_URL=postgresql+asyncpg://levi:strongpassword@postgres:5432/levi_db
       # Residency Redirects (v14.0)
       - HF_HOME=${HF_HOME:-/app/model_cache}
       - PIP_CACHE_DIR=${PIP_CACHE_DIR:-/app/data/pip_cache}

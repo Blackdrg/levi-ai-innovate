@@ -62,35 +62,52 @@ class CentralExecutionState:
             return
         redis_client.setex(self._key, 3600, json.dumps(data))
 
-    def initialize(self, initial: MissionState = MissionState.CREATED) -> None:
+    def initialize(self, initial: MissionState = MissionState.CREATED, term: int = 0) -> None:
+        now = time.time()
         data = {
             "mission_id": self.mission_id,
             "trace_id": self.trace_id,
             "user_id": self.user_id,
-            "baseline_tag": "v14.0.0-STABLE-BASELINE",
+            "baseline_tag": "v14.1.0-DCN-ENABLED",
             "state": initial.value,
             "idempotency_key": None,
-            "history": [{"state": initial.value, "ts": time.time()}],
+            "history": [{"state": initial.value, "ts": now}],
             "nodes": {},
             "replay": {},
+            "metadata": {
+                "term": term,
+                "updated_at": now
+            }
         }
         self._save(data)
 
     def attach_metadata(self, **metadata: Any) -> None:
         data = self._load()
-        data.update(metadata)
+        existing_meta = data.get("metadata", {})
+        existing_meta.update(metadata)
+        data["metadata"] = existing_meta
         self._save(data)
 
-    def transition(self, new_state: MissionState) -> bool:
+    def transition(self, new_state: MissionState, term: Optional[int] = None) -> bool:
         data = self._load()
         curr = MissionState(data.get("state", MissionState.CREATED.value))
         allowed = _ALLOWED_TRANSITIONS.get(curr, [])
         if new_state not in allowed and new_state not in [MissionState.FAILED, MissionState.DEAD]:
             return False
+        
+        now = time.time()
         data["state"] = new_state.value
         hist = data.get("history", [])
-        hist.append({"state": new_state.value, "ts": time.time()})
+        hist.append({"state": new_state.value, "ts": now})
         data["history"] = hist
+        
+        # Update DCN Metadata
+        meta = data.get("metadata", {})
+        if term is not None:
+            meta["term"] = max(meta.get("term", 0), term)
+        meta["updated_at"] = now
+        data["metadata"] = meta
+        
         self._save(data)
         return True
 

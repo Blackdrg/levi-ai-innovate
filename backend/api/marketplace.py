@@ -1,4 +1,5 @@
 import logging
+import uuid
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy import select
 from backend.db.postgres_db import get_write_session, get_read_session

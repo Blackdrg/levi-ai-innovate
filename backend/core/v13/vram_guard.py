@@ -10,7 +10,7 @@ from typing import Dict, List, Any
 
 logger = logging.getLogger(__name__)
 
-VRAM_SAFETY_BUFFER_PERCENT = 0.15 # 15% buffer as requested
+VRAM_SAFETY_BUFFER_PERCENT = float(os.getenv("VRAM_SAFETY_BUFFER_PERCENT", "0.15")) # Buffer for VRAM backpressure 
 MIN_FREE_GB = 1.0 # Absolute minimum 1GB free
 
 class VRAMPool:

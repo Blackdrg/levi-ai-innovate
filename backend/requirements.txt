@@ -68,3 +68,4 @@ opentelemetry-instrumentation-fastapi==0.45b0
 opentelemetry-exporter-otlp==1.24.0
 tiktoken==0.7.0
 passlib[bcrypt]==1.7.4
+openai==1.30.1

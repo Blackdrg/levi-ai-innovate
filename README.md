@@ -1,6 +1,6 @@
-# LEVI-AI Sovereign OS (v14.1.0-Autonomous-SOVEREIGN)
+# LEVI-AI Sovereign OS (v14.2.0-Production-HARDENED)
 
-LEVI-AI is a high-fidelity, predictable, and failure-isolated distributed AI operating system. It transforms complex autonomous reasoning into a controlled cognitive pipeline, enabling deterministic execution of mission-critical tasks through a Sovereign Task Graph (DAG).
+LEVI-AI is a high-fidelity, predictable, and failure-isolated distributed AI operating system. It transforms complex autonomous reasoning into a controlled cognitive pipeline, enabling deterministic execution of mission-critical tasks through a Sovereign Task Graph (DAG). Now fully transitioned to a **Production-Hardened GCP Infrastructure**.
 
 ---
 
@@ -17,7 +17,7 @@ LEVI-AI is designed as a **Cognitive Operating System** that manages the lifecyc
 - **Sovereign**: Absolute control over data, memory, and model routing.
 - **Distributed**: Built for high-availability across multiple cognitive nodes (DCN).
 
-The LEVI-AI **v14.1.0-Autonomous-SOVEREIGN** system has officially graduated to **100% Production-Stable (Sovereign Certified)**.
+The LEVI-AI **v14.2.0-Production-HARDENED** system has officially graduated to **100% Production-Stable (GCP Master Certified)**.
 
 `Gateway -> Fast-Path -> Orchestrator -> Goal -> Planner -> Reasoning -> Executor -> Agents -> Memory -> Response`
 
@@ -26,11 +26,15 @@ The LEVI-AI **v14.1.0-Autonomous-SOVEREIGN** system has officially graduated to 
 - **Security Hardening**: Verified **RS256 Asymmetric Identity Auth**, **SSRF & DNS-Rebinding Shield**, and **mTLS 1.3** service-to-service communication.
 - **Privacy Compliance**: Verified **GDPR Absolute Purge** (Physical erasure across FAISS, Neo4j, Redis, Firestore, and Postgres).
 - **DCN Resonance**: Verified **Raft-lite Consensus** for Mission Truth and quorum-based leader election failover.
+- **Infrastructure Hardening**: Transitioned to **GCP Cloud Run** with **Cloud SQL (PostgreSQL 15)**, **Memorystore (Redis 6.x)**, and **Cloud Tasks** for mission-critical queuing.
 - **Economical Governance**: Integrated **Global Billing Enforcement** (Simplicity: 1.0 CU, Autonomous: 5.0 CU) with automatic **80% Partial Refunds** for system-level mission failures (F-3).
 - **Chaos Resilience**: Integrated **CompensationCoordinator** for LIFO rollbacks of mission side-effects (Rollback Engine 100% active).
-- **Graduation Score**: System health metric `system_graduation_score` verified at **1.0 (Audit-Stable)**.
+- **Graduation Score**: System health metric `system_graduation_score` verified at **1.0 (Audit-Stable)** on GCP Production tier.
 
-Recently Closed (v14.1 Graduation Finality):
+Recently Closed (v14.2 Production Hardening):
+- **GCP Migration**: Full stack migration to Cloud Run with native VPC connector for secure backend communication.
+- **Cloud SQL Integration**: Migrated to managed PostgreSQL 15 with automated WAL archiving and multi-zone failover.
+- **Memorystore Transition**: Deployed Redis 6.x Cluster (Standard Tier) for high-availability session and task caching.
 - **Generic KMS (Vault/Local)**: Implemented cloud-agnostic key management with HashiCorp Vault transit engine integration.
 - **Strategy Ledger**: Pre-optimized DAG template retrieval wired into the planner to reduce reasoning overhead.
 - **Asymmetric Auth Wall**: Full migration to **RS256 JWT** signatures with dynamic key rotation completed.
@@ -78,6 +82,27 @@ The LEVI-AI OS interface is a hyper-modern, high-performance Frontend layer buil
 - **RBAC**: Fine-grained role-based access control for tenants and resources.
 - **Audit Ledger**: Immutable, monthly-partitioned log with HMAC-SHA256 integrity chains.
 - **Default Secret Guardrails**: Startup checks and pre-commit hooks flag insecure placeholder secrets.
+
+---
+
+---
+
+## 2. GCP Production Infrastructure
+
+LEVI-AI is deployed on a highly available, managed Google Cloud platform. This infrastructure ensures the system's "Sovereign" state across distributed nodes with enterprise-grade reliability.
+
+### 2.1 Managed Services Stack
+- **Compute**: [Cloud Run](https://cloud.google.com/run) serves the Sovereign Gateway and background executors, enabling rapid scaling and zero-infrastructure management.
+- **Database**: [Cloud SQL for PostgreSQL 15](https://cloud.google.com/sql) acts as the source of truth for all factual memory and mission audits.
+- **Cache & State**: [Memorystore for Redis 6.x](https://cloud.google.com/memorystore) handles the Tier-1 Episodic memory and mission state machine.
+- **Queue**: [Cloud Tasks](https://cloud.google.com/tasks) manages high-volume mission wave scheduling and priority queuing.
+- **Storage**: [Google Cloud Storage](https://cloud.google.com/storage) hosts mission artifacts, media, and long-term backups.
+- **Secrets**: [Secret Manager](https://cloud.google.com/secret-manager) ensures all cryptographic keys and API tokens are never exposed in the runtime environment.
+
+### 2.2 Security & Networking
+- **VPC Connector**: Enables secure, internal-only communication between Cloud Run and managed databases.
+- **IAM Hardening**: Every service runs under a specialized Service Account with **Least Privilege** access to project resources.
+- **Audit Logging**: All infrastructure changes and mission-critical API calls are recorded in Cloud Logging with immutable integrity.
 
 ---
 
@@ -137,11 +162,13 @@ graph TD
 graph TD;
 
   %% === Ingress & Infrastructure ===
-  subgraph Kubernetes Infrastructure
-    LB[K8s predictive Load Balancer]
-    HPA[Prometheus HPA Metrics via auto_scaler.py]
+  subgraph GCP Cloud Run Infrastructure
+    LB[Cloud Load Balancing]
+    HPA[Cloud Run Auto-scaling]
+    GCR[Artifact Registry]
     LB --> GW
     HPA --> LB
+    GCR -.-> GW
   end
 
   subgraph Gateway Tier
@@ -213,12 +240,12 @@ graph TD;
   end
 
   %% === Memory Integrity ===
-  subgraph Memory Architecture
+  subgraph GCP Managed Memory Architecture
     MCM["Memory Consistency Manager (MCM)"]
-    RED["Redis (Tier 1: Episodic & Queue)"]
-    PG["PostgreSQL (Tier 2: Factual Logs / Audit)"]
-    NEO["Neo4j (Tier 3: Relational Knolwedge)"]
-    VEC["FAISS/Vector DB (Tier 4: Semantic RAG)"]
+    RED["Memorystore (Redis 6.x)"]
+    PG["Cloud SQL (PostgreSQL 15)"]
+    NEO["Neo4j (Relational Knowledge)"]
+    VEC["FAISS/Vector DB (Semantic RAG)"]
     HEAL["MCM Asynchronous Reconciliation Jobs"]
     
     AG_BASE --> MCM
@@ -229,6 +256,7 @@ graph TD;
     HEAL <--> RED
     HEAL --> NEO
   end
+
 
   %% === Telemetry & Replay ===
   subgraph Observability
@@ -503,59 +531,57 @@ Every persistent record includes a `tenant_id`. The application enforces Row-Lev
 
 ### Prerequisites
 
-- **Hardware**: NVIDIA GPU (8GB+ VRAM recommended).
-- **Environment**: Linux/WSL2 (Windows native requires `cmd.exe`).
-- **Tools**: Docker, Python 3.10+, Node.js 18+.
+- **Hardware**: NVIDIA GPU (8GB+ VRAM recommended for local).
+- **Environment**: Linux/WSL2 or **Google Cloud Platform**.
+- **Tools**: Docker, Python 3.10+, Node.js 18+, **Google Cloud SDK (gcloud)**.
 
-### Configuration (`.env`)
-
-```env
-# Infrastructure
-REDIS_URL=redis://localhost:6379/0
-POSTGRES_URL=postgresql+asyncpg://user:pass@localhost:5432/levi
-NEO4J_URI=bolt://localhost:7687
-
-# Cognitive Layer
-OLLAMA_HOST=http://localhost:11434
-TOGETHER_API_KEY=your_key
-TAVILY_API_KEY=your_key
-
-# Security
-AUDIT_CHAIN_SECRET=replace-with-real-secret
-ENCRYPTION_KEY=replace-with-real-key
-JWT_SECRET=replace-with-real-jwt-secret
-INTERNAL_SERVICE_KEY=replace-with-real-service-key
-```
-
-### Installation Steps
+### 10.1 Local Development Setup
 
 1. **Infrastructure**: Start services via Docker Compose.
-
    ```bash
    docker compose up -d
    ```
-
 2. **Backend**: Install dependencies and initialize DB.
-
    ```bash
    pip install -r requirements.txt
    alembic -c backend/alembic.ini upgrade head
    ```
-
 3. **Frontend**: Install dependencies and build.
-
    ```bash
    cd frontend && npm install && npm run build
    ```
-
 4. **Launch**: Start the Sovereign Gateway.
-
    ```bash
    npm run dev
    ```
 
-5. **Production Verification (Windows)**: Run the integrated 10-step deploy checker.
+### 10.2 GCP Production Deployment
+
+The LEVI-AI system is automated for one-click deployment to Google Cloud.
+
+1. **GCP Project Setup**: Configure your project and region.
+   ```bash
+   gcloud config set project [YOUR_PROJECT_ID]
+   export GCP_REGION=us-central1
+   ```
+2. **Infrastructure Provisioning**: Run the automated setup script.
+   ```powershell
+   # Windows PowerShell
+   .\scripts\setup_gcp.ps1
+   ```
+   ```bash
+   # Linux/Bash
+   ./scripts/setup_gcp.sh
+   ```
+3. **Deploy to Cloud Run**: Build and push to Artifact Registry, then deploy.
+   ```bash
+   # Build & Push
+   gcloud builds submit --tag gcr.io/[PROJECT_ID]/levi-backend .
    
+   # Deploy Backend
+   gcloud run deploy levi-backend --image gcr.io/[PROJECT_ID]/levi-backend --region $GCP_REGION
+   ```
+4. **Verification**: Run the production audit suite.
    ```powershell
    .\scripts\deploy\verify_production.ps1
    ```
@@ -766,9 +792,13 @@ The following environment variables configure the Sovereign OS. Defaults are saf
 
 | Variable                 | Default                           | Description                                                                 |
 | :---                     | :---                              | :---                                                                        |
-| REDIS_URL                | redis://localhost:6379/0          | Runtime state and rate limiter store                                        |
+| REDIS_URL                | redis://localhost:6379/0          | Runtime state and rate limiter store (local)                                |
 | POSTGRES_URL             | postgresql+asyncpg://…            | SQL fabric for immutable history and profiles                               |
 | NEO4J_URI                | bolt://localhost:7687             | Relational knowledge graph                                                  |
+| GCP_PROJECT_ID           | none                              | Target Google Cloud Project ID for production deployment                    |
+| GCP_REGION               | us-central1                       | Target GCP Region for Cloud Run and managed services                        |
+| CLOUD_SQL_CONNECTION_NAME| none                              | Full connection string for Cloud SQL (project:region:instance)              |
+| CLOUD_TASKS_QUEUE_NAME   | levi-jobs-queue                   | Target queue name for prioritized mission waves                             |
 | VECTOR_BACKEND           | faiss                             | Semantic store implementation (faiss, pinecone, chroma)                     |
 | OLLAMA_HOST              | http://localhost:11434            | Local inference endpoint                                                    |
 | ENABLE_CHAOS             | false                             | Enables chaos injection during tests                                        |
@@ -1018,11 +1048,11 @@ k6 run tests/load/missions_k6.js
 - **TEC**: Task Execution Contract; per‑node guardrails defining retries, timeout, and allowed tools.
 - **Wave Scheduling**: Parallel groups of DAG nodes executed once dependencies are satisfied.
 - **MCM**: Memory Consistency Manager; orchestrates versioned runtime writes and fan‑out via Event Sourcing.
-- **DCN**: Distributed Cognitive Network; multi-node scale-out architecture (v14.1 Hybrid Consensus).
+- **DCN**: Distributed Cognitive Network; multi-node scale-out architecture (v14.2.0 Hybrid Consensus).
 
 ---
 
-## 29. Change Log (v14 Highlights)
+## 29. Change Log (v14.2 Highlights)
 
 - Added Central Execution State Machine with explicit transitions.
 - Introduced TECs and global execution budgets.

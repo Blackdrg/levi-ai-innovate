@@ -9,6 +9,7 @@ import asyncio
 import json
 import os
 import time
+from typing import Any, Dict, List, Optional, Set
 from enum import Enum
 from ..orchestrator_types import ToolResult, IntentResult, AgentResult
 from ..tool_registry import call_tool
@@ -232,6 +233,8 @@ class GraphExecutor:
         start_time = asyncio.get_event_loop().time()
         # 0. Override Policy Constraints
         max_retries = 1
+        agent_name = node.agent
+        memory_scope = getattr(node, "memory_scope", "task")
         if node.contract:
             max_retries = node.contract.max_retries
         elif policy:
@@ -548,7 +551,43 @@ class GraphExecutor:
                         delay = compute_backoff_delay(attempts, retry_strategy)
                         
                     await asyncio.sleep(delay)
-                    
+            
+            # formal lifecycle: FAILED
+            node.state = NodeState.FAILED
+            compensation = await self._run_compensation(node, mission_id=mission_id, agent_name=agent_name, error=last_error, mission_sm=mission_sm)
+            if compensation:
+                 node.state = NodeState.COMPENSATED
+
+            if mission_sm:
+                mission_sm.record_node(node.id, "failed", {"agent": agent_name, "error": last_error})
+                
+            fallback_output = getattr(node, "fallback_output", None) or {}
+            logger.error(
+                "executor_node_failed",
+                extra={
+                    "trace_id": mission_id,
+                    "mission_id": mission_id,
+                    "node_id": node.id,
+                    "agent": agent_name,
+                    "status": "failed",
+                    "duration_ms": int((asyncio.get_event_loop().time() - start_time) * 1000),
+                },
+            )
+            return ToolResult(
+                success=False,
+                error=f"Max retries exceeded: {last_error}",
+                agent=agent_name,
+                message=fallback_output.get("message", ""),
+                data={
+                    "fallback_output": fallback_output,
+                    "compensation_action": getattr(node, "compensation_action", None),
+                    "compensation": compensation,
+                },
+            )
+
+        finally:
+            AgentSandbox.deactivate(sandbox_token)
+
     async def _categorize_failure(self, error: str) -> str:
         """v14.1 Failure Classification."""
         err_lower = error.lower()
@@ -557,38 +596,6 @@ class GraphExecutor:
         if "timeout" in err_lower or "unreachable" in err_lower or "rate limit" in err_lower:
             return "F-3" # System
         return "F-2" # Logic/Grounding (Default)
-        # formal lifecycle: FAILED
-        node.state = NodeState.FAILED
-        compensation = await self._run_compensation(node, mission_id=mission_id, agent_name=agent_name, error=last_error, mission_sm=mission_sm)
-        if compensation:
-             node.state = NodeState.COMPENSATED
-
-        if mission_sm:
-            mission_sm.record_node(node.id, "failed", {"agent": agent_name, "error": last_error})
-            
-        fallback_output = getattr(node, "fallback_output", None) or {}
-        logger.error(
-            "executor_node_failed",
-            extra={
-                "trace_id": mission_id,
-                "mission_id": mission_id,
-                "node_id": node.id,
-                "agent": agent_name,
-                "status": "failed",
-                "duration_ms": int((asyncio.get_event_loop().time() - start_time) * 1000),
-            },
-        )
-        return ToolResult(
-            success=False,
-            error=f"Max retries exceeded: {last_error}",
-            agent=agent_name,
-            message=fallback_output.get("message", ""),
-            data={
-                "fallback_output": fallback_output,
-                "compensation_action": getattr(node, "compensation_action", None),
-                "compensation": compensation,
-            },
-        )
 
     async def _run_compensation(
         self,
