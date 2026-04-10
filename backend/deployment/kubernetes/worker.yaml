@@ -29,6 +29,17 @@ spec:
           limits:
             cpu: "2000m"
             memory: "8Gi" # Higher for heavy agent tasks
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/sh", "-c", "sleep 10"]
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app: levi-worker
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
@@ -40,7 +51,7 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: levi-worker
-  minReplicas: 2
+  minReplicas: 3
   maxReplicas: 20 # Highly scalable workers
   metrics:
   - type: Resource
@@ -49,3 +60,15 @@ spec:
       target:
         type: Utilization
         averageUtilization: 80
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: levi-worker-pdb
+  namespace: sovereign
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: levi-worker
+---

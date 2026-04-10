@@ -27,3 +27,31 @@ groups:
         annotations:
           summary: "P95 node latency breach"
           description: "P95 node latency exceeded 1500ms for 5 minutes."
+
+      - alert: LeviSLOBurnRateHigh
+        expr: (sum(rate(mission_failures_total[1h])) / sum(rate(mission_requests_total[1h]))) > 0.05
+        for: 10m
+        labels:
+          severity: critical
+          pagerduty: service_one
+        annotations:
+          summary: "High SLO Error Budget Burn"
+          description: "Mission error rate is above 5% over the last hour."
+
+      - alert: LeviVRAMSaturation
+        expr: (gpu_vram_used_mb / gpu_vram_total_mb) > 0.85
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "GPU VRAM Saturation"
+          description: "VRAM usage is above 85% for more than 5 minutes. Backpressure expected."
+
+      - alert: LeviDLQDepthSpike
+        expr: celery_queue_length{queue="dlq"} > 10
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "DLQ Depth Spike"
+          description: "Dead Letter Queue has more than 10 messages. Manual intervention required."

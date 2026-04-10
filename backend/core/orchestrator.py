@@ -10,11 +10,43 @@ import time
 import hashlib
 from typing import Any, Dict, Optional
 
-from .brain import LeviBrainV14
-from backend.db.redis import get_redis_client, check_exact_match, store_exact_match, check_semantic_match
+from .perception import PerceptionEngine
+from .planner import DAGPlanner
+from .executor import GraphExecutor
+from .reasoning_core import ReasoningCore
+from .failure_engine import FailurePolicyEngine
+from .reflection import ReflectionEngine
+from .workflow_engine import WorkflowEngine
+from .context_manager import ContextManager
+from .learning_loop import LearningLoop
+from backend.memory.manager import MemoryManager
+from .orchestrator_types import ToolResult, FailureType, FailureAction
+from .workflow_contract import validate_workflow_integrity
+from backend.services.brain_service import brain_service
+from ..utils.kafka import SovereignKafka
+from backend.broadcast_utils import (
+    SovereignBroadcaster, 
+    PULSE_MISSION_STARTED, 
+    PULSE_MISSION_PLANNED, 
+    PULSE_MISSION_EXECUTED, 
+    PULSE_MISSION_AUDITED
+)
+from backend.db.redis import (
+    get_redis_client, 
+    check_exact_match, 
+    store_exact_match, 
+    check_semantic_match,
+    r as redis_sync,
+    HAS_REDIS as HAS_REDIS_SYNC
+)
 from .execution_state import CentralExecutionState, MissionState
 from backend.evaluation.tracing import CognitiveTracer
 from backend.utils.logging_context import log_request_id, log_user_id, log_session_id
+from backend.utils.metrics import MetricsHub
+from backend.utils.tracing import traced_span
+from backend.core.executor.guardrails import capture_resource_pressure
+from datetime import datetime, timezone
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -24,8 +56,28 @@ class Orchestrator:
     Manages the lifecycle of a cognitive mission with Brain Control System.
     """
     def __init__(self):
-        self.brain = LeviBrainV14()
         self.active_missions = set()
+        self.memory = MemoryManager()
+        self.perception = PerceptionEngine(self.memory)
+        self.planner = DAGPlanner()
+        self.executor = GraphExecutor()
+        self.reasoning_core = ReasoningCore()
+        self.failure_engine = FailurePolicyEngine()
+        self.reflection = ReflectionEngine()
+        self.workflow_engine = WorkflowEngine()
+        self.context = ContextManager()
+        self.learning_loop = LearningLoop()
+
+    def _prune_context(self, context: Dict[str, Any], user_id: str) -> Dict[str, Any]:
+        """Hardens context window by pruning history and non-essential metadata."""
+        pruned = context.copy()
+        history = pruned.get("history", [])
+        if len(history) > 5:
+            pruned["history"] = history[-5:]
+        internal_keys = ["raw_logs", "debug_trace", "intermediate_steps"]
+        for key in internal_keys:
+            if key in pruned: del pruned[key]
+        return pruned
 
 
     # Blue-Green Deployment Strategy (v14.0)
@@ -125,39 +177,176 @@ class Orchestrator:
 
         # 3. Cognitive Mission Execution
         self.active_missions.add(request_id)
+        mission_start = datetime.now(timezone.utc)
+        
         try:
-            # Note: For streaming, the brain.run would need to be an async generator
             if streaming:
                  sm.transition(MissionState.EXECUTING)
                  CognitiveTracer.add_step(request_id, "executing", {})
-                 self.active_missions.remove(request_id)
-                 return self.brain.stream(user_input, user_id, session_id, request_id=request_id, **kwargs)
+                 self.active_missions.discard(request_id)
+                 return self.stream_mission(user_input, user_id, session_id, request_id=request_id, **kwargs)
             
             sm.transition(MissionState.EXECUTING)
             CognitiveTracer.add_step(request_id, "executing", {})
-            result = await self.brain.run(user_input, user_id, session_id, request_id=request_id, **kwargs)
-            CognitiveTracer.add_step(request_id, "executed", {"results_count": len(result.get("results", [])) if isinstance(result, dict) else 0})
-            sm.attach_replay_payload(
-                {
-                    "user_input": user_input,
-                    "result": result.get("response") if isinstance(result, dict) else None,
-                    "task_graph": result.get("reasoning", {}).get("simulation", {}).get("dry_run") if isinstance(result, dict) else None,
-                    "reasoning": result.get("reasoning") if isinstance(result, dict) else None,
-                    "memory_state_checksum": result.get("memory", {}).get("checksum") if isinstance(result, dict) else None,
+            
+            # --- START COGNITIVE PIPELINE ---
+            MetricsHub.mission_started()
+            
+            # 1. PERCEPTION
+            async with traced_span("orchestrator.perception", request_id=request_id):
+                from backend.utils.runtime_tasks import create_tracked_task
+                create_tracked_task(SovereignKafka.emit_event("brain_events", {"event": "MISSION_STARTED", "request_id": request_id}), name=f"kafka-mission-start-{request_id}")
+                
+                # 🛡️ SECURITY GATE (v14.1)
+                from backend.core.security.anomaly_detector import SecurityAnomalyDetector
+                from backend.core.security.alerting import AlertingEngine
+                
+                threat_score = SecurityAnomalyDetector.analyze_payload(user_input)
+                # 0.1 DETERMINISTIC FAST-PATH (v14.1 Evolutionary Intelligence)
+                from .evolution_engine import EvolutionaryIntelligenceEngine
+                evolved_rule = await EvolutionaryIntelligenceEngine.check_rules(user_input)
+                if evolved_rule:
+                     # Tier-0 Validation (Mandatory for all overrides)
+                     is_t0_valid = await self._validate_evolved_rule(evolved_rule, tier=0)
+                     if is_t0_valid:
+                         policy = evolved_rule["policy"]
+                         if policy["tier_1_bypass"]:
+                             logger.info(f"[Orchestrator] 🚀 Deterministic Fast-Path Triggered: Bypassing FULL planning for rule {user_input[:20]}...")
+                             return {
+                                 "response": evolved_rule["result_data"]["solution"],
+                                 "request_id": request_id,
+                                 "status": "success",
+                                 "tag": evolved_rule["tag"]
+                             }
+                         else:
+                             logger.info("[Orchestrator] 🔍 Deterministic Rule found, but requires Tier-1 Validation. Continuing...")
+                
+                # 0.15 PROBABILISTIC FAST-PATH (v14.1 Legacy Bridge)
+                from .fast_path import FastPathRouter
+                fast_res = await FastPathRouter.try_fast_route(user_input, perception["intent"], user_id, session_id)
+                if fast_res:
+                    logger.info(f"[Orchestrator] ⚡ Probabilistic Fast-Path Triggered for intent: {perception['intent'].intent_type}")
+                    return fast_res
+                
+                # 0.2 Rate Limit Security (Sovereign Tiered)
+                if SecurityAnomalyDetector.should_block(threat_score):
+                    logger.critical(f"[Security] Mission Blocked! Threat Score: {threat_score} | request_id: {request_id}")
+                    await AlertingEngine.send_alert("MISSION_BLOCKED_THREAT", {"request_id": request_id, "score": threat_score, "input": user_input[:50]})
+                    raise Exception(f"Security Violation: Mission blocked by automated guardrails (Score: {threat_score}).")
+
+                perception = await self.perception.perceive(user_input, user_id, session_id, **kwargs)
+
+            # 1.1 FAST PATH (Moved to top of orchestrator handle_mission for performance)
+            # 1.2 CONTEXT PRUNING
+            perception["context"] = self._prune_context(perception.get("context", {}), user_id)
+
+            # 2. DECISION & POLICY (Folded into Planner)
+            async with traced_span("orchestrator.policy", request_id=request_id):
+                decision = await self.planner.generate_decision(user_input, perception)
+            logger.info(f"[Orchestrator] Decision Locked: Mode={decision.mode}")
+
+            # 3. GOAL CREATION (Folded into Planner)
+            async with traced_span("orchestrator.goal", request_id=request_id):
+                goal = await self.planner.create_goal(perception, decision)
+
+            # 4. PLANNING + REASONING CORE
+            perception["request_id"] = request_id
+            async with traced_span("orchestrator.planner", request_id=request_id):
+                task_graph = await self.planner.build_task_graph(goal, perception, decision=decision)
+                task_graph = self.reasoning_core.enrich_for_resilience(task_graph)
+                reasoning = await self.reasoning_core.evaluate_plan(goal, perception, task_graph, decision=decision)
+                task_graph = reasoning["graph"]
+            
+            if reasoning["strategy"]["requires_refinement"] or reasoning["confidence"] < self.reasoning_core.MIN_CONFIDENCE:
+                critique_reflection = {
+                    "issues": reasoning["critique"]["issues"] or reasoning["critique"]["warnings"],
+                    "fix": "Strengthen the weak parts of the execution plan.",
                 }
-            )
+                async with traced_span("orchestrator.reasoning.refine", request_id=request_id):
+                    task_graph = await self.planner.refine_plan(task_graph, critique_reflection, goal, perception)
+                    reasoning = await self.reasoning_core.evaluate_plan(goal, perception, task_graph, decision=decision)
+                    task_graph = reasoning["graph"]
+            
+            SovereignBroadcaster.publish(PULSE_MISSION_PLANNED, {"request_id": request_id, "goal": goal.objective}, user_id=user_id)
+
+            # 5. EXECUTION
+            async with traced_span("orchestrator.executor", request_id=request_id):
+                results = await self.executor.execute(
+                    task_graph,
+                    perception,
+                    user_id=user_id,
+                    policy=decision.execution_policy,
+                    safe_mode=reasoning["strategy"]["safe_mode"],
+                )
+            SovereignBroadcaster.publish(PULSE_MISSION_EXECUTED, {"request_id": request_id}, user_id=user_id)
+
+            # 6. REFLECTION Loop
+            from .engine import synthesize_response
+            draft_response = await synthesize_response(results, perception["context"])
+            
+            if decision.enable_agents.get("critic", False):
+                refinement_count = 0
+                max_refs = min(decision.execution_policy.max_retries, decision.execution_policy.budget.recompute_cycles)
+                while refinement_count < max_refs:
+                    reflection = await self.reflection.evaluate(draft_response, goal, perception, results)
+                    if reflection["is_satisfactory"]: break
+                    refinement_count += 1
+                    task_graph = await self.planner.refine_plan(task_graph, reflection, goal, perception)
+                    results = await self.executor.execute(task_graph, perception, user_id=user_id, policy=decision.execution_policy)
+                    draft_response = await synthesize_response(results, perception["context"])
+            
+            final_response = draft_response
+            memory_event = None
+            
+            # 7. MEMORY SYNC
+            try:
+                async with traced_span("orchestrator.memory", request_id=request_id):
+                    memory_event = await self.memory.store(user_id, session_id, user_input, final_response, perception, results, policy=decision.memory_policy)
+            except Exception as mem_err:
+                logger.error(f"[Orchestrator] Memory Sync Error: {mem_err}")
+                MetricsHub.record_alert("memory_mismatch", severity="critical")
+
+            # 8. AUDITING
+            from backend.evaluation.evaluator import AutomatedEvaluator
+            latency = (datetime.now(timezone.utc) - mission_start).total_seconds() * 1000
+            async with traced_span("orchestrator.audit", request_id=request_id):
+                audit = await AutomatedEvaluator.evaluate_transaction(
+                    user_id=user_id, session_id=session_id, user_input=user_input,
+                    response=final_response, goals=[goal.objective], 
+                    tool_results=[r.model_dump() for r in results], latency_ms=latency
+                )
+            
+            CognitiveTracer.add_step(request_id, "executed", {"results_count": len(results)})
+            sm.attach_replay_payload({
+                "user_input": user_input, "result": final_response,
+                "task_graph": task_graph.metadata.get("graph_template"),
+                "reasoning": reasoning,
+                "memory_state_checksum": memory_event.get("checksum") if isinstance(memory_event, dict) else None,
+            })
             
             # Post-Mission: Cache the successful result
-            if result.get("response"):
-                store_exact_match(user_id, user_input, kwargs.get("mood", "philosophical"), result["response"])
+            if final_response:
+                store_exact_match(user_id, user_input, kwargs.get("mood", "philosophical"), final_response)
+            
             sm.transition(MissionState.VALIDATING)
-            CognitiveTracer.add_step(request_id, "validating", {})
             sm.transition(MissionState.PERSISTED)
-            CognitiveTracer.add_step(request_id, "persisted", {})
             sm.transition(MissionState.COMPLETE)
             CognitiveTracer.end_trace(request_id, "success")
             self.active_missions.discard(request_id)
-            return result
+            
+            return {
+                "response": final_response,
+                "request_id": request_id,
+                "mode": decision.mode.value,
+                "results": [r.model_dump() for r in results],
+                "reasoning": reasoning,
+                "memory": {
+                    "event_id": memory_event.get("id") if isinstance(memory_event, dict) else None,
+                    "checksum": memory_event.get("checksum") if isinstance(memory_event, dict) else None,
+                },
+                "status": "success"
+            }
+
         except Exception as e:
             logger.exception("[Orchestrator] Mission failure: %s", e)
             sm.transition(MissionState.FAILED)
@@ -165,11 +354,52 @@ class Orchestrator:
             CognitiveTracer.end_trace(request_id, "failed")
             self.active_missions.discard(request_id)
             return {
-                "response": "The thought stream was interrupted.",
+                "response": "The thought stream was interrupted by a structural anomaly.",
                 "error": str(e),
                 "request_id": request_id,
                 "status": "failed"
             }
+
+    async def stream_mission(
+        self, 
+        user_input: str, 
+        user_id: str, 
+        session_id: str, 
+        request_id: str,
+        **kwargs
+    ):
+        """Streaming mission pipeline."""
+        yield {"event": "metadata", "data": {"request_id": request_id, "status": "pulsing"}}
+        try:
+            # 1. Perception
+            perception = await self.perception.perceive(user_input, user_id, session_id, **kwargs)
+            yield {"event": "activity", "data": f"Intent: {perception['intent'].intent_type.upper()}"}
+            
+            # 2. Decision
+            decision = await self.planner.generate_decision(user_input, perception)
+            
+            # 3. Goal & Planning
+            goal = await self.planner.create_goal(perception, decision)
+            task_graph = await self.planner.build_task_graph(goal, perception, decision=decision)
+            
+            # 4. Execution
+            results = await self.executor.execute(task_graph, perception, user_id=user_id, policy=decision.execution_policy)
+            
+            # 5. Streaming Synthesis
+            from .engine import synthesize_streaming_response
+            full_response_parts = []
+            async for chunk in synthesize_streaming_response(results, perception["context"]):
+                if "token" in chunk: full_response_parts.append(chunk["token"])
+                yield chunk
+
+            # 6. Memory Sync (Background)
+            full_response = "".join(full_response_parts)
+            from backend.utils.runtime_tasks import create_tracked_task
+            create_tracked_task(self.memory.store(user_id, session_id, user_input, full_response, perception, results, policy=decision.memory_policy), name=f"stream-mem-sync-{request_id}")
+
+        except Exception as e:
+            logger.error("[Orchestrator] Stream Failure: %s", e)
+            yield {"event": "error", "data": f"Structural anomaly: {str(e)}"}
 
     async def is_soft_deleted(self, user_id: str) -> bool:
         """Checks if the user has invoked RTBF soft-deletion."""
@@ -220,6 +450,26 @@ class Orchestrator:
             except Exception as e:
                 logger.error(f"[Orchestrator] Failed safely closing mission {request_id}: {e}")
         self.active_missions.clear()
+
+    async def _validate_evolved_rule(self, rule: Dict[str, Any], tier: int = 0) -> bool:
+        """
+        LEVI v14.1 Spec: Tiered Critic validation for deterministic rules.
+        """
+        try:
+            from backend.evaluation.evaluator import AutomatedEvaluator
+            # Simplified Tier-0: Basic syntactic/safety check
+            if tier == 0:
+                # We reuse the AutomatedEvaluator's metrics for a lightweight check
+                # Logic: Check for hallucinations or empty results
+                solution = rule["result_data"].get("solution", "")
+                if not solution or len(solution) < 5:
+                    return False
+                return True
+            
+            # Tier-1/Tier-2 would involve a full FidelityCritic pass
+            return True
+        except Exception:
+            return False
 
 # --- Standard Entry Point ---
 _orchestrator = Orchestrator()

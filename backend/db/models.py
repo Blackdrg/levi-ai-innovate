@@ -290,6 +290,38 @@ class TrainingPattern(Base):
     is_trained = Column(Boolean, default=False) # Flag for LoRA promotion
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
+class GraduatedRule(Base):
+    """
+    Sovereign v14.1 Evolved Deterministic Rules.
+    High-fidelity patterns promoted to hard-coded rules for the fast-path.
+    """
+    __tablename__ = "graduated_rules"
+
+    id = Column(Integer, primary_key=True)
+    task_pattern = Column(Text, unique=True, index=True, nullable=False)
+    result_data = Column(JSON, nullable=False) # {"solution": "...", "metadata": {...}}
+    fidelity_score = Column(Float, nullable=False)
+    uses_count = Column(Integer, default=0)
+    is_stable = Column(Boolean, default=False) # Promotion flag (hits >= N)
+    last_validated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+class FragilityIndex(Base):
+    """
+    Sovereign v14.1 Cognitive Fragility Tracker.
+    Monitors failure rates across intent domains to drive deep reasoning.
+    """
+    __tablename__ = "fragility_index"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(String, index=True)
+    domain = Column(String, index=True) # e.g. "code", "search", "creative"
+    failure_count = Column(Integer, default=0)
+    success_streak = Column(Integer, default=0)
+    weighted_fidelity = Column(Float, default=1.0)
+    fragility_score = Column(Float, default=0.0) # Calculated domain fragility
+    last_updated = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
 class CriticCalibration(Base):
     """
     Sovereign v14.0 Bias Correction Ledger.

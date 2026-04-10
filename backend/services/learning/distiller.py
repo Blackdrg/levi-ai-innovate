@@ -35,15 +35,24 @@ class MemoryDistillerV13:
         })
 
         try:
-            # 2. Extract Episodic Fragments (HNSW Vault)
-            vault = VectorStoreV13()
-            fragments = await vault.search(user_id, "user traits and preferences", limit=20)
-            
             if len(fragments) < 3:
+                # 2.1 Evolved Patterns & Successes (v14.1 Evolution Engine)
+                pass # Continue to evolved patterns check
+
+            evolved_data = []
+            async with get_write_session() as session:
+                # Fetch recent high-fidelity patterns
+                stmt = text("SELECT query, result FROM training_corpus WHERE fidelity_score > 0.95 LIMIT 10")
+                res = await session.execute(stmt)
+                evolved_data = [f"{r['query']} -> {r['result'][:100]}" for r in res.mappings()]
+            
+            if not fragments and not evolved_data:
                 return
 
             # 3. Swarm Appraisal (Council of Models)
             fact_block = "\n".join([f"- {f.get('text')}" for f in fragments])
+            if evolved_data:
+                fact_block += "\n\nEvolved Patterns:\n" + "\n".join([f"- {p}" for p in evolved_data])
             system_prompt = (
                 "You are the LEVI Core Distiller (v13.0.0). "
                 "Synthesize fragments into high-fidelity Identity Traits and Relational Triplets.\n"
