@@ -34,8 +34,24 @@ class LearningLoop:
         metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
         metadata = metadata or {}
+        user_id = metadata.get("user_id", "default")
+        domain = metadata.get("intent_type", "chat")
+        
+        # 1. Crystallize pattern for LoRA (Postgres + JSONL)
         await cls.crystallize_pattern(mission_id, query, result, fidelity)
+        
+        # 2. Update Strategy Ledger (Legacy Strategy Tracking)
         cls._update_strategy_ledger(metadata, fidelity)
+        
+        # 3. Evolution Engine Integration (v14.1)
+        from .evolution_engine import EvolutionaryIntelligenceEngine
+        await EvolutionaryIntelligenceEngine.record_outcome(
+            user_id=user_id,
+            domain=domain,
+            fidelity=fidelity,
+            query=query,
+            response=result
+        )
 
     @classmethod
     def get_best_strategy(cls, intent_type: str) -> Dict[str, Any]:

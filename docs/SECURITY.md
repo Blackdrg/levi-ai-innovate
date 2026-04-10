@@ -1,6 +1,6 @@
-# 🛡️ LEVI-AI: Security Architecture (v14.0.0-Autonomous-SOVEREIGN)
+# 🛡️ LEVI-AI: Security Architecture (v14.1.0-Autonomous-SOVEREIGN)
 
-Architectural isolation relies on Identity, Encryption, Sanitization, and Boundary Enforcement. LEVI-AI v14.0.0-Autonomous-SOVEREIGN implements a multi-layered security mesh to protect all user data and system orchestration components.
+Architectural isolation relies on Identity, Encryption, Sanitization, and Boundary Enforcement. LEVI-AI v14.1.0-Autonomous-SOVEREIGN implements a multi-layered security mesh to protect all user data and system orchestration components.
 
 ---
 
@@ -10,17 +10,17 @@ Every task request passes through 5 sequential security layers before reaching t
 
 ```
 INPUT PIPELINE
-[Raw Input] → Prompt Injection Shield
+[Raw Input] → Security Anomaly Detector Gate (Pre-perception Filter)
+            → RS256 JWT Identity Check (Asymmetric Verification)
             → PII Masking (AES-256-GCM)
             → Rate Limit Gate (Redis Sliding Window)
-            → RBAC Tier Check (User/Provider/Core)
-            → Egress Proxy Allowlist (Deny-by-Default)
+            → Egress Proxy DNS Shield (Anti-Rebinding Check)
             → [Orchestration Engine]
 
 OUTPUT PIPELINE
 [Result] → ResultSanitizer (XSS / Markdown)
          → PII Re-masking Check
-         → Security Headers (CSP / HSTS / X-Frame)
+         → Audit Signature (HMAC-SHA256)
          → [Authenticated Response]
 ```
 
@@ -39,9 +39,12 @@ OUTPUT PIPELINE
 
 ---
 
-## 3. EgressProxy — SSRF Prevention
+## 3. EgressProxy — SSRF & DNS-Rebinding Prevention
 
 All outbound HTTP calls from agents are **exclusively** routed via the `EgressProxy`.
+
+### DNS Shielding (v14.1)
+The proxy performs a pre-request DNS resolution to verify the destination IP. If the resolved IP belongs to a forbidden subnet (local, private, or cloud metadata), the request is aborted **before** emission to prevent DNS-rebinding attacks.
 
 ### Active Allowlist (Deny-by-Default)
 ```python
@@ -49,16 +52,7 @@ ALLOWED_EGRESS_DOMAINS = {
     "api.tavily.com",    # Web search (approved)
     "serpapi.com",       # Alternative search (approved)
 }
-# ALL other domains → SSRFBlockedError raised immediately
 ```
-
-### Blocked Categories
-| Category | Examples |
-| :--- | :--- |
-| **Private IP ranges** | `10.x.x.x`, `172.16-31.x.x`, `192.168.x.x` |
-| **Localhost** | `127.0.0.1`, `::1`, `localhost` |
-| **Cloud Metadata** | `169.254.169.254` (AWS/GCP/Azure IMDS) |
-| **Unapproved APIs** | All domains not in the allowlist |
 
 ---
 
@@ -72,8 +66,7 @@ Enforced on every response via `SecurityHeadersMiddleware`:
 | `Strict-Transport-Security`| `max-age=31536000; includeSubDomains` | HTTPS enforcement |
 | `X-Frame-Options` | `DENY` | Clickjacking prevention |
 | `X-Content-Type-Options` | `nosniff` | MIME-type sniffing prevention |
-| `X-System-Version` | `v14.0.0` | Audit traceability header |
-| `Referrer-Policy` | `no-referrer` | Data leakage prevention |
+| `X-Trace-ID` | Generated UUID | Audit traceability header |
 
 ---
 
@@ -91,56 +84,44 @@ Enforced on every response via `SecurityHeadersMiddleware`:
 
 The `CodeAgent` executes all model-generated code in an isolated container.
 
-- **Interface**: **Rootless Unix Socket** — Legacy TCP:2375 is **disabled and removed**.
+- **Interface**: **Rootless Unix Socket** — Legacy TCP:2375 is **disabled**.
 - **CPU Cap**: 0.5 cores per execution block
 - **Memory Cap**: 512MB per execution block
-- **Network**: Zero internet access from within the container (Egress Proxy controls outbound)
-
-> [!WARNING]
-> Never re-enable the TCP Docker socket (`-H tcp://0.0.0.0:2375`) on production hosts. This creates a container-escape vector.
+- **Network**: Zero internet access (Internal air-gap)
 
 ---
 
-## 7. JWT Identity Cycle
+## 7. JWT Identity Cycle (RS256)
 
-```
-Login
-  → JWT access token (15min expiry) + refresh token (7 days)
+LEVI-AI leverages **RSA-256 Asymmetric signatures** for identity. 
 
-Access Token Expired
-  → POST /api/v1/auth/refresh
-  → JTI blacklist checked in Redis
-  → New access JWT issued
-
-Logout / Wipe
-  → JTI added to Redis blacklist (TTL = refresh token expiry)
-  → All task sessions invalidated
-```
+- **Private Key**: Used by `auth-service` to sign tokens.
+- **Public Key**: Distributed to all edge nodes for offline verification.
+- **Rotation**: Lazy-rotation supported via `certs/` versioning.
+- **Blacklisting**: JTI-based revocation in Redis with sub-10ms latency.
 
 ---
 
-## 8. GDPR Data Governance (Erasure)
+## 8. GDPR Sovereign Governance (Erasure)
 
-On explicit data deletion request, the system executes an atomic ordered wipe across all 5 persistence tiers:
+On explicit data deletion request, the system executes an atomic ordered wipe:
 
 | Tier | Store | Operation |
 | :--- | :--- | :--- |
 | T1 | Redis | `DEL system:user:{id}:*` — all keys and blackboard |
-| T2 | Postgres | `DELETE FROM sessions WHERE user_id=?` |
+| T2 | Postgres | `DELETE FROM missions WHERE user_id=?` |
 | T3 | Neo4j | `MATCH (n {user_id:$u}) DETACH DELETE n` |
-| T4 | HNSW Vault | Remove all vectors with matching `user_id` metadata |
-| T5 | training_corpus | `DELETE FROM training_corpus WHERE user_id=?` |
+| T4 | HNSW Vault | **Full Index Rebuild** with filtered user metadata |
+| T5 | Audit | Signed HMAC record of erasure event |
 
 ---
 
-## 9. Rate Limiting Specification
+## 9. Cypher Injection Shield (Graph Security)
 
-Redis-backed **sliding window** algorithm using sorted sets (ZSETs):
-
-- **Window**: 60 seconds rolling
-- **Keys**: `rate_limit:{user_id}:{endpoint}`
-- **On Breach**: `429 Too Many Requests` with `Retry-After` header
+All graph queries generated by reasoning agents are passed through the `CypherProtector`. 
+- **Keyword Blocking**: `DELETE`, `REMOVE`, `SET`, `CREATE` (unless authorized).
+- **Interpolation Sanitization**: Prevents tautology-based data extraction.
 
 ---
 
-© 2026 LEVI-AI Sovereign OS — Security Specification v14.0.0 Production Stable
+© 2026 LEVI-AI Sovereign OS — Security Specification v14.1.0 Graduation

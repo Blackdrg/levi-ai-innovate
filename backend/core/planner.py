@@ -7,12 +7,25 @@ import logging
 import re
 import copy
 from typing import Dict, Any, Optional, List
-from .orchestrator_types import IntentResult, BrainDecision, BrainMode, TaskExecutionContract, FailurePolicy
+from .orchestrator_types import (
+    IntentResult, 
+    BrainDecision, 
+    BrainMode, 
+    TaskExecutionContract, 
+    FailurePolicy,
+    MemoryPolicy,
+    ExecutionPolicy,
+    LLMPolicy,
+    IntentGraph
+)
 from .task_graph import TaskGraph, TaskNode
 from .intent_classifier import HybridIntentClassifier
 from .learning_loop import LearningLoop
 from backend.utils.llm_utils import call_lightweight_llm as _call_lightweight_llm
 from backend.utils.shield import PII_PATTERNS
+from pydantic import BaseModel, Field
+import uuid
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +64,123 @@ def detect_sensitivity(text: str) -> bool:
         return True
     return any(re.search(pattern, text) for pattern in PII_PATTERNS.values())
 
+class Goal(BaseModel):
+    goal_id: str = Field(default_factory=lambda: f"goal_{uuid.uuid4().hex[:6]}")
+    objective: str
+    success_criteria: List[str] = Field(default_factory=list)
+    validators: List[Dict[str, Any]] = Field(default_factory=list) # Machine-verifiable rules
+    metrics: Dict[str, Any] = Field(default_factory=dict) # Quantitative targets
+    priority: str = "medium"
+    state: str = "active"
+    mode: Optional[str] = None
+
+    def dict(self, *args, **kwargs):
+        return super().model_dump(*args, **kwargs)
+
+class GoalEngine:
+    """
+    Folded into Planner.
+    Transforms user intent and brain policy into a formal cognitive goal.
+    """
+    def formulate_objective(self, perception: Dict[str, Any], mode: BrainMode) -> str:
+        input_text = perception.get("input", "")
+        intent = perception.get("intent")
+        intent_type = intent.intent_type if intent else "chat"
+        
+        prefix = f"[{mode.value}] "
+        if mode == BrainMode.SECURE:
+             return f"{prefix}Securely process restricted query: {input_text}"
+        if intent_type == "search":
+            return f"{prefix}Retrieve and distill latest data: {input_text}"
+        elif intent_type == "document":
+            return f"{prefix}Synthesize document insights: {input_text}"
+        elif intent_type == "code":
+            return f"{prefix}Architect and verify code solution: {input_text}"
+        elif intent_type == "image":
+            return f"{prefix}Render high-fidelity creative concept: {input_text}"
+        return f"{prefix}Synthesize coherent response: {input_text}"
+
+    def generate_criteria(self, intent_type: str, complexity: int, user_input: str, mode: BrainMode) -> tuple:
+        criteria = ["Syntactic coherence", "Factual alignment"]
+        validators = []
+        metrics = {"min_confidence": 0.8}
+        
+        if mode == BrainMode.FAST:
+            criteria.append("Latency < 1000ms")
+            metrics["max_latency_ms"] = 1000
+        elif mode == BrainMode.DEEP:
+            criteria = ["Logical chain validation", "Comprehensive synthesis", "Cross-domain resonance"]
+            metrics["min_confidence"] = 0.95
+        elif mode == BrainMode.SECURE:
+            criteria.append("PII isolation")
+            validators.append({"type": "sandbox_check", "level": "high"})
+        
+        if intent_type == "search":
+             criteria.append("Citations included")
+             validators.append({"type": "regex", "pattern": r"\[\d+\]|https?://", "field": "response"})
+             metrics["min_sources"] = 2
+        elif intent_type == "code":
+             criteria.append("Syntactical correctness")
+             validators.append({"type": "python_check", "field": "code"})
+             metrics["max_latency_ms"] = 5000
+        return criteria, validators, metrics
+
+class PolicyEngine:
+    """
+    Folded into Planner.
+    Calculates execution policy based on intent and risk.
+    """
+    async def select_mode(self, intent: IntentResult, complexity: float, risk_level: float, user_id: str = "default") -> BrainMode:
+        if risk_level > 0.7: return BrainMode.SECURE
+        
+        # v14.1 Fragility Escalation
+        intent_type = intent.intent_type if intent else "chat"
+        from .evolution_engine import EvolutionaryIntelligenceEngine
+        fragility = await EvolutionaryIntelligenceEngine.get_fragility(user_id, intent_type)
+        
+        if fragility > 0.4:
+            logger.warning(f"[Policy] Escalating to DEEP mode due to high fragility ({fragility:.2f}) in domain: {intent_type}")
+            return BrainMode.DEEP
+
+        if intent.intent_type == "search" or "research" in intent.intent_type: return BrainMode.RESEARCH
+        if complexity > 0.8: return BrainMode.DEEP
+        if complexity > 0.5: return BrainMode.BALANCED
+        return BrainMode.FAST
+
+    def allocate_agents(self, mode: BrainMode, intent: IntentResult, complexity: float) -> Dict[str, bool]:
+        agents = {"planner": True, "critic": False, "retrieval": False, "browser": False, "docker": False}
+        if mode == BrainMode.FAST: agents["planner"] = False
+        if mode in [BrainMode.DEEP, BrainMode.RESEARCH, BrainMode.SECURE]: agents["critic"] = True
+        if mode == BrainMode.RESEARCH or intent.intent_type == "search":
+            agents["retrieval"] = True
+            agents["browser"] = True
+        if intent.intent_type == "code" and mode != BrainMode.FAST: agents["docker"] = True
+        return agents
+
+    def allocate_memory(self, mode: BrainMode, intent: IntentResult) -> MemoryPolicy:
+        policy = MemoryPolicy(redis=True, postgres=True, neo4j=False, faiss=True)
+        if mode in [BrainMode.RESEARCH, BrainMode.DEEP]: policy.neo4j = True
+        if intent.intent_type == "knowledge": policy.neo4j = True
+        return policy
+
+    def define_execution_policy(self, mode: BrainMode, complexity: float) -> ExecutionPolicy:
+        policy = ExecutionPolicy(parallel_waves=2, max_retries=1, sandbox_required=False)
+        if complexity > 0.7: policy.parallel_waves = 4
+        if complexity < 0.3: policy.parallel_waves = 1
+        if mode == BrainMode.SECURE:
+            policy.sandbox_required = True
+            policy.max_retries = 0
+        if mode == BrainMode.RESEARCH: policy.max_retries = 3
+        return policy
+
+    def define_llm_policy(self, mode: BrainMode, risk_level: float) -> LLMPolicy:
+        policy = LLMPolicy(local_only=True, cloud_fallback=False)
+        if mode == BrainMode.DEEP and risk_level < 0.5: policy.cloud_fallback = True
+        if mode == BrainMode.SECURE:
+            policy.local_only = True
+            policy.cloud_fallback = False
+        return policy
+
 # v14.1 Prebuilt Optimized Templates
 HARD_TEMPLATES = {
     "search": [
@@ -71,7 +201,52 @@ HARD_TEMPLATES = {
 class DAGPlanner:
     """
     LeviBrain v14.1: DAG-Based Planner with Prebuilt Templates.
+    Now incorporates Goal and Policy generation.
     """
+    def __init__(self):
+        self.goal_engine = GoalEngine()
+        self.policy_engine = PolicyEngine()
+
+    async def generate_decision(self, user_input: str, perception: Dict[str, Any]) -> BrainDecision:
+        intent = perception.get("intent")
+        complexity = intent.complexity_level / 3.0 if intent else 0.5
+        risk_level = 0.8 if (intent and intent.is_sensitive) else 0.1
+        
+        user_id = perception.get("user_id", "default")
+        mode = await self.policy_engine.select_mode(intent, complexity, risk_level, user_id=user_id)
+        enable_agents = self.policy_engine.allocate_agents(mode, intent, complexity)
+        memory_policy = self.policy_engine.allocate_memory(mode, intent)
+        execution_policy = self.policy_engine.define_execution_policy(mode, complexity)
+        llm_policy = self.policy_engine.define_llm_policy(mode, risk_level)
+        
+        return BrainDecision(
+            mode=mode,
+            enable_agents=enable_agents,
+            memory_policy=memory_policy,
+            execution_policy=execution_policy,
+            llm_policy=llm_policy,
+            risk_level=risk_level,
+            complexity_score=complexity
+        )
+
+    async def create_goal(self, perception: Dict[str, Any], decision: BrainDecision) -> Goal:
+        intent = perception.get("intent")
+        intent_type = intent.intent_type if intent else "chat"
+        complexity = intent.complexity_level if intent else 2
+        mode = decision.mode
+        
+        objective = self.goal_engine.formulate_objective(perception, mode)
+        success_criteria, validators, metrics = self.goal_engine.generate_criteria(intent_type, complexity, perception.get("input", ""), mode)
+        priority = "high" if (complexity >= 3 or mode in [BrainMode.DEEP, BrainMode.SECURE]) else "medium"
+        
+        return Goal(
+            objective=objective,
+            success_criteria=success_criteria,
+            validators=validators,
+            metrics=metrics,
+            priority=priority,
+            mode=mode.value
+        )
 
     async def build_task_graph(self, goal: Any, perception: Dict[str, Any], decision: Optional[BrainDecision] = None) -> TaskGraph:
         intent = perception.get("intent")

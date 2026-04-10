@@ -1,106 +1,69 @@
-# LEVI-AI: Cognitive Architecture Deep Dive
-### Architectural Specification v14.0.0-Autonomous-SOVEREIGN
+# LEVI-AI: Cognitive Architecture Deep Dive (v14.1)
+### Architectural Specification: Unified Mission Pipeline
+
+> [!IMPORTANT]
+> Spec v14.1 collapses the cognitive surface area by merging the `Brain`, `GoalEngine`, and `PolicyEngine` into a unified `Orchestrator` and `Planner` architecture.
 
 ---
 
-## 1. The Brain Controller
+## 1. Unified Mission Pipeline
 
-The `BrainController` is the central cognitive hub of LEVI-AI. It manages the full mission lifecycle from perception to crystallization.
-
-### 1.1 Mission States
-```
-UNFORMED → FORMULATED → PLANNED → EXECUTING → AUDITED → FINALIZED
-```
-
-| State | Module | Trigger |
-| :--- | :--- | :--- |
-| `UNFORMED` | Gateway | User submits raw natural language intent. |
-| `FORMULATED` | GoalEngine | Intent decomposed into structured goal tree. |
-| `PLANNED` | MissionPlanner | Goal tree converted to topological DAG. |
-| `EXECUTING` | GraphExecutor | DAG waves dispatched to swarm agents. |
-| `AUDITED` | CriticAgent | Fidelity Score S calculated across results. |
-| `FINALIZED` | MemoryManager | Quad-sync to all 4 persistence tiers. |
-
----
-
-## 2. GoalEngine — Intent Decomposition
-
-The GoalEngine transforms raw user input into a structured goal tree for the planner.
-
-### 2.1 Decomposition Strategy
-- **Primary Intent**: The core action the user wants to achieve.
-- **Sub-Goals**: Dependent tasks that must be completed to satisfy the primary intent.
-- **Context Anchors**: Historical facts from the Memory Vault that ground the plan.
-
-### 2.2 Interaction with Memory
-```
-UserInput → GoalEngine → [Neo4j: entity recall] → [FAISS: semantic context]
-                       → StructuredGoalTree → MissionPlanner
-```
-
----
-
-## 3. MissionPlanner — DAG Construction
-
-The `MissionPlanner` generates a Directed Acyclic Graph (DAG) from the goal tree.
-
-### 3.1 Wave Topology
-Each "wave" is a set of tasks with no inter-dependencies — they can safely execute in parallel.
-
-```
-Wave 1: [Research]                     # No deps
-Wave 2: [Analyze, Validate]            # Dep: Wave 1 results
-Wave 3: [Synthesize, Write]            # Dep: Wave 2 results
-Wave 4: [Critic Review]               # Dep: Wave 3 results
-```
-
-### 3.2 Safety Guards
-- `MAX_WAVES = 8`: Prevents infinite recursion in complex missions.
-- `MAX_MISSION_NODES = 15`: Hard cap on total task nodes per mission.
-- `WARNING_THRESHOLD = 8`: Emits a complexity pulse if exceeded.
-
----
-
-## 4. GraphExecutor — Wave Execution Engine
-
-### 4.1 Execution Protocol
-1. Identify executable nodes (all dependencies satisfied).
-2. Acquire GPU slot from `asyncio.Semaphore(4)`.
-3. Dispatch tasks in parallel via `asyncio.gather()`.
-4. Collect `ToolResult` objects from each agent.
-5. Release GPU slot.
-6. Update completed set and advance to next wave.
-
-### 4.2 Distributed Mode (DCN Preview)
-When `DISTRIBUTED_MODE=true`, waves are enqueued to `dcn:task_queue` (Redis) for multi-node execution instead of local parallel processing.
-
----
-
-## 5. Fidelity Score — Mathematical Specification
-
-```
-S = (LLM_Appraisal × 0.6) + (Rule_Truth × 0.4)
-```
-
-- **Range**: [0.0, 1.0]
-- **Crystallization Gate**: S > 0.85 → Pattern added to `training_corpus`.
-- **Retry Gate**: S < 0.5 → Task retried (max 2 retries, exponential backoff).
-- **Abort Gate**: S < 0.2 on critical node → Mission aborted.
-
----
-
-## 6. Memory Crystallization Flow
+The complete cognitive lifecycle is managed by three primary hardened components:
 
 ```mermaid
-graph LR
-   Result([Finalized Result]) --> MM[Memory Manager]
-   MM --> R[(Redis: Working State)]
-   MM --> P[(Postgres: Episodic Ledger)]
-   MM --> N[(Neo4j: Knowledge Graph)]
-   MM --> F[(FAISS: Semantic Index)]
-   MM -- "S > 0.85" --> TC[(Postgres: training_corpus)]
+graph TD
+    User([User Request]) --> Gateway[FastAPI Gateway]
+    Gateway --> Orchestrator[Orchestrator]
+    Orchestrator --> Perception[Perception Layer]
+    Perception --> Planner[DAG Planner]
+    Planner --> Reasoning[Reasoning Core]
+    Reasoning --> Executor[Graph Executor]
+    Executor --> MCM[Memory Consistency Manager]
+    MCM --> Response([Final Response])
 ```
 
 ---
 
-*© 2026 LEVI-AI Sovereign Hub — Architectural Specification v14.0.0-Autonomous-SOVEREIGN*
+## 2. Component Specifications
+
+### 2.1 Sovereign Orchestrator
+The central entry point for mission lifecycle management.
+- **Role**: Coordinates intent capture, security gating, and memory synchronization.
+- **Hardening**: Implements the **Deterministic Fast-Path** (Spec v14.1) to bypass planning for graduated rules.
+- **States**: `UNFORMED` → `PLANNED` → `EXECUTING` → `VALIDATING` → `COMPLETE`.
+
+### 2.2 DAG Planner (Goal + Policy)
+A unified planning engine that absorbs both **Goal Formulation** and **Policy Allocation**.
+- **Role**: Decomposes intent into a Goal, selects the appropriate `BrainMode`, and generates a topological Task DAG.
+- **Logic**: Implements **Fragility-Aware Mode Selection**, escalating to `DEEP` mode for fragile domains.
+
+### 2.3 Graph Executor (Stateful Execution)
+A rigorous DAG execution engine with formal node lifecycle states.
+- **Role**: Executes DAG waves in parallel, manages agent slots, and enforces compensation guarantees.
+- **States**: `CREATED`, `SCHEDULED`, `RUNNING`, `COMPLETED`, `FAILED`, `COMPENSATED`.
+
+---
+
+## 3. Fidelity Specification
+
+Fidelity is the primary metric for mission truth and evolution triggers.
+
+```
+S = (LLM_Appraisal × 0.6) + (Heuristic_Grounding × 0.4)
+```
+
+- **Crystallization Gate**: $S > 0.85$ → Patterns added to `training_corpus`.
+- **Graduation Gate**: $S > 0.95$ (with stability) → Pattern promoted to `GraduatedRule`.
+
+---
+
+## 4. Tiered Critic Validation
+
+All mission results and deterministic overrides are passed through the **Tiered Critic Logic**:
+- **Tier-0**: Mandatory syntactic validation.
+- **Tier-1**: Deep semantic consistency (bypassed only for stable, high-fidelity rules).
+- **Tier-2**: Comprehensive multi-agent validation for critical/inconsistent states.
+
+---
+
+*© 2026 LEVI-AI Sovereign Hub — Architectural Specification v14.1.0-Autonomous-SOVEREIGN Graduation*

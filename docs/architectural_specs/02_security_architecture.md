@@ -1,5 +1,5 @@
 # LEVI-AI: Security Architecture Deep Dive
-### Specification v14.0.0-Autonomous-SOVEREIGN
+### Specification v14.1.0-Autonomous-SOVEREIGN Graduation
 
 ---
 
@@ -69,7 +69,7 @@ Injected on every response for OWASP LLM Top 10 compliance:
 | `Strict-Transport-Security` | `max-age=31536000` | HTTPS enforcement |
 | `X-Frame-Options` | `DENY` | Clickjacking prevention |
 | `X-Content-Type-Options` | `nosniff` | MIME sniffing prevention |
-| `X-Sovereign-Version` | `v14.0.0-Autonomous-SOVEREIGN` | Audit traceability |
+| `X-Sovereign-Version` | `v14.1.0-Autonomous-SOVEREIGN Graduation` | Audit traceability |
 | `Referrer-Policy` | `no-referrer` | Data leakage prevention |
 
 ---
@@ -111,4 +111,4 @@ On user deletion or explicit wipe request:
 
 ---
 
-*© 2026 LEVI-AI Sovereign Hub — Security Architecture Specification v14.0.0-Autonomous-SOVEREIGN*
+*© 2026 LEVI-AI Sovereign Hub — Security Architecture Specification v14.1.0-Autonomous-SOVEREIGN Graduation*

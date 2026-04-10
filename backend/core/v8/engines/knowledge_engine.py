@@ -15,10 +15,19 @@ class KnowledgeEngine:
 
     async def run(self, cypher: str, parameters: Optional[Dict[str, Any]] = None):
         """
-        Executes a Cypher query and returns the results.
+        Executes a Cypher query and returns the results with safety validation.
         """
+        from backend.utils.security import CypherProtector
+        
+        if not CypherProtector.validate_query(cypher, parameters):
+             return {
+                 "success": False, 
+                 "error": "Security Shield Triggered: Unauthorized Cypher execution attempted.",
+                 "engine": "knowledge"
+             }
+
         try:
-            logger.info(f"[KnowledgeEngine] Executing Cypher query: {cypher[:50]}...")
+            logger.info(f"[KnowledgeEngine] Executing Hardened Cypher query: {cypher[:50]}...")
             
             # If no driver is provided, use the global execute_query utility
             results = await execute_query(cypher, parameters)

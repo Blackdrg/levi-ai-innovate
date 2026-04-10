@@ -15,11 +15,10 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from backend.auth.logic import get_current_user as get_sovereign_identity
-from backend.core.v8.brain import LeviBrainCoreController
+from backend.core.orchestrator import orchestrator as brain
 from backend.engines.utils.security import SovereignSecurity
 
-# Unified v13.0.0 Brain Monolith
-brain_v13 = LeviBrainCoreController()
+# Production v14.1 Brain Singleton
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="", tags=["Chat"])
@@ -44,11 +43,11 @@ async def conversational_endpoint_v13(
         raise HTTPException(status_code=400, detail="Neural protocol violation.")
 
     try:
-        res = await brain_v13.run_mission_sync(
-            input_text=request.message,
+        res = await brain.run(
+            user_input=request.message,
             user_id=uid,
             session_id=request.session_id,
-            context=request.context
+            mood="philosophical"
         )
         
         return {
@@ -79,11 +78,11 @@ async def conversational_stream_endpoint_v13(
 
     async def _mission_generator():
         try:
-            async for event in brain_v13.run_mission_stream(
+            async for event in brain.stream(
                 user_input=request.message,
                 user_id=uid,
                 session_id=request.session_id,
-                context=request.context
+                mood="philosophical"
             ):
                 # Adaptive Pulse v4.1: Binary Encoding
                 event_type = event.get("event", "data")

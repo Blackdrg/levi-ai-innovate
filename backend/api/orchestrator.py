@@ -13,14 +13,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from backend.auth import SovereignAuth, UserIdentity
-from backend.core.brain import LeviBrainV14
-from backend.engines.utils.security import SovereignSecurity
-
-logger = logging.getLogger(__name__)
-router = APIRouter(prefix="", tags=["Orchestrator"])
-
-# Initialize production v14.0.0 LeviBrain instance (Controlled)
-brain = LeviBrainV14()
+from backend.core.orchestrator import orchestrator as brain
 
 async def handle_chat(user_input, user_id, session_id=None, tier='free'):
     """v14.0: Unified cognitive execution pass."""

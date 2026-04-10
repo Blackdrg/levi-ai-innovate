@@ -9,7 +9,7 @@ import asyncio
 import json
 import os
 import time
-from typing import Dict, Any, List, Set, Optional
+from enum import Enum
 from ..orchestrator_types import ToolResult, IntentResult, AgentResult
 from ..tool_registry import call_tool
 from ..blackboard import MissionBlackboard
@@ -34,6 +34,15 @@ from ..execution_guardrails import AgentSandbox, ExecutionBudgetTracker, capture
 
 
 logger = logging.getLogger(__name__)
+
+class NodeState(str, Enum):
+    CREATED = "created"
+    SCHEDULED = "scheduled"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    COMPENSATED = "compensated"
+    SKIPPED = "skipped"
 
 class GraphExecutor:
     """
@@ -107,7 +116,8 @@ class GraphExecutor:
                         logger.error("[Shield] Tool budget exhausted.")
                         break
                     
-                    # Wrap execution in a task
+                    # formal lifecycle: SCHEDULED
+                    node.state = NodeState.SCHEDULED
                     task = asyncio.create_task(
                         self._execute_node(node, results, perception, blackboard=blackboard, user_id=user_id, wave_count=wave_count, policy=policy, mission_sm=mission_sm)
                     )
@@ -115,7 +125,7 @@ class GraphExecutor:
                     remaining_nodes.remove(node)
                     budget_tracker.reserve_tool_calls(1)
                     total_nodes_executed += 1
-                    logger.debug(f"[Greedy] Started node {node.id}")
+                    logger.debug(f"[Executor] Scheduled node {node.id}")
 
             if not running_tasks:
                 if remaining_nodes:
@@ -276,9 +286,8 @@ class GraphExecutor:
                 "duration_ms": 0,
             },
         )
-        memory_scope = "session"
-        if node.contract:
-            memory_scope = node.contract.memory_scope
+        # formal lifecycle: RUNNING
+        node.state = NodeState.RUNNING
         sandbox_token = AgentSandbox.activate(
             mission_id=mission_id,
             node_id=node.id,
@@ -466,7 +475,8 @@ class GraphExecutor:
                                 "duration_ms": int(result.latency_ms),
                             },
                         )
-
+                        # formal lifecycle: COMPLETED
+                        node.state = NodeState.COMPLETED
                         return result
 
                     last_error = result.error or "Unknown failure"
@@ -484,19 +494,15 @@ class GraphExecutor:
 
                 if attempts <= max_retries:
                     await asyncio.sleep(compute_backoff_delay(attempts, retry_strategy))
-        finally:
-            AgentSandbox.deactivate(sandbox_token)
+        # formal lifecycle: FAILED
+        node.state = NodeState.FAILED
+        compensation = await self._run_compensation(node, mission_id=mission_id, agent_name=agent_name, error=last_error, mission_sm=mission_sm)
+        if compensation:
+             node.state = NodeState.COMPENSATED
 
-        # 6. Fallback mechanism
-        if getattr(node, 'fallback_node_id', None):
-             logger.info(f"[V8 Executor] Node {node.id} exhausted retries. Activating fallback: {node.fallback_node_id}")
-             # In a real implementation, we might mark this node as 'failed_handled'
-             # and the executor would then pick up the fallback node.
-             # For now, we return a failure result indicating fallback is needed.
-
-        compensation = self._run_compensation(node, mission_id=mission_id, agent_name=agent_name, error=last_error, mission_sm=mission_sm)
         if mission_sm:
             mission_sm.record_node(node.id, "failed", {"agent": agent_name, "error": last_error})
+            
         fallback_output = getattr(node, "fallback_output", None) or {}
         logger.error(
             "executor_node_failed",
@@ -521,7 +527,7 @@ class GraphExecutor:
             },
         )
 
-    def _run_compensation(
+    async def _run_compensation(
         self,
         node: Any,
         mission_id: str,
@@ -532,22 +538,29 @@ class GraphExecutor:
         action = getattr(node, "compensation_action", None)
         if not action:
             return None
+        
+        logger.warning(f"[Executor] Activating compensation for {node.id}: {action}")
         compensation = {
             "action": action,
             "status": "executed",
             "error": error,
+            "timestamp": time.time()
         }
+        
+        # In a real system, we might execute a specific compensation task/agent here
+        # For now, we formalize the record of it.
+        
         if mission_sm:
             mission_sm.record_node(node.id, "compensated", {"agent": agent_name, **compensation})
-        logger.warning(
+            
+        logger.info(
             "executor_compensation_executed",
             extra={
                 "trace_id": mission_id,
                 "mission_id": mission_id,
-                "node_id": getattr(node, "id", None),
+                "node_id": node.id,
                 "agent": agent_name,
                 "status": "compensated",
-                "duration_ms": 0,
             },
         )
         return compensation

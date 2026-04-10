@@ -103,11 +103,9 @@ class VectorDB:
         """
         if not self.metadata: return
         
-        texts = [m["text"] for m in self.metadata if "text" in m]
-        if len(texts) != len(self.metadata):
-             logger.warning(f"[VectorDB] Partial text availability in {self.collection_name}. Skipping missing records.")
-             self.metadata = [m for m in self.metadata if "text" in m]
-             texts = [m["text"] for m in self.metadata]
+        # Filtering: skip records marked as deleted for GDPR compliance
+        self.metadata = [m for m in self.metadata if "text" in m and not m.get("deleted")]
+        texts = [m["text"] for m in self.metadata]
 
         if not texts: return
         
@@ -209,18 +207,23 @@ class VectorDB:
                     if len(results) >= limit: break
         return results
 
-    async def remove_indices(self, indices: List[int]):
+    async def remove_indices(self, indices: List[int], hard_delete: bool = False):
         """
-        Sovereign v9.8.1: Soft Purge.
-        Marks vectors as deleted so they are ignored by the search logic.
+        Sovereign v14.1.0: GDPR Compliance Pass.
+        Marks vectors as deleted or triggers a hard-rebuild for immediate removal.
         """
         if not indices: return
         async with self._lock:
             for idx in indices:
                 if 0 <= idx < len(self.metadata):
                     self.metadata[idx]["deleted"] = True
-            self._save()
-            logger.info(f"Marked {len(indices)} records as purged in '{self.collection_name}'.")
+            
+            if hard_delete:
+                logger.info(f"[VectorDB] Triggering mandatory hard-delete rebuild for {self.collection_name}...")
+                await self.rebuild_index()
+            else:
+                self._save()
+                logger.info(f"Marked {len(indices)} records as purged in '{self.collection_name}'.")
 
     async def clear(self):
         async with self._lock:

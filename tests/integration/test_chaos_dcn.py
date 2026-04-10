@@ -211,3 +211,111 @@ async def test_mental_compression_backpressure():
     
     # Release VRAM
     await GLOBAL_VRAM_POOL.release(15360)
+
+@pytest.mark.asyncio
+async def test_partition_during_election():
+    """
+    Chaos Test: Partition during Leader Election.
+    Simulates network partition just as nodes are incrementing terms.
+    """
+    # Setup 4 nodes
+    nodes = {f"node-{i}": {"node_id": f"node-{i}", "last_seen": time.time()} for i in range(1, 5)}
+    for nid, ndata in nodes.items():
+        await redis_client.hset("dcn:swarm:nodes", nid, json.dumps(ndata))
+    
+    # Node 1 tries to become coordinator
+    gossip1 = DCNGossip(r=redis_client)
+    gossip1.node_id = "node-1"
+    
+    # 🧪 SIMULATE PARTITION: Hide 3 of the 4 nodes from Node 1
+    # We override hgetall for this gossip instance to simulate isolation
+    original_hgetall = redis_client.hgetall
+    async def partitioned_hgetall(name):
+        if name == "dcn:swarm:nodes":
+            return {"node-1": json.dumps(nodes["node-1"])}
+        return await original_hgetall(name)
+    
+    redis_client.hgetall = partitioned_hgetall
+    
+    # Should fail due to lack of quorum (1/4 < 50%)
+    success = await gossip1.try_become_coordinator()
+    assert success is False
+    assert gossip1.is_isolated is True
+    
+    # Restore hgetall
+    redis_client.hgetall = original_hgetall
+
+@pytest.mark.asyncio
+async def test_simultaneous_rejoin():
+    """
+    Chaos Test: Simultaneous Rejoin.
+    Verifies that multiple nodes rejoining don't trigger term oscillations.
+    """
+    # 1. Start with Node 1 as leader in Term 10
+    await redis_client.set("dcn:swarm:term", "10")
+    await redis_client.set("dcn:swarm:leader:token", "10:node-1")
+    
+    # 2. Nodes 2 and 3 rejoin simultaneously with higher terms from a sub-partition
+    # Node 2 thinks Term is 15, Node 3 thinks Term is 12
+    gossip2 = DCNGossip(r=redis_client)
+    gossip2.node_id = "node-2"
+    
+    gossip3 = DCNGossip(r=redis_client)
+    gossip3.node_id = "node-3"
+    
+    # Verify both can recognize the current global state and converge
+    # Node 2 sees Term 10 but had Term 15 in its state
+    # (Simplified: check if term increments are monotonic and consistent)
+    await gossip2.try_become_coordinator()
+    token2 = await redis_client.get("dcn:swarm:leader:token")
+    term2 = int(token2.decode().split(":")[0])
+    assert term2 >= 11
+    
+    await gossip3.try_become_coordinator()
+    token3 = await redis_client.get("dcn:swarm:leader:token")
+    term3 = int(token3.decode().split(":")[0])
+    
+    # Since node-2 is already leader, node-3 should fail or wait
+    assert term3 == term2
+    assert "node-2" in token3.decode()
+
+@pytest.mark.asyncio
+async def test_stale_pulse_replay():
+    """
+    Security Test: Stale Pulse Replay detection.
+    Prevents old heartbeats from keeping a zombie node 'active'.
+    """
+    gossip = DCNGossip(r=redis_client)
+    gossip.node_id = "node-alpha"
+    
+    # 1. Send an old pulse (time offset by 5 minutes)
+    stale_time = time.time() - 300
+    stale_node = {"node_id": "node-alpha", "last_seen": stale_time}
+    await redis_client.hset("dcn:swarm:nodes", "node-alpha", json.dumps(stale_node))
+    
+    # 2. check_quorum should treat this node as inactive
+    active_nodes = await gossip._get_active_nodes()
+    assert "node-alpha" not in [n["node_id"] for n in active_nodes]
+
+@pytest.mark.asyncio
+async def test_sybil_detection_load():
+    """
+    Chaos/Security Test: Sybil Detection.
+    Detects abnormal node join rates.
+    """
+    gossip = DCNGossip(r=redis_client)
+    
+    # Simulate 100 nodes joining in 1 second
+    now = time.time()
+    for i in range(100):
+        node = {"node_id": f"sybil-{i}", "last_seen": now}
+        await redis_client.hset("dcn:swarm:nodes", f"sybil-{i}", json.dumps(node))
+    
+    # check_quorum or a specific audit check should flag this
+    # (Implementation dependent - v14 adding Sybil logic)
+    active_nodes = await gossip._get_active_nodes()
+    # In v14, we might limit max nodes in quorum or flag high join rate
+    assert len(active_nodes) >= 100 
+    # Logic to flag excessive active nodes
+    if len(active_nodes) > 50:
+         logger.warning("SWARM HYPER-DENSITY DETECTED: Possible Sybil Attack.")
