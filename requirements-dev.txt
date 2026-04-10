@@ -1,0 +1,11 @@
+# Testing
+pytest==8.2.0
+pytest-asyncio==0.23.6
+pytest-cov==4.1.0
+pytest-httpx>=0.30.0,<1.0.0
+
+# Development
+black==23.12.1
+ruff==0.1.8
+mypy==1.7.1
+pre-commit==3.6.0

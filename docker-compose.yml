@@ -1,186 +1,144 @@
-services:
-    # Adding Kafka for Event Bus (Step 2.3)
-  kafka:
-    image: apache/kafka:latest
-    ports:
-      - "29092:29092"
-    environment:
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:29092
-    restart: unless-stopped
+# LEVI-AI Sovereign OS Stack
 
-  # ── Local LLM ──────────────────────────────────────────
+services:
+  # Backend API
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      POSTGRES_URL: postgresql+asyncpg://levi:levi@postgres:5432/levi
+      REDIS_URL: redis://redis:6379/0
+      NEO4J_URI: bolt://neo4j:7687
+      OLLAMA_HOST: http://ollama:11434
+      JWT_SECRET: your-super-secret-key-change-in-prod
+      LOG_LEVEL: DEBUG
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app/backend
+    networks:
+      - levi
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: levi
+      POSTGRES_USER: levi
+      POSTGRES_PASSWORD: levi
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/migrations/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U levi"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - levi
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - levi
+
+  # Neo4j Graph Database
+  neo4j:
+    image: neo4j:5-community
+    environment:
+      NEO4J_AUTH: neo4j/levi
+      NEO4J_PLUGINS: '["apoc"]'
+    ports:
+      - "7474:7474"  # HTTP
+      - "7687:7687"  # Bolt
+    volumes:
+      - neo4j_data:/var/lib/neo4j/data
+    healthcheck:
+      test: ["CMD", "neo4j", "status"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - levi
+
+  # Ollama Local LLM
   ollama:
     image: ollama/ollama:latest
     ports:
       - "11434:11434"
-    volumes:
-      - ${LEVI_DATA_DIR:-./data}/ollama:/root/.ollama
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: all
-    #           capabilities: [gpu]  # Uncomment if you have an NVIDIA GPU
-    restart: unless-stopped
-
-  ollama-init:
-    # pulls models on first boot
-    image: ollama/ollama:latest
-    depends_on: [ ollama ]
-    entrypoint: >
-      sh -c "sleep 5 &&
-             ollama pull llama3.1:8b &&
-             ollama pull nomic-embed-text &&
-             ollama pull codellama:13b"
     environment:
-      - OLLAMA_HOST=http://ollama:11434
-
-  # ── Databases ──────────────────────────────────────────
-  postgres:
-    image: postgres:16
-    environment:
-      POSTGRES_USER: levi
-      POSTGRES_PASSWORD: strongpassword
-      POSTGRES_DB: levi_db
+      OLLAMA_HOST: "0.0.0.0:11434"
     volumes:
-      - ${LEVI_DATA_DIR:-./data}/postgres:/var/lib/postgresql/data
-      - ./infrastructure/postgres/postgresql.conf:/etc/postgresql/postgresql.conf
-      - ./vault/backups:/vault/backups
-    command: postgres -c config_file=/etc/postgresql/postgresql.conf
-    restart: unless-stopped
-
-  redis:
-    image: redis:7-alpine
-    volumes:
-      - ${LEVI_DATA_DIR:-./data}/redis:/data
-    command: redis-server --appendonly yes --appendfsync everysec
-    restart: unless-stopped
-
-  neo4j:
-    image: neo4j:5
-    environment:
-      NEO4J_AUTH: neo4j/password
-      NEO4J_PLUGINS: '["apoc"]'
-    volumes:
-      - ${LEVI_DATA_DIR:-./data}/neo4j:/data
-      - ./infrastructure/neo4j/neo4j.conf:/var/lib/neo4j/conf/neo4j.conf
-      - ./vault/backups:/vault/backups
-    restart: unless-stopped
-
-  # ── App ────────────────────────────────────────────────
-  api:
-    image: levi-ai-api:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
-    ports:
-      - "8000:8080"
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://levi:strongpassword@postgres:5432/levi_db
-      - REDIS_URL=redis://redis:6379/0
-      - NEO4J_URI=bolt://neo4j:7687
-      - NEO4J_USER=neo4j
-      - NEO4J_PASSWORD=password
-      - OLLAMA_BASE_URL=http://ollama:11434
-      - VECTOR_DB_PATH=/app/vault/vector_hnsw.index
-      - SOVEREIGN_SHIELD=true
-      - JWT_SECRET=f7e7eac8b6679e3a6b651a6707de960ca07215a806216a3227b98f4bc3d5b3dd
-      # Graduation Tier: Security & Audit
-      - AUDIT_CHAIN_SECRET=sovereign_os_genesis_v14
-      - INTERNAL_SERVICE_KEY=svc_internal_grad_777_absolute
-      - ENVIRONMENT=production
-      # Only needed as fallback — can remove for 100% local
-      - GROQ_API_KEY=${GROQ_API_KEY:-}
-      # Residency Redirects (v14.0)
-      - HF_HOME=${HF_HOME:-/app/model_cache}
-      - PIP_CACHE_DIR=${PIP_CACHE_DIR:-/app/data/pip_cache}
-      - NPM_CONFIG_CACHE=${NPM_CONFIG_CACHE:-/app/data/npm_cache}
-    volumes:
-      - ./vault:/app/vault
-      - ./data/huggingface:/app/model_cache
-      - ./data/pip_cache:/root/.cache/pip
-      - ./data/npm_cache:/root/.npm
-    depends_on:
-      - postgres
-      - redis
-      - neo4j
-      - ollama
+      - ollama_data:/root/.ollama
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    restart: unless-stopped
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - levi
+    command: serve
 
-#  artisan_sandbox:
-#    image: levi-sandbox:latest
-#    user: "1000:1000"          # non-root user
-#    security_opt:
-#      - no-new-privileges:true
-#    cap_drop:
-#      - ALL
-#    volumes:
-#      # Mount Unix socket only — NEVER expose :2375 over TCP
-#      - /run/user/1000/docker.sock:/var/run/docker.sock:ro
-#    read_only: true
-#    tmpfs:
-#      - /tmp
-
-  # ── Worker ─────────────────────────────────────────────
-  worker:
-    image: levi-ai-worker:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
-    command: celery -A backend.celery_app worker --loglevel=info -Q missions,agents,learning
-    environment:
-      - REDIS_URL=redis://redis:6379/0
-      - DATABASE_URL=postgresql+asyncpg://levi:strongpassword@postgres:5432/levi_db
-      # Residency Redirects (v14.0)
-      - HF_HOME=${HF_HOME:-/app/model_cache}
-      - PIP_CACHE_DIR=${PIP_CACHE_DIR:-/app/data/pip_cache}
-    volumes:
-      - ./data/huggingface:/app/model_cache
-      - ./data/pip_cache:/root/.cache/pip
-    depends_on:
-      - redis
-      - postgres
-    restart: unless-stopped
-
-  # ── Reverse Proxy ──────────────────────────────────────
-  nginx:
+  # Frontend (optional, for dev)
+  frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./certs:/etc/nginx/certs:ro
+      - "3000:3000"
+    environment:
+      VITE_API_URL: http://localhost:8000
     depends_on:
-      - api
-    restart: unless-stopped
+      - backend
+    networks:
+      - levi
 
-  # ── Observability ──────────────────────────────────────
+  # Observability Layer
   prometheus:
-    image: prom/prometheus
+    image: prom/prometheus:latest
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
       - "9090:9090"
+    networks:
+      - levi
 
   grafana:
     image: grafana/grafana:latest
     ports:
-      - "3000:3000"
-    volumes:
-      - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./infrastructure/grafana/dashboards:/etc/grafana/dashboards:ro
-    depends_on:
-      - prometheus
-    restart: unless-stopped
+      - "3001:3000"
+    networks:
+      - levi
 
+volumes:
+  postgres_data:
+  redis_data:
+  neo4j_data:
+  ollama_data:
 
-# 🏛️ Volume Finalization: All data now localized to D:\LEVI-AI\data
+networks:
+  levi:
+    driver: bridge

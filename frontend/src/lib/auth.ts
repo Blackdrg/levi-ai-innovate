@@ -3,7 +3,7 @@
  * Secure token management and automatic session persistence.
  */
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+export const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 export async function login(username: string, password: string) {
   const res = await fetch(`${API_BASE}/api/v1/auth/token`, {

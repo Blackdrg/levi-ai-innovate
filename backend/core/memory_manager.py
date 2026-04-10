@@ -47,6 +47,18 @@ class MemoryManager:
     Manages the lifecycle of cognitive context across 4 distinct tiers.
     """
 
+    async def initialize(self) -> None:
+        """Initialize memory tiers and connections."""
+        logger.info("[MemoryV8] Initializing Sovereign Memory Engine tiers...")
+        # Add any async init logic for DAOs/Clients here if needed
+        pass
+
+    async def shutdown(self) -> None:
+        """Graceful teardown of memory tiers."""
+        logger.info("[MemoryV8] Shutting down memory tiers...")
+        # Add any async cleanup logic here
+        pass
+
     # ── Tier 1/2: Short-term & Episodic Retrieval ───────────────────────────
 
     async def get_short_term(self, session_id: str) -> List[Dict[str, Any]]:
