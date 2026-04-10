@@ -106,18 +106,77 @@ LEVI-AI is deployed on a highly available, managed Google Cloud platform. This i
 
 ---
 
-## 3. Architecture Overview
+## 3. Frontend Technical Architecture
+
+The LEVI-AI Frontend is a highly optimized, reactive interface designed for real-time mission observability and control.
+
+### 3.1 Tech Stack & Core Libraries
+- **Framework**: [React 18](https://reactjs.org/) + [Vite 6](https://vitejs.dev/) for ultra-fast HMR and build performance.
+- **State Management**: [Zustand](https://github.com/pmndrs/zustand) for lightweight, predictable global state across missions and telemetry.
+- **Styling**: [Tailwind CSS](https://tailwindcss.com/) + [PostCSS](https://postcss.org/) for utility-first, performant UI components.
+- **Animations**: [Framer Motion](https://www.framer.com/motion/) for smooth transitions and cognitive state visualization.
+- **Visualization**: [ReactFlow](https://reactflow.dev/) for interactive Sovereign Task Graph (DAG) rendering.
+- **Networking**: [Axios](https://axios-http.com/) for API communication and **Server-Sent Events (SSE)** for real-time mission telemetry.
+
+### 3.2 Directory Structure (`frontend/src/`)
+```text
+├── components/     # Atomic UI components (Buttons, Modals, Cards)
+├── features/       # Feature-specific logic (Chat, Studio, Monitor)
+├── hooks/          # Custom React hooks (useAuth, useMission, useSSE)
+├── lib/            # Third-party library configurations
+├── pages/          # Top-level page components (Admin, Marketplace, Gallery)
+├── services/       # API service wrappers (InternalServiceClient)
+├── store/          # Zustand store definitions (authStore, missionStore)
+├── styles/         # Global CSS and Tailwind directives
+└── utils/          # Pure helper functions and formatters
+```
+
+### 3.3 ReactFlow Integration
+The execution graph is rendered dynamically from the `frozen_dag` stored in the mission payload. Nodes are colored based on their lifecycle status (`CREATED`, `RUNNING`, `COMPLETE`, `FAILED`), providing immediate visual feedback of the "cognitive wave" execution.
+
+---
+
+## 4. Database Architecture & Schema
+
+LEVI-AI utilizes a multi-tier persistence model to balance real-time responsiveness with long-term semantic knowledge.
+
+### 4.1 SQL Fabric (PostgreSQL 15)
+The primary relational store for immutable missions, identity, and compliance.
+
+| Table | Purpose | Key Features |
+| :--- | :--- | :--- |
+| **`user_profiles`** | Identity Archetypes | Multi-tenant scoped, Trait-crystallization relationship. |
+| **`missions`** | Primary Mission Ledger | Tracks `fidelity_score`, `objective`, and `status`. |
+| **`audit_log`** | Compliance Registry | **Partitioned by Month**, Cryptographically chained SHA-256 integrity. |
+| **`graduated_rules`** | Evolution Store | Stores high-fidelity patterns promoted to fast-path logic. |
+| **`training_corpus`** | Learning Signal | Captures inputs for future LoRA fine-tuning and culling. |
+| **`user_credits`** | Economic Ledger | Tracks CU balances and subscription tier limits. |
+
+### 4.2 Cognitive Storage Tiers
+- **Tier 1 (Episodic)**: [Redis/Memorystore] 7-day rolling window for rapid context retrieval.
+- **Tier 2 (Factual)**: [PostgreSQL] Immutable factual history of user interactions.
+- **Tier 3 (Relational)**: [Neo4j] Knowledge graph tracking entities and semantic triples.
+- **Tier 4 (Semantic)**: [FAISS/Vector DB] Distributed vector memory for similarity retrieval and RAG.
+
+### 4.3 Resilience Layer (`missions_aborted`)
+The `missions_aborted` table stores the `frozen_dag` (full serialized graph state) and the `wave_index` of transient failures. This allows the system to perform deterministic restarts from the exact failure point without re-executing successful upstream nodes.
+
+---
+
+## 5. Architecture Overview
 
 ### 3.1 Request Lifecycle Flow
 
 ```mermaid
 graph TD
-    User[User Request] --> Gateway[FastAPI Gateway]
+    User[User Request] --> Frontend[React UI / Zustand]
+    Frontend --> Gateway[FastAPI Gateway]
     Gateway --> FastPath{Fast-Path / Cache?}
     FastPath -- Hit --> Response[Response]
     FastPath -- Miss --> SecurityGate{Security Anomaly Gate}
     SecurityGate -- Threat --> Block[Block & Alert]
-    SecurityGate -- Clean --> Auth[RS256 JWT Identity]
+    SecurityGate -- Clean --> Guardrails[PII / NER Guardrails]
+    Guardrails --> Auth[RS256 JWT Identity]
     Auth --> Orchestrator[Orchestrator]
     Orchestrator --> Evolution{Evolutionary Rule?}
     Evolution -- Match --> FastPath
@@ -129,6 +188,8 @@ graph TD
     Agents --> Tools[Isolated Tools]
     Tools --> Memory[Memory Sync]
     Memory --> Response[Final Response]
+    Response -.-> Learning[Learning Pipeline]
+    Learning -.-> Evolution
 ```
 
 ### 3.2 Memory Flow (Single Write Authority)
@@ -154,29 +215,42 @@ graph TD
     Swarm --> Logic[Logic: Code, Task, Consensus]
     Swarm --> Data[Data: Search, Research, Document]
     Swarm --> Creative[Creative: Image, Video]
-```
-
-### 3.4 Complete System Architecture
-
-```mermaid
-graph TD;
+```graph TD;
 
   %% === Ingress & Infrastructure ===
+  subgraph Frontend React UI
+    UI["React 18 + Vite"]
+    STOR["Zustand State Store"]
+    FLOW["ReactFlow Graph Rendering"]
+    UI <--> STOR
+    UI --> FLOW
+  end
+
+  subgraph CI/CD & Deployment
+    GHA["GitHub Actions (Audit/Tests)"]
+    GCB["Google Cloud Build"]
+    REG["Artifact Registry"]
+    GHA --> GCB
+    GCB --> REG
+    REG -.-> RUN
+  end
+
   subgraph GCP Cloud Run Infrastructure
+    RUN["Cloud Run (Backend)"]
     LB[Cloud Load Balancing]
     HPA[Cloud Run Auto-scaling]
-    GCR[Artifact Registry]
-    LB --> GW
+    LB --> UI
+    UI --"[rs256]"--> RUN
     HPA --> LB
-    GCR -.-> GW
   end
 
   subgraph Gateway Tier
     GW["FastAPI App Gateway"]
     RATE["Tiered Sliding Window Rate Limiter"]
     SH["RBAC / SSRF Shield & CSP"]
-    PII["Prompt Injection / Secret Guard"]
+    PII["PII / NER Guardrails"]
     
+    RUN --> GW
     GW <--> RATE
     GW --> PII
     PII --> SH
@@ -195,14 +269,14 @@ graph TD;
     TEAR -.-> ORC
   end
 
-  %% === Planning & Brain Governance ===
+  %% === Brain Governance ===
   subgraph Brain Governance
-    PL["DAG Planner (Unified: Goal + Intent + DAG)"]
+    PL["DAG Planner (Unified Unified)"]
     RC["Reasoning Core (Critique & Simulation)"]
     EVO["Evolution Engine (Fragility & Rules)"]
     
     ORC --> EVO
-    EVO --"Rule Graduation"--> RESPONSE
+    EVO --"Rule Graduation"--> Response
     EVO --"Mission Drift"--> PL
     PL --> RC
     RC <--> EVO
@@ -224,39 +298,38 @@ graph TD;
 
   %% === Agent Ecosystem ===
   subgraph Sovereign Agent Swarm
-    AG_BASE["SovereignAgent Base (Reflexive Correction)"]
-    AG_CODE["Artisan (Code & Safe Sandbox)"]
+    AG_BASE["SovereignAgent Base (Reflexive)"]
+    AG_CODE["Artisan (CodeSandbox)"]
     AG_TASK["HardRule (Logic)"]
-    AG_SEARCH["Scout (Search & Retrieval)"]
+    AG_SEARCH["Scout (Search/RAG)"]
     AG_DOC["Analyst (OCR/Parsing)"]
-    COMPENSE["Compensation Engine (Rollbacks)"]
+    COMPENSE["Compensation Engine (Saga Rollback)"]
     
     SCHED --> AG_BASE
-    AG_BASE --> AG_CODE
-    AG_BASE --> AG_TASK
-    AG_BASE --> AG_SEARCH
-    AG_BASE --> AG_DOC
+    AG_BASE --"[mtls 1.3]"--> AG_CODE
+    AG_BASE --"[mtls 1.3]"--> AG_TASK
+    AG_BASE --"[mtls 1.3]"--> AG_SEARCH
+    AG_BASE --"[mtls 1.3]"--> AG_DOC
     AG_BASE -.-> COMPENSE
   end
 
   %% === Memory Integrity ===
   subgraph GCP Managed Memory Architecture
     MCM["Memory Consistency Manager (MCM)"]
-    RED["Memorystore (Redis 6.x)"]
+    RED["Memorystore (Redis Cluster)"]
     PG["Cloud SQL (PostgreSQL 15)"]
-    NEO["Neo4j (Relational Knowledge)"]
-    VEC["FAISS/Vector DB (Semantic RAG)"]
-    HEAL["MCM Asynchronous Reconciliation Jobs"]
+    NEO["Neo4j (Knowledge Graph)"]
+    VEC["FAISS/Vector DB (Semantic)"]
+    VPC["VPC Connector (Isolation)"]
     
     AG_BASE --> MCM
-    MCM --> RED
-    MCM --> PG
-    MCM --> NEO
+    MCM --"[tcp/resp]"--> RED
+    MCM --"[tcp/sql]"--> PG
+    MCM --"[bolt]"--> NEO
     MCM --> VEC
-    HEAL <--> RED
-    HEAL --> NEO
+    VPC -.-> PG
+    VPC -.-> RED
   end
-
 
   %% === Telemetry & Replay ===
   subgraph Observability
@@ -274,7 +347,31 @@ graph TD;
 
 ---
 
-## 4. Core Components (System Blueprint)
+## 6. Server Wiring & Security Middleware
+
+The LEVI-AI Gateway is a mission-critical FastAPI application that coordinates model routing, identity verification, and DCN swarm synchronization.
+
+### 6.1 Service Routers (v14.2)
+The application is decomposed into specialized domains for isolation and performance:
+- `/api/v1/orchestrator`: Central Mission Control and mission lifecycle state machine.
+- `/api/v1/auth`: **RS256 Asymmetric Identity** provider.
+- `/api/v1/memory`: Gateway to the 4-tier cognitive memory layers.
+- `/api/v1/learning`: Evolved intelligence engine and fragility tracking.
+- `/api/v1/telemetry`: SSE pulse broadcaster for real-time dashboard updates.
+- `/api/v1/compliance`: GDPR Hard-Delete and immutable audit log exports.
+
+### 6.2 Security Middleware Stack
+1. **`RS256 Identity Middleware`**: Mandates asymmetric cryptographic verification of JWTs using the project's Public Key.
+2. **`SSRF Shield Middleware`**: Inspects all egress payloads to prevent DNS-rebinding attacks and internal CIDR leakage.
+3. **`RateLimitMiddleware`**: USes a Redis-backed sliding window for precision throttling of mission execution waves.
+4. **`SecurityHeadersMiddleware`**: Enforces strict CSP, HSTS, and Frame-Options for production hardening.
+
+### 6.3 Lifecycle & DCN Gossip Hub
+During the `lifespan` event, the server initializes the **DCN Gossip Manager**. This background worker facilitates node discovery and shared cognitive insights across the swarm, ensuring that once a pattern is "Graduated" on one node, it is synchronized globally.
+
+---
+
+## 7. Pipelines & Cognitive Data Flow
 
 | Module | Purpose | Input | Output | Dependencies |
 | :--- | :--- | :--- | :--- | :--- |
@@ -390,7 +487,48 @@ Each completed mission is treated as a training signal:
 
 ---
 
-## 7. Agent Swarm (Registry)
+## 8. Pipelines & Cognitive Data Flow
+
+LEVI-AI orchestrates data through three primary specialized pipelines.
+
+### 8.1 Ingestion Pipeline (RAG Flow)
+`Source (Web/File) -> Clean -> Chunk -> Semantic Embedding (Local LLM) -> Vector Pulse -> Vector DB Store`
+- Optimized for batch processing of large datasets without blocking the primary mission waves.
+- Uses asynchronous workers to populate the FAISS/HNSW indices.
+
+### 8.2 Self-Evolution Pipeline (Learning Loop)
+`Failure Detection -> Insight Capture (Postgres) -> Council of Models Optimization -> System Patch -> Graduation Rule`
+- Automatically analyzes missions with low fidelity scores ($F < 0.6$).
+- Promotes stable reasoning patterns to the **Fast-Path** cache once they achieve $\ge 95\%$ average fidelity.
+
+### 8.3 Mission Execution Pipeline
+`Orchestrator -> DAG Planner -> Reasoning Core -> Wave Executor (Greedy Waves) -> Outcome Collector`
+- The system parallelizes task nodes into "waves" based on dependency satisfaction.
+- Every mission is idempotent and results are cached across the 3-tier semantic cache.
+
+---
+
+## 9. CI/CD & Production Pipelines
+
+LEVI-AI employs a robust CI/CD strategy to maintain **100% Production Stability**.
+
+### 9.1 GitHub Actions Workflows
+The repository includes 13+ specialized workflows for automated testing and deployment:
+- **`deploy-backend.yml`**: Triggers on pushes to `main`. Builds and deploys the Sovereign Gateway to **GCP Cloud Run**.
+- **`production_readiness.yml`**: Runs the 10-step graduation suite, including stress tests and auth verification.
+- **`certification_gate.yml`**: Mandatory security scan and license compliance check before deployment.
+- **`sovereign-graduate.yml`**: Automates the tagging and archiving of production-stable releases.
+
+### 9.2 Deployment Flow (GCP)
+1. **Source Check**: Git push triggers GitHub Actions.
+2. **Build**: [Cloud Build] containerizes dependencies and core logic.
+3. **Register**: Images are versioned and stored in [Artifact Registry].
+4. **Deploy**: [Cloud Run] performs a zero-downtime rolling update.
+5. **Verify**: Post-deployment smoke tests trigger an immediate rollback if the `system_graduation_score` drops below 1.0.
+
+---
+
+## 10. Agent Swarm (Registry)
 
 LEVI-AI utilizes a specialized swarm of agents, each acting as a "dumb executor" governed by the central Orchestrator.
 
@@ -817,6 +955,26 @@ The following environment variables configure the Sovereign OS. Defaults are saf
 
 ---
 
+## 20. Connection Wiring & Internal Service Mappings
+
+LEVI-AI components are "wired" through a combination of environment variables and internal discovery pulses.
+
+| Component | Target Wire | Protocol | Wiring Logic |
+| :--- | :--- | :--- | :--- |
+| **Gateway -> Redis** | `REDIS_URL` | TCP/RESP | Mission locking, wave scheduling, cache. |
+| **Gateway -> SQL** | `POSTGRES_URL` | TCP/SQL | Immutable ledge, user profiles, audit. |
+| **ORC -> DCN** | `DCN_SECRET` | HMAC-SHA256 | Signed Gossip pulses for state reconciliation. |
+| **ORC -> Agents** | `INTERNAL_SERVICE_KEY` | mTLS 1.3 | Trusted service-to-service communication. |
+| **ORC -> LLM** | `OLLAMA_HOST` | HTTP/REST | Local-first inference routing. |
+| **Memory -> Neo4j**| `NEO4J_URI` | Bolt | Relational knowledge mapping. |
+| **Memory -> Vector**| `VECTOR_BACKEND` | gRPC/Local | FAISS/HNSW similarity retrieval. |
+| **Pipeline -> GCS** | `GCP_PROJECT_ID` | HTTPS | Managed artifact and backup storage. |
+
+### 20.1 Internal Service Communication
+The system utilizes the `InternalServiceClient` to perform zero-trust requests between nodes. Every request is signed ($Sig = Sign_{HMAC}(Payload, Secret)$) and includes a unique `X-Trace-ID` to ensure end-to-end observability across the distributed cognitive network.
+
+---
+
 ## 19. Deployment Guides
 
 ### 19.1 Docker Compose (Local)
@@ -863,6 +1021,18 @@ The following matrix represents the final audit status for the LEVI-AI Sovereign
 ---
 
 ## 21. System Manifest
+
+For a complete, auto-generated list of all internal modules, services, and agent registries, see the [SYSTEM_MANIFEST.md](./SYSTEM_MANIFEST.md).
+
+Example K8s Deployment Fragment:
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: levi-backend
+spec:
+  replicas: 3
+  selector:
     matchLabels:
       app: levi-backend
   template:
@@ -876,6 +1046,7 @@ The following matrix represents the final audit status for the LEVI-AI Sovereign
           envFrom:
             - secretRef:
                 name: levi-secrets
+```
           ports:
             - containerPort: 8000
           readinessProbe:
