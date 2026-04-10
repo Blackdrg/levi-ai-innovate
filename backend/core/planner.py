@@ -21,6 +21,7 @@ from .orchestrator_types import (
 from .task_graph import TaskGraph, TaskNode
 from .intent_classifier import HybridIntentClassifier
 from .learning_loop import LearningLoop
+from .strategy_ledger import StrategyLedger
 from backend.utils.llm_utils import call_lightweight_llm as _call_lightweight_llm
 from backend.utils.shield import PII_PATTERNS
 from pydantic import BaseModel, Field
@@ -277,6 +278,17 @@ class DAGPlanner:
                 "retry_strategy": "exp_backoff_jitter",
             }
         )
+        # 0. Strategy Ledger Lookup (Optimized Scaffolds)
+        optimized_template = StrategyLedger.get_best_template(intent_type)
+        if optimized_template:
+            logger.info(f"[Planner] 🚀 Consuming Optimized Strategy Template for {intent_type}")
+            learned_strategy = {"graph_template": optimized_template, "graph_signature": f"strat_{intent_type}"}
+            cached_graph = self._restore_cached_template(learned_strategy, user_input, perception)
+            if cached_graph:
+                cached_graph.metadata.update(graph.metadata)
+                cached_graph.metadata["strategy_ledger_hit"] = True
+                return cached_graph
+
         cached_graph = self._restore_cached_template(learned_strategy, user_input, perception)
         if cached_graph is not None:
             max_depth = decision.execution_policy.budget.max_dag_depth if decision else 8

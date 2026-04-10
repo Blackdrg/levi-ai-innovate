@@ -34,6 +34,7 @@ from backend.api.v8.learning import router as learning_v1
 from backend.api.scheduling import router as scheduling_v1
 from backend.api.v1.replay import router as replay_v1
 from backend.api.v14.brain import router as brain_v14
+from backend.api.v8.health import router as health_v1
 from backend.api.v8.debug import router as debug_v8
 
 # Middleware Tier
@@ -189,6 +190,7 @@ app.include_router(learning_v1, prefix="/api/v1/learning", tags=["Evolution"])
 app.include_router(replay_v1, prefix="/api/v1/missions", tags=["Resilience"])
 app.include_router(brain_v14, prefix="/api/v14", tags=["Brain Service v14.0"])
 app.include_router(debug_v8, prefix="/api/v8", tags=["Sovereign Debug"])
+app.include_router(health_v1, prefix="/api/v1/orchestrator/health", tags=["Health & DCN"])
 
 async def gossip_handler(pulse: Dict[str, Any]):
     """
@@ -210,6 +212,7 @@ async def gossip_handler(pulse: Dict[str, Any]):
 @app.get("/")
 @app.get("/api/v1/health")
 @app.get("/health")
+@app.get("/healthz")
 async def health_status():
     """Official Pulse of the Distributed AI Stack."""
     startup = collect_startup_checks()

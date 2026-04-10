@@ -65,3 +65,34 @@ CU_ABORT_THRESHOLD = int(os.getenv("CU_ABORT_THRESHOLD", "500"))
 CU_WARNING_PERCENT = 0.7  # Trigger warning at 70% of ceiling
 HITL_STRICT_MODE = True  # Block DRAFT quality delivery
 CRITIC_CALIBRATION_OFFSET = 0.0 # Weekly adjustment value
+def verify_production_secrets():
+    """
+    Sovereign v14.1 Security Gate: Fail-Hard Production Guardrails.
+    Prevents the system from booting with insecure or default secrets.
+    """
+    if ENVIRONMENT.lower() != "production":
+        return
+
+    # 1. Secret Key Hardening
+    if len(SECRET_KEY) < 32:
+        raise SystemExit("[CRITICAL] Insecure SECRET_KEY: Must be at least 32 characters in production.")
+    
+    if SECRET_KEY == "sovereign_os_genesis_key":
+        raise SystemExit("[CRITICAL] Default SECRET_KEY detected in production!")
+
+    # 2. JWT Configuration
+    jwt_secret = os.getenv("JWT_SECRET")
+    if not jwt_secret or jwt_secret == "dev_jwt_secret_placeholder":
+         raise SystemExit("[CRITICAL] Insecure or missing JWT_SECRET in production.")
+
+    # 3. Hardware / Environment Bounds
+    max_tokens = int(os.getenv("MAX_CONTEXT_TOKENS", "32768"))
+    if max_tokens > 128000:
+        # Prevent OOM on standard L4/A100 instances unless overridden with intent
+        import warnings
+        warnings.warn("Extreme MAX_CONTEXT_TOKENS detected. Verify VRAM backpressure limits.")
+
+    print(f"[System] Production Hardening Verified: env={ENVIRONMENT}, version={SOVEREIGN_VERSION}")
+
+# Execute Gate
+verify_production_secrets()

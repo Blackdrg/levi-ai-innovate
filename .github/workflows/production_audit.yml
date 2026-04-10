@@ -1,0 +1,42 @@
+name: Sovereign OS Production Audit
+
+on:
+  push:
+    branches: [ main, production ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install ruff bandit pytest httpx pydantic[email]
+
+    - name: Lint with Ruff
+      run: ruff check .
+
+    - name: Security Scan (Bandit)
+      run: bandit -r backend/ -ll
+
+    - name: Production Readiness Suite
+      run: |
+        # Simulate local env for test
+        export ENVIRONMENT=testing
+        export JWT_SECRET=test_secret_for_ci
+        python -m pytest tests/production_readiness_suite.py
+
+    - name: Verify K8s Manifests
+      run: |
+        # Simple dry-run style validation (requires kubectl or yq)
+        # For CI, we just ensure it's valid YAML
+        python -c "import yaml; yaml.safe_load(open('infrastructure/k8s/deployment.yaml'))"

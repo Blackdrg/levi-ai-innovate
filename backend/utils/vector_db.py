@@ -37,6 +37,8 @@ class VectorDB:
         self.meta_path = os.path.join(self.storage_dir, f"{collection_name}_meta.json")
         self.index = None
         self.metadata: List[Dict[str, Any]] = []
+        self._is_rebuilding = False
+        self._write_queue: List[tuple[List[str], List[Dict[str, Any]]]] = []
         os.makedirs(self.storage_dir, exist_ok=True)
 
     @classmethod
@@ -97,11 +99,13 @@ class VectorDB:
 
     async def rebuild_index(self):
         """
-        Sovereign v14.0.0-Autonomous-SOVEREIGN: High-fidelity deterministic re-indexing.
-        Applies L2-normalization for METRIC_INNER_PRODUCT (Cosine Similarity).
-        Preserves tenant_id and versioning for absolute isolation.
+        Sovereign v14.1.0-Autonomous-SOVEREIGN: High-fidelity deterministic re-indexing.
+        Applies rebuild_lock (IsRebuilding) to prevent write-loss during migration.
         """
-        if not self.metadata: return
+        self._is_rebuilding = True
+        if not self.metadata: 
+            self._is_rebuilding = False
+            return
         
         # Filtering: skip records marked as deleted for GDPR compliance
         self.metadata = [m for m in self.metadata if "text" in m and not m.get("deleted")]
@@ -122,23 +126,38 @@ class VectorDB:
         emb_np = np.array(new_embeddings).astype('float32')
         self.dimension = emb_np.shape[1]
         
-        # Build new HNSW index with Inner Product (Cosine)
-        # 32 = M (Max Connections), defaults to L2 if not specified.
+        # Build new HNSW index
         new_index = faiss.IndexHNSWFlat(self.dimension, 32, faiss.METRIC_INNER_PRODUCT)
         new_index.hnsw.efConstruction = 200
-        new_index.hnsw.efSearch = 64 # Optimized for real-time latency (v14.0.0-Autonomous-SOVEREIGN)
+        new_index.hnsw.efSearch = 64
         new_index.add(emb_np)
         
         async with self._lock:
+            # Atomic Swap & Flush Write Queue
             self.index = new_index
-            # Ensure version and tenant mapping is preserved in metadata
+            self._is_rebuilding = False
+            
+            if self._write_queue:
+                logger.info(f"[VectorDB] Flushing {len(self._write_queue)} queued writes for {self.collection_name}...")
+                # We recursively call add, but _is_rebuilding is false now
+                for q_texts, q_metas in self._write_queue:
+                    # We can't await inside a thread if we were in one, but here we are in an async def
+                    await self.add(q_texts, q_metas)
+                self._write_queue = []
+
+            # Ensure version/tenant mapping
             for m in self.metadata:
-                m["version"] = os.getenv("SOVEREIGN_VERSION", "v14.0.0-Autonomous-SOVEREIGN")
+                m["version"] = os.getenv("SOVEREIGN_VERSION", "v14.1.0-Autonomous-SOVEREIGN")
             self._save()
         logger.info(f"[VectorDB] Rebuild complete for {self.collection_name}.")
 
     async def add(self, texts: List[str], metadatas: List[Dict[str, Any]]):
         if not texts: return
+        
+        if self._is_rebuilding:
+            logger.info(f"[VectorDB] Rebuild in progress for {self.collection_name}. Queuing write...")
+            self._write_queue.append((texts, metadatas))
+            return
         
         embeddings = []
         from backend.db.vector_store import embed_text
