@@ -6,7 +6,7 @@ LEVI-AI is a high-fidelity, predictable, and failure-isolated distributed AI ope
 
 ## 1. Overview
 
-The active v14 runtime now inserts a mandatory **Reasoning Core** between planning and execution. Every mission can go through critique, dry-run simulation, confidence scoring, and plan refinement before the Executor runs the DAG.
+The active v14 runtime now inserts a mandatory **Reasoning Core** between planning and execution. Every mission passes through a weighted **Confidence Gate** (Threshold $C \ge 0.55$) before proceeding to the **Graph Executor**. The process includes critique, DAG simulation, and autonomous refinement.
 
 LEVI-AI is designed as a **Cognitive Operating System** that manages the lifecycle of AI missions—from intent classification and goal generation to parallelized agent execution and multi-tier memory synchronization. It addresses the inherent unpredictability of large language models by enforcing strict execution contracts, centralized state tracking, and a unified memory consistency layer.
 
@@ -260,6 +260,15 @@ graph TD;
 | **MCM** | Memory Consistency | Memory Events | Versioned State | Redis, Pipeline |
 | **Learning Loop** | Outcome Capture & Strategy Reuse | Mission Audit | Best DAG Templates | Evaluator, Corpus, Strategy Ledger |
 
+#### 4.1.1 DAG Generation Strategy
+- **Hybrid-LLM**: Uses **Template-Retrieval** for stable patterns (from Evolution Engine) and **Dynamic LLM Generation** for high-fragility or novel intents ($F > 0.4$).
+- **Granularity Rules**: 
+    - **Split**: When tool-sets differ or node output volume is predicted to exceed 1MB.
+    - **Merge**: When dependencies are linear and context overlap between nodes is $> 80\%$.
+- **Cost Model ($C_{dag}$ )**: 
+    $$C_{dag} = \sum (\text{Model\_Cost} + \text{Tool\_Latency}) \times \text{Risk\_Factor}$$
+    *Risk Factor is increased by 2.0x for sensitive domains or high-fragility routes.*
+
 ---
 
 ## 5. Execution Model
@@ -268,23 +277,31 @@ graph TD;
 
 Every mission is decomposed into a directed acyclic graph (DAG) of task nodes. Each node defines a **TEC**:
 
-- **`timeout_ms`**: Explicit execution deadline.
-- **`max_retries`**: Capped retry attempts (default: 2).
-- **`allowed_tools`**: Restricted tool access per agent.
-- **`memory_scope`**: Scoped memory access (`session`, `mission`, `global`).
-- **`fallback_output`**: Safe result returned if a node exhausts retries.
 - **`compensation_action`**: Recovery action recorded for failure handling and replay.
+
+#### 5.1.1 Node Lifecycle States
+- **CREATED**: Manifest initialized in memory.
+- **QUEUED**: Dependencies satisfied; awaiting available wave slot.
+- **RUNNING**: Active execution by a Sovereign Agent.
+- **COMPLETE**: Result validated and stored in MCM.
+- **FAILED**: Retries exhausted; compensation triggered.
+
+#### 5.1.2 Retry & Backoff
+- **Backoff Strategy**: Exponential backoff ($t = 2^n \times 500ms$) up to 2 retries.
+- **Dependency Timeout**: Cross-node dependency wait-time is capped at $5000ms$.
+- **Partial Completion Policy**: **Wait-All (Default)**. If a non-critical node fails, the DAG continues. If a **Critical Node** fails, the Orchestrator triggers an immediate abort of downstream dependents and executes compensation.
 
 ### 5.2 Mandatory Reasoning Pass
 
 Before the DAG reaches the Executor, the Reasoning Core performs:
 
 - **Plan Critique**: Detects missing dependencies, shallow plans, and weak resilience structure.
-- **Simulation Pass**: Dry-runs the DAG with mock outputs to expose blocked branches.
-- **Confidence Scoring**: Produces a per-plan confidence score used to trigger refinement.
+- **Simulation Pass**: A rule-based dry-run of the DAG with mock outputs to expose blocked branches.
+- **Confidence Scoring ($S$ )**: 
+  $$S = 0.92 - (0.2 \cdot \text{Issues}) - (0.05 \cdot \text{Warnings}) - (0.2 \text{ if simulation blocked}) - \text{complexity penalty}$$
 - **Execution Strategy Selection**: Chooses normal DAG execution or `safe_mode` linear fallback.
 
-The planner now supports a minimum two-pass flow when the first graph is weak: generation, critique, then refinement.
+The planner supports a minimum two-pass flow when $S < 0.55$ or when $\ge 1$ issues are detected: Generation -> Critique -> Refinement.
 
 ### 5.3 Wave Scheduling & Backpressure
 
@@ -316,9 +333,18 @@ That endpoint reports:
 | **Tier 3 (Relational)** | Neo4j | Knowledge graph triplets | Derived via Pipeline |
 | **Tier 4 (Semantic)** | Vector DB | Semantic fact retrieval | Derived via Embedding |
 
+**Fidelity Scoring System ($F$ )**:
+Missions are evaluated across four dimensions to determine graduation and learning:
+$$F = (0.4 \cdot C) + (0.3 \cdot G) + (0.2 \cdot L) + (0.1 \cdot U)$$
+- **$C$ (Correctness)**: Percentage of successful node completions.
+- **$G$ (Grounding)**: Factual resonance score from internal fact-checkers.
+- **$L$ (Latency)**: Time-efficiency score ($1.0 - \min(1.0, \frac{\text{Latency}}{\text{SLA}})$).
+- **$U$ (User Feedback)**: Explicit or implicit satisfaction signal.
+
 **Memory Consistency Manager (MCM)**:
 
 - Implements **Event Sourcing**: The Single Event Log is the absolute truth.
+- **Conflict Resolution**: In the event of a tier-desync, the **Redis Event Log (Tier-0)** is used to asynchronously rebuild the projection stores. MCM uses a "Last-Event-Wins" (LEW) strategy based on the Global Sequence ID.
 - Provides versioned projections to prevent conflict resolution issues.
 - Asynchronously reconciles all derived stores (Postgres, Neo4j, FAISS).
 
@@ -336,11 +362,21 @@ Each completed mission is treated as a training signal:
 
 LEVI-AI utilizes a specialized swarm of agents, each acting as a "dumb executor" governed by the central Orchestrator.
 
+### 7.1 Agent Failure Classification
+- **F-1 (Syntactic)**: JSON/Contract violation. Handled by immediate retry.
+- **F-2 (Logic)**: Valid output but fails Grounding check. Handled by Reasoning Core refinement.
+- **F-3 (System)**: Timeout or resource limit. Handled by fallback_output and circuit breaking.
+
 ### Logic & Planning
 
 - **Artisan (CodeAgent)**: Generates high-fidelity code and architectural patterns.
 - **HardRule (TaskAgent)**: Enforces recursive goal decomposition and strict intent logic.
 - **SwarmCtrl (ConsensusAgent)**: Adjudicates across parallel outputs for collective resonance.
+
+#### 7.2 Agent Governance & Sandboxing
+- **Inter-Agent Communication**: Strict **Parent-Child** (via Orchestrator) or **Peer-Consensus** (via SwarmCtrl) hierarchy. Direct P2P agent traffic is blocked to prevent privilege escalation.
+- **Resource Sandboxing**: Each agent process is capped at **256MB RAM** and **10% CPU**. Exceeding these triggers an automatic `F-3 (System)` failure.
+- **State Isolation**: Agents have no persistent local disk access; all state must be emitted as memory events to Tier-0.
 
 ### Data & Retrieval
 
@@ -359,10 +395,11 @@ The LEVI-AI v14.1.0-Autonomous-SOVEREIGN Graduation OS architecture is designed 
 The DCN is the communication backbone that allows multiple cognitive nodes to synchronize state and share reasoning results.
 
 - **Hybrid Consensus (DCN v14.1)**: 
-    - **Gossip + LWW**: Used for high-availability node discovery and metadata.
-    - **Raft-lite**: Used for "Mission Truth" (definitive state and cognitive history).
-- **HMAC Authenticated Pulses**: Every pulse in the DCN is signed with **HMAC-SHA256**.
-- **Resonance Heartbeats**: Every node broadcasts hardware and cognitive health every 30 seconds.
+    - **Gossip + LWW**: Used for high-availability node discovery and ephemeral health.
+    - **Raft-lite**: Used for **Mission Truth** (Definition: Multi-node mission logs and state transitions). Quorum = $\lfloor N/2 \rfloor + 1$.
+- **Mission Truth Schema**: `(MissionID: UUID, State: Int, Sequence: Long, Signature: Bytes)`.
+- **Partition Handling**: Nodes use a 2s election timeout and 500ms heartbeats. Stale leaders are automatically demoted on term mismatch.
+- **Conflict Resolution**: Raft state overrides Gossip metadata for all mission-critical transitions.
 
 ### 8.2 Evolutionary Intelligence Engine
 
@@ -371,37 +408,44 @@ The "Brain" self-improves through a continuous learning loop that manages strate
 - **Fragility Tracking**: The OS monitors performance metrics (Success/Failure streaks) to calculate a **Fragility Score (0.0–1.0)** for every cognitive domain. High fragility ($F \ge 0.4$) triggers an automatic escalation to **Deep Reasoning Mode**, forcing multi-agent reflection and simulation nodes in the DAG.
 - **Pattern Promotion**: Successful reasoning paths are recorded. When a pattern achieves **$\ge 95\%$ average fidelity over 5 independent missions**, it is graduated into a deterministic **Graduated Rule**, enabling the **Deterministic Fast-Path** for that intent.
 - **Tiered Critic Logic**: Graduated rules are governed by a tiered validation protocol. **Tier-0** (Syntactic Integrity) is mandatory for all overrides, while **Tier-1** (Deep Semantic) is bypassed only for highly stable rules ($\ge 0.995$ fidelity).
+- **Rule Decay Function**: 
+    $$F_{adj} = F_{base} \cdot e^{-\lambda t}$$ 
+    Where $\lambda$ (Decay Constant) is increased by zero usage and decreased by high-fidelity hits. Rules below $0.85$ adjusted fidelity are automatically pruned.
 - **Knowledge Crystallization**: High-fidelity mission outcomes are distilled into **Reasoning Prototypes**. These are used to update the **Neo4j Relational Graph** and the **FAISS Vector Index**, ensuring the system never solves the same complex problem twice from scratch.
-- **Strategic Decay**: Cognitive resonance fades over time. Templates that remain unused or drop below fidelity thresholds are automatically pruned to maintain system efficiency.
+- **Semantic Drift Handling**: The Vector DB triggers a **Centroid Recalculation** every 10k interactions to account for shifting conceptual clusters in user-specific memory.
+- **Embedding Versioning**: All Tier-4 items include a `model_version` tag. Version mismatch during retrieval triggers a **Just-In-Time (JIT) Re-embedding** before data is fed to the planner.
 
 ### 8.3 Hardware-Aware Backpressure
 
 LEVI-AI protects its host infrastructure through multi-signal resource gating.
 
 - **Signal Dimensions**: Real-time monitoring of **VRAM, CPU, RAM, and Executor Queue Depth**.
-- **15% VRAM Safety Buffer**: A mandatory buffer is maintained; missions requiring more than the available "safe" VRAM are either queued or transitioned to **Cloud Burst** proxies.
-- **Strategic Degradation**: Under heavy load, the system triggers the following responses to ensure uptime:
-    1.  **Agent Culling**: Disabling secondary reflection agents (e.g., the Critic).
-    2.  **Wave Serialization**: Converting parallel agent waves into sequential execution to lower peak compute spikes.
-    3.  **Tier Down-routing**: Forcing L1/L2 models for complex queries to preserve high-tier VRAM.
+- **15% VRAM Safety Buffer**: Mandatory baseline; requests exceeding $85\%$ VRAM utilization trigger cloud burst proxies.
+- **Priority Degradation Order**:
+    1.  **TIER-1 (80% Load)**: Disable `DiagnosticAgent` & background archival.
+    2.  **TIER-2 (85% Load)**: Disable `ReasoningCore` Critique; force standard planners.
+    3.  **TIER-3 (90% Load)**: Disable Wave Parallelism; force linear execution.
+    4.  **TIER-4 (95% Load)**: Drop non-mission-critical agents (Creative/Imaging).
 
 ### 8.4 DAG Resilience & Self-Healing
 
-The Sovereign Task Graph (DAG) is the primary unit of deterministic execution.
-
-- **Circuit Breakers**: Every task node features an independent circuit breaker with customizable failure thresholds and cooldown windows.
-- **Automatic Sub-DAG Batching**: If a generated DAG violates depth limits, the Orchestrator automatically flattens deep dependencies into **Atomic Batches** to prevent recursion overflow while maintaining logical integrity.
 - **Idempotency Locking**: A per-user, per-intent lock prevents "Thundering Herd" scenarios where duplicate identical missions execute simultaneously.
+
+### 8.6 Mission Lifecycle & Priority
+- **Cancellation**: Missions can be cancelled via `DELETE /api/v1/orchestrator/mission/{id}`, triggering immediate SIGTERM to the agent wave and a compensation pulse.
+- **Priority Scheduling**: High-tier users ('Sovereign') are assigned to a dedicated **Priority Queue** with guaranteed VRAM semaphore slots.
+- **Global Timeout**: Every mission has a mandatory global safety timeout of $120s$.
 
 ### 8.5 Sovereign Security Wall (RS256 & DNS Shield)
 
 Security is enforced at the network and logic layer, not just the API.
 
-- **RS256 JWT Identity**: Switched from HS256 to **RSA-256 Asymmetric signatures**. Edge nodes verify identity without access to the central private key.
-- **DNS-Rebinding Shield**: The EgressProxy performs pre-request DNS resolution to verify IPs against forbidden subnets, neutralizing rebinding vectors.
-- **CypherProtector**: Mandatory validation middleware for graph queries, blocking injection and sensitive data extraction.
-- **Logic Sandbox**: All code execution occurs in an isolated rootless container boundary.
-- **Industrial Headers**: Enforced HSTS, CSP (default-src 'self'), and X-Frame-Options (DENY).
+- **RS256 JWT Identity**: Asymmetric signatures ensure identity integrity across the swarm.
+- **LLM Threat Model**:
+    - **Injection Escalation**: Multi-tier intent classification blocks prompt injection from reaching task-graph generation.
+    - **Tool Poisoning**: Sandboxed tools communicate via zlib-compressed binary hashes, preventing downstream exploit persistence.
+    - **Trust Boundaries**: No internal unauthenticated service mesh; all intra-node traffic requires HMAC parity.
+- **DNS-Rebinding Shield**: EgressProxy IP whitelist gating.
 
 ### Specialized Functions
 
@@ -504,6 +548,45 @@ INTERNAL_SERVICE_KEY=replace-with-real-service-key
 | `/api/v1/missions/replay/{id}` | GET | Triggers deterministic replay of a previous mission. |
 | `/metrics` | GET | Exposes Prometheus telemetry for system monitoring. |
 
+#### 11.1 Replay Determinism
+Missions are rendered deterministic during replay by:
+- **Seed Injection**: Forcing a fixed seed for all probabilistic LLM nodes.
+- **Tool Mocking**: Replaying the exact stored outputs for all external API/Tool calls.
+- **Time Freezing**: Injecting the original mission timestamp into all time-dependent logic.
+
+---
+
+## 11.2 API Layer & Production Standards
+
+### 11.2.1 Standardized Error Schema
+All v14.1 errors follow the Sovereign Error Format:
+```json
+{
+  "error_code": "LEVI_004_VRAM_REJECTION",
+  "message": "Insufficient VRAM for parallel wave execution.",
+  "trace_id": "tr_12345",
+  "remediation": "Wait for queue clearing or force linear mode."
+}
+```
+
+### 11.2.2 Webhooks & Async Callbacks
+Missions can specify a `callback_url`. The Orchestrator emits a `POST` event on:
+- **MISSION_COMPLETED**
+- **MISSION_FAILED_COMPENSATION**
+- **SLA_BREACH_WARNING**
+
+### 11.2.3 Rate Limiting
+- returns `429 Too Many Requests`
+- Headers: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`.
+
+---
+
+## 11.4 Versioning & Upgrade Strategy
+
+- **Backward Compatibility**: v14.1 maintains a **DAG Translation Shim** to execute legacy v14.0 JSON manifests.
+- **Model Upgrades**: Embedding shifts are handled via the **JIT Re-embedding** layer in Tier-4.
+- **State Migration**: Redis snapshots from v14.0 are 100% compatible with the v14.1 Raft-lite log.
+
 ---
 
 ## 12. Failure Handling & Recovery
@@ -543,13 +626,12 @@ Structured logs also include:
 - `duration_ms`
 - `status`
 
-### 12.2 Health Graph
-
-The `/api/v1/orchestrator/health/graph` endpoint aggregates real-time stability metrics:
-
-- **Throughput**: Queue depth, DAG failure rates.
-- **Resources**: VRAM usage, Redis/Neo4j query latencies.
 - **Quality**: Fidelity scores across the last 100 missions.
+
+### 13.3 Auto-Remediation & Alerts
+- **SLO Violation (Latency > 2s)**: Triggers an automatic cache-flush and shard-rebalance for the Vector DB.
+- **Node Drift (> 0.4 Fragility)**: Triggers an immediate "Deep Reasoning" lock for the affected domain.
+- **Memory Inconsistency**: Triggers a forced MCM resync from the Redis Event Log (Source of Truth).
 
 ---
 
