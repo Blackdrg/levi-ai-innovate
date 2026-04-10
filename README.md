@@ -215,7 +215,12 @@ graph TD
     Swarm --> Logic[Logic: Code, Task, Consensus]
     Swarm --> Data[Data: Search, Research, Document]
     Swarm --> Creative[Creative: Image, Video]
-```graph TD;
+```
+
+### 3.4 Complete System Architecture
+
+```mermaid
+graph TD;
 
   %% === Ingress & Infrastructure ===
   subgraph Frontend React UI
@@ -389,8 +394,8 @@ During the `lifespan` event, the server initializes the **DCN Gossip Manager**. 
 - **Granularity Rules**: 
     - **Split**: When tool-sets differ or node output volume is predicted to exceed 1MB.
     - **Merge**: When dependencies are linear and context overlap between nodes is $> 80\%$.
-- **Cost Model ($C_{dag}$ )**: 
-    $$C_{dag} = \sum (\text{Model\_Cost} + \text{Tool\_Latency}) \times \text{Risk\_Factor}$$
+- **Cost Model ($C_{dag}$)**: 
+    $$C_{dag} = \sum (\text{Model Cost} + \text{Tool Latency}) \times \text{Risk Factor}$$
     *Risk Factor is increased by 2.0x for sensitive domains or high-fragility routes.*
 
 ---
