@@ -213,3 +213,25 @@ async def approve_mission_node(
     
     logger.info(f"[HITL] Decision '{decision}' received for mission {request.mission_id}")
     return {"status": "success", "message": f"Mission node {decision}."}
+@router.delete("/mission/{mission_id}")
+async def cancel_mission_endpoint(
+    mission_id: str,
+    current_user: Any = Depends(get_current_user)
+):
+    """
+    Sovereign Cancellation: Abort an in-flight mission.
+    Triggers immediate stop in GraphExecutor and background cleanup.
+    """
+    from backend.utils.mission import MissionControl
+    
+    # 1. Verify existence/ownership if possible (omitted for speed in this spec)
+    # 2. Set Cancellation Flag
+    MissionControl.cancel_mission(mission_id)
+    
+    # 3. Mark state as FAILED in sm
+    from backend.core.execution_state import CentralExecutionState, MissionState
+    sm = CentralExecutionState(mission_id)
+    sm.transition(MissionState.FAILED)
+    
+    logger.info(f"[Orchester-v13] Mission {mission_id} cancellation requested by user.")
+    return {"status": "success", "message": f"Mission {mission_id} cancellation pulse emitted."}

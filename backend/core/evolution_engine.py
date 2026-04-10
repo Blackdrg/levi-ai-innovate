@@ -20,6 +20,14 @@ class EvolutionaryIntelligenceEngine:
     """
     
     MIN_HITS_FOR_STABILITY = 5
+    DOMAIN_THRESHOLDS = {
+        "code": 20,
+        "security": 20,
+        "finance": 20,
+        "chat": 5,
+        "search": 10,
+        "default": 10
+    }
     FIDELITY_GRADUATION_THRESHOLD = 0.95
     BYPASS_FIDELITY_THRESHOLD = 0.995 # Tier-1 Bypass
     
@@ -27,7 +35,7 @@ class EvolutionaryIntelligenceEngine:
     async def record_outcome(cls, user_id: str, domain: str, fidelity: float, query: str, response: str):
         """Processes mission outcome to update fragility and track patterns."""
         await cls._update_fragility(user_id, domain, fidelity)
-        await cls._track_pattern(query, response, fidelity)
+        await cls._track_pattern(query, response, fidelity, domain=domain)
 
     @classmethod
     async def get_fragility(cls, user_id: str, domain: str) -> float:
@@ -128,13 +136,42 @@ class EvolutionaryIntelligenceEngine:
             logger.error(f"[Evolution] Fragility update failure: {e}")
 
     @classmethod
-    async def _track_pattern(cls, query: str, response: str, fidelity: float):
+    async def on_rule_graduated(cls, rule_id: int):
+        """
+        Callback triggered when a rule graduates to 'STABLE'.
+        Updates the Fast-Path Redis cache for Tier-0 deterministic overrides.
+        """
+        try:
+            from backend.db.redis import r_async as redis_client, HAS_REDIS_ASYNC
+            if not HAS_REDIS_ASYNC or not redis_client:
+                return
+
+            async with PostgresDB._session_factory() as session:
+                rule = await session.get(GraduatedRule, rule_id)
+                if not rule or not rule.is_stable:
+                    return
+
+                # Write to Fast-Path Routing Table (Redis Hash)
+                # Key: task_pattern (normalized), Value: result_data
+                await redis_client.hset(
+                    "sovereign:fast_path:rules",
+                    rule.task_pattern,
+                    json.dumps(rule.result_data)
+                )
+                logger.info(f"[Evolution] 🎓 Rule {rule_id} Graduated to Fast-Path Cache.")
+        except Exception as e:
+            logger.error(f"[Evolution] Graduation callback failure: {e}")
+
+    @classmethod
+    async def _track_pattern(cls, query: str, response: str, fidelity: float, domain: str = "default"):
         """Tracks repeating patterns and graduates them if they exceed thresholds."""
         if fidelity < cls.FIDELITY_GRADUATION_THRESHOLD:
             return
 
         try:
             task_key = query.lower().strip()
+            threshold = cls.DOMAIN_THRESHOLDS.get(domain, cls.DOMAIN_THRESHOLDS["default"])
+            
             async with PostgresDB._session_factory() as session:
                 async with session.begin():
                     stmt = select(GraduatedRule).where(GraduatedRule.task_pattern == task_key)
@@ -153,10 +190,13 @@ class EvolutionaryIntelligenceEngine:
                         rule.uses_count += 1
                         rule.fidelity_score = (rule.fidelity_score * (rule.uses_count - 1) + fidelity) / rule.uses_count
                         
-                        # Stability Graduation
-                        if rule.uses_count >= cls.MIN_HITS_FOR_STABILITY and rule.fidelity_score >= cls.FIDELITY_GRADUATION_THRESHOLD:
-                            rule.is_stable = True
-                            logger.info(f"[Evolution] Rule STABILIZED: {task_key[:30]}...")
+                        # Stability Graduation (Domain Specific)
+                        if rule.uses_count >= threshold and rule.fidelity_score >= cls.FIDELITY_GRADUATION_THRESHOLD:
+                            if not rule.is_stable:
+                                rule.is_stable = True
+                                logger.info(f"[Evolution] Rule STABILIZED for domain '{domain}': {task_key[:30]}...")
+                                from backend.utils.runtime_tasks import create_tracked_task
+                                create_tracked_task(cls.on_rule_graduated(rule.id), name=f"graduation-{rule.id}")
                             
                     rule.last_validated_at = datetime.now(timezone.utc)
                 await session.commit()

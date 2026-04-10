@@ -5,11 +5,11 @@ from typing import Any, Optional, Dict
 
 logger = logging.getLogger(__name__)
 
+from .kms import get_kms_provider
+
+HAS_CRYPTO = True
 try:
     from cryptography.fernet import Fernet
-    from cryptography.hazmat.primitives import hashes
-    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-    HAS_CRYPTO = True
 except ImportError:
     HAS_CRYPTO = False
     logger.warning("cryptography package not found. Memory vault using DEGRADED obfuscation.")
@@ -27,27 +27,13 @@ class SovereignVault:
     _master_fernet: Optional[Any] = None
     _rotation_keys: Dict[str, Any] = {}
 
+    _kms: Optional[Any] = None
+
     @classmethod
-    def _get_master_fernet(cls, version: str = "v1"):
-        if version == "v1" and cls._master_fernet:
-            return cls._master_fernet
-            
-        secret = os.getenv(f"SYSTEM_SECRET_{version.upper()}", os.getenv("SYSTEM_SECRET", "levi-sovereign-default-secret-2024"))
-        salt = b'levi_salt_v13'
-        
-        if HAS_CRYPTO:
-            kdf = PBKDF2HMAC(
-                algorithm=hashes.SHA256(),
-                length=32,
-                salt=salt,
-                iterations=100000,
-            )
-            key = base64.urlsafe_b64encode(kdf.derive(secret.encode()))
-            fernet = Fernet(key)
-            if version == "v1": cls._master_fernet = fernet
-            return fernet
-        else:
-            return "DEGRADED"
+    def _get_kms(cls):
+        if not cls._kms:
+            cls._kms = get_kms_provider()
+        return cls._kms
 
     @classmethod
     def encrypt(cls, data: str) -> str:
@@ -65,13 +51,13 @@ class SovereignVault:
         # 2. Encrypt Data with DEK
         enc_data = f_dek.encrypt(data.encode())
         
-        # 3. Encrypt DEK with Master Key (Envelope)
-        mk = cls._get_master_fernet("v1")
-        enc_dek = mk.encrypt(dek)
+        # 3. Encrypt DEK with KMS (Envelope Residency)
+        kms = cls._get_kms()
+        enc_dek_bytes = kms.encrypt_dek(dek)
         
         # 4. Pack the Envelope
-        # Format: version:enc_dek:enc_data
-        payload = f"v1:{base64.b64encode(enc_dek).decode()}:{base64.b64encode(enc_data).decode()}"
+        # Format: kms_v1:base64(enc_dek):base64(enc_data)
+        payload = f"kms_v1:{base64.b64encode(enc_dek_bytes).decode()}:{base64.b64encode(enc_data).decode()}"
         return payload
 
     @classmethod
@@ -90,12 +76,12 @@ class SovereignVault:
             if len(parts) != 3: return token
             
             version, enc_dek_b64, enc_data_b64 = parts
-            enc_dek = base64.b64decode(enc_dek_b64)
+            enc_dek_bytes = base64.b64decode(enc_dek_b64)
             enc_data = base64.b64decode(enc_data_b64)
             
-            # 1. Decrypt DEK with Master Key
-            mk = cls._get_master_fernet(version)
-            dek = mk.decrypt(enc_dek)
+            # 1. Decrypt DEK with KMS
+            kms = cls._get_kms()
+            dek = kms.decrypt_dek(enc_dek_bytes)
             
             # 2. Decrypt Data with DEK
             f_dek = Fernet(dek)

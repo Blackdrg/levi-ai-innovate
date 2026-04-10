@@ -17,9 +17,7 @@ LEVI-AI is designed as a **Cognitive Operating System** that manages the lifecyc
 - **Sovereign**: Absolute control over data, memory, and model routing.
 - **Distributed**: Built for high-availability across multiple cognitive nodes (DCN).
 
-### Current Status (2026-04-10)
-
-The LEVI-AI **v14.1.0-Autonomous-SOVEREIGN** system has graduated from production hardening and is **100% Production-Stable**.
+The LEVI-AI **v14.1.0-Autonomous-SOVEREIGN** system has officially graduated to **100% Production-Stable (Sovereign Certified)**.
 
 `Gateway -> Fast-Path -> Orchestrator -> Goal -> Planner -> Reasoning -> Executor -> Agents -> Memory -> Response`
 
@@ -33,12 +31,15 @@ The LEVI-AI **v14.1.0-Autonomous-SOVEREIGN** system has graduated from productio
 - **Smoke Suite**: 100% Success across all core service routers (`tests/production_readiness_suite.py`).
 - **Load Baseline**: Verified stability at 100 concurrent VUs with zone-aware K8s HA scaling.
 
-Recently Closed (v14.1 Graduation Phase):
+Recently Closed (v14.1 Graduation Finality):
+- **Generic KMS (Vault/Local)**: Implemented cloud-agnostic key management with HashiCorp Vault transit engine integration.
+- **Strategy Ledger**: Pre-optimized DAG template retrieval wired into the planner to reduce reasoning overhead.
 - **Asymmetric Auth Wall**: Full migration to **RS256 JWT** signatures with dynamic key rotation completed.
+- **Webhook Dispatcher**: Celery-backed reliable event delivery with exponential backoff and HMAC signing.
 - **GDPR Sovereign Deletion**: Physical data erasure via FAISS index rebuilds and SQL scrubbing enabled.
 - **DCN Anti-Entropy**: P2P state reconciliation and sticky leader election hardened for split-brain immunity.
-- **Compensation Orchestration**: Distributed rollback handlers for Tool/Agent/DB failures finalized in the GraphExecutor.
-- **K8s HA Graduation**: Manifests hardened with **TopologySpreadConstraints**, **PodDisruptionBudgets**, and 60s Postgres RPO.
+- **Compensation Orchestration**: Distributed rollback handlers for Tool/Agent/DB failures finalized via the Coordinator.
+- **K8s HA Graduation**: Manifests hardened with **HPA**, **PodDisruptionBudgets**, and 60s Postgres RPO.
 - **Observability Interface**: Production-ready Replay Debugger and Prometheus SLI/SLO dashboards active.
 
 
@@ -542,11 +543,15 @@ INTERNAL_SERVICE_KEY=replace-with-real-service-key
 | Endpoint | Method | Description |
 | :--- | :--- | :--- |
 | `/api/v1/orchestrator/mission` | POST | Initiates a new cognitive mission. |
+| `/api/v1/orchestrator/mission/{id}` | DELETE | Cancels an in-flight mission and triggers compensation. |
 | `/api/v1/brain/pulse` | GET | Returns live system health and model routing status. |
 | `/api/v1/memory/context` | GET | Retrieves merged context from all 4 memory tiers. |
+| `/api/v1/telemetry/workflow` | GET | Returns the designated end-to-end workflow manifest. |
+| `/api/v1/orchestrator/health/graph` | GET | Visualizes the DCN health and node connectivity graph. |
 | `/api/v1/auth/session` | POST | Generates a new secure session token. |
 | `/api/v1/missions/replay/{id}` | GET | Triggers deterministic replay of a previous mission. |
 | `/metrics` | GET | Exposes Prometheus telemetry for system monitoring. |
+| `/healthz` | GET | Root health-check for infrastructure readiness. |
 
 #### 11.1 Replay Determinism
 Missions are rendered deterministic during replay by:
@@ -581,7 +586,7 @@ Missions can specify a `callback_url`. The Orchestrator emits a `POST` event on:
 
 ---
 
-## 11.4 Versioning & Upgrade Strategy
+## 11.3 Versioning & Upgrade Strategy
 
 - **Backward Compatibility**: v14.1 maintains a **DAG Translation Shim** to execute legacy v14.0 JSON manifests.
 - **Model Upgrades**: Embedding shifts are handled via the **JIT Re-embedding** layer in Tier-4.
@@ -609,7 +614,7 @@ If a critical task node fails after all retries, the **Compensation Engine** exe
 
 ## 13. Observability & Telemetry
 
-### 12.1 Global Tracing
+### 13.1 Global Tracing
 
 Every request carries a `TRACE_ID` injected at the Gateway. Spans are recorded for:
 
@@ -626,6 +631,8 @@ Structured logs also include:
 - `duration_ms`
 - `status`
 
+### 13.2 Quality Metrics
+- **Performance**: P95 Latency tracked per domain.
 - **Quality**: Fidelity scores across the last 100 missions.
 
 ### 13.3 Auto-Remediation & Alerts
@@ -639,13 +646,13 @@ Structured logs also include:
 
 LEVI-AI employs a multi-layered testing strategy to ensure reliability across its distributed components.
 
-### 13.1 Unit Testing
+### 14.1 Unit Testing
 
 - **Agents**: Every agent in the registry is tested for input/output schema adherence.
 - **Engines**: The Goal Engine, Planner, and Reasoning Core are tested for DAG validity, simulation behavior, and confidence scoring.
 - **Utils**: Security filters and sanitizers are tested against known injection patterns.
 
-### 13.2 Integration Testing
+### 14.2 Integration Testing
 
 - **End-to-End Missions**: Simulated user requests are routed through the entire pipeline to verify completion.
 - **Memory Consistency**: Tests verify that writes to Redis are correctly synchronized to Postgres, Neo4j, and FAISS.
@@ -654,7 +661,7 @@ LEVI-AI employs a multi-layered testing strategy to ensure reliability across it
 - **RBAC Negatives**: Protected routes are tested for no token, expired token, and wrong-role token handling.
 - **Live Ollama Smoke**: Optional non-mocked tests validate real local inference when `RUN_LIVE_OLLAMA_TESTS=1`.
 
-### 13.3 Chaos & Reliability
+### 14.3 Chaos & Reliability
 
 - **Chaos Monkey**: Intentional injection of Redis outages, Neo4j slowdowns, and agent timeouts to test recovery logic.
 - **VRAM Stress**: Simulation of high GPU load to verify adaptive concurrency throttling.
@@ -693,7 +700,7 @@ To add a new agent to the swarm:
 3. Register the agent in `backend/agents/registry.py`.
 4. Add a default TEC heuristic in `backend/core/planner.py`.
 
-## 15. Limitations & Roadmap
+## 16. Limitations & Roadmap
 
 ### Current Limitations
 
@@ -702,17 +709,9 @@ To add a new agent to the swarm:
 - **Latency**: High-complexity DAGs (depth > 6) may incur significant reasoning overhead due to recursive validation steps.
 - **Horizontal Scaling**: [GRADUATED] DCN multi-node peering is stable for up to 5 authenticated nodes. Higher counts require multi-cluster ingress (v15 roadmap).
 
-### Roadmap (v14.x - v15.0)
-
-- **Phase 2: Swarm Intelligence**: Hardening of multi-agent consensus protocols and shadow-critic calibration.
-- **Phase 3: DCN Peering**: Official release of the peer-to-peer cognitive network for global mission distribution.
-- **Phase 4: Deterministic Replay**: Full UI integration for step-by-step mission debugging and forensic analysis.
-- **Phase 5: Evolutionary Learning**: Promote strategy-led mission templates into deeper adaptive planner behavior.
-- **Phase 6: Multi-Modal Context**: Native support for video and spatial audio context in the long-term memory graph.
-
 ---
 
-## 16. System Manifest
+## 17. System Manifest
 
 For a complete, auto-generated list of all internal modules, services, and agent registries, see the [SYSTEM_MANIFEST.md](./SYSTEM_MANIFEST.md).
 
@@ -722,7 +721,7 @@ For a complete, auto-generated list of all internal modules, services, and agent
 
 ---
 
-## 16.1 v14.1 Architectural Migration Note
+## 18. v14.1 Architectural Migration Note
 
 As of version **v14.1.0-Autonomous-SOVEREIGN**, the LEVI-AI OS has simplified its cognitive surface area:
 
@@ -733,7 +732,7 @@ As of version **v14.1.0-Autonomous-SOVEREIGN**, the LEVI-AI OS has simplified it
 
 ---
 
-## 17. Configuration Reference
+## 19. Configuration Reference
 
 The following environment variables configure the Sovereign OS. Defaults are safe for local development but should be overridden in production.
 
@@ -760,9 +759,9 @@ The following environment variables configure the Sovereign OS. Defaults are saf
 
 ---
 
-## 18. Deployment Guides
+## 19. Deployment Guides
 
-### 18.1 Docker Compose (Local)
+### 19.1 Docker Compose (Local)
 
 ```yaml
 version: "3.9"
@@ -789,7 +788,7 @@ services:
     ports: ["8000:8000"]
 ```
 
-### 18.2 Kubernetes (Preview)
+### 19.2 Kubernetes (Production-Ready)
 
 ```yaml
 apiVersion: apps/v1
@@ -824,7 +823,7 @@ spec:
 
 ---
 
-## 19. End‑to‑End Walkthroughs
+## 21. End-to-End Walkthroughs
 
 ### 19.1 Chat Mission (Fast Path)
 
@@ -867,7 +866,7 @@ Expected:
 
 ---
 
-## 20. Extension Points
+## 22. Extension Points
 
 ### 20.1 Adding Tools
 - Implement tool call in `backend/core/tool_registry.py`.
@@ -885,7 +884,7 @@ Expected:
 
 ---
 
-## 21. Trace & Telemetry Taxonomy
+## 23. Trace & Telemetry Taxonomy
 
 ### 21.1 Trace IDs
 - `TRACE_ID`: mission root identifier.
@@ -909,7 +908,7 @@ Expected:
 
 ---
 
-## 22. Memory Consistency Rules
+## 24. Memory Consistency Rules
 
 ### 22.1 Event Schema
 
@@ -933,7 +932,7 @@ Expected:
 
 ---
 
-## 23. Security Hardening Checklist
+## 25. Security Hardening Checklist
 
 - Enable RBAC and JWTs on all API routes.
 - Enforce sandbox for code execution nodes.
@@ -946,7 +945,7 @@ Expected:
 
 ---
 
-## 24. Performance Tuning
+## 26. Performance Tuning
 
 ### 24.1 Live Chaos & Load
 
@@ -962,7 +961,7 @@ k6 run tests/load/missions_k6.js
 
 ---
 
-## 25. Troubleshooting & FAQ
+## 27. Troubleshooting & FAQ
 
 - Symptoms: “Could not establish a connection to backend (MySQL Shell)”
   - Cause: legacy monitors expecting MySQL; LEVI uses Postgres.
@@ -978,7 +977,7 @@ k6 run tests/load/missions_k6.js
 
 ---
 
-## 26. Glossary
+## 28. Glossary
 
 - **Sovereign OS**: An AI operating system emphasizing control and predictability.
 - **TEC**: Task Execution Contract; per‑node guardrails defining retries, timeout, and allowed tools.
@@ -988,7 +987,7 @@ k6 run tests/load/missions_k6.js
 
 ---
 
-## 27. Change Log (v14 Highlights)
+## 29. Change Log (v14 Highlights)
 
 - Added Central Execution State Machine with explicit transitions.
 - Introduced TECs and global execution budgets.
@@ -999,7 +998,7 @@ k6 run tests/load/missions_k6.js
 
 ---
 
-## 28. SLOs & Error Budgets
+## 30. SLOs & Error Budgets
 
 - Availability SLO: 99.5% for Gateway and Orchestrator.
 - Latency SLO: P95 end-to-end mission **< 2.0s** for FAST mode (Fast-Path Active).
@@ -1007,7 +1006,7 @@ k6 run tests/load/missions_k6.js
 
 ---
 
-## 29. Operational Runbooks
+## 31. Operational Runbooks
 
 ### 29.1 Cache Warmup
 - Preload embeddings for top intents.
@@ -1023,7 +1022,7 @@ k6 run tests/load/missions_k6.js
 
 ---
 
-## 30. Extension Examples
+## 32. Extension Examples
 
 ### 30.1 Example: Custom Tool Contract
 

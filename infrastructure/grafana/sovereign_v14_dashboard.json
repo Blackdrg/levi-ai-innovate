@@ -1,0 +1,70 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": 1,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "title": "Mission Throughput",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(mission_requests_total[1m])",
+          "legendFormat": "Requests/sec"
+        }
+      ]
+    },
+    {
+      "title": "P95 Latency SLO (2s)",
+      "type": "gauge",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(node_latency_ms_bucket[5m])) by (le))",
+          "legendFormat": "P95 Latency"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 1500},
+              {"color": "red", "value": 2000}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Cognitive Success Rate",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "sum(rate(mission_success_total[5m])) / sum(rate(mission_requests_total[5m]))",
+          "legendFormat": "Success Rate"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 36,
+  "style": "dark",
+  "tags": ["sovereign", "v14.1"],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Sovereign OS v14.1 Production Audit",
+  "uid": "sovereign-v14-1",
+  "version": 1
+}
