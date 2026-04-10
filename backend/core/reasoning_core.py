@@ -4,14 +4,15 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from .task_graph import TaskGraph, TaskNode
+from .evaluation.confidence_ml import confidence_model
 
 logger = logging.getLogger(__name__)
 
 
 class ReasoningCore:
     """
-    Mandatory reasoning gate between planning and execution.
-    Performs critique, simulation, and execution strategy selection.
+    Sovereign Reasoning Gate between planning and execution.
+    Performs critique, simulation, and ML-based confidence scoring.
     """
 
     MIN_CONFIDENCE = 0.55
@@ -76,6 +77,11 @@ class ReasoningCore:
     ) -> bool:
         if perception.get("fast_path_bypass") is True:
             return False
+
+        # v14.1 On-Demand Force Flag
+        if perception.get("force_reasoning") is True:
+            logger.info("[ReasoningCore] Force reasoning flag detected.")
+            return True
 
         # v14.1 Strict Triggers
         is_sensitive = perception.get("intent", {}).is_sensitive if hasattr(perception.get("intent"), "is_sensitive") else False
@@ -202,20 +208,30 @@ class ReasoningCore:
         simulation: Dict[str, Any],
         decision: Optional[Any],
     ) -> float:
-        score = 0.92
-        depth = self._graph_depth(graph)
-        dependency_complexity = sum(len(node.dependencies) for node in graph.nodes)
-        historical_success = self._historical_success_rate(graph)
-        score -= 0.2 * len(critique["issues"])
-        score -= 0.05 * len(critique["warnings"])
-        if simulation["status"] not in {"ok", "skipped"}:
-            score -= 0.2
-        score -= min(0.2, max(0, depth - 2) * 0.04)
-        score -= min(0.12, dependency_complexity * 0.02)
-        score -= max(0.0, 0.8 - historical_success) * 0.15
-        if decision and getattr(decision, "complexity_score", 0.0) > 0.8:
-            score -= 0.05
-        return max(0.05, min(0.99, round(score, 3)))
+        """
+        v14.1 Adaptive ML Confidence Scoring.
+        """
+        features = {
+            "depth": float(self._graph_depth(graph)),
+            "node_count": float(len(graph.nodes)),
+            "dependencies": float(sum(len(node.dependencies) for node in graph.nodes)),
+            "historical_success": self._historical_success_rate(graph),
+            "complexity": getattr(decision, "complexity_score", 0.5) if decision else 0.5,
+            "issue_count": float(len(critique["issues"])),
+            "warning_count": float(len(critique["warnings"])),
+            "simulation_blocked": 1.0 if simulation["status"] not in {"ok", "skipped"} else 0.0
+        }
+        
+        # Call the ML model
+        base_confidence = confidence_model.predict(features)
+        
+        # Apply deterministic penalties for critical issues
+        penalty = 0.2 * len(critique["issues"])
+        if features["simulation_blocked"] > 0:
+            penalty += 0.2
+            
+        final_score = max(0.05, min(0.99, round(base_confidence - penalty, 3)))
+        return final_score
 
     def _select_execution_strategy(
         self,

@@ -55,3 +55,20 @@ class ModelRouter:
             config["SHADOW_CANDIDATE"] = cls.CANDIDATE_MODEL
             config["SHADOW_PCT"] = f"{cls.SHADOW_TRAFFIC_PCT}%"
         return config
+
+    @classmethod
+    async def warm_models(cls):
+        """v14.1 JIT Warming: Pre-loads essential models to reduce cold-start latency."""
+        logger.info("[ModelRouter] Initiating JIT model warming pulse...")
+        from backend.services.brain_service import brain_service
+        
+        # Warm L1/L2 models (most frequently used)
+        essential_models = {cls.TIER_MAP["L1"], cls.TIER_MAP["L2"]}
+        for model in essential_models:
+            try:
+                # We send a tiny empty prompt to trigger loading in Ollama
+                await brain_service.call_local_llm(" ", model=model)
+                logger.debug(f"[ModelRouter] Warmed model: {model}")
+            except Exception as e:
+                logger.warning(f"[ModelRouter] Failed to warm {model}: {e}")
+        logger.info("[ModelRouter] JIT warming pulse complete.")

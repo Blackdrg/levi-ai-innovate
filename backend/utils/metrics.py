@@ -65,6 +65,11 @@ LAST_ALERT_STATE = Gauge(
     ["alert_type"],
 )
 
+GRADUATION_SCORE = Gauge(
+    "system_graduation_score",
+    "Current production readiness score (0.0 to 1.0)",
+)
+
 
 class MetricsHub:
     """Centralized metrics collection and exposition logic."""

@@ -47,24 +47,25 @@ class EgressProxy:
             netloc = parsed.netloc.split(":")[0].lower() # Strip port
 
             # 1. Allow internal K8s/Docker services (no dot, e.g., 'postgres')
-            # In production, even these should be restricted, but for DCN resonance we allow internal.
+            # For v14.1.0 Graduation, we block these by default unless explicitly allowed.
             if "." not in netloc:
+                if netloc not in ALLOWED_DOMAINS:
+                    logger.warning(f"[EgressProxy] BLOCKED internal service access: {netloc}")
+                    return False
                 return True
             
-            # 2. Check explicitly allowed domains
+            # 2. Check explicitly allowed domains & subdomains
+            is_allowed_domain = False
             if netloc in ALLOWED_DOMAINS:
-                 # Even if it's in the allowlist, we should still check the IP 
-                 # if someone managed to point a trusted domain to a private IP (malicious DNS).
-                 pass
+                 is_allowed_domain = True
             elif any(netloc.endswith(f".{d}") for d in ALLOWED_DOMAINS if "." in d):
-                 # Allow subdomains of allowed domains
-                 pass
-            else:
-                # Heuristic: If it's not a known domain, block unless it's a specific exception.
-                # However, for the Graduate OS, we want to allow resolution and IP-based validation.
-                pass
+                 is_allowed_domain = True
+            
+            if not is_allowed_domain:
+                logger.error(f"[EgressProxy] BLOCKED attempt to unauthorized domain: {netloc}")
+                return False
 
-            # 3. DNS Resolution & Rebinding Check
+            # 3. DNS Resolution & Rebinding Check (Defense-in-Depth)
             try:
                 # Resolve the domain to an IP address
                 resolved_ip_str = socket.gethostbyname(netloc)
@@ -73,22 +74,13 @@ class EgressProxy:
                 # Check against forbidden ranges
                 for forbidden_range in FORBIDDEN_NETWORK_RANGES:
                     if resolved_ip in forbidden_range:
-                        logger.error(f"[EgressProxy] BLOCKED SSRF/Rebinding: {netloc} resolves to forbidden IP {resolved_ip_str}")
+                        logger.critical(f"[EgressProxy] SSRF/REBINDING ALERT: {netloc} resolves to forbidden IP {resolved_ip_str}")
                         return False
             except socket.gaierror:
                 logger.warning(f"[EgressProxy] Could not resolve host: {netloc}")
                 return False
             except ValueError:
-                # In case resolved_ip_str is not a valid IP (unlikely)
                 return False
-            
-            # 4. Final safety check: block all non-allowed external domains if strict mode is active
-            # For v14.1.0, we prioritize the Allowlist for better defense-in-depth.
-            if netloc not in ALLOWED_DOMAINS:
-                 # Check if the IP itself is the netloc and is forbidden (handled by resolution block above)
-                 # If it's a domain NOT in allowlist, we block it by default.
-                 logger.error(f"[EgressProxy] BLOCKED attempt to unauthorized domain: {netloc}")
-                 return False
 
             return True
 

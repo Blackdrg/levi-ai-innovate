@@ -1,6 +1,7 @@
 import json
 import logging
 import asyncio
+import hashlib
 from typing import Dict, Any, List, Optional, Tuple
 from backend.db.redis import r_async as redis_client, HAS_REDIS_ASYNC
 
@@ -18,40 +19,57 @@ class StreamManager:
     Features: Priority Queuing, Consumer Groups, and Auto-Claim logic.
     """
 
-    def __init__(self):
-        self.stream_name = TASK_STREAM
+    def __init__(self, shard_count: int = 4):
+        self.shard_count = shard_count
+        self.stream_base = TASK_STREAM
         self.group_name = CONSUMER_GROUP
+        self._batch_queues: Dict[str, List[Dict[str, Any]]] = {}
+
+    def _get_stream_for_mission(self, mission_id: str) -> str:
+        """v14.1 Partitioning: Hashes mission ID to a specific stream shard."""
+        shard = int(hashlib.md5(str(mission_id).encode()).hexdigest(), 16) % self.shard_count
+        return f"{self.stream_base}:{shard}"
 
     async def setup_groups(self):
-        """Ensures the consumer group exists for stable task processing."""
+        """Ensures the consumer group exists for all shards."""
         if not HAS_REDIS_ASYNC: return
-        try:
-            # Create stream if not exists, then create group
-            await redis_client.xgroup_create(self.stream_name, self.group_name, id="0", mkstream=True)
-            logger.info(f"[Streams] Consumer Group '{self.group_name}' initialized.")
-        except Exception as e:
-            if "BUSYGROUP" in str(e):
-                logger.debug("[Streams] Consumer Group already exists.")
-            else:
-                logger.error(f"[Streams] Group setup failure: {e}")
+        for i in range(self.shard_count):
+            stream = f"{self.stream_base}:{i}"
+            try:
+                await redis_client.xgroup_create(stream, self.group_name, id="0", mkstream=True)
+                logger.debug(f"[Streams] Group '{self.group_name}' initialized for {stream}.")
+            except Exception as e:
+                if "BUSYGROUP" not in str(e):
+                    logger.error(f"[Streams] Group setup failure for {stream}: {e}")
 
     async def enqueue_task(self, task_pkg: Dict[str, Any], priority: str = "medium") -> Optional[str]:
-        """Pushes a task package into the stream with priority metadata."""
+        """Pushes a task package into the partitioned stream."""
         if not HAS_REDIS_ASYNC: return None
         
+        mission_id = task_pkg.get("mission_id", "default")
+        stream = self._get_stream_for_mission(mission_id)
+        
         try:
-            # Map priority to a numeric score if needed (Streams are FIFO, but we can use multiple streams or head-loading)
-            # For v2, we use a single stream with a 'priority' field.
             msg_id = await redis_client.xadd(
-                self.stream_name,
+                stream,
                 {"payload": json.dumps(task_pkg), "priority": priority},
                 maxlen=5000,
                 approximate=True
             )
             return msg_id
         except Exception as e:
-            logger.error(f"[Streams] Enqueue failure: {e}")
+            logger.error(f"[Streams] Enqueue failure for {stream}: {e}")
             return None
+
+    async def batch_enqueue(self, mission_id: str, tasks: List[Dict[str, Any]]):
+        """v14.1 Write Batching: Pushes multiple tasks to a shard in one pulse."""
+        if not HAS_REDIS_ASYNC or not tasks: return
+        stream = self._get_stream_for_mission(mission_id)
+        pipe = redis_client.pipeline()
+        for t in tasks:
+            pipe.xadd(stream, {"payload": json.dumps(t), "priority": "batch"}, maxlen=5000)
+        await pipe.execute()
+        logger.info(f"[Streams] Batched {len(tasks)} tasks to {stream}.")
 
     async def pull_tasks(self, consumer_id: str, count: int = 1) -> List[Tuple[str, Dict[str, Any], int]]:
         """Reads new/pending tasks and returns (msg_id, payload, delivery_count)."""

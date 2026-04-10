@@ -22,8 +22,12 @@ from sqlalchemy import select
 
 from backend.services.learning.logic import UserPreferenceModel
 from .consistency import MemoryConsistencyManager as MCM
+from ..utils.kafka import SovereignKafka
+import os
 
 logger = logging.getLogger(__name__)
+
+ENV = os.getenv("ENV", "development")
 
 # Mid-term query guard
 _MIDTERM_TIMEOUT = 3.0
@@ -112,7 +116,9 @@ class MemoryManager:
         return pruned
 
     async def get_short_term(self, session_id: str) -> List[Dict[str, Any]]:
-        return await asyncio.to_thread(MemoryCache.get_session_history, session_id)
+        # Filter logic would usually be at the store level, but we add it here for safety
+        history = await asyncio.to_thread(MemoryCache.get_session_history, session_id)
+        return [h for h in history if not h.get("is_deleted")]
 
     async def get_mid_term(self, user_id: str, limit: int = 5) -> List[Dict[str, Any]]:
         """Async: recent interaction history pulse from Firestore with Redis caching."""
@@ -209,6 +215,18 @@ class MemoryManager:
             "derived_from": [r.agent for r in results] if results else [],
             "content_hash": MCM.compute_content_hash({"user_input": user_input, "response": response}),
         })
+
+        # v14.1 Production Backbone: Kafka emission is mandatory
+        if ENV == "production":
+            await SovereignKafka.emit_event("memory_events", {
+                "event": "MEMORY_STORED",
+                "user_id": user_id,
+                "session_id": session_id,
+                "request_id": perception.get("request_id"),
+                "content_hash": event.get("checksum") if isinstance(event, dict) else None
+            })
+        else:
+            logger.info("[MemoryManager] Dev Mode: Kafka emission optional. Pushing directly to tiers.")
         
         # 1. Short-term/Episodic (Redis/Postgres)
         if not policy or policy.redis:
@@ -432,10 +450,77 @@ class MemoryManager:
             logger.warning(f"Creation context retrieval failed for {user_id}: {e}")
             return []
 
+    async def soft_delete_user(self, user_id: str):
+        """v14.1 RTBF Soft-Delete implementation."""
+        logger.warning(f"[MemoryManager] Soft-deleting all resonance for {user_id}")
+        async with PostgresDB._session_factory() as session:
+             from backend.db.models import UserProfile, UserFact, Mission
+             from sqlalchemy import update
+             
+             # Mark Postgres items as deleted
+             await session.execute(update(UserProfile).where(UserProfile.user_id == user_id).values(is_deleted=True))
+             await session.execute(update(UserFact).where(UserFact.user_id == user_id).values(is_deleted=True))
+             await session.execute(update(Mission).where(Mission.user_id == user_id).values(is_deleted=True))
+             await session.commit()
+             
+             # Flag in Redis for fast-path blocking (used in Orchestrator)
+             from backend.db.redis import get_redis_client
+             redis = get_redis_client()
+             redis.set(f"sovereign:soft_delete:{user_id}", 1, ex=86400 * 30) # 30 day tombstone
+             
+        logger.info(f"[MemoryManager] Soft-delete markers set for {user_id}. Background reindexer will prune tiers.")
+
     async def clear_all_user_data(self, user_id: str):
-        """Standard v8 absolute memory wipe."""
-        logger.warning(f"SOVEREIGN WIPE: Clearing all data for {user_id}")
-        # Implementation bridged to Vector store and Database layers
+        """
+        LeviBrain v14.1.0: Absolute GDPR-Compliant Purge.
+        Coordinates multi-tier hard deletion.
+        """
+        if not user_id or str(user_id).startswith("guest:"):
+            return
+
+        logger.critical(f"🚨 SOVEREIGN PURGE: Absolute wipe initiated for {user_id}")
+        
+        # 1. Vector Store Wipe (FAISS/HNSW)
         from .vector_store import SovereignVectorStore
         await SovereignVectorStore.clear_user_memory(user_id)
-        # Clear Firestore and Redis logic here...
+        
+        # 2. Graph Wipe (Neo4j)
+        try:
+            await self.graph.clear_user_resonance(user_id)
+        except Exception as e:
+            logger.error(f"[Purge] Graph wipe failed: {e}")
+
+        # 3. Firestore Wipe (Episodic/Conversations)
+        try:
+            def _wipe_firestore():
+                colls = ["conversations", "jobs", "user_preferences"]
+                for coll in colls:
+                    docs = firestore_db.collection(coll).where("user_id", "==", user_id).get()
+                    for doc in docs:
+                        doc.reference.delete()
+            await asyncio.to_thread(_wipe_firestore)
+        except Exception as e:
+            logger.error(f"[Purge] Firestore wipe failed: {e}")
+
+        # 4. Redis Wipe (Cache/Short-term)
+        try:
+            from backend.db.redis import get_redis_client
+            redis = get_redis_client()
+            # Delete episodic cache and state keys
+            keys = redis.keys(f"*:{user_id}:*")
+            if keys:
+                redis.delete(*keys)
+            redis.delete(f"sovereign:profile:{user_id}")
+        except Exception as e:
+            logger.error(f"[Purge] Redis wipe failed: {e}")
+
+        # 5. Postgres Wipe (Identity & Traits)
+        async with PostgresDB._session_factory() as session:
+             from backend.db.models import UserProfile, UserTrait, Mission
+             from sqlalchemy import delete
+             await session.execute(delete(UserTrait).where(UserTrait.user_id == user_id))
+             await session.execute(delete(Mission).where(Mission.user_id == user_id))
+             await session.execute(delete(UserProfile).where(UserProfile.user_id == user_id))
+             await session.commit()
+             
+        logger.info(f"✅ [Purge] Absolute data wipe finalized for {user_id}.")

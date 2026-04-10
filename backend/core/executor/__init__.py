@@ -31,6 +31,8 @@ from ...utils.metrics import MetricsHub
 from ...utils.chaos import ChaosMonkey
 from ...utils.tracing import traced_span
 from ..execution_guardrails import AgentSandbox, ExecutionBudgetTracker, capture_resource_pressure
+from .compensation_coordinator import CompensationCoordinator
+from backend.services.billing_service import billing_service
 
 
 logger = logging.getLogger(__name__)
@@ -81,6 +83,7 @@ class GraphExecutor:
         wave_count = 0
         total_nodes_executed = 0
         mission_sm = CentralExecutionState(mission_id)
+        compensation_coordinator = CompensationCoordinator(mission_id)
         budget = getattr(policy, "budget", None)
         budget_tracker = ExecutionBudgetTracker(
             token_limit=getattr(budget, "token_limit", 200000),
@@ -106,7 +109,19 @@ class GraphExecutor:
                 ]
             
             # Constraint check (Parallelism & Budget)
-            max_parallel = 1 if safe_mode else (policy.parallel_waves if policy else 4)
+            snapshot = capture_resource_pressure(vram_pressure=False, queue_depth=len(remaining_nodes))
+            pressure_factor = 1.0
+            if "vram" in snapshot.active_dimensions or "ram" in snapshot.active_dimensions:
+                pressure_factor = 0.5
+            if "cpu" in snapshot.active_dimensions:
+                pressure_factor = 0.25
+            
+            base_parallel = policy.parallel_waves if policy else 4
+            max_parallel = 1 if safe_mode else max(1, int(base_parallel * pressure_factor))
+            
+            if pressure_factor < 1.0:
+                logger.warning(f"[Executor] Resource pressure detected ({snapshot.active_dimensions}). Throttling concurrency to {max_parallel}.")
+            
             slots_available = max_parallel - len(running_tasks)
             
             if slots_available > 0 and executable_nodes:
@@ -142,11 +157,25 @@ class GraphExecutor:
                     results[node.id] = res
                     completed_ids.add(node.id)
                     
+                    # v14.1 Compensation & Refund Logic
                     if not res.success and node.critical:
                         logger.warning(f"[V14.1 Executor] Critical failure on {node.id}")
+                        
+                        # Partial Refund for System failures
+                        failure_type = self._categorize_failure(res.error or "Unknown")
+                        if failure_type == "F-3": # System/Infra
+                             refund_amount = 0.8 * 5.0 # 80% of autonomous cost
+                             logger.info(f"[Billing] Triggering partial refund ({refund_amount} credits) for system failure.")
+                             await billing_service.add_credits(user_id, amount=refund_amount)
+                        
                         if not safe_mode:
                             logger.info("[Resilience] Escalating to Safe Mode (Linear).")
                             safe_mode = True
+                        else:
+                            # Already in safe mode and failed critical node -> ROLLBACK
+                            logger.error("[Resilience] Safe mode exhausted. Triggering Compensation Rollback.")
+                            await compensation_coordinator.compensate()
+                            break
                     
                     # Update budget
                     budget_tracker.add_tokens(node.agent, getattr(res, "total_tokens", 0))
@@ -187,9 +216,12 @@ class GraphExecutor:
         if all(r.success for r in results.values()):
             dcn = DCNProtocol()
             if dcn.is_active:
-                pulse = dcn.sign_pulse(mission_id, json.dumps({k: v.message for k, v in results.items()}))
+                # v14.1 Graduation: Use Raft-lite Mission Truth for confirmed outcomes
                 from backend.utils.runtime_tasks import create_tracked_task
-                create_tracked_task(dcn.broadcast_gossip(pulse), name=f"dcn-pulse-{mission_id}")
+                create_tracked_task(
+                    dcn.broadcast_mission_truth(mission_id, {k: v.message for k, v in results.items()}), 
+                    name=f"dcn-truth-{mission_id}"
+                )
 
         return list(results.values())
 
@@ -477,6 +509,16 @@ class GraphExecutor:
                         )
                         # formal lifecycle: COMPLETED
                         node.state = NodeState.COMPLETED
+                        
+                        # Register for potential compensation
+                        if hasattr(node, "reversal_logic") and node.reversal_logic:
+                            compensation_coordinator.register_step(
+                                node.id, 
+                                node.agent, 
+                                node.reversal_logic, 
+                                getattr(node, "reversal_params", {})
+                            )
+                        
                         return result
 
                     last_error = result.error or "Unknown failure"
@@ -493,7 +535,28 @@ class GraphExecutor:
                     logger.exception(f"[V8 Executor] Agent {agent_name} crashed: {e}")
 
                 if attempts <= max_retries:
-                    await asyncio.sleep(compute_backoff_delay(attempts, retry_strategy))
+                    # v14.1 Adaptive Retry Categorization
+                    failure_type = self._categorize_failure(last_error)
+                    logger.info(f"[Retry] Failure categorized as {failure_type}. Adjusting strategy.")
+                    
+                    if failure_type == "F-1": # Syntactic: Immediate retry
+                        delay = 0.5
+                    elif failure_type == "F-2": # Logic: Reasoning Refinement might be needed, but we retry first with high temperature?
+                        # For now, standard backoff but flag for refinement
+                        delay = compute_backoff_delay(attempts, retry_strategy)
+                    else: # F-3 System/Timeout: Exponential backoff with jitter
+                        delay = compute_backoff_delay(attempts, retry_strategy)
+                        
+                    await asyncio.sleep(delay)
+                    
+    async def _categorize_failure(self, error: str) -> str:
+        """v14.1 Failure Classification."""
+        err_lower = error.lower()
+        if "json" in err_lower or "schema" in err_lower or "format" in err_lower:
+            return "F-1" # Syntactic
+        if "timeout" in err_lower or "unreachable" in err_lower or "rate limit" in err_lower:
+            return "F-3" # System
+        return "F-2" # Logic/Grounding (Default)
         # formal lifecycle: FAILED
         node.state = NodeState.FAILED
         compensation = await self._run_compensation(node, mission_id=mission_id, agent_name=agent_name, error=last_error, mission_sm=mission_sm)

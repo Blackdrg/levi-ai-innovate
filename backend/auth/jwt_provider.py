@@ -45,17 +45,25 @@ class JWTProvider:
                 with open(pub_path, "r") as f:
                     cls._public_key = f.read()
             
+            is_prod = os.getenv("ENVIRONMENT") == "production"
+
             if not cls._private_key or not cls._public_key:
-                 # Fallback to HS256 if keys are missing (Backward Compatibility)
+                 if is_prod:
+                     logger.critical("🚨 PRODUCTION BLOCKER: RS256 Identity Keys MISSING from /certs. Graduation ABORTED.")
+                     raise RuntimeError("Production Graduation Failure: RS256 keys required.")
+
+                 # Fallback to HS256 if keys are missing (Dev Only)
                  cls.ALGORITHM = "HS256"
                  cls._private_key = os.getenv("JWT_SECRET", "sovereign_monolith_default_secret")
                  cls._public_key = cls._private_key
-                 logger.warning("JWT: RS256 keys missing. Falling back to HS256.")
+                 logger.warning("JWT: RS256 keys missing. Falling back to HS256 (DEVELOPMENT ONLY).")
             else:
                  cls.ALGORITHM = "RS256"
                  logger.info("JWT: RS256 Asymmetric Identity Layer ACTIVE.")
 
         except Exception as e:
+            if os.getenv("ENVIRONMENT") == "production":
+                 raise e 
             logger.error(f"JWT Key Loading Error: {e}")
             cls.ALGORITHM = "HS256"
             cls._private_key = os.getenv("JWT_SECRET", "sovereign_monolith_default_secret")
