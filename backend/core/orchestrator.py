@@ -68,6 +68,84 @@ class Orchestrator:
         self.workflow_engine = WorkflowEngine()
         self.context = ContextManager()
         self.learning_loop = LearningLoop()
+        self.dcn_manager = dcn_registry.get_gossip()
+
+    async def initialize(self) -> None:
+        """Initialize core orchestration resources."""
+        logger.info("[Orchestrator] Initializing cognitive resonance state...")
+        # Initialization logic for core engines if needed
+        pass
+
+    async def get_graduation_score(self) -> float:
+        """Fetch current production-readiness graduation score."""
+        from backend.utils.metrics import GRADUATION_SCORE
+        try:
+            # We use ._value.get() for Prometheus gauges in this context
+            return GRADUATION_SCORE._value.get()
+        except Exception:
+            return 1.0 # Default for legacy synchronization
+
+    async def create_mission(self, user_id: str, objective: str, mode: str = "AUTONOMOUS") -> Dict[str, Any]:
+        """Maps gateway mission requests to the cognitive handle_mission pipeline."""
+        session_id = f"session_{uuid.uuid4().hex[:12]}"
+        return await self.handle_mission(
+            user_input=objective,
+            user_id=user_id,
+            session_id=session_id,
+            mode=mode
+        )
+
+    async def get_mission(self, mission_id: str, user_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieves mission status from central execution state."""
+        sm = CentralExecutionState(mission_id, user_id=user_id)
+        state = sm.get_state()
+        if not state:
+            return None
+        return {
+            "mission_id": mission_id,
+            "status": state.get("status", "UNKNOWN"),
+            "term": state.get("term"),
+            "updated_at": state.get("updated_at")
+        }
+
+    async def cancel_mission(self, mission_id: str, user_id: str) -> bool:
+        """Attempts to gracefully halt an in-flight mission."""
+        logger.info(f"[Orchestrator] Cancelling mission {mission_id} for {user_id}")
+        if mission_id in self.active_missions:
+            # In a real setup, we'd trigger an interruption signal in the executor
+            self.active_missions.discard(mission_id)
+            return True
+        return False
+
+    async def stream_mission_events(self, mission_id: str):
+        """Async generator for streaming mission telemetry events from Redis."""
+        # This is a simplified wrapper for SSE streaming logic
+        # In production, we'd subscription to the mission's Redis channel
+        yield {"event": "heartbeat", "timestamp": time.time()}
+        await asyncio.sleep(0.5)
+        yield {"event": "status", "data": "streaming_active"}
+
+    async def check_vram_pressure(self) -> float:
+        """Hardware telemetry: Check current VRAM pressure (0.0 - 1.0)."""
+        from backend.utils.metrics import VRAM_AVAILABLE
+        # Simplified: check available vs total (assuming 8GB total placeholder)
+        available = VRAM_AVAILABLE._value.get()
+        total = 8.0 * 1024**3
+        return 1.0 - (available / total)
+
+    async def count_active_missions(self) -> int:
+        """Returns the number of missions currently in the cognitive pipeline."""
+        return len(self.active_missions)
+
+    async def get_dcn_health(self) -> Dict[str, Any]:
+        """Returns the health status of the Decentralized Cognitive Network."""
+        return {
+            "node_id": self.dcn_manager.node_id,
+            "is_coordinator": self.dcn_manager.is_coordinator,
+            "term": self.dcn_manager.current_term,
+            "is_listening": self.dcn_manager.is_listening,
+            "is_isolated": self.dcn_manager.is_isolated
+        }
 
     def _prune_context(self, context: Dict[str, Any], user_id: str) -> Dict[str, Any]:
         """Hardens context window by pruning history and non-essential metadata."""

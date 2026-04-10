@@ -324,5 +324,17 @@ class DCNGossip:
             await self.try_become_coordinator()
             await asyncio.sleep(self.lease_ttl // 2) # Heartbeat at half TTL
 
+    async def start_gossip_hub(self):
+        """Standard production entry for starting DCN gossip and elections."""
+        logger.info(f"[DCN] Starting Sovereign Gossip Hub for {self.node_id}...")
+        # Start listener and election in background
+        asyncio.create_task(self.listen(lambda p: None)) # Basic listener
+        asyncio.create_task(self.start_election_loop())
+
+    async def stop_gossip_hub(self):
+        """Standard production entry for stopping DCN hub."""
+        logger.info(f"[DCN] Stopping Gossip Hub for {self.node_id}...")
+        self.stop()
+
     def stop(self):
         self.is_listening = False
