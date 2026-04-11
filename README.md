@@ -197,7 +197,7 @@ sequenceDiagram
     O->>A: Task: Write script using X summary
     A-->>O: Generated Python Script
     O->>C: Task: Verify script logic & security
-    C->>A: Logic error in Line 12; Fix requested
+    C->>A: Logic error in Line 12, Fix requested
     A-->>C: Updated Script
     C-->>O: Verified & Signed TEC
 ```
