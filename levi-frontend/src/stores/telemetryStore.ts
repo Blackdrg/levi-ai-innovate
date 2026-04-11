@@ -18,6 +18,7 @@ export const useTelemetryStore = create<TelemetryState>((set) => ({
   taskStatuses: {},
   circuitBreaker: 'CLOSED',
   setPulse: (pulse) => set({ pulse }),
+  setAgents: (agentsMap: Record<string, AgentStatus>) => set({ agents: agentsMap }),
   updateAgent: (id, status) => set((state) => ({
     agents: { ...state.agents, [id]: status }
   })),

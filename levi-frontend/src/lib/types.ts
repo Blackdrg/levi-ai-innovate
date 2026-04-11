@@ -38,11 +38,13 @@ export interface Task {
 
 export interface AgentStatus {
   id: string;
-  category: 'Planner' | 'Execution' | 'Retrieval' | 'Critic' | 'Tool';
+  category: 'PLANNER' | 'EXECUTION' | 'RETRIEVAL' | 'CRITIC' | 'TOOL';
   currentTask?: string;
+  goal_id?: string;
+  goal_objective?: string;
   latency_ms: number;
   retryCount: number;
-  status: 'IDLE' | 'BUSY' | 'OFFLINE';
+  status: 'online' | 'busy' | 'offline';
 }
 
 export interface TelemetryEvent {

@@ -108,21 +108,25 @@ class SovereignBroadcaster:
                              if event_type not in allowed:
                                  continue
                          
-                         # 2. Dynamic Compression for Mobile (Base64 Binary Pulse)
-                         if profile == "mobile":
+                         # 2. Smart Compression (v14.2)
+                         # Threshold: 4KB for efficiency vs overhead
+                         should_compress = (len(data_raw) > 4096) or (profile == "mobile")
+                         
+                         if should_compress:
                              compressed = zlib.compress(data_raw.encode('utf-8'))
                              payload = base64.b64encode(compressed).decode('utf-8')
-                             yield f"event: {event_type}\ndata: {payload}\n\n"
+                             yield f"event: {event_type}\ndata: {payload}\ncompression: zlib\n\n"
                          else:
                              yield f"event: {event_type}\ndata: {data_raw}\n\n"
 
                     except json.JSONDecodeError:
                          yield f"data: {data_raw}\n\n"
                 
-                # Dynamic Heartbeat
+                # 3. Dynamic Adaptive Heartbeat
+                heartbeat_interval = 1.0 if profile == "mobile" else 0.1
                 yield f"event: heartbeat\ndata: {json.dumps({'timestamp': asyncio.get_event_loop().time()})}\n\n"
 
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(heartbeat_interval)
                 
         except asyncio.CancelledError:
             logger.info(f"[Pulse v4] Subscriber disconnected: {user_id}")

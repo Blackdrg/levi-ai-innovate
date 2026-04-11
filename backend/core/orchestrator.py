@@ -59,8 +59,8 @@ class Orchestrator:
     MISSION_TIMEOUT = 300 # Default mission timeout in seconds
 
     def __init__(self):
-        self.active_missions = set()
         self._shutdown_event = asyncio.Event()
+        self.active_missions_key = "orchestrator:active_missions"
         self.memory = MemoryManager()
         self.perception = PerceptionEngine(self.memory)
         self.planner = DAGPlanner()
@@ -74,10 +74,27 @@ class Orchestrator:
         self.dcn_manager = dcn_registry.get_gossip()
 
     async def initialize(self) -> None:
-        """Initialize core orchestration resources."""
+        """
+        Sovereign v15.0: Production-Ready Initialization.
+        Syncs state with the DCN truth and recovers active missions from Redis.
+        """
         logger.info("[Orchestrator] Initializing cognitive resonance state...")
-        # Initialization logic for core engines if needed
-        pass
+        
+        # 1. State Recovery from Redis Hash Truth
+        active_states = await CentralExecutionState.load_state_on_boot()
+        if active_states:
+            redis = get_redis_client()
+            for mid in active_states:
+                if redis:
+                    redis.sadd(self.active_missions_key, mid)
+            logger.info(f"[Orchestrator] Successfully re-hydrated {len(active_states)} missions from persistent memory.")
+        
+        # 2. Sync term with DCN
+        dcn = dcn_registry.get_gossip()
+        if dcn:
+            self.current_term = dcn.current_term
+        
+        logger.info("[Orchestrator] Readiness: 100% (State Recovered)")
 
     async def get_graduation_score(self) -> float:
         """
@@ -126,7 +143,8 @@ class Orchestrator:
     async def cancel_mission(self, mission_id: str, user_id: str) -> bool:
         """Attempts to gracefully halt an in-flight mission."""
         logger.info(f"[Orchestrator] Cancelling mission {mission_id} for {user_id}")
-        if mission_id in self.active_missions:
+        redis = get_redis_client()
+        if redis and redis.sismember(self.active_missions_key, mission_id):
             # Trigger cascaded abort
             await self.force_abort(mission_id, "User requested cancellation")
             return True
@@ -135,11 +153,33 @@ class Orchestrator:
     async def force_abort(self, mission_id: str, reason: str):
         """Cascades mission termination to dependent components."""
         logger.warning(f"[Orchestrator] FORCE ABORT mission {mission_id}. Reason: {reason}")
-        if mission_id in self.active_missions:
+        redis = get_redis_client()
+        if redis and redis.sismember(self.active_missions_key, mission_id):
             # Mark central state as failed/cancelled
             sm = CentralExecutionState(mission_id)
             sm.transition(MissionState.FAILED, term=dcn_registry.get_gossip().current_term)
             
+            # MARK: Graduation #18: LIFO Compensation (Reversing side effects)
+            try:
+                state_data = sm._load()
+                nodes_raw = state_data.get("nodes", {})
+                # Filter nodes that actually finished or started execution
+                executed_nodes = []
+                for node_id, node_data in nodes_raw.items():
+                    events = node_data.get("events", [])
+                    if any(e.get("status") in ["executing", "success", "failed"] for e in events):
+                        # Construct a mini-node dict for the compensation mapper
+                        # In a real system, we'd store the full node definition in Redis
+                        executed_nodes.append({
+                            "id": node_id,
+                            "compensation_action": node_data.get("compensation_action", "log_failure")
+                        })
+                
+                if executed_nodes:
+                    await self.reasoning_core.execute_compensation_lifo(executed_nodes)
+            except Exception as comp_err:
+                logger.error(f"[Orchestrator] Compensation logic failed: {comp_err}")
+
             # Cascade to executor (through cancellation signal in Redis or memory)
             from backend.utils.mission import MissionControl
             MissionControl.cancel_mission(mission_id)
@@ -154,7 +194,44 @@ class Orchestrator:
             CognitiveTracer.add_step(mission_id, "aborted", {"reason": reason})
             CognitiveTracer.end_trace(mission_id, "cancelled")
             
-            self.active_missions.discard(mission_id)
+            if redis:
+                redis.srem(self.active_missions_key, mission_id)
+
+    async def force_abort_all(self, user_id: str):
+        """
+        Sovereign v15.0 GA: Cluster-wide Emergency Evacuation.
+        Aborts missions for a user (or ALL missions if SYSTEM_AUTONOMOUS) 
+        and broadcasts a security alert.
+        """
+        redis = get_redis_client()
+        if not redis: return
+        
+        is_global = (user_id == "SYSTEM_AUTONOMOUS")
+        active_ids = [mid.decode() if isinstance(mid, bytes) else mid for mid in redis.smembers(self.active_missions_key)]
+        count = 0
+        
+        for mid in active_ids:
+            sm = CentralExecutionState(mid)
+            state = sm._load()
+            
+            # Match user_id OR Global trigger
+            if is_global or state.get("user_id") == user_id:
+                logger.warning(f"🚨 [Security-Rollback] Aborting mission {mid} (Target: {user_id})")
+                await self.force_abort(mid, f"Emergency system-wide rollback triggered. User: {user_id}")
+                count += 1
+                
+        # Broadcast security shield to the DCN pulse
+        from backend.core.dcn_protocol import DCNProtocol
+        dcn = DCNProtocol()
+        if dcn.is_active:
+            await dcn.broadcast_gossip(
+                mission_id="emergency_shield", 
+                payload={"user_id": user_id, "action": "ROLLBACK", "missions_aborted": count, "global": is_global},
+                pulse_type="security_shield"
+            )
+            
+        logger.info(f"🚨 [Security] Emergency Rollback complete. Aborted {count} missions. (Target: {user_id})")
+        return count
 
     async def stream_mission_events(self, user_id: str):
         """
@@ -168,14 +245,26 @@ class Orchestrator:
     async def check_vram_pressure(self) -> float:
         """Hardware telemetry: Check current VRAM pressure (0.0 - 1.0)."""
         from backend.utils.metrics import VRAM_AVAILABLE
-        # Simplified: check available vs total (assuming 8GB total placeholder)
+        # Calculated based on available GPU memory reported by metrics
         available = VRAM_AVAILABLE._value.get()
-        total = 8.0 * 1024**3
-        return 1.0 - (available / total)
+        total = float(os.getenv("GPU_VRAM_TOTAL_MB", "8192")) * 1024 * 1024
+        pressure = 1.0 - (available / total)
+        
+        # 🛡️ P0 Hardening: Strict Concurrency Guardrail
+        active_count = await self.count_active_missions()
+        max_allowed = int(os.getenv("MAX_CONCURRENT_MISSIONS", "10"))
+        
+        if pressure > 0.95 or active_count >= max_allowed:
+            logger.critical(f"[Backpressure] EMERGENCY: Pressure={pressure:.2f}, Active={active_count}. Rejecting new nodes.")
+            return 1.0 # Force rejection / heavy backpressure
+            
+        return pressure
 
     async def count_active_missions(self) -> int:
         """Returns the number of missions currently in the cognitive pipeline."""
-        return len(self.active_missions)
+        redis = get_redis_client()
+        if not redis: return 0
+        return int(redis.scard(self.active_missions_key) or 0)
 
     async def get_dcn_health(self) -> Dict[str, Any]:
         """Returns the health status of the Decentralized Cognitive Network."""
@@ -203,17 +292,48 @@ class Orchestrator:
     DEPLOYMENT_STRATEGY = os.getenv("DEPLOYMENT_STRATEGY", "blue") # blue (stable) / green (candidate)
     TRAFFIC_SPLIT_PCT = int(os.getenv("TRAFFIC_SPLIT_GREEN", "0"))
 
+    async def handle_mission_request(self, request_id: str, user_id: str, objective: str, goal_id: str):
+        """
+        Convenience wrapper for the GoalEngine to spawn missions.
+        """
+        return await self.handle_mission(
+            user_input=objective,
+            user_id=user_id,
+            session_id=f"goal_session_{goal_id[:8]}",
+            request_id=request_id,
+            goal_id=goal_id
+        )
+
     async def handle_mission(
         self, 
         user_input: str, 
         user_id: str, 
         session_id: str, 
         streaming: bool = False,
+        goal_id: Optional[str] = None,
         **kwargs
     ) -> Any:
         """
-        Routes a user request through the cognitive pipeline with timeout enforcement.
+        Routes a user request through the cognitive pipeline with v15.0 Safety Gates.
         """
+        metadata = kwargs.get("metadata", {})
+        interaction_medium = metadata.get("interaction_medium", "TEXT")
+        avg_logprob = metadata.get("avg_logprob", 0)
+
+        # 🛡️ v15.0 VOICE SAFETY GATE
+        if interaction_medium == "VOICE":
+            risky_keywords = ["delete", "remove", "wipe", "format", "shutdown", "reset", "clear memory", "rollback"]
+            input_lower = user_input.lower()
+            
+            if any(k in input_lower for k in risky_keywords):
+                if avg_logprob < -0.4: # Ultra-strict gate for destructive voice intent
+                    logger.warning(f"[Orchestrator-v15] Destructive voice command blocked (Conf: {avg_logprob}): {user_input}")
+                    return {
+                        "response": "CRITICAL_RISK_BLOCK: A destructive command was detected via voice with insufficient signal clarity. Please repeat or use text input for safety.",
+                        "status": "error", # Signal failure to VoiceProcessor
+                        "request_id": kwargs.get("request_id", "risk-block")
+                    }
+
         try:
             return await asyncio.wait_for(
                 self._handle_mission_logic(user_input, user_id, session_id, streaming, **kwargs),
@@ -237,6 +357,7 @@ class Orchestrator:
         user_id: str, 
         session_id: str, 
         streaming: bool = False,
+        goal_id: Optional[str] = None,
         **kwargs
     ) -> Any:
         """
@@ -269,6 +390,8 @@ class Orchestrator:
             pass
         CognitiveTracer.start_trace(request_id, user_id, "mission")
         sm = CentralExecutionState(request_id, trace_id=request_id, user_id=user_id)
+        if goal_id:
+            sm.attach_metadata(goal_id=goal_id)
         term = dcn_registry.get_gossip().current_term
         sm.initialize(MissionState.CREATED, term=term)
         
@@ -358,8 +481,10 @@ class Orchestrator:
         # 2. Credit Lock
         # We check intent roughly here or let the brain handle it. 
         # For DDD, the Orchestrator (Application Service) handles the transaction logic.
-            # 3. Cognitive Mission Execution
-        self.active_missions.add(request_id)
+        # 3. Cognitive Mission Execution
+        redis = get_redis_client()
+        if redis:
+            redis.sadd(self.active_missions_key, request_id)
         mission_start = datetime.now(timezone.utc)
         
         try:
@@ -367,7 +492,8 @@ class Orchestrator:
                  sm.transition(MissionState.EXECUTING, term=term)
                  CognitiveTracer.add_step(request_id, "executing", {})
                  SovereignBroadcaster.publish("MISSION_STARTED", {"request_id": request_id, "objective": user_input}, user_id=user_id)
-                 self.active_missions.discard(request_id)
+                 if redis:
+                     redis.srem(self.active_missions_key, request_id)
                  return self.stream_mission(user_input, user_id, session_id, request_id=request_id, **kwargs)
             
             sm.transition(MissionState.EXECUTING, term=term)
@@ -405,6 +531,16 @@ class Orchestrator:
                          if policy["tier_1_bypass"]:
                              logger.info(f"[Orchestrator] 🚀 Deterministic Fast-Path Triggered: Bypassing FULL planning for rule {user_input[:20]}...")
                              SovereignBroadcaster.publish("MISSION_FAST_PATH", {"request_id": request_id}, user_id=user_id)
+                             
+                             # 🧪 Phase 3: Shadow Auditing (10-20% Traffic Cap)
+                             import random
+                             if random.random() < 0.15: # 15% Shadow rate
+                                 from backend.utils.runtime_tasks import create_tracked_task
+                                 create_tracked_task(
+                                     self._perform_shadow_audit(request_id, user_input, evolved_rule["rule_id"]), 
+                                     name=f"shadow-audit-{request_id}"
+                                 )
+                             
                              return {
                                  "response": evolved_rule["result_data"]["solution"],
                                  "request_id": request_id,
@@ -451,15 +587,18 @@ class Orchestrator:
                 reasoning = await self.reasoning_core.evaluate_plan(goal, perception, task_graph, decision=decision)
                 task_graph = reasoning["graph"]
             
-            # v14.2 Strict Confidence Gate: Enforcement (S >= 0.55)
+            # v14.2 Strict Confidence Gate: Enforcement (S >= 0.55 or risk-adaptive)
+            risk_level = perception.get("intent", {}).risk_level if hasattr(perception.get("intent"), "risk_level") else "low"
+            min_conf = self.reasoning_core.RISK_THRESHOLDS.get(risk_level, self.reasoning_core.MIN_CONFIDENCE)
+            
             # v14.2 Strict Confidence Gate & Structural Refinement
             requires_refine = (
-                reasoning["confidence"] < self.reasoning_core.MIN_CONFIDENCE 
+                reasoning["confidence"] < min_conf 
                 or reasoning["strategy"].get("requires_refinement", False)
             )
             
             if requires_refine:
-                logger.warning(f"[Orchestrator] Refinement required (C:{reasoning['confidence']}, R:{requires_refine}). Attempting Pass 2...")
+                logger.warning(f"[Orchestrator] Refinement required (C:{reasoning['confidence']}, target:{min_conf}). Attempting Pass 2...")
                 critique_reflection = {
                     "issues": reasoning["critique"]["issues"] or reasoning["critique"]["warnings"],
                     "fix": "Strengthen the weak parts of the execution plan.",
@@ -470,12 +609,12 @@ class Orchestrator:
                     task_graph = reasoning["graph"]
                 
                 # FINAL GATE: If still low confidence, ABORT mission
-                if reasoning["confidence"] < self.reasoning_core.MIN_CONFIDENCE:
-                    logger.critical(f"[Orchestrator] REJECTING mission {request_id} due to low confidence ({reasoning['confidence']}) after refinement.")
+                if reasoning["confidence"] < min_conf:
+                    logger.critical(f"[Orchestrator] REJECTING mission {request_id} due to low confidence ({reasoning['confidence']} < {min_conf}) after refinement.")
                     sm.transition(MissionState.FAILED, term=term)
                     SovereignBroadcaster.publish("MISSION_FAILED", {"request_id": request_id, "reason": "low_confidence"}, user_id=user_id)
                     return {
-                        "response": "The plan created for this mission does not meet the required fidelity threshold. Aborting to ensure cognitive safety.",
+                        "response": f"The mission risk is {risk_level.upper()} and the plan fidelity ({reasoning['confidence']}) is below the required safety threshold ({min_conf}). Aborting.",
                         "status": "failed",
                         "confidence": reasoning["confidence"],
                         "request_id": request_id
@@ -546,6 +685,12 @@ class Orchestrator:
             sm.transition(MissionState.PERSISTED, term=term)
             sm.transition(MissionState.COMPLETE, term=term)
             
+            # 🎯 Phase 2: Goal Progress Reporting
+            g_id = goal_id or sm._load().get("metadata", {}).get("goal_id")
+            if g_id:
+                from backend.core.goal_engine import goal_engine
+                asyncio.create_task(goal_engine.update_goal_progress(g_id))
+            
             # 🛡️ Graduation #12: Autonomous Evolution (Learning Loop)
             from backend.core.learning_loop import LearningLoop
             from backend.utils.runtime_tasks import create_tracked_task
@@ -574,8 +719,8 @@ class Orchestrator:
                 metadata={"fidelity": audit.get("quality_score", 0.0)}
             )
 
-            CognitiveTracer.end_trace(request_id, "success")
-            self.active_missions.discard(request_id)
+            if redis:
+                redis.srem(self.active_missions_key, request_id)
             
             return {
                 "response": final_response,
@@ -689,6 +834,38 @@ class Orchestrator:
             logger.error(f"[Orchestrator] Evolved rule validation failure: {e}")
             return False
 
+    async def _perform_shadow_audit(self, request_id: str, user_input: str, rule_id: int):
+        """
+        Sovereign v15.0: Shadow Verification Loop.
+        Runs full LLM reasoning in background to audit a Fast-Path rule result.
+        """
+        try:
+            logger.info(f"🧪 [Orchestrator] Initiating Shadow Audit for Rule {rule_id}...")
+            # 1. Synthesis only (Fastest verification)
+            from backend.services.brain_service import brain_service
+            llm_response = await brain_service.call_local_llm(user_input)
+            
+            # 2. Compare (Simplistic equality/semantic check)
+            # In a full release, use CriticAgent to compare semantic similarity
+            from backend.core.evolution_engine import EvolutionaryIntelligenceEngine
+            async with await PostgresDB.get_session() as session:
+                rule = await session.get(GraduatedRule, rule_id)
+                rule_response = rule.result_data.get("solution", "")
+            
+            # Basic character-based similarity or exact match for now
+            matches = (llm_response.strip().lower() == rule_response.strip().lower())
+            
+            # 3. Report back to Evolution Engine
+            await EvolutionaryIntelligenceEngine.record_shadow_outcome(rule_id, matches_llm=matches)
+            
+            if not matches:
+                logger.warning(f"[Orchestrator] 🚨 SHADOW DIVERGENCE DETECTED for Rule {rule_id}")
+            else:
+                logger.info(f"[Orchestrator] ✅ Shadow Audit Passed for Rule {rule_id}")
+                
+        except Exception as e:
+            logger.error(f"[Orchestrator] Shadow audit failed: {e}")
+
     async def is_soft_deleted(self, user_id: str) -> bool:
         """Checks if the user has invoked RTBF soft-deletion."""
         redis = get_redis_client()
@@ -736,30 +913,36 @@ class Orchestrator:
         Sovereign v14.2: Graceful drainage of active missions.
         Waits for in-flight tasks to finish or times out.
         """
-        logger.info(f"[Orchestrator] Initiating graceful drainage for {len(self.active_missions)} mission(s)...")
+        redis = get_redis_client()
+        active_count = int(redis.scard(self.active_missions_key) or 0) if redis else 0
+        logger.info(f"[Orchestrator] Initiating graceful drainage for {active_count} mission(s)...")
         self._shutdown_event.set()
         self.executor._shutdown_event.set()
         
         start_time = time.time()
-        while self.active_missions and (time.time() - start_time < timeout):
-            logger.info(f"[Orchestrator] Draining... {len(self.active_missions)} active missions remaining.")
+        while active_count > 0 and (time.time() - start_time < timeout):
+            logger.info(f"[Orchestrator] Draining... {active_count} active missions remaining.")
             await asyncio.sleep(2)
+            active_count = int(redis.scard(self.active_missions_key) or 0) if redis else 0
             
-        if self.active_missions:
-            logger.warning(f"[Orchestrator] Drainage timed out. Force-terminating {len(self.active_missions)} missions.")
-            for request_id in list(self.active_missions):
-                try:
-                    CognitiveTracer.add_step(request_id, "interrupted", {"reason": "Process shutdown (SIGTERM)"})
-                    CognitiveTracer.end_trace(request_id, "interrupted")
-                    sm = CentralExecutionState(request_id)
-                    sm.transition(MissionState.FAILED, term=dcn_registry.get_gossip().current_term)
-                    # Use MissionControl to signal the executor
-                    from backend.utils.mission import MissionControl
-                    MissionControl.cancel(request_id)
-                except Exception as e:
-                    logger.error(f"[Orchestrator] Failed safely closing mission {request_id}: {e}")
+        if active_count > 0:
+            logger.warning(f"[Orchestrator] Drainage timed out. Force-terminating {active_count} missions.")
+            if redis:
+                active_ids = [mid.decode() if isinstance(mid, bytes) else mid for mid in redis.smembers(self.active_missions_key)]
+                for request_id in active_ids:
+                    try:
+                        CognitiveTracer.add_step(request_id, "interrupted", {"reason": "Process shutdown (SIGTERM)"})
+                        CognitiveTracer.end_trace(request_id, "interrupted")
+                        sm = CentralExecutionState(request_id)
+                        sm.transition(MissionState.FAILED, term=dcn_registry.get_gossip().current_term)
+                        # Use MissionControl to signal the executor
+                        from backend.utils.mission import MissionControl
+                        MissionControl.cancel(request_id)
+                    except Exception as e:
+                        logger.error(f"[Orchestrator] Failed safely closing mission {request_id}: {e}")
         
-        self.active_missions.clear()
+        if redis:
+            redis.delete(self.active_missions_key)
         logger.info("[Orchestrator] Teardown complete.")
 
     async def get_mission_trace(self, mission_id: str) -> Optional[Dict[str, Any]]:

@@ -34,6 +34,7 @@ from ...utils.tracing import traced_span
 from ..execution_guardrails import AgentSandbox, ExecutionBudgetTracker, capture_resource_pressure
 from .compensation_coordinator import CompensationCoordinator
 from backend.services.billing_service import billing_service
+from backend.db.neo4j_db import project_to_neo4j
 
 
 logger = logging.getLogger(__name__)
@@ -169,9 +170,18 @@ class GraphExecutor:
             if executable:
                 pressure = capture_resource_pressure(len(running_tasks))
                 
-                # Backpressure Logic: If critical pressure, throttle
+                # --- v14.2 Resource-Aware Admission Control ---
+                # If CPU/RAM/VRAM pressure is > 90%, we throttle node scheduling
+                if pressure.ram_percent >= 90.0 or pressure.cpu_percent >= 90.0 or pressure.vram_pressure:
+                    logger.warning(f"[Shield] Resource Exhaustion Near (RAM: {pressure.ram_percent}%). Throttling execution flow...")
+                    # Delay scheduling of new nodes
+                    await asyncio.sleep(2.0)
+                    # Skip scheduling this wave for now to allow pressure to drop
+                    continue
+
+                # Backpressure Logic: If high (but not critical) pressure, minor throttle
                 if pressure.active_dimensions:
-                    logger.warning(f"[V14.2 Executor] Critical backpressure: {pressure.active_dimensions}. Throttling...")
+                    logger.info(f"[Executor] Moderate pressure: {pressure.active_dimensions}. Minor delay.")
                     await asyncio.sleep(0.5) 
 
                 for node in executable:
@@ -245,6 +255,12 @@ class GraphExecutor:
                             break
                     
                     budget_tracker.add_tokens(node.agent, getattr(res, "total_tokens", 0))
+                    
+                    # --- v15.0 Neo4j Sync Projection (Fix #1) ---
+                    # High-criticality nodes use synchronous projection
+                    node_type = getattr(node, "type", "baseline")
+                    is_critical_logic = node_type in ["research", "analysis"]
+                    await project_to_neo4j(res.model_dump() if hasattr(res, 'model_dump') else {}, sync=is_critical_logic)
                     
                 except Exception as e:
                     logger.error(f"[Executor] Task CRASH for {node.id}: {e}")
@@ -397,15 +413,22 @@ class GraphExecutor:
         )
         try:
             while attempts <= max_retries:
-                try:
-                    attempts += 1
-
-                    if not await check_agent_limit(user_id, agent_name, limit=60):
-                        return ToolResult(
-                            success=False,
-                            error=f"Sovereign Rate Limit Exceeded for agent '{agent_name}'. Please wait before next mission.",
                             agent=agent_name,
                         )
+
+                    # --- v14.2 Sub-DAG Caching ---
+                    cache_key = None
+                    if agent_name in ["search_agent", "browser_agent", "document_agent", "image_agent"]:
+                        input_hash = hashlib.sha256(json.dumps(resolved_inputs, sort_keys=True).encode()).hexdigest()
+                        cache_key = f"sovereign:node_cache:{agent_name}:{input_hash}"
+                        if HAS_REDIS:
+                            cached_data = await redis_client.get(cache_key)
+                            if cached_data:
+                                logger.info(f"[Executor] Cache Hit for node {node.id} (Agent: {agent_name}). Skipping execution.")
+                                result = ToolResult(**json.loads(cached_data))
+                                result.data["cache_hit"] = True
+                                # Jump to success logic
+                                break 
 
                     is_fragile = getattr(node, "is_fragile", False) or getattr(node, "high_friction", False)
                     if is_fragile and attempts == 1:
@@ -593,14 +616,9 @@ class GraphExecutor:
                         # formal lifecycle: COMPLETED
                         node.state = NodeState.COMPLETED
                         
-                        # Register for potential compensation
-                        if hasattr(node, "reversal_logic") and node.reversal_logic:
-                            compensation_coordinator.register_step(
-                                node.id, 
-                                node.agent, 
-                                node.reversal_logic, 
-                                getattr(node, "reversal_params", {})
-                            )
+                        # Store in Sub-DAG Cache (v14.2)
+                        if cache_key and HAS_REDIS:
+                            await redis_client.set(cache_key, json.dumps(result.model_dump()), ex=3600 * 2) # 2h cache
                         
                         return result
 

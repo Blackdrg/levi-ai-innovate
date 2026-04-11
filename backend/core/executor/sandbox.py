@@ -43,15 +43,17 @@ class DockerSandbox:
         docker_cmd = [
             "docker", "run", "--rm", "-i",
             "--memory", f"{self.memory_mb}m",
-            "--memory-swap", f"{self.memory_mb}m", # Disable swap escalation
+            "--memory-swap", "0", # Hard disable swap escalation per P0 request
+            "--oom-kill-disable=false", # Ensure process is killed on OOM
             "--cpus", str(self.cpu_quota),
-            "--pids-limit", "64", # Prevent fork bombs
-            "--network", "none",  # Total network isolation
+            "--pids-limit", "64",
+            "--network", "none",
             "--cap-drop=ALL",
             "--security-opt", "no-new-privileges",
             "--user", "nobody",
             "--read-only",
             "--tmpfs", "/tmp:rw,noexec,nosuid,size=64m",
+            "--volume", "/etc/ssl/certs:/etc/ssl/certs:ro",
             f"--runtime={self.runtime}",
             self.image,
             "python", "-c", code
@@ -93,7 +95,8 @@ class DockerSandbox:
         docker_cmd = [
             "docker", "run", "--rm", "-i",
             "--memory", f"{self.memory_mb}m",
-            "--memory-swap", f"{self.memory_mb}m",
+            "--memory-swap", "0",
+            "--oom-kill-disable=false",
             "--cpus", str(self.cpu_quota),
             "--pids-limit", "64",
             "--network", "none",
@@ -102,6 +105,7 @@ class DockerSandbox:
             "--user", "nobody",
             "--read-only",
             "--tmpfs", "/tmp:rw,noexec,nosuid,size=64m",
+            "--volume", "/etc/ssl/certs:/etc/ssl/certs:ro",
             f"--runtime={self.runtime}",
             self.image
         ] + command
@@ -133,8 +137,11 @@ class DockerSandbox:
 class LocalProcessSandbox:
     """Fallback sandbox using subprocess for non-docker environments."""
     async def run_code(self, code: str, env: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+        if os.getenv("ENVIRONMENT") == "production":
+            logger.critical("[Security] INSECURE SANDBOX BLOCK: LocalProcessSandbox triggered in PRODUCTION. Access REJECTED.")
+            return {"success": False, "error": "Insecure sandbox execution prohibited in production.", "sandbox_id": "blocked"}
+            
         logger.warning("[Sandbox] DOCKER UNAVAILABLE. Falling back to local process isolation (INSECURE).")
-        # Implementation of a restricted subprocess call...
         return {"success": True, "stdout": "Local fallback executed (mock result)", "sandbox_id": "local_dev"}
 
 def get_sandbox(agent_config: Any = None) -> Any:

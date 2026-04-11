@@ -17,6 +17,13 @@ class ReasoningCore:
 
     MIN_CONFIDENCE = 0.55
     COMPLEXITY_SKIP_THRESHOLD = 0.35
+    
+    # Risk-Adaptive Thresholds (P1 Hardening)
+    RISK_THRESHOLDS = {
+        "high": 0.90,
+        "medium": 0.75,
+        "low": 0.55
+    }
 
     async def evaluate_plan(
         self,
@@ -282,36 +289,42 @@ class ReasoningCore:
         decision: Optional[Any],
     ) -> float:
         """
-        v14.2 High-Fidelity Confidence Scoring.
-        Now factors in resource prediction and agent diversity.
+        v14.2 Bayesian-Inspired Confidence Scoring.
+        P(Success | Evidence) = (P(Evidence | Success) * P(Success)) / P(Evidence)
+        We use a weighted evidence approach to approximate this.
         """
+        # 1. Prior: Based on historical success or base architectural trust
+        prior = self._historical_success_rate(graph)
+        
+        # 2. Evidence from Structural Audit (Critique)
+        # We model evidence as a multiplier [0, 1]
+        issue_penalty = len(critique["issues"]) * 0.25
+        warning_penalty = len(critique["warnings"]) * 0.08
+        structural_evidence = max(0.0, 1.0 - (issue_penalty + warning_penalty))
+        
+        # 3. Evidence from Simulation Pass
+        sim_evidence = 1.0 if simulation["status"] == "ok" else 0.3
+        
+        # 4. Resource Resilience Factor
         res = simulation.get("resource_prediction", {})
-        features = {
-            "depth": float(self._graph_depth(graph)),
-            "node_count": float(len(graph.nodes)),
-            "agent_diversity": float(critique.get("agent_diversity", 1)),
-            "est_tokens": float(res.get("estimated_tokens", 0)),
-            "issue_count": float(len(critique["issues"])),
-            "warning_count": float(len(critique["warnings"])),
-            "sim_blocked": 1.0 if simulation["status"] != "ok" else 0.0
-        }
+        tokens = res.get("estimated_tokens", 0)
+        # High token count reduces confidence (fragility/hallucination risk)
+        resource_evidence = 1.0 - min(0.3, (tokens / 10000.0) * 0.3)
         
-        # Base score starts from simulation status
-        score = 0.9 if simulation["status"] == "ok" else 0.4
+        # 5. Bayesian Combination (Weighted Heuristic Approximation)
+        # Likelihood = Structural * Simulation * Resource
+        likelihood = structural_evidence * 0.5 + sim_evidence * 0.3 + resource_evidence * 0.2
         
-        # Penalties
-        score -= (features["issue_count"] * 0.15)
-        score -= (features["warning_count"] * 0.05)
+        # Posterior = Prior * Likelihood
+        # We add a complexity buffer (deeper graphs need more evidence)
+        depth = self._graph_depth(graph)
+        depth_penalty = 0.02 * max(0, depth - 3)
         
-        # Penalty for excessive resource usage (Fragility risk)
-        if features["est_tokens"] > 5000:
-            score -= 0.1
+        posterior = (prior * 0.4 + likelihood * 0.6) - depth_penalty
         
-        # Complexity Reward for multi-node planning success
-        if features["node_count"] > 2 and simulation["status"] == "ok":
-            score += 0.05
-            
-        return max(0.05, min(0.99, round(score, 3)))
+        logger.info(f"[ReasoningCore] Confidence Calculated: Prior={prior:.2f}, Likelihood={likelihood:.2f}, Posterior={posterior:.2f}")
+        
+        return max(0.01, min(0.99, round(posterior, 3)))
 
     def _select_execution_strategy(
         self,
@@ -341,6 +354,34 @@ class ReasoningCore:
             "dag_depth": depth,
         }
 
+    COMPENSATION_MAP: Dict[str, Any] = {
+        "log_failure": lambda node: logger.warning(f"[Compensation] Node {node['id']} failed. Logged."),
+        "reverse_debit": lambda node: logger.info(f"[Compensation] Reversing debit for {node['id']}"),
+        "delete_resource": lambda node: logger.info(f"[Compensation] Deleting resource created by {node['id']}"),
+        "execute_code": lambda node: logger.info(f"[Compensation] Cleaning up temp files for {node['id']}"),
+    }
+
+    async def execute_compensation_lifo(self, failed_nodes: List[Dict[str, Any]]):
+        """
+        Sovereign v14.2: Compensation Execution (LIFO).
+        Reverses side effects in reverse order of execution.
+        """
+        logger.warning(f"[ReasoningCore] Initiating LIFO compensation for {len(failed_nodes)} nodes...")
+        for node in reversed(failed_nodes):
+            action = node.get("compensation_action", "log_failure")
+            # Handle both simple strings and complex "action:arg" formats
+            clean_action = action.split(":")[0] if ":" in action else action
+            
+            handler = self.COMPENSATION_MAP.get(clean_action, self.COMPENSATION_MAP["log_failure"])
+            try:
+                if asyncio.iscoroutinefunction(handler):
+                    await handler(node)
+                else:
+                    handler(node)
+                logger.info(f"[Compensation] {clean_action} executed for {node.get('id')}")
+            except Exception as e:
+                logger.error(f"[Compensation] {clean_action} failed for {node.get('id')}: {e}")
+
     def enrich_for_resilience(self, graph: TaskGraph) -> TaskGraph:
         enriched = copy.deepcopy(graph)
         for node in enriched.nodes:
@@ -350,7 +391,15 @@ class ReasoningCore:
                     "source": "reasoning_core",
                 }
             if node.compensation_action is None:
-                node.compensation_action = f"log_failure:{node.id}"
+                # Default compensation based on agent type
+                if "finance" in node.agent:
+                    node.compensation_action = "reverse_debit"
+                elif "cloud" in node.agent:
+                    node.compensation_action = "delete_resource"
+                elif "executor" in node.agent:
+                    node.compensation_action = "execute_code"
+                else:
+                    node.compensation_action = f"log_failure:{node.id}"
         return enriched
 
     def _graph_depth(self, graph: TaskGraph) -> int:

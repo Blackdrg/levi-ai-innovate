@@ -117,3 +117,78 @@ async def get_vault_health(current_user: dict = Depends(get_current_user)):
         "index_type": "FAISS_IVF_FLAT",
         "last_evolution": "2026-04-02T10:00:00Z"
     }
+
+
+# 🧠 v15.0 GA: MULTI-TIER MEMORY EXPLORER WIRING
+
+@router.get("/{tier}/search")
+async def tiered_memory_search(
+    tier: str,
+    query: str = "",
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Sovereign v15.0: Directed search across cognitive partitions.
+    Tiers: working (Redis), episodic (Postgres), semantic (FAISS), relational (Neo4j).
+    """
+    user_id = current_user.get("uid") or current_user.get("id")
+    from backend.main import memory_manager
+    
+    results = []
+    
+    try:
+        if tier == "working":
+            # Search active Redis sessions
+            # In a real setup, we'd need the current session_id. For Explorer, we search the most recent.
+            # Here we fetch last 20 messages as a baseline for the explorer
+            # (Note: In production, this would be filtered by query if desired)
+            from backend.memory.cache import get_conversation
+            # Simplified: get last 5 sessions or specific current one
+            sessions = [f"session_{user_id}"] # Placeholder session key mapping
+            for sid in sessions:
+                history = get_conversation(sid)
+                for h in history:
+                    if not query or query.lower() in str(h).lower():
+                        results.append({
+                            "id": f"working_{hash(str(h))}",
+                            "content": f"User: {h.get('user')} | Bot: {h.get('bot')}",
+                            "timestamp": h.get("timestamp"),
+                            "tier": "working"
+                        })
+
+        elif tier == "semantic":
+            from backend.memory.vector_store import SovereignVectorStore
+            raw_facts = await SovereignVectorStore.search_facts(user_id, query, limit=50)
+            results = [{
+                "id": f"fact_{f.get('id', i)}",
+                "content": f.get("fact"),
+                "score": f.get("score"),
+                "timestamp": f.get("timestamp", datetime.utcnow().isoformat()),
+                "tier": "semantic"
+            } for i, f in enumerate(raw_facts)]
+
+        elif tier == "episodic":
+            # Episodic = Historical Missions from Postgres
+            history = await memory_manager.get_mid_term(user_id, limit=50)
+            results = [{
+                "id": m.get("mission_id"),
+                "content": f"Objective: {m.get('objective')} | Status: {m.get('status')}",
+                "timestamp": m.get("updated_at"),
+                "tier": "episodic"
+            } for m in history if not query or query.lower() in m.get("objective", "").lower()]
+
+        elif tier == "relational":
+            # Relational = Graph Resonance (Neo4j)
+            from backend.db.neo4j_client import Neo4jClient
+            resonance = await Neo4jClient.get_resonance_entities(user_id, query)
+            results = [{
+                "id": f"node_{i}",
+                "content": f"Entity: {res.get('name')} | Label: {res.get('label')}",
+                "timestamp": datetime.utcnow().isoformat(),
+                "tier": "relational"
+            } for i, res in enumerate(resonance)]
+
+        return results
+    except Exception as e:
+        logger.error(f"[MemoryExplorer] Tier {tier} search failed: {e}")
+        return []

@@ -48,8 +48,11 @@ class Neo4jClient:
                 return []
 
     @classmethod
-    async def add_interaction(cls, user_id: str, query: str, response: str, intent: str):
-        """Creates a knowledge node for a user interaction."""
+    async def add_interaction(cls, user_id: str, query: str, response: str, intent: str, sync: bool = True):
+        """
+        Creates a knowledge node for a user interaction.
+        v14.2: Added sync flag to manage knowledge resonance lag.
+        """
         cypher = """
         MERGE (u:User {id: $user_id})
         CREATE (i:Interaction {
@@ -61,51 +64,70 @@ class Neo4jClient:
         })
         CREATE (u)-[:PERFORMED]->(i)
         """
-        # Note: apoc might not be available, fallback to manual uuid if needed
-        try:
-             await cls.execute_query(cypher, {
-                "user_id": user_id,
-                "query": query,
-                "response": response,
-                "intent": intent
-            })
-        except:
-             cypher_no_apoc = """
-             MERGE (u:User {id: $user_id})
-             CREATE (i:Interaction {
-                text: $query,
-                response: $response,
-                timestamp: datetime(),
-                intent: $intent
-             })
-             CREATE (u)-[:PERFORMED]->(i)
-             """
-             await cls.execute_query(cypher_no_apoc, {
-                "user_id": user_id,
-                "query": query,
-                "response": response,
-                "intent": intent
-            })
+        
+        async def _execute():
+            try:
+                 await cls.execute_query(cypher, {
+                    "user_id": user_id,
+                    "query": query,
+                    "response": response,
+                    "intent": intent
+                })
+            except Exception as e:
+                 logger.warning(f"[Neo4j] APOC failed, attempting fallback: {e}")
+                 cypher_no_apoc = """
+                 MERGE (u:User {id: $user_id})
+                 CREATE (i:Interaction {
+                    text: $query,
+                    response: $response,
+                    timestamp: datetime(),
+                    intent: $intent
+                 })
+                 CREATE (u)-[:PERFORMED]->(i)
+                 """
+                 await cls.execute_query(cypher_no_apoc, {
+                    "user_id": user_id,
+                    "query": query,
+                    "response": response,
+                    "intent": intent
+                })
+
+        if sync:
+            await _execute()
+        else:
+            import asyncio
+            asyncio.create_task(_execute())
 
     @classmethod
     async def get_resonance_entities(cls, user_id: str, query_text: str) -> List[Dict[str, Any]]:
         """
         Retrieves entities and interactions related to the current query context.
-        Used for Phase 4 Graph Retrieval.
+        v14.2: Hardened resonance with phrase expansion and multi-hop awareness.
         """
-        # Simple phrase matching for resonance
-        # In a real system, we might use full-text indices or vector extensions in Neo4j.
+        if not query_text: return []
+        
+        # 1. Term Expansion (Simple keyword extraction)
+        stop_words = {"what", "how", "show", "give", "find", "this", "that", "user"}
+        terms = [t.lower() for t in query_text.replace("?", "").split() if len(t) > 3 and t.lower() not in stop_words]
+        
+        if not terms: return []
+
+        # 2. Resonate across User Clusters (Interactions + Traits)
         cypher = """
         MATCH (u:User {id: $user_id})-[:PERFORMED|KNOWS|PREFERS]->(n)
-        WHERE n.text CONTAINS $term OR n.name CONTAINS $term or n.intent = $term
-        RETURN n as entity, labels(n) as labels LIMIT 5
+        WHERE any(term IN $terms WHERE n.text CONTAINS term OR n.name CONTAINS term OR n.intent CONTAINS term)
+        RETURN n as entity, labels(n) as labels, 
+               (CASE WHEN n.importance IS NOT NULL THEN n.importance ELSE 0.5 END) as weight
+        ORDER BY weight DESC LIMIT 10
         """
-        # Extract keywords for better matching
-        terms = [t for t in query_text.split() if len(t) > 3]
-        results = []
-        for term in terms[:3]:
-            res = await cls.execute_query(cypher, {"user_id": user_id, "term": term})
-            results.extend(res)
+        
+        try:
+            results = await cls.execute_query(cypher, {"user_id": user_id, "terms": terms[:5]})
+            logger.debug(f"[Neo4j] Resonance match found {len(results)} atoms for query: {query_text[:30]}...")
+            return results
+        except Exception as e:
+            logger.error(f"[Neo4j] Resonance retrieval failure: {e}")
+            return []
     @classmethod
     async def clear_user_data(cls, user_id: str):
         """Detaches and deletes all nodes associated with a user for absolute privacy."""

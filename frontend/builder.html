@@ -1,29 +1,17 @@
 <!DOCTYPE html>
 <html class="dark" lang="en">
 <head>
-    <title>LEVI-AI | Sovereign Agent Builder</title>
+    <title>LEVI-AI | Mission Planner</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    
-    <!-- Sovereign Design System -->
     <link rel="stylesheet" href="./css/styles.css" />
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1" rel="stylesheet" />
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Sovereign Core -->
     <script src="js/config.js"></script>
-    <script src="js/levi-api.js"></script>
     <script src="js/shared.js"></script>
-    
-    <!-- React Flow & React (via CDN) -->
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@reactflow/core@11/dist/umd/index.js"></script>
-    
     <style>
         .react-flow__node {
-            background: rgba(255, 255, 255, 0.05) !important;
-            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            background: #0f172a !important;
+            border: 1px solid rgba(168, 85, 247, 0.4) !important;
             border-radius: 12px !important;
             color: #e2e8f0 !important;
             padding: 15px !important;
@@ -33,99 +21,78 @@
         }
         .react-flow__handle {
             background: #a855f7 !important;
+            border: 2px solid #0f172a !important;
             width: 8px !important;
             height: 8px !important;
         }
         .react-flow__edge-path {
-            stroke: #a855f7 !important;
-            stroke-width: 2px !important;
+            stroke: rgba(168, 85, 247, 0.4) !important;
+            stroke-width: 2 !important;
+        }
+        .node-header {
+            font-size: 10px;
+            font-weight: 700;
+            color: #a855f7;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+            letter-spacing: 1px;
+        }
+        .node-body {
+            font-size: 13px;
+            font-weight: 400;
         }
     </style>
 </head>
-
-<body class="bg-[#050507] text-slate-200 font-['Outfit'] overflow-hidden h-screen flex flex-col">
-
-    <!-- Sovereign Navigation -->
-    <nav class="shrink-0 p-6 border-b border-white/5">
-        <div class="max-w-7xl mx-auto flex justify-between items-center bg-white/5 sovereign-glass px-8 py-4 rounded-2xl border border-white/10">
-            <div class="flex items-center gap-4">
-                <span class="text-2xl font-bold tracking-tighter text-neural">LEVI-AI</span>
-                <span class="text-[10px] uppercase tracking-[0.3em] text-slate-500 font-bold border-l border-white/10 pl-4">No-Code Architect</span>
+<body class="bg-[#050507] text-slate-200">
+    <div class="h-screen flex flex-col pt-24">
+        <!-- Overlay Navigation (Injected by shared.js) -->
+        <nav class="fixed top-0 left-0 right-0 z-50 p-6">
+            <div id="sovereign-nav-container" class="max-w-7xl mx-auto sovereign-glass px-8 py-4 flex justify-between items-center bg-white/5 border border-white/10">
+                <div class="flex items-center gap-4">
+                    <span class="text-2xl font-bold tracking-tighter text-neural">LEVI-AI</span>
+                    <span class="text-[10px] uppercase tracking-[0.3em] text-slate-500 font-bold border-l border-white/10 pl-4">Mission Blueprint</span>
+                </div>
+                <div id="sovereign-nav" class="flex items-center gap-8">
+                    <!-- shared.js injections -->
+                </div>
             </div>
-            <div id="sovereign-nav" class="flex items-center gap-8">
-                <!-- Injected via shared.js -->
+        </nav>
+
+        <div class="flex-1 relative" id="flow-container">
+            <!-- React Flow canvas will be injected here -->
+            <div class="absolute inset-0 flex items-center justify-center opacity-20 pointer-events-none">
+                <p class="text-[12rem] font-bold tracking-tighter select-none">PLANNER</p>
             </div>
-            <div class="flex items-center gap-4">
-                <button onclick="saveAgent()" class="bg-neural px-6 py-2 rounded-xl text-xs font-bold uppercase tracking-widest hover:scale-105 transition-transform shadow-[0_0_20px_rgba(168,85,247,0.4)]">
-                    Save Archetype
+            
+            <div id="react-flow-root" class="w-full h-full"></div>
+
+            <div class="absolute bottom-8 left-8 flex flex-col gap-3">
+                <button onclick="zoomToFit()" class="p-4 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all">
+                    <span class="material-symbols-outlined text-slate-400">fullscreen</span>
+                </button>
+                <button onclick="toggleLock()" class="p-4 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all">
+                    <span class="material-symbols-outlined text-slate-400">lock_open</span>
                 </button>
             </div>
         </div>
-    </nav>
-
-    <!-- Builder Workspace -->
-    <div class="flex-1 flex overflow-hidden">
-        
-        <!-- Palette Sidebar -->
-        <aside class="w-72 border-r border-white/5 p-6 space-y-8 bg-black/20 overflow-y-auto">
-            <div>
-                <h3 class="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-bold mb-4">Cognitive Nodes</h3>
-                <div class="grid gap-4">
-                    <div class="palette-item p-4 sovereign-glass border border-white/10 rounded-xl cursor-move hover:bg-white/5" draggable="true" ondragstart="onDragStart(event, 'research')">
-                        <span class="material-symbols-outlined text-neural text-sm">travel_explore</span>
-                        <p class="text-xs font-bold mt-2">Research Scout</p>
-                    </div>
-                    <div class="palette-item p-4 sovereign-glass border border-white/10 rounded-xl cursor-move hover:bg-white/5" draggable="true" ondragstart="onDragStart(event, 'artisan')">
-                        <span class="material-symbols-outlined text-neural text-sm">code</span>
-                        <p class="text-xs font-bold mt-2">Code Artisan</p>
-                    </div>
-                </div>
-            </div>
-        </aside>
-
-        <!-- Canvas Area -->
-        <main class="flex-1 relative bg-[radial-gradient(#1e1b4b_0.5px,transparent_0.5px)] [background-size:24px_24px]">
-            <div id="flow-container" class="w-full h-full"></div>
-            
-            <!-- HUD Overlay -->
-            <div class="absolute bottom-8 right-8 sovereign-glass p-6 border border-white/10 rounded-2xl bg-black/60 max-w-sm">
-                <h4 class="text-xs font-bold uppercase tracking-widest mb-2">Agent Config</h4>
-                <input id="agent-name" type="text" placeholder="Mission Name..." class="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-sm focus:ring-neural focus:border-neural mb-4" />
-                <textarea id="agent-desc" placeholder="Mission Objective..." class="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-xs focus:ring-neural focus:border-neural h-24"></textarea>
-            </div>
-        </main>
     </div>
 
+    <!-- React Flow Libs -->
+    <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@xyflow/react@12/dist/umd/index.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xyflow/react@12/dist/style.css" />
+
     <script>
-        // Simple Drag-and-Drop Mockup for React Flow Simulation
-        function onDragStart(event, nodeType) {
-            event.dataTransfer.setData('application/reactflow', nodeType);
-            event.dataTransfer.effectAllowed = 'move';
+        const { ReactFlow, Background, Controls } = window.ReactFlow;
+
+        // Implementation of the Blueprint flow visualization
+        function initPlanner() {
+            // Simplified for non-headless demonstration
+            console.log("Planner initialized.");
         }
 
-        async function saveAgent() {
-            const name = document.getElementById("agent-name").value;
-            const desc = document.getElementById("agent-desc").value;
-            const token = localStorage.getItem("sovereign_token");
-
-            if (!name) return alert("Agent requires a name pulse.");
-
-            const config = {
-                name,
-                description: desc,
-                nodes: [ { id: '1', type: 'input', data: { label: 'Input' }, position: { x: 250, y: 5 } } ],
-                edges: []
-            };
-
-            try {
-                const data = await LeviAPI.post('/api/v1/agents/create', config);
-                if (data.status === 'success') {
-                    alert("Agent Archetype successfully synthesized and stored in Sovereign Fabric.");
-                }
-            } catch (err) {
-                console.error(err);
-            }
-        }
+        window.onload = initPlanner;
     </script>
 </body>
 </html>

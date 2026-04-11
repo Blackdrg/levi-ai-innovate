@@ -33,34 +33,90 @@ _ALLOWED_TRANSITIONS: Dict[MissionState, List[MissionState]] = {
 
 
 class CentralExecutionState:
-    def __init__(self, mission_id: str, trace_id: Optional[str] = None, user_id: Optional[str] = None):
+    def __init__(self, mission_id: Optional[str] = None, trace_id: Optional[str] = None, user_id: Optional[str] = None):
         self.mission_id = mission_id
         self.trace_id = trace_id or mission_id
         self.user_id = user_id or "unknown"
+        self.namespace = "orchestrator"
 
     @property
     def _key(self) -> str:
-        return f"mission:state:{self.mission_id}"
+        return f"{self.namespace}:missions"
 
     def _load(self) -> Dict[str, Any]:
-        if not HAS_REDIS:
+        if not (HAS_REDIS and self.mission_id):
             return {}
-        raw: Any = redis_client.get(self._key)  # type: ignore[assignment]
+        raw: Any = redis_client.hget(self._key, self.mission_id)
         if not raw:
             return {}
         try:
             if isinstance(raw, (bytes, bytearray)):
                 raw = raw.decode("utf-8")
-            if not isinstance(raw, str):
-                raw = str(raw)
             return json.loads(raw)
         except Exception:
             return {}
 
     def _save(self, data: Dict[str, Any]) -> None:
-        if not HAS_REDIS:
+        if not (HAS_REDIS and self.mission_id):
             return
-        redis_client.setex(self._key, 3600, json.dumps(data))
+        redis_client.hset(self._key, self.mission_id, json.dumps(data))
+
+    @classmethod
+    async def load_state_on_boot(cls) -> Dict[str, Any]:
+        """
+        Sovereign v15.0: Hybrid Pod Recovery Logic.
+        Recovers 'ACTIVE' missions from Redis (Tier-0) with SQL (Tier-2) fallback.
+        """
+        active = {}
+        
+        # 1. Primary: Redis Hash Truth
+        if HAS_REDIS:
+            try:
+                all_redis = redis_client.hgetall("orchestrator:missions")
+                for mid_bytes, data_bytes in all_redis.items():
+                    try:
+                        mid = mid_bytes.decode()
+                        data = json.loads(data_bytes.decode())
+                        if data.get("state") in [MissionState.CREATED, MissionState.PLANNED, MissionState.EXECUTING, MissionState.SCHEDULED, MissionState.RUNNING]:
+                            active[mid] = data
+                    except Exception: continue
+            except Exception as e:
+                logger.error(f"[Recovery] Redis hydration failure: {e}")
+
+        # 2. Secondary: PostgreSQL Fallback (If Redis is empty or for baseline integrity)
+        if not active:
+            logger.info("[Recovery] Redis Tier-0 empty. Attempting Tier-2 PostgreSQL hydration...")
+            try:
+                from backend.db.postgres import PostgresDB
+                from backend.db.models import Mission
+                from sqlalchemy import select
+                
+                async with await PostgresDB.get_session() as session:
+                    stmt = select(Mission).where(Mission.status.in_([
+                        MissionState.CREATED.value, MissionState.PLANNED.value, 
+                        MissionState.EXECUTING.value, MissionState.SCHEDULED.value, 
+                        MissionState.RUNNING.value
+                    ]))
+                    res = await session.execute(stmt)
+                    missions = res.scalars().all()
+                    
+                    for m in missions:
+                        # Re-constitute minimal state from SQL payload
+                        active[m.mission_id] = m.payload or {
+                            "mission_id": m.mission_id,
+                            "user_id": m.user_id,
+                            "state": m.status,
+                            "metadata": {"goal": m.objective}
+                        }
+                        # Seed Redis back if available
+                        if HAS_REDIS:
+                            redis_client.hset("orchestrator:missions", m.mission_id, json.dumps(active[m.mission_id]))
+            except Exception as e:
+                logger.error(f"[Recovery] SQL hydration failure: {e}")
+
+        if active:
+            logger.info(f"[Recovery] Hybrid mode: Recovered {len(active)} active missions.")
+        return active
 
     def initialize(self, initial: MissionState = MissionState.CREATED, term: int = 0) -> None:
         now = time.time()
@@ -109,7 +165,43 @@ class CentralExecutionState:
         data["metadata"] = meta
         
         self._save(data)
+        
+        # 🛡️ Graduation #22: SQL Partitioning for HA
+        if new_state in [MissionState.COMPLETE, MissionState.FAILED, MissionState.DEAD]:
+            from backend.utils.runtime_tasks import create_tracked_task
+            create_tracked_task(self._sync_to_postgres(data), name=f"mission-sql-sync-{self.mission_id}")
+            
         return True
+
+    async def _sync_to_postgres(self, data: Dict[str, Any]):
+        """Persists mission state to PostgreSQL for HA recovery and auditing."""
+        try:
+            from backend.db.postgres import PostgresDB
+            from backend.db.models import Mission
+            from sqlalchemy.dialects.postgresql import insert
+            
+            # Using raw SQL or ORM for upsert
+            async with await PostgresDB.get_session() as session:
+                async with session.begin():
+                    stmt = insert(Mission).values(
+                        mission_id=data["mission_id"],
+                        user_id=data.get("user_id"),
+                        objective=data.get("metadata", {}).get("goal", "unknown"),
+                        status=data["state"],
+                        fidelity_score=data.get("metadata", {}).get("fidelity_score", 0.0),
+                        payload=data
+                    ).on_conflict_do_update(
+                        index_elements=["mission_id"],
+                        set_={
+                            "status": data["state"],
+                            "payload": data,
+                            "fidelity_score": data.get("metadata", {}).get("fidelity_score", 0.0)
+                        }
+                    )
+                    await session.execute(stmt)
+                    logger.debug(f"[SQL-Sync] Mission {self.mission_id} persisted to PostgreSQL.")
+        except Exception as e:
+            logger.error(f"[SQL-Sync] Failed persisting mission {self.mission_id}: {e}")
 
     def attach_replay_payload(self, payload: Dict[str, Any]) -> None:
         data = self._load()

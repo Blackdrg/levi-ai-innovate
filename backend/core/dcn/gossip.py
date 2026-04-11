@@ -11,8 +11,18 @@ from typing import Dict, Any, Optional, Callable
 logger = logging.getLogger(__name__)
 
 GOSSIP_STREAM = "dcn:gossip"
-NODE_ID = os.getenv("DCN_NODE_ID", "node-alpha")
-DCN_SECRET = os.getenv("DCN_SECRET", "sovereign_default_secret_v13")
+NODE_ID = os.getenv("DCN_NODE_ID", f"node-{time.time_ns() % 1000}")
+DCN_SECRET = os.getenv("DCN_SECRET")
+
+if not DCN_SECRET:
+    logger.critical("🚨 [DCN] MISSING DCN_SECRET! System cannot safely coordinate. Set DCN_SECRET in environment.")
+    raise RuntimeError("DCN_SECRET is mandatory for Sovereign DCN operations.")
+
+if len(DCN_SECRET) < 32:
+    logger.warning("⚠️ [DCN] INSECURE DCN_SECRET! Secret must be >= 32 characters for HMAC-SHA256 integrity.")
+    if os.getenv("ENVIRONMENT") == "production":
+         raise RuntimeError("DCN_SECRET must be >= 32 characters in production.")
+
 GOSSIP_MAXLEN = 1000  # Capped MAXLEN for safety
 GOSSIP_TTL_SECONDS = 3600  # 1 hour TTL for gossip messages
 NODE_ROLE = os.getenv("NODE_ROLE", "worker") # coordinator | worker
@@ -148,7 +158,12 @@ class DCNGossip:
         ).hexdigest()
 
         if not hmac.compare_digest(sig, expected_sig):
-            logger.warning("[DCN] Rejected unauthenticated or tampered pulse signature.")
+            logger.warning(f"[DCN] SECURITY ALERT: Rejected unauthenticated pulse from data stream. Signature mismatch.")
+            return
+
+        # 1.1 Strict Secret Integrity Check
+        if len(self.secret) < 32:
+            logger.error(f"[DCN] Rejecting pulse processing due to insecure DCN_SECRET (len={len(self.secret)}).")
             return
 
         # 2. Decode and check if it's from self
@@ -197,25 +212,41 @@ class DCNGossip:
         """
         Hardened Quorum Check: N/2 + 1.
         Ensures the node is not isolated before accepting coordination.
+        Now includes aggressive stale node pruning to prevent dead nodes from stalling quorum.
         """
         try:
             nodes_raw = await self.r.hgetall("dcn:swarm:nodes")
             if not nodes_raw:
                 return True # Standalone mode
 
-            all_nodes = [json.loads(v) for v in nodes_raw.values()]
             now = time.time()
+            all_nodes = {}
+            active_nodes = []
             
-            # Count nodes seen in the last 60s
-            active_nodes = [n for n in all_nodes if now - n.get("last_seen", 0) < 60]
+            # 🛡️ P0 Pruning: Remove nodes older than 10 minutes from registry
+            for nid_bytes, val_bytes in nodes_raw.items():
+                nid = nid_bytes.decode()
+                node_data = json.loads(val_bytes.decode())
+                last_seen = node_data.get("last_seen", 0)
+                
+                if now - last_seen > 600: # 10 minutes stale
+                    await self.r.hdel("dcn:swarm:nodes", nid)
+                    logger.info(f"[DCN] Pruned tombstone node: {nid}")
+                    continue
+                
+                all_nodes[nid] = node_data
+                if now - last_seen < 60: # Active in last min
+                    active_nodes.append(nid)
+
             active_count = len(active_nodes)
             total_count = len(all_nodes)
             
-            quorum_needed = (total_count // 2) + 1
+            # Quorum is half of recent cluster membership + 1
+            quorum_needed = (total_count // 2) + 1 if total_count > 1 else 1
             
             if active_count < quorum_needed:
                 if not self.is_isolated:
-                    logger.warning(f"⚠️ [DCN] QUORUM LOST: Node {self.node_id} is isolated ({active_count}/{quorum_needed} active). PAUSING coordination.")
+                    logger.warning(f"⚠️ [DCN] QUORUM LOST: {active_count}/{quorum_needed} active. Node {self.node_id} isolated.")
                 self.is_isolated = True
                 return False
             

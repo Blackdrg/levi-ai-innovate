@@ -131,7 +131,14 @@ class PolicyEngine:
     Folded into Planner.
     Calculates execution policy based on intent and risk.
     """
-    async def select_mode(self, intent: IntentResult, complexity: float, risk_level: float, user_id: str = "default") -> BrainMode:
+    async def select_mode(
+        self, 
+        intent: IntentResult, 
+        complexity: float, 
+        risk_level: float, 
+        user_id: str = "default",
+        resonance_data: Optional[List[Dict[str, Any]]] = None
+    ) -> BrainMode:
         if risk_level > 0.7: return BrainMode.SECURE
         
         # v14.1 Fragility Escalation
@@ -142,6 +149,13 @@ class PolicyEngine:
         if fragility > 0.4:
             logger.warning(f"[Policy] Escalating to DEEP mode due to high fragility ({fragility:.2f}) in domain: {intent_type}")
             return BrainMode.DEEP
+
+        # v14.2 Knowledge-Based Escalation (Neo4j Resonance)
+        if resonance_data:
+            high_weight_atoms = [r for r in resonance_data if r.get("weight", 0) > 0.8]
+            if len(high_weight_atoms) > 2:
+                logger.info(f"[Policy] Escalating to DEEP mode due to high knowledge density ({len(high_weight_atoms)} high-weight atoms).")
+                return BrainMode.DEEP
 
         if intent.intent_type == "search" or "research" in intent.intent_type: return BrainMode.RESEARCH
         if complexity > 0.8: return BrainMode.DEEP
@@ -282,7 +296,15 @@ class DAGPlanner:
         risk_level = 0.8 if (intent and intent.is_sensitive) else 0.1
         
         user_id = perception.get("user_id", "default")
-        mode = await self.policy_engine.select_mode(intent, complexity, risk_level, user_id=user_id)
+        resonance = perception.get("context", {}).get("long_term", {}).get("graph_resonance", [])
+        
+        mode = await self.policy_engine.select_mode(
+            intent, 
+            complexity, 
+            risk_level, 
+            user_id=user_id,
+            resonance_data=resonance
+        )
         enable_agents = self.policy_engine.allocate_agents(mode, intent, complexity)
         memory_policy = self.policy_engine.allocate_memory(mode, intent)
         execution_policy = self.policy_engine.define_execution_policy(mode, complexity)

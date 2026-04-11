@@ -14,6 +14,7 @@ services:
       NEO4J_URI: bolt://neo4j:7687
       OLLAMA_HOST: http://ollama:11434
       JWT_SECRET: your-super-secret-key-change-in-prod
+      DCN_SECRET: sovereign_dev_secret_32_chars_long_minimum_integrity
       LOG_LEVEL: DEBUG
     depends_on:
       postgres:
@@ -54,7 +55,7 @@ services:
     image: redis:7-alpine
     ports:
       - "6379:6379"
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --save 60 1000 --appendfsync everysec
     volumes:
       - redis_data:/data
     healthcheck:

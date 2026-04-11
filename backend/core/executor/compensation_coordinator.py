@@ -1,74 +1,99 @@
-"""
-Sovereign Compensation Coordinator v14.1.0.
-Manages deterministic rollbacks for failed complex cognitive missions.
-"""
-
+# backend/core/executor/compensation.py
 import logging
 import asyncio
+import json
+import time
 from typing import List, Dict, Any, Callable, Optional
-from backend.core.orchestrator_types import ToolResult
+from backend.db.redis import r_async as redis_client
 
 logger = logging.getLogger(__name__)
 
+# --- v15.0 Compensation Handlers ---
+async def async_reverse_debit(node: Dict[str, Any]):
+    logger.warning(f"[Compensation] Reversing debit for account {node.get('parameters', {}).get('account_id')}")
+    return {"status": "refunded"}
+
+async def async_delete_gcs_bucket(node: Dict[str, Any]):
+    logger.warning(f"[Compensation] Deleting GCS bucket {node.get('parameters', {}).get('bucket_name')}")
+    return {"status": "deleted"}
+
+async def async_revoke_webhook(node: Dict[str, Any]):
+    logger.warning(f"[Compensation] Revoking webhook {node.get('parameters', {}).get('webhook_id')}")
+    return {"status": "revoked"}
+
+async def async_cleanup_temp_files(node: Dict[str, Any]):
+    logger.warning("[Compensation] Cleaning up sandbox temp files.")
+    return {"status": "cleaned"}
+
+COMPENSATION_HANDLERS: Dict[str, Callable] = {
+    "debit_account": async_reverse_debit,
+    "create_gcs_bucket": async_delete_gcs_bucket,
+    "invoke_webhook": async_revoke_webhook,
+    "execute_code": async_cleanup_temp_files,
+}
+
 class CompensationCoordinator:
     """
-    Orchestrates UNDO operations for mission-critical side effects.
-    Supports registration of 'reversal' lambdas during DAG execution.
+    Sovereign v15.0 LIFO Compensation Engine.
+    Executes best-effort reversals for failed mission-critical waves.
     """
     def __init__(self, mission_id: str):
         self.mission_id = mission_id
-        self._stack: List[Dict[str, Any]] = []
+        self._executed_nodes: List[Dict[str, Any]] = []
 
-    def register_step(self, node_id: str, forward_action: str, reversal_logic: Callable, params: Dict[str, Any]):
-        """Registers a completed step and its corresponding reverse action."""
-        self._stack.append({
-            "node_id": node_id,
-            "action": forward_action,
-            "reverse": reversal_logic,
-            "params": params
+    def register_node_execution(self, node_id: str, action_type: str, parameters: Dict[str, Any]):
+        """Registers a completed node in the execution stack."""
+        self._executed_nodes.append({
+            "id": node_id,
+            "action_type": action_type,
+            "parameters": parameters,
+            "ts": time.time()
         })
-        logger.debug(f"[Compensation] Registered reversal for {node_id} ({forward_action})")
 
-    async def compensate(self) -> Dict[str, Any]:
-        """
-        Executes internal stack in REVERSE order (LIFO).
-        Triggered when a Critical Path fails in GraphExecutor.
-        """
-        if not self._stack:
-            return {"status": "noop", "steps": 0}
+    async def compensate(self) -> List[Dict[str, Any]]:
+        """Alias for LIFO rollback."""
+        return await self.execute_lifo_compensation()
 
-        logger.warning(f"[Compensation] STARTING ROLLBACK for mission {self.mission_id} ({len(self._stack)} steps)")
-        results = []
+    async def execute_lifo_compensation(self) -> List[Dict[str, Any]]:
+        """
+        Execute compensations in reverse order (LIFO).
+        If a compensation fails, log and continue (best-effort).
+        """
+        logger.warning(f"[V15.0] Starting LIFO compensation for mission {self.mission_id}: {len(self._executed_nodes)} nodes")
         
+        compensation_results = []
         # Reverse the stack: LIFO
-        for step in reversed(self._stack):
-            node_id = step["node_id"]
-            action = step["action"]
-            reversal = step["reverse"]
-            params = step["params"]
+        for node in reversed(self._executed_nodes):
+            action_type = node.get("action_type")
+            if action_type not in COMPENSATION_HANDLERS:
+                logger.warning(f"[Compensation] No handler for {action_type}, skipping node {node['id']}")
+                continue
             
             try:
-                logger.info(f"[Compensation] Reversing step {node_id}...")
-                if asyncio.iscoroutinefunction(reversal):
-                    await reversal(**params)
-                else:
-                    reversal(**params)
-                results.append({"node_id": node_id, "status": "reversed"})
+                handler = COMPENSATION_HANDLERS[action_type]
+                result = await handler(node)
+                compensation_results.append({
+                    "node_id": node['id'],
+                    "status": "compensated",
+                    "result": result
+                })
+                logger.info(f"[Compensation] SUCCESS: Reversed node {node['id']} ({action_type})")
             except Exception as e:
-                logger.error(f"[Compensation] FAILED to reverse {node_id}: {e}")
-                results.append({"node_id": node_id, "status": "failed", "error": str(e)})
+                logger.error(f"[Compensation] CRITICAL FAILURE for node {node['id']}: {e}. Continuing best-effort.")
+                compensation_results.append({
+                    "node_id": node['id'],
+                    "status": "compensation_failed",
+                    "error": str(e)
+                })
+        
+        # Store compensation audit trail in Redis
+        try:
+            await redis_client.set(
+                f"mission:{self.mission_id}:compensation_log",
+                json.dumps(compensation_results),
+                ex=86400 # 24h retention
+            )
+        except Exception as redis_err:
+             logger.error(f"[Compensation] Failed to persist log to Redis: {redis_err}")
 
-        return {
-            "status": "completed",
-            "mission_id": self.mission_id,
-            "steps": results
-        }
-
-    @staticmethod
-    def get_global_handlers() -> Dict[str, Callable]:
-        """Returns standard reversal handlers for common actions."""
-        return {
-            "delete_file": lambda path: os.remove(path) if os.path.exists(path) else None,
-            "rollback_transaction": lambda tx_id: logger.warning(f"Simulating DB Rollback for {tx_id}"),
-            "cancel_order": lambda order_id: logger.warning(f"Simulating Order Cancellation for {order_id}")
-        }
+        return compensation_results

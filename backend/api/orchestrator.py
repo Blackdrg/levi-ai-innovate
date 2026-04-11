@@ -74,3 +74,36 @@ async def chat_legacy_bridge(
 ):
     """Legacy bridge for simple chat interface (Phase 6 compatible)."""
     return await create_cognitive_mission(request, current_user)
+
+
+# 🛡️ v15.0 GA GRADUATION: HEALTH & SECURITY WIRING
+
+@router.post("/health/rollback")
+async def trigger_emergency_rollback(current_user: dict = Depends(get_current_user)):
+    """
+    Sovereign v15.0: The 'Panic Button'.
+    Stops all active cognitive resonance for the user and triggers a CLOUD REVERT.
+    """
+    from backend.services.rollback_service import rollback_service
+    user_id = current_user.get("uid") or current_user.get("id")
+    
+    result = await rollback_service.trigger_emergency_rollback(
+        user_id=user_id, 
+        reason="Manual Emergency Trigger"
+    )
+    
+    return {
+        "status": "triggered",
+        "message": result["message"],
+        "cloud_revert_sent": result["cloud_revert_sent"],
+        "shield_active": True
+    }
+
+@router.get("/health/graph")
+async def get_sovereign_health_graph(is_admin: bool = Depends(verify_admin)):
+    """
+    Sovereign v15.0 GA: Restricted Health Monitoring.
+    Only administrators can view low-level DCN and VRAM metrics.
+    """
+    from backend.api.v1.monitor_routes import get_system_health_graph
+    return await get_system_health_graph(is_admin=True)

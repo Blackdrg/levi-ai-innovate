@@ -6,6 +6,8 @@ import os
 from typing import Dict, Any, Optional
 from backend.redis_client import r as redis_client, HAS_REDIS
 from backend.utils.runtime_tasks import create_tracked_task
+from backend.db.milvus_client import MilvusClient
+from backend.db.vector_store import embed_text
 
 # Global Sync Gate: GCP Pub/Sub
 try:
@@ -186,33 +188,48 @@ class MemoryConsistencyManager:
                 logger.error(f"[MCM] Global Relay Failed: {e}")
 
         # Implementation core (Hardened v14.2)
-        if event_type == "interaction":
-            from backend.db.neo4j_client import Neo4jClient
-            from backend.memory.vector_store import SovereignVectorStore
             try: 
-                # Sync to Graph
-                await Neo4jClient.add_interaction(user_id, payload.get("input", ""), payload.get("response", ""), session_id=session_id)
+                # Sync to Graph (v14.2 Hardened Sync)
+                await Neo4jClient.add_interaction(
+                    user_id=user_id, 
+                    query=payload.get("input", ""), 
+                    response=payload.get("response", ""), 
+                    intent=payload.get("intent", "generic_sync"),
+                    sync=True
+                )
                 # Sync to Vector Pulse
                 await SovereignVectorStore.store_fact(user_id, f"Interaction recorded in {source_region}: {payload.get('input')[:50]}...", category="interaction")
+                
+                # Global Milvus Archive Relay
+                interaction_text = f"Input: {payload.get('input')} | Response: {payload.get('response')}"
+                vector = await asyncio.to_thread(embed_text, interaction_text)
+                await MilvusClient.store_global_fact(user_id, vector, {"input": payload.get("input"), "response": payload.get("response"), "category": "interaction", "source_region": source_region})
+                
             except Exception as e: 
                 logger.error(f"[MCM] Interaction sync failed: {e}")
 
-        elif event_type == "fact_extracted":
-            from backend.memory.vector_store import SovereignVectorStore
             try:
                 facts = payload.get("facts", [])
                 for f in facts:
                     await SovereignVectorStore.store_fact(user_id, f["fact"], category=f.get("category", "semantic"), importance=f.get("importance", 0.5))
+                    
+                    # Global Milvus Archive Relay
+                    vector = await asyncio.to_thread(embed_text, f["fact"])
+                    await MilvusClient.store_global_fact(user_id, vector, {"fact": f["fact"], "category": f.get("category", "semantic"), "source_region": source_region})
+                    
                 logger.info(f"[MCM] Synchronized {len(facts)} extracted facts for {user_id}")
             except Exception as e:
                 logger.error(f"[MCM] Fact sync failed: {e}")
 
-        elif event_type == "trait_distilled":
-            from backend.memory.vector_store import SovereignVectorStore
             try: 
                 trait = payload.get("trait", "")
                 await SovereignVectorStore.store_fact(user_id, trait, category="trait", importance=0.95)
                 logger.info(f"[MCM] Integrated distilled trait for {user_id} (Source: {source_region})")
+                
+                # Global Milvus Archive Relay
+                if trait:
+                    vector = await asyncio.to_thread(embed_text, trait)
+                    await MilvusClient.store_global_fact(user_id, vector, {"fact": trait, "category": "trait", "source_region": source_region})
             except Exception as e: 
                 logger.error(f"[MCM] Trait sync failed: {e}")
 

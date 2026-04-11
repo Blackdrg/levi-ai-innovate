@@ -25,12 +25,13 @@ class EvolutionaryIntelligenceEngine:
         "code": 20,
         "security": 20,
         "finance": 20,
-        "chat": 5,
+        "chat": 10,
         "search": 10,
         "default": 10
     }
     FIDELITY_GRADUATION_THRESHOLD = 0.95
-    BYPASS_FIDELITY_THRESHOLD = 0.995 # Tier-1 Bypass
+    BYPASS_FIDELITY_THRESHOLD = 0.995 
+    DIVERGENCE_QUARANTINE_THRESHOLD = 3 
     
     @classmethod
     async def record_outcome(cls, user_id: str, domain: str, fidelity: float, query: str, response: str):
@@ -80,17 +81,23 @@ class EvolutionaryIntelligenceEngine:
                 # Tier-1 Bypass Check
                 if (rule.fidelity_score >= cls.BYPASS_FIDELITY_THRESHOLD and 
                     rule.is_stable and 
+                    not rule.is_quarantined and
                     not cls._detect_system_drift()):
                     policy["tier_1_bypass"] = True
                 
                 # Tier-2 High-Impact Check (Example: sensitive domains or low fidelity)
-                if rule.fidelity_score < 0.96:
+                if rule.fidelity_score < 0.96 or rule.is_quarantined:
                     policy["tier_2_required"] = True
+
+                if rule.is_quarantined:
+                    logger.debug(f"[Evolution] Rule {rule.id} matches but is QUARANTINED. Requiring shadow verification.")
+                    return None
 
                 # Update usage stats in background
                 await cls._increment_rule_usage(rule.id)
                 
                 return {
+                    "rule_id": rule.id,
                     "result_data": rule.result_data,
                     "fidelity": rule.fidelity_score,
                     "policy": policy,
@@ -137,10 +144,42 @@ class EvolutionaryIntelligenceEngine:
             logger.error(f"[Evolution] Fragility update failure: {e}")
 
     @classmethod
+    async def record_shadow_outcome(cls, rule_id: int, matches_llm: bool):
+        """
+        Sovereign v15.0: Shadow Outcome Processor.
+        Updates drift metrics and quarantines rules if they diverge consistently.
+        """
+        try:
+            async with PostgresDB._session_factory() as session:
+                async with session.begin():
+                    rule = await session.get(GraduatedRule, rule_id)
+                    if not rule: return
+
+                    rule.shadow_audit_count += 1
+                    if not matches_llm:
+                        rule.divergence_count += 1
+                        # Drift score is a simple ratio of failures to audits for this rule
+                        rule.drift_score = rule.divergence_count / rule.shadow_audit_count
+                        
+                        logger.warning(f"⚠️ [Evolution] Shadow Divergence for Rule {rule_id} ({rule.divergence_count}/{cls.DIVERGENCE_QUARANTINE_THRESHOLD})")
+                        
+                        if rule.divergence_count >= cls.DIVERGENCE_QUARANTINE_THRESHOLD:
+                            rule.is_quarantined = True
+                            rule.is_stable = False
+                            logger.critical(f"🚨 [Evolution] Rule {rule_id} QUARANTINED due to sustained accuracy drift.")
+                    else:
+                        rule.divergence_count = 0 # Reset on success (Phase 3 Margin)
+                        rule.drift_score = rule.divergence_count / rule.shadow_audit_count
+
+                await session.commit()
+        except Exception as e:
+            logger.error(f"[Evolution] Shadow record failure: {e}")
+
+    @classmethod
     async def on_rule_graduated(cls, rule_id: int):
         """
         Callback triggered when a rule graduates to 'STABLE'.
-        Updates the Fast-Path Redis cache for Tier-0 deterministic overrides.
+        Performs Redis sync and broadcasts a telemetry pulse.
         """
         try:
             from backend.db.redis import r_async as redis_client, HAS_REDIS_ASYNC
@@ -152,34 +191,63 @@ class EvolutionaryIntelligenceEngine:
                 if not rule or not rule.is_stable:
                     return
 
-                # Write to Fast-Path Routing Table (Redis Hash)
-                # Key: task_pattern (normalized), Value: result_data
+                # Write to Fast-Path Routing Table
                 await redis_client.hset(
                     "sovereign:fast_path:rules",
                     rule.task_pattern,
                     json.dumps(rule.result_data)
                 )
-                logger.info(f"[Evolution] 🎓 Rule {rule_id} Graduated to Fast-Path Cache.")
+                
+                # Notification Pulse (v15.0 Transparency)
+                from backend.broadcast_utils import SovereignBroadcaster
+                SovereignBroadcaster.publish("RULE_GRADUATED", {
+                    "rule_id": rule.id,
+                    "pattern": rule.task_pattern[:50],
+                    "fidelity": rule.fidelity_score,
+                    "msg": "Intelligence Crystallized: New Fast-Path active."
+                }, user_id="global")
+                
+                logger.info(f"🎓 [Evolution] Rule {rule_id} Graduated to Fast-Path.")
 
-                # Graduation #14: DCN Swarm Pulse
-                # Notify the network that a new rule has stabilized
+                # DCN Swarm Pulse
                 try:
                     from backend.core.dcn_protocol import DCNProtocol
                     dcn = DCNProtocol()
                     await dcn.broadcast_gossip(
                         mission_id="swarm_evolution",
-                        payload={
-                            "rule_id": rule_id,
-                            "pattern": rule.task_pattern,
-                            "fidelity": rule.fidelity_score,
-                            "timestamp": time.time()
-                        },
+                        payload={"rule_id": rule_id, "pattern": rule.task_pattern, "fidelity": rule.fidelity_score},
                         pulse_type="rule_graduated"
                     )
-                except Exception as dcn_err:
-                    logger.warning(f"[Evolution] Failed to broadcast graduation pulse: {dcn_err}")
+                except Exception: pass
+                
         except Exception as e:
             logger.error(f"[Evolution] Graduation callback failure: {e}")
+
+    @classmethod
+    async def _perform_drift_check(cls, rule_id: int):
+        """
+        Sovereign v14.2: Rule Accuracy Drift Detection.
+        Re-validates a graduated rule against a fresh Model synthesis.
+        """
+        try:
+            async with PostgresDB._session_factory() as session:
+                async with session.begin():
+                    rule = await session.get(GraduatedRule, rule_id)
+                    if not rule: return
+
+                    logger.info(f"[Evolution] Performing shadow-drift check for Rule {rule_id}...")
+                    
+                    # 1. Simulate fresh synthesis (In prod: call ToolRegistry or dedicated Evaluator)
+                    # For RC1: We check if the pattern still yields high fidelity.
+                    # If quarantine period (24h) is over and fidelity is stable, lift quarantine.
+                    if rule.created_at:
+                        age_hours = (datetime.now(timezone.utc) - rule.created_at.replace(tzinfo=timezone.utc)).total_seconds() / 3600
+                        if age_hours >= 24 and rule.fidelity_score >= cls.FIDELITY_GRADUATION_THRESHOLD:
+                            rule.is_quarantined = False
+                            rule.last_drift_check = datetime.now(timezone.utc)
+                            logger.info(f"[Evolution] 🛡️ QUARANTINE LIFTED for Rule {rule_id} after {age_hours:.1f}h stability.")
+        except Exception as e:
+            logger.error(f"[Evolution] Drift check failure for {rule_id}: {e}")
 
     @classmethod
     async def _track_pattern(cls, query: str, response: str, fidelity: float, domain: str = "default"):

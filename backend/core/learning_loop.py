@@ -90,6 +90,11 @@ class LearningLoop:
             from backend.utils.runtime_tasks import create_tracked_task
             create_tracked_task(cls._check_training_trigger(), name="learning_trigger_check")
             
+            # 🎯 Phase 3: Autonomous Intent Refinement (Fidelity > 0.98)
+            if fidelity >= 0.98:
+                from backend.core.intent_classifier import HybridIntentClassifier
+                create_tracked_task(HybridIntentClassifier.refine_classification(query, domain), name="intent-refinement")
+            
         except Exception as e:
             logger.error(f"[LearningLoop] Failed to crystallize pattern: {e}")
 

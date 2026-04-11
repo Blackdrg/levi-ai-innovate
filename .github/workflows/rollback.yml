@@ -1,0 +1,36 @@
+# .github/workflows/rollback.yml
+name: LEVI-AI Automated Rollback
+
+on:
+  repository_dispatch:
+    types: [trigger-rollback]
+
+env:
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  SERVICE_NAME: levi-backend
+
+jobs:
+  rollback:
+    name: "🛡️ Emergency Rollback"
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        region: [us-central1, europe-west1]
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+      - name: Revert to Last Stable Version (${{ matrix.region }})
+        run: |
+          gcloud run services update ${{ env.SERVICE_NAME }}-${{ matrix.region }} \
+            --region ${{ matrix.region }} \
+            --rollback-to-stable-version
+        continue-on-error: true

@@ -86,6 +86,19 @@ async def get_recent_decisions(limit: int = 20, is_admin: bool = Depends(verify_
         logger.error(f"Failed to fetch decision logs: {e}")
         return {"decisions": [], "error": str(e)}
 
+@router.get("/system")
+async def get_system_audit(limit: int = 50, is_admin: bool = Depends(verify_admin)):
+    """
+    Sovereign v14.2: Retrieve and verify system-wide audit records from the Sovereign Ledger.
+    """
+    try:
+        from backend.utils.audit import AuditLogger
+        logs = await AuditLogger.get_verified_logs(limit=limit)
+        return {"logs": logs, "status": "verified"}
+    except Exception as e:
+        logger.error(f"[Audit-API] Retrieval failed: {e}")
+        return {"logs": [], "error": str(e), "status": "error"}
+
 @router.get("/prompts")
 async def get_prompt_performance(is_admin: bool = Depends(verify_admin)):
     """

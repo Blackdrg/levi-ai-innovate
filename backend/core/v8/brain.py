@@ -90,6 +90,33 @@ class LeviBrainCoreController:
         else:
             return await self.run_mission_sync(user_input, user_id, session_id, **kwargs)
 
+    async def handle_mission(self, user_id: str, objective: str, **kwargs) -> Dict[str, Any]:
+        """
+        Standardized Entry Point for v15.0 Graduation.
+        Includes Voice-Specific Safety Gates (Bayesian Risk Gating).
+        """
+        metadata = kwargs.get("metadata", {})
+        interaction_medium = metadata.get("interaction_medium", "TEXT")
+        avg_logprob = metadata.get("avg_logprob", 0)
+
+        # 🛡️ v15.0 VOICE SAFETY GATE
+        if interaction_medium == "VOICE":
+            risky_keywords = ["delete", "remove", "wipe", "format", "shutdown", "reset", "clear memory"]
+            objective_lower = objective.lower()
+            
+            # If risky keyword + moderate confidence -> Require higher verify
+            if any(k in objective_lower for k in risky_keywords):
+                if avg_logprob < -0.4: # Very strict for risky voice commands
+                    logger.warning(f"[Brain-v15] Risky voice command blocked due to confidence threshold: {objective}")
+                    return {
+                        "status": "error",
+                        "response": "CRITICAL_RISK_BLOCK: Command contains destructive intent and fails high-fidelity voice verification. Please use text input for this action.",
+                        "request_id": kwargs.get("request_id")
+                    }
+
+        # Route to the standard sync pipeline (or stream if requested)
+        return await self.run_mission_sync(objective, user_id, kwargs.get("session_id", "default"), **kwargs)
+
     async def run_mission_sync(self, input_text: str, user_id: str, session_id: str, mission_id: Optional[str] = None, **kwargs) -> Dict[str, Any]:
         """High-fidelity synchronous mission execution (v13.0.0)."""
         user_input = input_text

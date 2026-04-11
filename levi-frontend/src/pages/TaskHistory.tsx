@@ -45,7 +45,7 @@ export const TaskHistory: React.FC = () => {
             <option value="FAILED">FAILED</option>
             <option value="RUNNING">RUNNING</option>
           </select>
-          <button onClick={handleExport} className="export-btn">
+          <button onClick={handleExport} className="export-btn" title="Export as JSON">
             <Download size={16} />
             EXPORT JSON
           </button>
