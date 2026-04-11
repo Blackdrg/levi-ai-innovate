@@ -77,9 +77,30 @@ class ApiClient {
     return response.data;
   }
 
-  // Health
+  // Health & DCN
   async checkHealth(): Promise<any> {
-    const response = await this.axiosInstance.get('/health');
+    const response = await this.axiosInstance.get('/api/v1/orchestrator/health');
+    return response.data;
+  }
+
+  async getHealthGraph(): Promise<any> {
+    const response = await this.axiosInstance.get('/api/v1/orchestrator/health/graph');
+    return response.data;
+  }
+
+  // Emergency Rollback (Sovereign v15.0)
+  async triggerRollback(): Promise<any> {
+    const response = await this.axiosInstance.post('/api/v1/orchestrator/health/rollback');
+    return response.data;
+  }
+
+  // Voice Module (Sovereign v15.0)
+  async uploadVoiceCommand(audioBlob: Blob): Promise<any> {
+    const formData = new FormData();
+    formData.append('file', audioBlob, 'command.webm');
+    const response = await this.axiosInstance.post('/api/v1/voice/command', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
     return response.data;
   }
 }

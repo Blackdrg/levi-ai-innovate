@@ -20,7 +20,28 @@ export const useSSE = () => {
 
     es.addEventListener('pulse', (event) => {
       try {
-        const pulse: TelemetryEvent = JSON.parse(event.data);
+        let rawData = event.data;
+        let parsedData;
+
+        // 1. Adaptive Pulse v4.1 Decoder (zlib -> base64)
+        if (typeof rawData === "string" && !rawData.startsWith("{")) {
+            const pako = require('pako'); // Dynamic import for safety if not global
+            try {
+              const binary = atob(rawData);
+              const bytes = new Uint8Array(binary.length);
+              for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+              
+              const decompressed = pako.inflate(bytes, { to: "string" });
+              parsedData = JSON.parse(decompressed);
+            } catch (err) {
+              console.warn("[Pulse] Compressed decode failed, attempting JSON fallback", err);
+              parsedData = JSON.parse(rawData);
+            }
+        } else {
+            parsedData = JSON.parse(rawData);
+        }
+
+        const pulse: TelemetryEvent = parsedData;
         setPulse(pulse);
 
         // Specific handlers

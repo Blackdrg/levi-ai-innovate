@@ -101,7 +101,7 @@ resource "google_sql_database_instance" "postgres" {
 
   settings {
     tier              = "db-f1-micro"
-    availability_type = "ZONAL" # Zonal for Cost Management in diversified setup
+    availability_type = "REGIONAL" # Regional (High Availability) for Multi-Zone Failure Resilience
     
     ip_configuration {
       private_network   = google_compute_network.vpc[each.value].id
@@ -114,7 +114,7 @@ resource "google_redis_instance" "cache" {
   for_each       = toset(var.regions)
   name           = "levi-redis-${each.value}"
   memory_size_gb = 1
-  tier           = "BASIC"
+  tier           = "STANDARD_HA" # Standard-HA for Multi-Zone Cache Resilience
   region         = each.value
   authorized_network  = google_compute_network.vpc[each.value].id
 }

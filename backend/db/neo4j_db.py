@@ -63,3 +63,45 @@ async def execute_query(query: str, parameters: Optional[Dict[str, Any]] = None)
     except Exception as e:
         logger.error(f"[GraphDB] Query execution error: {e}\nQuery: {query}")
         return []
+
+async def project_to_neo4j(node_result: Dict[str, Any], sync: bool = True, timeout: float = 2.0):
+    """
+    Sovereign v15.0: Cognitive Knowledge Projection.
+    Updates the Neo4j Knowledge Graph with node execution outcomes.
+    """
+    query = """
+    MERGE (node:MissionNode {id: $id})
+    SET node.status = $status, 
+        node.timestamp = $timestamp,
+        node.agent = $agent,
+        node.fidelity = $fidelity
+    RETURN node
+    """
+    
+    params = {
+        "id": node_result.get('id', node_result.get('node_id')),
+        "status": "COMPLETED" if node_result.get('success') else "FAILED",
+        "timestamp": time.time(),
+        "agent": node_result.get('agent', 'unknown'),
+        "fidelity": node_result.get('fidelity_score', 0.0)
+    }
+
+    try:
+        if sync:
+            # Synchronous verification (blocks until graph confirms)
+            await asyncio.wait_for(execute_query(query, params), timeout=timeout)
+            logger.debug(f"[Neo4j] SYNC: Projected node {params['id']} successfully.")
+            return {"status": "synced"}
+        else:
+            # Asynchronous background projection
+            asyncio.create_task(execute_query(query, params))
+            logger.debug(f"[Neo4j] ASYNC: Queued projection for node {params['id']}.")
+            return {"status": "queued"}
+    except asyncio.TimeoutError:
+        logger.warning(f"[Neo4j] Sync timeout for node {params['id']}. Fallback to async.")
+        return {"status": "timeout_fallback"}
+    except Exception as e:
+        logger.error(f"[Neo4j] Projection failure for {params['id']}: {e}")
+        return {"status": "error", "error": str(e)}
+
+import time

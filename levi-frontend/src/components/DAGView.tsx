@@ -22,7 +22,7 @@ interface SovereignNodeData extends Record<string, unknown> {
 }
 
 // Custom Node Component
-const SovereignNode = ({ id, data }: NodeProps<any>) => {
+const SovereignNode = ({ id, data }: any) => {
   const nodeData = data as SovereignNodeData;
   const currentStatus = useTelemetryStore((state) => state.taskStatuses[id] || nodeData.status) as TaskStatus;
 
@@ -71,6 +71,7 @@ const SovereignNode = ({ id, data }: NodeProps<any>) => {
         .node-body {
           border-left: 4px solid;
           padding-left: 10px;
+          border-color: inherit;
         }
         .node-label {
           font-weight: 600;
@@ -100,9 +101,6 @@ interface DAGViewProps {
 export const DAGView: React.FC<DAGViewProps> = ({ initialNodes, initialEdges }) => {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
-
-  // Sync with global store if needed (e.g. status changes)
-  // For simplicity, we assume nodes data has current status and the custom node reads from store
 
   return (
     <div className="dag-viewer-root">

@@ -19,6 +19,9 @@ from fastapi.responses import JSONResponse
 from backend.services.mcm import mcm_service
 from backend.core.dcn.gossip import DCNGossip
 from backend.db.redis import r_async as redis_async
+from backend.services.ollama_health import ollama_monitor
+from backend.services.health_monitor import health_monitor
+from backend.core.goal_engine import goal_engine
 
 # Initialize logger
 logger = logging.getLogger("levi")
@@ -42,6 +45,9 @@ async def lifespan(app: FastAPI):
     await orchestrator.initialize()
     await memory_manager.initialize()
     
+    # Link Orchestrator to GoalEngine
+    goal_engine.orchestrator = orchestrator
+    
     # 4. Initialize DCN Gossip Hub & Protocol
     from backend.core.dcn_protocol import DCNProtocol
     dcn_protocol = DCNProtocol()
@@ -60,8 +66,18 @@ async def lifespan(app: FastAPI):
     
     # 5. Starting DCN Global Bridge
     from backend.utils.global_gossip import global_swarm_bridge
+    from backend.memory.vector_store import SovereignVectorStore
     await global_swarm_bridge.initialize()
     await global_swarm_bridge.start()
+    
+    # 6. Background Memory Sync (v14.2 Hardened)
+    from backend.utils.runtime_tasks import create_tracked_task
+    create_tracked_task(SovereignVectorStore.reindex_global_memory(), name="faiss-global-reindex")
+    
+    # 7. Start Health, Model & Goal Monitors (v15.0 GA)
+    await ollama_monitor.start()
+    await health_monitor.start()
+    await goal_engine.start()
     
     logger.info("✅ LEVI-AI online and globally synchronized")
     
@@ -76,6 +92,12 @@ async def lifespan(app: FastAPI):
     
     if dcn_gossip:
         await dcn_gossip.stop_gossip_hub()
+    
+    # 2. Stop Monitoring & Goal Services
+    await health_monitor.stop()
+    await ollama_monitor.stop()
+    await goal_engine.stop()
+    
     await memory_manager.shutdown()
     logger.info("✅ Shutdown complete")
 
@@ -128,6 +150,7 @@ async def readiness_check():
         "dependencies": {
             "redis": "connected" if HAS_REDIS else "disconnected",
             "postgres": "unknown",
+            "ollama": "unknown",
             "global_sync": "active" if HAS_PUBSUB else "degraded ⚠️"
         },
         "swarm_info": {
@@ -148,11 +171,38 @@ async def readiness_check():
         async with PostgresDB._session_factory() as session:
             from sqlalchemy import text
             await session.execute(text("SELECT 1"))
-            health["dependencies"]["postgres"] = "connected"
+            
+            # 🛡️ Graduation #23: Pool Monitoring
+            engine = PostgresDB.get_engine()
+            if engine:
+                pool = engine.pool
+                health["dependencies"]["postgres"] = {
+                    "status": "connected",
+                    "pool_size": pool.size(),
+                    "checked_out": pool.checkedout(),
+                    "overflow": pool.overflow()
+                }
+            else:
+                health["dependencies"]["postgres"] = "connected"
+    # 3. Optional Dependency: Ollama
+    try:
+        import httpx
+        ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(f"{ollama_host}/api/tags", timeout=2.0)
+            if resp.status_code == 200:
+                health["dependencies"]["ollama"] = "connected"
+            else:
+                health["dependencies"]["ollama"] = f"degraded ({resp.status_code})"
+                if os.getenv("ENVIRONMENT") == "production":
+                    health["status"] = "not_ready"
+                    return JSONResponse(status_code=503, content=health)
     except Exception:
-        health["dependencies"]["postgres"] = "disconnected"
-        health["status"] = "not_ready"
-        return JSONResponse(status_code=503, content=health)
+        health["dependencies"]["ollama"] = "disconnected"
+        # 🛡️ Graduation #23: In strict production mode, fail the probe if Ollama is down
+        if os.getenv("ENVIRONMENT") == "production":
+            health["status"] = "not_ready"
+            return JSONResponse(status_code=503, content=health)
 
     return health
 

@@ -1,7 +1,7 @@
 {
   "name": "levi-frontend",
   "private": true,
-  "version": "14.0.0-Autonomous-SOVEREIGN",
+  "version": "15.0.0-GA",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,6 +11,7 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "pako": "^2.1.0",
     "@tanstack/react-query": "^5.0.0",
     "@xyflow/react": "^12.0.0",
     "axios": "^1.6.0",

@@ -70,6 +70,11 @@ GRADUATION_SCORE = Gauge(
     "Current production readiness score (0.0 to 1.0)",
 )
 
+LEVI_AGENT_SUCCESS_RATE = Gauge(
+    "levi_agent_success_rate",
+    "Windowed success rate of agents (0.0 to 1.0)",
+)
+
 
 class MetricsHub:
     """Centralized metrics collection and exposition logic."""
@@ -97,6 +102,12 @@ class MetricsHub:
             MISSION_ABORTED.inc()
             if stage:
                 MISSION_FAILURES.labels(stage=stage).inc()
+        
+        # Recalculate windowed success rate (simplified)
+        total = MISSION_COMPLETED._value.get() + MISSION_ABORTED._value.get()
+        if total > 0:
+            rate = MISSION_COMPLETED._value.get() / total
+            LEVI_AGENT_SUCCESS_RATE.set(rate)
 
     @staticmethod
     def observe_wave(size: int, queue_depth: int) -> None:

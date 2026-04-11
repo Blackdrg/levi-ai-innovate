@@ -19,18 +19,8 @@ export const MemoryExplorer: React.FC = () => {
     setIsLoading(true);
     try {
       if (activeTab === 'relational') {
-        // Mocking graph data for Neo4j preview
-        setGraphData({
-          nodes: [
-            { id: '1', label: 'User(mehta)', color: '#38bdf8' },
-            { id: '2', label: 'Task(v14_front)', color: '#10b981' },
-            { id: '3', label: 'Agent(Planner)', color: '#f59e0b' },
-          ],
-          links: [
-            { source: '1', target: '2', label: 'CREATED' },
-            { source: '2', target: '3', label: 'ASSIGNED_TO' },
-          ]
-        } as any);
+        const graph = await api.getHealthGraph();
+        setGraphData(graph);
       } else {
         const data = await api.searchMemory(searchQuery, activeTab);
         setResults(data);
@@ -47,14 +37,19 @@ export const MemoryExplorer: React.FC = () => {
   }, [activeTab]);
 
   return (
-    <div className="memory-explorer">
-      <header className="explorer-header">
-        <h1>QUAD-MEMORY EXPLORER</h1>
-        <div className="search-bar">
-          <Search size={18} />
+    <div className="memory-explorer font-['Outfit'] h-full overflow-y-auto">
+      <header className="explorer-header flex justify-between items-center mb-10">
+        <div>
+          <h1 className="text-2xl font-black tracking-tight uppercase text-white/90">Quad-Memory Explorer</h1>
+          <span className="text-[10px] uppercase tracking-widest font-black text-purple-500 opacity-80">Cognitive Persistence Layer</span>
+        </div>
+        
+        <div className="search-bar flex items-center gap-3 bg-neutral-900/40 border border-white/5 px-4 py-2 rounded-xl focus-within:border-purple-500/50 transition-all shadow-lg shadow-black/20">
+          <Search size={18} className="text-neutral-500" />
           <input 
             type="text" 
             placeholder="Search cognitive stores..." 
+            className="bg-transparent border-none outline-none text-sm text-white placeholder-neutral-600 w-64"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && fetchMemory()}

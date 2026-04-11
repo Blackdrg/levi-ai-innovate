@@ -97,9 +97,27 @@ async def lifespan(app: FastAPI):
         # 5. Monitoring & Graduation
         from backend.utils.metrics import GRADUATION_SCORE
         GRADUATION_SCORE.set(1.0)
-        logger.info("[Sovereign] System marked as 100% PRODUCTION GRADUATED (v14.1.0).")
         
-        logger.info(f"[DCN] Resilience Loops: [ACTIVE] node={node_id}")
+        # --- v15.0 Recovery & Liveness (Fix #1, #2, #3, #5) ---
+        from backend.core.execution_state import CentralExecutionState
+        from backend.services.ollama_health import ollama_monitor
+        from backend.db.milvus_client import MilvusClient
+        from backend.db.neo4j_db import SovereignGraph
+        
+        # A. Start Model Tier Monitor
+        create_tracked_task(ollama_monitor.start(), name="ollama-monitor")
+        
+        # B. Verify Cognitive Tiers (Blocking)
+        logger.info("[Sovereign] Initializing Cognitive Tiers...")
+        MilvusClient.connect()
+        SovereignGraph.get_driver()
+        
+        # C. Recover Active Missions (Post-Tier Ready)
+        recovered_missions = await CentralExecutionState.load_state_on_boot()
+        if recovered_missions:
+            logger.info(f"[Sovereign] Successfully loaded {len(recovered_missions)} missions for potential recovery.")
+            
+        logger.info("[Sovereign] System marked as 100% PRODUCTION GRADUATED (v15.0.0-GA).")
 
     except Exception as e:
         logger.error(f"[DCN] Failed to initialize resilience loops: {e}")

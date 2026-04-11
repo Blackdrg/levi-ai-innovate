@@ -1,14 +1,12 @@
 <!DOCTYPE html>
 <html class="dark" lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LEVI — Admin Control Plane</title>
-    <link href="./css/output.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Plus+Jakarta+Sans:wght@200;800&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
-    
-    <!-- Sovereign Core -->
+    <title>LEVI-AI Admin | Sovereignty Monitor</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="./css/styles.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com"></script>
     <script src="js/config.js"></script>
     <script src="js/levi-api.js"></script>
     <script src="js/shared.js"></script>
@@ -17,141 +15,123 @@
         .gold-text { background: linear-gradient(135deg, #f2ca50 0%, #d4af37 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
         .stat-card { background: rgba(27,27,31,0.6); border: 0.5px solid rgba(255,255,255,0.08); transition: all 0.3s ease; }
         .stat-card:hover { border-color: rgba(242,202,80,0.3); transform: translateY(-2px); }
-        @keyframes pulse-slow { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
-        .pulse { animation: pulse-slow 3s infinite; }
     </style>
 </head>
-<body class="bg-[#0e0e12] text-[#e5e1e7] font-sans antialiased min-h-screen">
-            <div id="sovereign-nav" class="flex items-center gap-8">
-                <!-- Injected via shared.js -->
-            </div>
-
-    <main class="max-w-7xl mx-auto p-8 lg:p-12">
-        <!-- Live Gauges -->
-        <div class="grid md:grid-cols-4 gap-6 mb-12">
-            <div class="stat-card rounded-[2rem] p-8">
-                <p class="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">p95 Latency</p>
-                <div class="flex items-baseline gap-2">
-                    <h3 id="metric-latency" class="text-5xl font-headline italic gold-text">0</h3>
-                    <span class="text-xs text-zinc-500">ms</span>
+<body class="bg-[#050507] text-slate-200 font-['Outfit']">
+    <div class="flex h-screen overflow-hidden">
+        <!-- Sidebar -->
+        <aside class="w-20 lg:w-64 border-r border-white/5 flex flex-col items-center lg:items-start p-6 bg-[#08080a]">
+            <div class="mb-12 flex items-center gap-4 px-2">
+                <div class="w-10 h-10 bg-neural rounded-xl flex items-center justify-center">
+                    <span class="material-symbols-outlined text-white">shield_person</span>
                 </div>
+                <span class="hidden lg:block text-xl font-bold tracking-tighter">LEVI-AI</span>
             </div>
-            <div class="stat-card rounded-[2rem] p-8">
-                <p class="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">Total Requests</p>
-                <h3 id="metric-requests" class="text-5xl font-headline italic">0</h3>
-            </div>
-            <div class="stat-card rounded-[2rem] p-8">
-                <p class="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">Active Nodes</p>
-                <h3 id="metric-nodes" class="text-5xl font-headline italic">0</h3>
-            </div>
-            <div class="stat-card rounded-[2rem] p-8">
-                <p class="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">Error Rate</p>
-                <div class="flex items-baseline gap-2">
-                    <h3 id="metric-errors" class="text-5xl font-headline italic text-rose-500">0.0</h3>
-                    <span class="text-xs text-rose-500/50">%</span>
-                </div>
-            </div>
-        </div>
+            
+            <nav class="flex-1 space-y-4 w-full" id="admin-nav">
+                <!-- Nav items injected via shared.js -->
+            </nav>
+        </aside>
 
-        <div class="grid lg:grid-cols-2 gap-12">
-            <!-- Instances -->
-            <section>
-                <h2 class="text-sm font-bold uppercase tracking-[0.2em] text-zinc-500 mb-6 flex items-center gap-2">
-                    <span class="material-symbols-outlined text-zinc-700">dns</span>
-                    Cluster Topology
-                </h2>
-                <div id="instance-list" class="space-y-4">
-                    <!-- Dynamic instances here -->
+        <!-- Main Content -->
+        <main class="flex-1 overflow-y-auto p-8 lg:p-12">
+            <header class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-12">
+                <div>
+                    <h1 class="text-4xl font-bold tracking-tight mb-2">System <span class="neural-text">Sovereignty</span></h1>
+                    <p class="text-slate-500 text-sm">Real-time telemetry and cognitive node health monitor.</p>
                 </div>
-            </section>
+                <div class="flex gap-4">
+                    <button onclick="checkHealth()" class="px-6 py-3 rounded-xl border border-white/10 text-sm font-bold flex items-center gap-2 hover:bg-white/5 transition-all">
+                        <span class="material-symbols-outlined text-sm">sync</span> REFRESH PULSE
+                    </button>
+                </div>
+            </header>
 
-            <!-- Control Plane -->
-            <section>
-                <h2 class="text-sm font-bold uppercase tracking-[0.2em] text-zinc-500 mb-6 flex items-center gap-2">
-                    <span class="material-symbols-outlined text-zinc-700">settings_input_component</span>
-                    Circuit Overrides
-                </h2>
-                <div class="space-y-4">
-                    <div class="stat-card rounded-3xl p-6 flex justify-between items-center">
-                        <div>
-                            <p class="text-sm font-bold">GROQ_SERVICE</p>
-                            <p id="breaker-groq-status" class="text-[10px] uppercase font-bold text-emerald-500 mt-1">Status: Closed</p>
-                        </div>
-                        <div class="flex gap-2">
-                            <button onclick="tripBreaker('groq')" class="px-4 py-2 rounded-full border border-rose-500/30 text-rose-500 text-[10px] font-bold uppercase hover:bg-rose-500/10 transition-all">Manual Trip</button>
-                            <button onclick="resetBreaker('groq')" class="px-4 py-2 rounded-full bg-emerald-500/10 text-emerald-500 text-[10px] font-bold uppercase hover:bg-emerald-500/20 transition-all">Reset</button>
-                        </div>
+            <!-- Stats Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12" id="stats-container">
+                <div class="stat-card p-8 rounded-[32px] glass">
+                    <p class="text-[10px] uppercase tracking-[0.3em] text-slate-500 font-bold mb-4">VRAM Pressure</p>
+                    <div class="flex items-end gap-3">
+                        <span id="vram-total" class="text-3xl font-bold">0.00</span>
+                        <span class="text-xs text-slate-500 mb-1">GB</span>
                     </div>
-                    <div class="stat-card rounded-3xl p-6 flex justify-between items-center">
-                        <div>
-                            <p class="text-sm font-bold">TOGETHER_SERVICE</p>
-                            <p id="breaker-together-status" class="text-[10px] uppercase font-bold text-emerald-500 mt-1">Status: Closed</p>
-                        </div>
-                        <div class="flex gap-2">
-                            <button onclick="tripBreaker('together')" class="px-4 py-2 rounded-full border border-rose-500/30 text-rose-500 text-[10px] font-bold uppercase hover:bg-rose-500/10 transition-all">Manual Trip</button>
-                            <button onclick="resetBreaker('together')" class="px-4 py-2 rounded-full bg-emerald-500/10 text-emerald-500 text-[10px] font-bold uppercase hover:bg-emerald-500/20 transition-all">Reset</button>
-                        </div>
+                    <div class="w-full h-1 bg-white/5 mt-4 rounded-full overflow-hidden">
+                        <div id="vram-bar" class="h-full bg-neural w-0"></div>
                     </div>
                 </div>
-            </section>
-        </div>
-    </main>
+                <!-- Other stats injected dynamically -->
+            </div>
 
-        async function updateStats() {
+            <!-- Health Cards -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8" id="health-grid">
+                <!-- Dynamic cards -->
+            </div>
+        </main>
+    </div>
+
+    <script>
+        async function checkHealth() {
             try {
-                const data = await LeviAPI.get('/api/v1/telemetry/metrics');
-                // Assume telemetry endpoint returns breakers as well or handle separately
-                const breakers = await LeviAPI.get('/api/v1/telemetry/breakers');
-
-                document.getElementById('metric-latency').innerText = data.p95_latency_ms || 0;
-                document.getElementById('metric-requests').innerText = data.total_requests.toLocaleString() || 0;
-                document.getElementById('metric-nodes').innerText = data.active_instances || 0;
-                document.getElementById('metric-errors').innerText = data.error_rate_percent || '0.0';
-
-                // Update Instances
-                const list = document.getElementById('instance-list');
-                list.innerHTML = '';
-                Object.entries(data.instance_details).forEach(([id, ts]) => {
-                    const ago = Math.round(Date.now()/1000 - ts);
-                    list.innerHTML += `
-                        <div class="stat-card rounded-2xl p-4 flex justify-between items-center">
-                            <div class="flex items-center gap-3">
-                                <div class="w-2 h-2 rounded-full bg-emerald-500"></div>
-                                <span class="text-xs font-mono text-zinc-400">${id}</span>
+                const data = await LeviAPI.get('/api/v1/brain/pulse');
+                
+                // VRAM
+                const used = data.vram_pressure * 24; // Assuming 24GB total for display
+                document.getElementById('vram-total').innerText = used.toFixed(2);
+                document.getElementById('vram-bar').style.width = `${data.vram_pressure * 100}%`;
+                
+                // DCN Health
+                const grid = document.getElementById('health-grid');
+                grid.innerHTML = `
+                    <div class="stat-card p-10 rounded-[40px] glass">
+                        <h3 class="text-xs uppercase tracking-widest text-neural font-bold mb-8">DCN Consensus Cluster</h3>
+                        <div class="space-y-6">
+                            <div class="flex justify-between items-center pb-6 border-b border-white/5">
+                                <span class="text-slate-500 text-sm">Node Role</span>
+                                <span class="font-bold text-white px-3 py-1 bg-neural/10 rounded-lg">${data.dcn_health.role}</span>
                             </div>
-                            <span class="text-[10px] text-zinc-600">Heartbeat: ${ago}s ago</span>
+                            <div class="flex justify-between items-center pb-6 border-b border-white/5">
+                                <span class="text-slate-500 text-sm">Peers Online</span>
+                                <span class="font-bold text-white">${data.dcn_health.peers} Nodes</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-slate-500 text-sm">Consensus Term</span>
+                                <span class="font-bold text-white">${data.dcn_health.term}</span>
+                            </div>
                         </div>
-                    `;
-                });
+                    </div>
 
-                // Update Breakers
-                ['groq', 'together'].forEach(id => {
-                    const status = breakers[id].state;
-                    const el = document.getElementById(`breaker-${id}-status`);
-                    el.innerText = `Status: ${status}`;
-                    el.className = `text-[10px] uppercase font-bold mt-1 ${status === 'OPEN' ? 'text-rose-500' : 'text-emerald-500'}`;
-                });
+                    <div class="stat-card p-10 rounded-[40px] glass">
+                        <h3 class="text-xs uppercase tracking-widest text-neural font-bold mb-8">System Resource Load</h3>
+                        <div class="space-y-8">
+                            <div class="space-y-4">
+                                <div class="flex justify-between items-center text-xs">
+                                    <span class="text-slate-500">GPU Orchestration</span>
+                                    <span class="text-white">${(data.vram_pressure * 100).toFixed(0)}%</span>
+                                </div>
+                                <div class="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                                    <div class="h-full bg-neural" style="width: ${data.vram_pressure * 100}%"></div>
+                                </div>
+                            </div>
+                            <div class="space-y-4">
+                                <div class="flex justify-between items-center text-xs">
+                                    <span class="text-slate-500">Memory Resonance</span>
+                                    <span class="text-white">NOMINAL</span>
+                                </div>
+                                <div class="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                                    <div class="h-full bg-emerald-500" style="width: 100%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
 
-            } catch (e) {
-                console.error("Dash sync failed:", e);
-                document.getElementById('connection-status').innerText = 'Sync Lost';
-                document.getElementById('connection-status').className = 'text-[10px] font-bold uppercase tracking-widest text-rose-500';
+            } catch (err) {
+                console.error("[Admin] Pulse check failed:", err);
             }
         }
 
-        window.tripBreaker = async (name) => {
-            if(!confirm(`Trip ${name} circuit manually?`)) return;
-            await LeviAPI.post(`/api/v1/telemetry/breakers/${name}/trip`, {});
-            updateStats();
-        };
-
-        window.resetBreaker = async (name) => {
-            await LeviAPI.post(`/api/v1/telemetry/breakers/${name}/reset`, {});
-            updateStats();
-        };
-
-        setInterval(updateStats, 2000);
-        updateStats();
+        setInterval(checkHealth, 5000);
+        checkHealth();
     </script>
 </body>
 </html>

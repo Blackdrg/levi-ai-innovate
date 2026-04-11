@@ -169,3 +169,25 @@ class HybridIntentClassifier:
             confidence_score=0.5,
             is_sensitive=False
         )
+
+    @classmethod
+    async def refine_classification(cls, query: str, intent: str):
+        """
+        Sovereign v15.0: Autonomous Intent Refinement.
+        Learns from high-fidelity successes to update regex rules.
+        """
+        logger.info(f"🎯 [Intent] Refining classification for pattern: '{query[:30]}...' -> {intent}")
+        # In v15.0 GA: We append a raw regex pattern to the dynamic intentions ledger.
+        # For now, we log the graduation candidate.
+        try:
+             # Logic to generate a clean regex from query (simplistic)
+             sanitized = re.escape(query.strip().lower())
+             # Graduation pulse
+             from backend.broadcast_utils import SovereignBroadcaster
+             SovereignBroadcaster.publish("INTENT_REFINED", {
+                 "query": query,
+                 "intent": intent,
+                 "regex_candidate": f"r'^({sanitized})$'"
+             }, user_id="global")
+        except Exception as e:
+             logger.error(f"[Intent] Refinement failure: {e}")

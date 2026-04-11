@@ -1,5 +1,4 @@
-from sqlalchemy import Column, String, Float, DateTime, JSON, ForeignKey, Text, Integer, Boolean
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, backref
 from backend.db.postgres import Base
 from datetime import datetime, timezone
 import os
@@ -159,12 +158,27 @@ class AuditLog(Base):
 
     @classmethod
     def calculate_checksum(cls, prev_checksum: str, row_data: dict) -> str:
-        """Calculates row integrity hash."""
+        """
+        Sovereign v15.0: Hardened HMAC Integrity Chaining.
+        HMAC-SHA256(prev_checksum + row_data) using AUDIT_CHAIN_SECRET.
+        """
+        import hmac
         import hashlib
         import json
+        
+        secret = os.getenv("AUDIT_CHAIN_SECRET")
+        if not secret:
+            # Fallback for development, but warning in production
+            secret = "levi_ai_audit_genesis_fallback_v15_unsecure"
+            
         data_str = json.dumps(row_data, sort_keys=True)
         combined = f"{prev_checksum}:{data_str}".encode()
-        return hashlib.sha256(combined).hexdigest()
+        
+        return hmac.new(
+            secret.encode(), 
+            combined, 
+            hashlib.sha256
+        ).hexdigest()
 
 class MissionSchedule(Base):
     """
@@ -201,6 +215,33 @@ class UserFact(Base):
 
     profile = relationship("UserProfile")
 
+class Goal(Base):
+    """
+    Sovereign v15.0: Persistent Long-term Objective.
+    Goals are the "Directives" that survive sessions and drive autonomous mission spawning.
+    Supports recursive decomposition via parent_goal_id.
+    """
+    __tablename__ = "goals"
+
+    goal_id = Column(String, primary_key=True, index=True)
+    parent_goal_id = Column(String, ForeignKey("goals.goal_id"), nullable=True, index=True)
+    user_id = Column(String, ForeignKey("user_profiles.user_id"), index=True)
+    tenant_id = Column(String, index=True)
+    
+    objective = Column(Text, nullable=False)
+    status = Column(String, default="active") # active, achieved, stalled, canceled
+    priority = Column(Float, default=1.0) # 1.0 (Normal) to 10.0 (Critical)
+    progress = Column(Float, default=0.0) # 0.0 - 1.0
+    
+    metadata_json = Column(JSON, default={}) # Strategy, heuristics, constraints
+    
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    sub_goals = relationship("Goal", backref=backref("parent_goal", remote_side=[goal_id]))
+    missions = relationship("Mission", back_populates="goal")
+
 class Mission(Base):
     """
     Distributed Mission Ledger.
@@ -210,6 +251,7 @@ class Mission(Base):
 
     mission_id = Column(String, primary_key=True, index=True)
     user_id = Column(String, ForeignKey("user_profiles.user_id"), index=True)
+    goal_id = Column(String, ForeignKey("goals.goal_id"), nullable=True, index=True)
     tenant_id = Column(String, index=True)
     objective = Column(String, nullable=False)
     intent_type = Column(String)
@@ -219,9 +261,9 @@ class Mission(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
-    # 🛡️ Resilience: Recovery Link
+    # Relationships
+    goal = relationship("Goal", back_populates="missions")
     aborted_record = relationship("AbortedMission", back_populates="mission", uselist=False)
-
     messages = relationship("Message", back_populates="mission", cascade="all, delete-orphan")
 
 class Message(Base):
@@ -293,17 +335,26 @@ class TrainingPattern(Base):
 
 class GraduatedRule(Base):
     """
-    Sovereign v14.1 Evolved Deterministic Rules.
+    Sovereign v15.0 Evolved Deterministic Rules.
     High-fidelity patterns promoted to hard-coded rules for the fast-path.
     """
     __tablename__ = "graduated_rules"
 
     id = Column(Integer, primary_key=True)
     task_pattern = Column(Text, unique=True, index=True, nullable=False)
-    result_data = Column(JSON, nullable=False) # {"solution": "...", "metadata": {...}}
+    result_data = Column(JSON, nullable=False)
     fidelity_score = Column(Float, nullable=False)
     uses_count = Column(Integer, default=0)
-    is_stable = Column(Boolean, default=False) # Promotion flag (hits >= N)
+    
+    # 🧪 Phase 3: Shadow Auditing & Drift
+    shadow_audit_count = Column(Integer, default=0)
+    divergence_count = Column(Integer, default=0) # Consecutive shadow failures
+    drift_score = Column(Float, default=0.0) 
+    
+    is_stable = Column(Boolean, default=False)
+    is_quarantined = Column(Boolean, default=False)
+    
+    last_drift_check = Column(DateTime)
     last_validated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 

@@ -164,6 +164,39 @@ class SovereignVectorStore:
         except Exception as e:
             logger.error(f"[VectorStore] Re-indexing failed for {user_id}: {e}")
 
+    @staticmethod
+    async def reindex_global_memory():
+        """
+        Sovereign v14.2: Global memory re-indexing.
+        Ensures common knowledge is synchronized across all nodes from MongoDB.
+        """
+        logger.info("[VectorStore] Starting global knowledge re-indexing...")
+        try:
+            from backend.db.mongo import MongoDB
+            db = await MongoDB.get_db()
+            if db is None: return
+
+            cursor = db.global_facts.find({})
+            facts_to_index = await cursor.to_list(length=1000)
+            
+            texts = []
+            metadatas = []
+            for doc in facts_to_index:
+                doc.pop("_id", None)
+                fact_text = doc.get("input") or doc.get("text")
+                if fact_text:
+                    texts.append(fact_text)
+                    metadatas.append(doc)
+
+            if texts:
+                global_memory = await SovereignVectorStore.get_global_memory()
+                await global_memory.clear()
+                await global_memory.add(texts, metadatas)
+                logger.info(f"[VectorStore] Successfully synchronized {len(texts)} global knowledge atoms.")
+
+        except Exception as e:
+            logger.error(f"[VectorStore] Global re-indexing failed: {e}")
+
     # --- Global Wisdom logic ---
     @staticmethod
     async def store_global_wisdom(input_text: str, output_text: str, mood: str):

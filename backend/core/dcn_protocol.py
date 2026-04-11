@@ -15,6 +15,7 @@ import time
 from enum import Enum
 from typing import Dict, Any, Optional, Callable, List
 from pydantic import BaseModel, Field
+from opentelemetry import propagate
 from .v13.vram_guard import VRAMGuard
 from .dcn.load_balancer import dcn_balancer
 
@@ -42,6 +43,8 @@ class DCNPulse(BaseModel):
     prev_log_term: int = 0
     
     region: str = "us-east" # Regional awareness (v14.2)
+    
+    trace_parent: Optional[str] = None # W3C Trace Context (v14.2)
     
     signature: Optional[str] = None
     timestamp: float = Field(default_factory=time.time)
@@ -95,7 +98,8 @@ class DCNProtocol:
             mode=mode,
             term=self.gossip.current_term if self.gossip else 0,
             index=self.last_applied_index + 1 if mode == ConsensusMode.RAFT else 0,
-            region=self.region
+            region=self.region,
+            trace_parent=self._get_current_trace_parent()
         )
         
         # We need a predictable string for signing. Using model_dump_json is good but exclude signature.
@@ -169,6 +173,17 @@ class DCNProtocol:
             try:
                 # 🛡️ HMAC-SHA256 Verification
                 pulse = DCNPulse(**pulse_raw)
+                
+                # Restore Tracing Context (v14.2)
+                if pulse.trace_parent:
+                    token = propagate.extract({"traceparent": pulse.trace_parent})
+                    from opentelemetry.trace import set_span_in_context
+                    # We inject the extracted context into the current thread/task
+                    # This ensures subsequent spans are children of the propagated trace
+                    # Note: propagate.attach is better for background tasks
+                    ctx = propagate.extract({"traceparent": pulse.trace_parent})
+                    token = propagate.attach(ctx)
+                
                 if not await self.verify_pulse(pulse):
                     logger.warning(f"[DCN] Dropping unauthenticated pulse from {pulse.node_id}")
                     return
@@ -256,3 +271,9 @@ class DCNProtocol:
             engine = ReplayEngine()
             await engine.recover_mission_state(mission_id)
             self.last_applied_index = remote_index
+
+    def _get_current_trace_parent(self) -> Optional[str]:
+        """Extracts the W3C traceparent from the current opentelemetry context."""
+        carrier = {}
+        propagate.inject(carrier)
+        return carrier.get("traceparent")

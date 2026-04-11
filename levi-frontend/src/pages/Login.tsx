@@ -18,121 +18,90 @@ export const Login: React.FC = () => {
       await login({ email, password });
       navigate('/');
     } catch (err) {
-      setError('Neural signature mismatch. Access denied.');
+      setError('NEURAL_SIGNATURE_MISMATCH: Authentication rejected by Sovereign Gateway.');
     }
   };
 
   return (
-    <div className="login-page">
+    <div className="login-page font-['Outfit']">
       <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="login-card"
+        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        className="login-card relative overflow-hidden"
       >
-        <div className="login-header">
-           <div className="brand-logo">
-              <Activity size={32} className="text-blue-500" />
+        {/* Decorative Glow */}
+        <div className="absolute -top-24 -right-24 w-48 h-48 bg-purple-600/10 blur-[60px] rounded-full"></div>
+        <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-cyan-600/10 blur-[60px] rounded-full"></div>
+
+        <div className="login-header mb-12 relative z-10">
+           <div className="flex justify-center mb-6">
+              <div className="p-4 rounded-2xl bg-purple-600/10 border border-purple-500/20 shadow-xl shadow-purple-900/10">
+                <Shield size={40} className="text-purple-500" />
+              </div>
            </div>
-           <h1>LEVI-AI v14.0</h1>
-           <p>SYSTEM ACCESS GATEWAY</p>
+           <h1 className="text-3xl font-black tracking-tighter text-white uppercase italic">LEVI-AI <span className="text-purple-500">v15.0</span></h1>
+           <p className="text-[10px] uppercase tracking-[0.3em] font-black text-neutral-500 mt-2">Sovereign Artificial Intelligence OS</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="login-form">
-          <div className="input-grp">
-             <User size={18} />
-             <input 
-                type="email" 
-                placeholder="NEURAL_ID (Email)" 
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-             />
+        <form onSubmit={handleSubmit} className="login-form space-y-6 relative z-10">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2 px-4 py-3.5 bg-neutral-900/60 border border-white/5 rounded-xl focus-within:border-purple-500/40 transition-all">
+               <User size={18} className="text-neutral-500" />
+               <input 
+                  type="email" 
+                  placeholder="IDENTITY_KEY" 
+                  className="bg-transparent border-none outline-none text-sm text-white placeholder-neutral-600 w-full font-bold"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+               />
+            </div>
           </div>
 
-          <div className="input-grp">
-             <Lock size={18} />
-             <input 
-                type="password" 
-                placeholder="CRYPT_KEY (Password)" 
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-             />
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2 px-4 py-3.5 bg-neutral-900/60 border border-white/5 rounded-xl focus-within:border-purple-500/40 transition-all">
+               <Lock size={18} className="text-neutral-500" />
+               <input 
+                  type="password" 
+                  placeholder="CRYPT_SIGNATURE" 
+                  className="bg-transparent border-none outline-none text-sm text-white placeholder-neutral-600 w-full font-bold"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+               />
+            </div>
           </div>
 
-          <button type="submit" className="login-btn">
-             <Shield size={18} />
-             AUTHORIZE ENTITY
+          <button type="submit" className="w-full bg-gradient-to-tr from-purple-600 to-purple-500 hover:to-purple-400 text-white py-4 rounded-xl font-black text-xs uppercase tracking-widest shadow-xl shadow-purple-900/20 active:scale-[0.98] transition-all flex items-center justify-center gap-3">
+             <Activity size={18} />
+             Authorize Access
           </button>
 
-          {error && <div className="error-msg">{error}</div>}
+          {error && <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center text-red-500 text-[10px] font-black uppercase tracking-widest border border-red-500/20 p-3 rounded-lg bg-red-500/5">{error}</motion.div>}
         </form>
 
-        <div className="login-footer">
-          <span>SOVEREIGN_OS v14.0.0-Autonomous-SOVEREIGN</span>
+        <div className="login-footer mt-12 text-center border-t border-white/5 pt-8 relative z-10">
+          <span className="text-[10px] font-black text-neutral-600 uppercase tracking-widest">Sovereign_Node_Status: <span className="text-green-500/60">GA-STABLE</span></span>
+          <p className="text-[9px] text-neutral-700 font-bold mt-2 uppercase tracking-[0.2em]">LEVI-AI v15.0.0-GA GRADUATED</p>
         </div>
       </motion.div>
 
       <style>{`
-        .login-page { width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; background: #020617; }
+        .login-page { width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; background: #020617; position: relative; overflow: hidden; }
         .login-card { 
           width: 100%; 
-          max-width: 400px; 
+          max-width: 440px; 
           background: rgba(15, 23, 42, 0.4); 
-          border: 1px solid rgba(56, 189, 248, 0.2); 
-          border-radius: 20px; 
-          padding: 3rem; 
-          backdrop-filter: blur(12px); 
-          box-shadow: 0 20px 80px rgba(0,0,0,0.6); 
-        }
-        .login-header { text-align: center; margin-bottom: 2.5rem; }
-        .brand-logo { margin-bottom: 1.5rem; display: flex; justify-content: center; }
-        h1 { font-family: 'JetBrains Mono', monospace; font-size: 1.5rem; letter-spacing: 0.1em; color: #f1f5f9; margin-bottom: 0.5rem; }
-        p { font-size: 0.7rem; color: #38bdf8; font-weight: 800; letter-spacing: 0.2em; }
-
-        .login-form { display: flex; flex-direction: column; gap: 1.5rem; }
-        .input-grp { 
-          position: relative; 
-          background: rgba(2, 6, 23, 0.4); 
           border: 1px solid rgba(255, 255, 255, 0.05); 
-          border-radius: 10px; 
-          display: flex; 
-          align-items: center; 
-          padding: 0 1rem; 
-          color: #64748b; 
-          transition: all 0.2s ease;
+          border-radius: 32px; 
+          padding: 4rem; 
+          backdrop-filter: blur(24px); 
+          box-shadow: 0 40px 120px rgba(0,0,0,0.8); 
         }
-        .input-grp:focus-within { border-color: #38bdf8; color: #38bdf8; }
-        .input-grp input { 
-          background: transparent; 
-          border: none; 
-          color: white; 
-          padding: 1rem; 
-          width: 100%; 
-          outline: none; 
-          font-family: 'Inter', sans-serif; 
-        }
-        .login-btn { 
-          background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); 
-          border: none; color: white; 
-          padding: 1rem; 
-          border-radius: 10px; 
-          font-weight: 700; 
-          font-family: 'JetBrains Mono', monospace; 
-          display: flex; 
-          align-items: center; 
-          justify-content: center; 
-          gap: 0.75rem; 
-          cursor: pointer; 
-          transition: all 0.2s ease; 
-          margin-top: 1rem;
-        }
-        .login-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(37, 99, 235, 0.3); }
-        .error-msg { text-align: center; color: #ef4444; font-size: 0.8rem; font-family: 'JetBrains Mono', monospace; }
-
-        .login-footer { margin-top: 3rem; text-align: center; border-top: 1px solid rgba(255, 255, 255, 0.05); padding-top: 1.5rem; }
-        .login-footer span { font-size: 0.6rem; color: #475569; font-family: 'JetBrains Mono', monospace; font-weight: 600; letter-spacing: 0.05em; }
       `}</style>
+    </div>
+  );
+};
     </div>
   );
 };

@@ -62,3 +62,41 @@ async def get_root_healthz():
         "timestamp": os.getenv("START_TIME", "0"),
         "resonance": "STABLE"
     }
+
+@router.post("/rollback")
+async def trigger_emergency_rollback():
+    """
+    Sovereign v15.0: Emergency Rollback Trigger.
+    Emits a GitHub Repository Dispatch to revert the cluster state.
+    Requires: ROLLBACK_TOKEN (PAT with repo scope).
+    """
+    import aiohttp
+    
+    token = os.getenv("ROLLBACK_TOKEN")
+    repo = os.getenv("GITHUB_REPO") # e.g., "Blackdrg/levi-ai-innovate"
+    
+    if not token or not repo:
+        logger.error("[Rollback] FAILED: Missing ROLLBACK_TOKEN or GITHUB_REPO in env.")
+        return {"status": "error", "message": "Rollback capability not configured."}
+
+    url = f"https://api.github.com/repos/{repo}/dispatches"
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "Authorization": f"Bearer {token}",
+        "X-GitHub-Api-Version": "2022-11-28"
+    }
+    payload = {"event_type": "trigger-rollback"}
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=payload, headers=headers) as response:
+                if response.status in [201, 204]:
+                    logger.warning(f"[Rollback] CRITICAL: Emergency rollback triggered via GitHub Dispatch for {repo}.")
+                    return {"status": "triggered", "message": "Rollback workflow initiated."}
+                
+                txt = await response.text()
+                logger.error(f"[Rollback] GitHub API rejected request: {response.status} - {txt}")
+                return {"status": "failed", "http_code": response.status}
+    except Exception as e:
+        logger.exception(f"[Rollback] Unexpected error during dispatch: {e}")
+        return {"status": "error", "message": str(e)}
