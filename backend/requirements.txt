@@ -43,7 +43,9 @@ boto3==1.34.106
 python-json-logger>=3.0.0
 diffusers==0.27.2
 accelerate==0.30.1
-# TTS==0.22.0 # Standardized in requirements-video.txt
+TTS==0.22.0
+openai-whisper==20231117
+pydub==0.25.1
 firebase-admin==6.5.0
 google-cloud-firestore==2.15.0
 celery[redis]==5.3.6

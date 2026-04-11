@@ -1,8 +1,11 @@
 import time
 import logging
-from fastapi import Request, HTTPException
+from fastapi import Request, HTTPException, Depends
 from starlette.middleware.base import BaseHTTPMiddleware
 from backend.db.redis import r_async as redis_client, HAS_REDIS_ASYNC
+from backend.db.postgres_db import PostgresDB
+from backend.db.models import User
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -21,11 +24,14 @@ class SlidingWindowRateLimiter:
     def __init__(self, r: redis_client):
         self.r = r
 
-    async def is_allowed(self, user_id: str, tier: str = "free") -> bool:
+    async def is_allowed(self, user_id: str) -> bool:
         if not HAS_REDIS_ASYNC:
             return True
 
+        # 🛡️ Phase 3: Database-Verified Tiering
+        tier = await self._get_verified_tier(user_id)
         tier_config = TIER_LIMITS.get(tier.lower(), TIER_LIMITS["free"])
+        
         now = time.time()
         rpm_key = f"rl:rpm:{user_id}"
         rpd_key = f"rl:rpd:{user_id}"
@@ -43,6 +49,21 @@ class SlidingWindowRateLimiter:
             pipe.expire(rpd_key, 172800)
             
             results = await pipe.execute()
+            
+            # 🌐 Phase 3: Global Quota Sync (If near limit, gossip to other regions)
+            if results[6] > (tier_config["rpd"] * 0.8):
+                from backend.utils.global_gossip import global_swarm_bridge
+                await global_swarm_bridge.initialize()
+                await global_swarm_bridge.publisher.publish(
+                    global_swarm_bridge.topic_path,
+                    json.dumps({
+                        "fragment_id": f"quota-{user_id}",
+                        "fidelity_s": 0.99,
+                        "payload": {"type": "quota_alert", "user_id": user_id, "consumed": results[6]},
+                        "is_global": True
+                    }).encode()
+                )
+
             if results[2] > tier_config["rpm"] or results[6] > tier_config["rpd"]:
                 return False
                 
@@ -51,6 +72,19 @@ class SlidingWindowRateLimiter:
             logger.error(f"[RateLimit] Tiered failure: {e}")
             return True
 
+    async def _get_verified_tier(self, user_id: str) -> str:
+        """Fetch verified tier from regional Postgres database."""
+        if user_id == "global_anonymous": return "free"
+        
+        try:
+            async with PostgresDB._session_factory() as session:
+                stmt = select(User).where(User.id == user_id)
+                res = await session.execute(stmt)
+                user = res.scalar_one_or_none()
+                return user.tier if user else "free"
+        except:
+            return "free"
+
 class RateLimitMiddleware(BaseHTTPMiddleware):
     def __init__(self, app):
         super().__init__(app)
@@ -58,10 +92,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         user_id = request.headers.get("X-User-ID", "global_anonymous")
-        user_tier = request.headers.get("X-User-Tier", "free")
         
-        if not await self.limiter.is_allowed(user_id, user_tier):
-            logger.warning(f"[RateLimit] Blocked request from {user_id} (Tier: {user_tier})")
-            raise HTTPException(status_code=429, detail=f"Sovereign {user_tier} pulse threshold exceeded.")
+        if not await self.limiter.is_allowed(user_id):
+            logger.warning(f"[RateLimit] Blocked request from {user_id}")
+            raise HTTPException(status_code=429, detail="Sovereign pulse threshold exceeded.")
             
         return await call_next(request)

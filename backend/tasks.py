@@ -136,3 +136,33 @@ def weekly_critic_calibration():
     from backend.scripts.calibrate_critic import calibrate_all_users
     loop = asyncio.get_event_loop()
     return loop.run_until_complete(calibrate_all_users())
+async def execute_mission_from_cloud_task(mission_id: str, perception: dict):
+    """
+    Sovereign v14.1.0: Cloud-Native Mission execution.
+    Triggered by a Cloud Task webhook.
+    """
+    logger.info(f"🚀 [CloudTask] Executing mission: {mission_id}")
+    
+    from backend.core.v8.executor import GraphExecutor
+    from backend.services.orchestrator.meta_planner import MetaPlanner
+    
+    try:
+        # 1. Regenerate or re-hydrate Task Graph from perception
+        planner = MetaPlanner()
+        goal = perception.get("input", "")
+        context = perception.get("context", {})
+        
+        # We re-plan to ensure we have the latest graph context if it wasn't serialized
+        graph = await planner.plan_mission(goal, context=context)
+        
+        # 2. Execute
+        executor = GraphExecutor()
+        perception["mission_id"] = mission_id # Ensure it's passed
+        
+        await executor.run(graph, perception)
+        
+        logger.info(f"✅ [CloudTask] Mission {mission_id} execution flow completed.")
+        return True
+    except Exception as e:
+        logger.error(f"❌ [CloudTask] Mission {mission_id} failed: {e}")
+        return False
