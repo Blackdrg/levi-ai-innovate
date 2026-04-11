@@ -104,7 +104,8 @@ resource "google_sql_database_instance" "postgres" {
     availability_type = "REGIONAL" # Regional (High Availability) for Multi-Zone Failure Resilience
     
     ip_configuration {
-      private_network   = google_compute_network.vpc[each.value].id
+      private_network = "projects/${var.gcp_project_id}/global/networks/levi-vpc-${each.value}"
+      ipv4_enabled    = false
     }
   }
   deletion_protection = false # Fast teardown for graduation testing
@@ -116,7 +117,7 @@ resource "google_redis_instance" "cache" {
   memory_size_gb = 1
   tier           = "STANDARD_HA" # Standard-HA for Multi-Zone Cache Resilience
   region         = each.value
-  authorized_network  = google_compute_network.vpc[each.value].id
+  authorized_network = "projects/${var.gcp_project_id}/global/networks/levi-vpc-${each.value}"
 }
 
 # 🚀 Regional Cloud Run Clusters
@@ -139,8 +140,12 @@ resource "google_cloud_run_service" "backend" {
       containers {
         image = "gcr.io/${var.gcp_project_id}/levi-backend:latest"
         env {
-          name  = "GCP_REGION"
-          value = each.value
+          name  = "GCP_PROJECT_ID"
+          value = var.gcp_project_id
+        }
+        env {
+          name  = "TARGET_URL"
+          value = google_compute_global_address.default.address
         }
         env {
           name  = "DCN_IS_DIVERSIFIED"

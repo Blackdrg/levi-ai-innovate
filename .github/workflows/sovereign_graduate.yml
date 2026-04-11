@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 env:
-  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
   SERVICE_NAME: levi-backend
   IMAGE_NAME: levi-backend
   REGIONS: '["us-central1", "europe-west1"]' # Multi-region deployment map
@@ -123,5 +123,5 @@ jobs:
       - name: Run Global Chaos Validation
         run: python backend/scripts/chaos_failover_test.py
         env:
-          TARGET_URL: ${{ secrets.GLOBAL_LB_IP }}
+          TARGET_URL: ${{ vars.GLOBAL_LB_IP }}
           TEST_MODE: production
