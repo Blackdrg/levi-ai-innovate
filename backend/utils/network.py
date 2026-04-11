@@ -145,6 +145,7 @@ ai_service_breaker = CircuitBreaker("AI_SERVICE", threshold=3, recovery_time=30)
 redis_breaker = CircuitBreaker("REDIS", threshold=5, recovery_time=60)
 groq_breaker = CircuitBreaker("Groq", threshold=3, recovery_time=30)
 together_breaker = CircuitBreaker("TogetherAI", threshold=5, recovery_time=60)
+neo4j_breaker = CircuitBreaker("NEO4J", threshold=3, recovery_time=30)
 
 def safe_request(method: str, url: str, **kwargs) -> requests.Response:
     """

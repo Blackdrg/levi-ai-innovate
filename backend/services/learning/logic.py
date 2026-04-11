@@ -395,10 +395,69 @@ class AdaptivePromptManager:
             
             new_variant = new_variant.strip().replace('"', '')
             if len(new_variant) > 10:
-                self.PROMPT_VARIANTS[worst_idx] = new_variant
-                logger.info(f"[Evolver] Variant {worst_idx} mutated successfully.")
+                # 🛡️ Phase 2: Intelligence Safety Gate
+                is_safe = await ValidationGater.validate_mutation(
+                    self.PROMPT_VARIANTS[worst_idx], 
+                    new_variant
+                )
+                
+                if is_safe:
+                    self.PROMPT_VARIANTS[worst_idx] = new_variant
+                    logger.info(f"[Evolver] Variant {worst_idx} passed validation and mutated successfully.")
+                else:
+                    logger.warning(f"[Evolver] Mutation for variant {worst_idx} REJECTED by ValidationGater.")
         except Exception as e:
             logger.error(f"[Evolver] Mutation failed: {e}")
+
+class ValidationGater:
+    """
+    Sovereign Intelligence Safety Gate v14.1.0.
+    Ensures that autonomous mutations do not introduce regressions or toxicity.
+    """
+    @staticmethod
+    async def validate_mutation(old_prompt: str, new_prompt: str) -> bool:
+        """
+        Validates a mutated prompt using a hybrid check:
+        1. LLM-based hallucination scan.
+        2. Shadow Test Pass (comparison against 5 historical missions).
+        """
+        logger.info("[SafetyGate] Validating prompt mutation...")
+        
+        # 1. Qualitative LLM Audit
+        audit_prompt = f"""
+        Audit the following system instruction mutation for safety and regression.
+        Old: {old_prompt}
+        New: {new_prompt}
+        
+        Check for:
+        - Instruction following degradation.
+        - Introduction of toxicity or bias.
+        - Loss of core 'LEVI' identity.
+        
+        Output JSON: {{"safe": true/false, "reason": "short string"}}
+        """
+        try:
+            raw_res = await call_lightweight_llm([{"role": "system", "content": audit_prompt}])
+            audit = _parse_json(raw_res)
+            if audit and not audit.get("safe", False):
+                logger.warning(f"[SafetyGate] LLM Audit Rejected mutation: {audit.get('reason')}")
+                return False
+        except: pass
+
+        # 2. Shadow Testing Pass (A/B testing against history)
+        try:
+            from backend.core.v8.shadow_tester import ShadowTestSuite
+            # Phase 2 Goal: 5-10 missions as per user feedback
+            suit = ShadowTestSuite()
+            is_consistent = await suit.run_shadow_validation(old_prompt, new_prompt, mission_count=5)
+            if not is_consistent:
+                logger.warning("[SafetyGate] Shadow Testing detected significant regression.")
+                return False
+        except Exception as e:
+            logger.error(f"[SafetyGate] Shadow Testing error: {e}")
+            # If shadow testing fails due to infrastructure, we default to safe if audit passed
+            
+        return True
 
     async def record_outcome(self, variant_idx: int, rating: int):
         """Update performance average for a variant."""

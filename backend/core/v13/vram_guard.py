@@ -13,6 +13,11 @@ logger = logging.getLogger(__name__)
 VRAM_SAFETY_BUFFER_PERCENT = float(os.getenv("VRAM_SAFETY_BUFFER_PERCENT", "0.15")) # Buffer for VRAM backpressure 
 MIN_FREE_GB = 1.0 # Absolute minimum 1GB free
 
+# Degradation Saturation Thresholds
+THRESHOLD_L2_DOWNGRADE = 0.70 # 70% VRAM used
+THRESHOLD_L1_DOWNGRADE = 0.85 # 85% VRAM used
+THRESHOLD_MENTAL_COMPRESSION = 0.95 # 95% VRAM used
+
 class VRAMPool:
     """
     Sovereign VRAM Resource Pool v14.0.0.
@@ -156,3 +161,23 @@ class VRAMGuard:
                 return True
         
         return False
+
+    async def get_recommended_tier(self, requested_tier: str) -> str:
+        """
+        Sovereign v14.1.0: Advanced Multi-Tier Degradation.
+        Determines the best model tier based on immediate VRAM pressure.
+        """
+        slots = await self.get_device_slots(force_refresh=True)
+        if not slots: return "L1" # Safety fallback
+        
+        # We look at the most available slot
+        best_slot = max(slots, key=lambda s: s["vram_free_mb"])
+        usage_pct = 1.0 - (best_slot["vram_free_mb"] / best_slot["vram_total_mb"])
+        
+        if usage_pct > THRESHOLD_MENTAL_COMPRESSION: return "MENTAL_COMPRESSION"
+        if usage_pct > THRESHOLD_L1_DOWNGRADE: return "L1"
+        if usage_pct > THRESHOLD_L2_DOWNGRADE:
+             # Downgrade L3 to L2 if pressure is high
+             return "L2" if requested_tier == "L3" else requested_tier
+             
+        return requested_tier

@@ -34,14 +34,14 @@ The LEVI-AI **v14.2.0-Production-HARDENED** system has officially graduated to *
 Recently Closed (v14.2 Production Hardening & Consolidation):
 - **Repository Standardized**: Consolidated `requirements.txt` and `alembic` to the project root for unified production management.
 - **GCP Migration**: Full stack migration to Cloud Run with native VPC connector for secure backend communication.
-- **Cloud SQL Integration**: Migrated to managed PostgreSQL 15 with automated WAL archiving and multi-zone failover.
-- **Memorystore Transition**: Deployed Redis 6.x Cluster (Standard Tier) for high-availability session and task caching.
 - **Consolidated FastAPI Gateway**: Overhauled `main.py` with `SSRF`, `RateLimit`, and `SovereignShield` production middleware.
+- **Unified Telemetry Stream**: Implemented global SSE resonance broadcaster for real-time frontend synchronized pulse.
 - **Orchestrator Alignment**: Integrated `DCNGossip` lifecycle and mission telemetry directly into the gateway entry point.
 - **Frontend Build Stability**: Fixed dependency conflicts and export mismatches (API_BASE) for reliable production builds.
 - **Observability Layer**: Integrated Prometheus & Grafana for real-time cognitive and hardware telemetry.
 - **Asymmetric Auth Wall**: Full migration to **RS256 JWT** signatures with dynamic key rotation completed.
 - **Graduation Score**: System stability baseline verified at **1.0 (Audit-Stable)** across 200+ edge-case mission scenarios ($GS = 1.0 \iff \forall Test_{i} \in AuditSuite, Result_{i} = Pass$).
+- **Sovereign Voice Stack (Phase 1)**: Integrated local Whisper STT and Coqui TTS for 100% private, voice-first cognitive missions.
 
 
 ---
@@ -81,6 +81,7 @@ The LEVI-AI OS interface is a hyper-modern, high-performance Frontend layer buil
 - **RBAC**: Fine-grained role-based access control for tenants and resources.
 - **Audit Ledger**: Immutable, monthly-partitioned log with HMAC-SHA256 integrity chains.
 - **Default Secret Guardrails**: Startup checks and pre-commit hooks flag insecure placeholder secrets.
+- **Sovereign Voice Stack**: Local, low-latency Speech-to-Text (STT) and Text-to-Speech (TTS) integration for voice-first cognitive missions.
 
 ---
 
@@ -169,7 +170,9 @@ The `missions_aborted` table stores the `frozen_dag` (full serialized graph stat
 ```mermaid
 graph TD
     User[User Request] --> Frontend[React UI / Zustand]
-    Frontend --> Gateway[FastAPI Gateway]
+    VoiceInput[Voice Input] --> STT[Sovereign STT - Whisper]
+    STT --> Gateway[FastAPI Gateway]
+    Frontend --> Gateway
     Gateway --> FastPath{Fast-Path / Cache?}
     FastPath -- Hit --> Response[Response]
     FastPath -- Miss --> SecurityGate{Security Anomaly Gate}
@@ -187,6 +190,8 @@ graph TD
     Agents --> Tools[Isolated Tools]
     Tools --> Memory[Memory Sync]
     Memory --> Response[Final Response]
+    Response --> TTS[Sovereign TTS - Coqui]
+    TTS --> VoiceOutput[Audio Output]
     Response -.-> Learning[Learning Pipeline]
     Learning -.-> Evolution
 ```
@@ -216,18 +221,27 @@ graph TD
     Swarm --> Creative[Creative: Image, Video]
 ```
 
+
 ### 3.4 Complete System Architecture
 
 ```mermaid
 graph TD;
 
   %% === Ingress & Infrastructure ===
-  subgraph Frontend React UI
+  subgraph Frontend UI
     UI["React 18 + Vite"]
     STOR["Zustand State Store"]
     FLOW["ReactFlow Graph Rendering"]
     UI <--> STOR
     UI --> FLOW
+  end
+
+  subgraph Sovereign Voice Stack
+    STT["Whisper STT (Local)"]
+    TTS["Coqui TTS (Local)"]
+    VP["Voice Processor"]
+    STT --> VP
+    VP --> TTS
   end
 
   subgraph CI/CD & Deployment
@@ -239,45 +253,49 @@ graph TD;
     REG -.-> RUN
   end
 
-  subgraph GCP Cloud Run Infrastructure
+  subgraph GCP Production Infrastructure
     RUN["Cloud Run (Backend)"]
-    LB[Cloud Load Balancing]
-    HPA[Cloud Run Auto-scaling]
+    LB["Cloud Load Balancing"]
+    HPA["Auto-scaling"]
+    CLT["Cloud Tasks (Mission Queue)"]
     LB --> UI
     UI --"[rs256]"--> RUN
     HPA --> LB
+    RUN --> CLT
   end
 
   subgraph Gateway Tier
     GW["FastAPI App Gateway"]
-    RATE["Tiered Sliding Window Rate Limiter"]
-    SH["RBAC / SSRF Shield & CSP"]
-    PII["PII / NER Guardrails"]
+    RATE["Rate Limiter (Redis)"]
+    SH["RBAC / SSRF Shield"]
+    PII["PII Guardrails"]
     
     RUN --> GW
     GW <--> RATE
     GW --> PII
     PII --> SH
+    VP <--> GW
   end
 
   %% === Central Orchestration ===
   subgraph Central Orchestration
     ORC["Orchestrator (Mission Controller)"]
-    SM["Central Execution State Machine"]
-    TEAR["Graceful Teardown Hook"]
+    SM["Execution State Machine"]
+    TEAR["Graceful Teardown"]
     IDEMP["Idempotency Verifier"]
     
     SH --> IDEMP
     IDEMP --> ORC
     ORC <--> SM
     TEAR -.-> ORC
+    VP <--> ORC
   end
 
   %% === Brain Governance ===
   subgraph Brain Governance
-    PL["DAG Planner (Unified Unified)"]
-    RC["Reasoning Core (Critique & Simulation)"]
-    EVO["Evolution Engine (Fragility & Rules)"]
+    PL["DAG Planner"]
+    RC["Reasoning Core"]
+    EVO["Evolution Engine"]
     
     ORC --> EVO
     EVO --"Rule Graduation"--> Response
@@ -287,12 +305,12 @@ graph TD;
     RC --> EX
   end
 
-  %% === Execution & Distributed Network ===
-  subgraph DCN_NET ["Distributed Execution Network (DCN)"]
-    EX["Graph Executor (Greedy Waves)"]
-    SCHED["Wave Scheduler & Priority Queues"]
-    VRAM["GPU Backpressure (VRAMGuard)"]
-    DCN["DCN Leader Election & P2P Reconcile"]
+  %% === Execution & DCN ===
+  subgraph DCN_NET ["Distributed Network (DCN)"]
+    EX["Graph Executor"]
+    SCHED["Wave Scheduler"]
+    VRAM["GPU Backpressure"]
+    DCN["Leader Election & P2P"]
     
     RC -.-> EX
     EX --> SCHED
@@ -302,12 +320,12 @@ graph TD;
 
   %% === Agent Ecosystem ===
   subgraph Sovereign Agent Swarm
-    AG_BASE["SovereignAgent Base (Reflexive)"]
-    AG_CODE["Artisan (CodeSandbox)"]
+    AG_BASE["SovereignAgent Base"]
+    AG_CODE["Artisan (Code)"]
     AG_TASK["HardRule (Logic)"]
-    AG_SEARCH["Scout (Search/RAG)"]
-    AG_DOC["Analyst (OCR/Parsing)"]
-    COMPENSE["Compensation Engine (Saga Rollback)"]
+    AG_SEARCH["Scout (Search)"]
+    AG_DOC["Analyst (Doc)"]
+    COMPENSE["Compensation Engine"]
     
     SCHED --> AG_BASE
     AG_BASE --"[mtls 1.3]"--> AG_CODE
@@ -317,14 +335,14 @@ graph TD;
     AG_BASE -.-> COMPENSE
   end
 
-  %% === Memory Integrity ===
-  subgraph GCP Managed Memory Architecture
-    MCM["Memory Consistency Manager (MCM)"]
-    RED["Memorystore (Redis Cluster)"]
-    PG["Cloud SQL (PostgreSQL 15)"]
-    NEO["Neo4j (Knowledge Graph)"]
-    VEC["FAISS/Vector DB (Semantic)"]
-    VPC["VPC Connector (Isolation)"]
+  %% === GCP Memory & Consistency ===
+  subgraph GCP Managed Memory
+    MCM["Memory Consistency Manager"]
+    RED["Memorystore (Episodic)"]
+    PG["Cloud SQL (Factual)"]
+    NEO["Neo4j (Relational)"]
+    VEC["Vector DB (Semantic)"]
+    VPC["VPC Connector"]
     
     AG_BASE --> MCM
     MCM --"[tcp/resp]"--> RED
@@ -363,6 +381,7 @@ The application is decomposed into specialized domains for isolation and perform
 - `/api/v1/learning`: Evolved intelligence engine and fragility tracking.
 - `/api/v1/telemetry`: SSE pulse broadcaster for real-time dashboard updates.
 - `/api/v1/compliance`: GDPR Hard-Delete and immutable audit log exports.
+- `/api/v1/voice`: **Sovereign Voice Stack** gateway (STT/TTS/Streaming).
 
 ### 6.2 Security Middleware Stack
 1. **`RS256 Identity Middleware`**: Mandates asymmetric cryptographic verification of JWTs using the project's Public Key.
@@ -744,6 +763,8 @@ The LEVI-AI system is automated for one-click deployment to Google Cloud.
 | `/api/v1/missions/replay/{id}` | GET | Triggers deterministic replay of a previous mission. |
 | `/metrics` | GET | Exposes Prometheus telemetry for system monitoring. |
 | `/healthz` | GET | Root health-check for infrastructure readiness. |
+| `/api/v1/voice/command` | POST | Processes audio file -> mission -> audio response. |
+| `/api/v1/voice/stream` | WS | Real-time WebSocket audio streaming gateway. |
 
 #### 11.1 Replay Determinism
 Missions are rendered deterministic during replay by:

@@ -113,6 +113,27 @@ class GraphExecutor:
         ceiling = CU_ABORT_THRESHOLD
         warning_threshold = ceiling * CU_WARNING_PERCENT
         
+        # 🛡️ Phase 2: Predictive CU Costing (Warn then Block)
+        estimated_total_cu = graph.estimate_graph_cost()
+        logger.info(f"📊 [Phase 2] Mission Cost Prediction: {estimated_total_cu:.1f} CU (Ceiling: {ceiling} CU)")
+        
+        if estimated_total_cu > ceiling:
+            severity = "CRITICAL" if estimated_total_cu > (ceiling * 1.5) else "WARNING"
+            logger.warning(f"⚠️ [Phase 2] Prediction Violation: {estimated_total_cu:.1f} CU exceeds {ceiling} CU limit. Status: {severity}")
+            
+            broadcast_mission_event(user_id, "cost_prediction_alert", {
+                "estimated": estimated_total_cu,
+                "ceiling": ceiling,
+                "severity": severity
+            })
+            
+            # Policy: "First warn then block"
+            # If critical (e.g. 50% over limit), we block immediately. Otherwise, we warn.
+            if severity == "CRITICAL":
+                logger.error(f"🚫 [Phase 2] Mission BLOCKED: Predicted cost {estimated_total_cu:.1f} CU is too high.")
+                MISSION_ABORTED.inc()
+                return []
+        
         # Monitor Semaphore (v13.1 / Telemetry Bridge)
         GPU_SEMAPHORE_AVAILABLE.set(GLOBAL_GPU_SEMAPHORE._value)
 
@@ -241,17 +262,24 @@ class GraphExecutor:
             "__node_metadata__": node.metadata
         }
         
-        # 🛠️ Adaptive Backpressure: Mental Compression (v13.2)
-        model_tier = getattr(node, 'tier', "L2")
-        vram_needed = GLOBAL_VRAM_GUARD.get_vram_requirement(model_tier)
+        # 🛠️ Adaptive Backpressure: Multi-Tier Degradation (v14.1.0)
+        requested_tier = getattr(node, 'tier', "L3" if agent_name in ["code_agent", "research_agent"] else "L2")
+        target_tier = await GLOBAL_VRAM_GUARD.get_recommended_tier(requested_tier)
         
-        # If GPU pool is saturated, we attempt 'Mental Compression' for non-critical nodes.
-        if GLOBAL_VRAM_POOL and GLOBAL_VRAM_POOL.available_mb < vram_needed and not getattr(node, 'critical', False):
-             logger.warning(f"🔋 [Backpressure] GPU Saturated for tier {model_tier}. Triggering Mental Compression for {node.id}")
-             agent_name = "mental_compressor"
-             merged_params["original_agent"] = node.agent
-             merged_params["reason"] = "resource_exhaustion"
-             vram_needed = GLOBAL_VRAM_GUARD.get_vram_requirement("L1") # 4GB for compressor
+        if target_tier != requested_tier:
+             logger.warning(f"🔋 [Backpressure] Degrading {node.id}: {requested_tier} -> {target_tier}")
+             if target_tier == "MENTAL_COMPRESSION":
+                 agent_name = "mental_compressor"
+                 merged_params["original_agent"] = node.agent
+                 merged_params["reason"] = "resource_saturation"
+             else:
+                 # Pass the downgraded tier to the agent/LLM config
+                 merged_params["forced_model_tier"] = target_tier
+                 merged_params["reason"] = "vram_backpressure"
+             
+             vram_needed = GLOBAL_VRAM_GUARD.get_vram_requirement(target_tier if target_tier != "MENTAL_COMPRESSION" else "L1")
+        else:
+             vram_needed = GLOBAL_VRAM_GUARD.get_vram_requirement(requested_tier)
         
         try:
             # 1.5. HITL: Human Approval Gate (v13.0)

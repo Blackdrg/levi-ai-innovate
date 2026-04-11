@@ -17,6 +17,7 @@ class TaskNode(BaseModel):
     dependencies: List[str] = Field(default_factory=list) # IDs of parent tasks
     critical: bool = True
     retry_count: int = 2
+    estimated_cu: float = 0.0 # Phase 2: Predictive Costing
     metadata: Dict[str, Any] = Field(default_factory=dict) # Swarm context, mood, etc.
 
 class TaskGraph(BaseModel):
@@ -41,6 +42,34 @@ class TaskGraph(BaseModel):
 
     def mark_complete(self, node_id: str, result: ToolResult):
         self.results[node_id] = result
+
+    def estimate_graph_cost(self) -> float:
+        """
+        Sovereign v14.1.0: Predictive CU Costing.
+        Calculates the total estimated Compute Units for the DAG.
+        """
+        AGENT_WEIGHTS = {
+            "search_agent": 2.0,
+            "research_agent": 3.0,
+            "code_agent": 5.0,
+            "python_repl_agent": 2.0,
+            "document_agent": 3.0,
+            "image_agent": 10.0,
+            "video_agent": 50.0,
+            "critic_agent": 1.0,
+            "consensus_agent": 1.0,
+            "chat_agent": 1.0,
+            "mental_compressor": 0.5
+        }
+        total = 0.0
+        for node in self.nodes:
+            # Base cost from agent type
+            weight = AGENT_WEIGHTS.get(node.agent, 1.0)
+            # Adjust for retries and criticality
+            node_estimate = weight * (1 + (node.retry_count * 0.5))
+            node.estimated_cu = node_estimate
+            total += node_estimate
+        return total
 
     def validate_dag(self):
         """
