@@ -687,5 +687,112 @@ It is currently at **RC1 (Release Candidate)** state based on the **v14.2.0** co
 
 The `v14.2.0` codebase has officially cleared its final P1 hardening pass. All infrastructure, accessibility, and build-level blockers have been resolved. The system is certified for deployment into sovereign high-fidelity environments.
 
+# 24. 🛡️ OPERATIONAL & PRODUCTION GUARANTEE LAYER
+
+## 24.1 Service Level Objectives (SLO)
+
+| Metric | Target |
+| :--- | :--- |
+| Mission Success Rate | >= 97% |
+| P95 Latency | <= 15s |
+| System Uptime | >= 99.5% |
+| Agent Failure Recovery | <= 3 retries |
+
+---
+
+## 24.2 Resource & Cost Model
+
+| Resource | Consumption Model |
+| :--- | :--- |
+| LLM Inference | Token-based (per DAG node) |
+| VRAM Usage | Wave-parallel bounded (0.85 threshold) |
+| Memory Storage | Tiered (Redis hot, SQL persistent, Vector compressed) |
+
+**Estimated Cost per Mission**:
+- FAST: Low (single-pass DAG)
+- DEEP: High (multi-pass + RAFT consensus)
+
+---
+
+## 24.3 Security Threat Model
+
+### Attack Surfaces
+- Prompt Injection via user input
+- Malicious tool execution in Artisan agents
+- SSRF attempts via Scout agent
+
+### Mitigations
+- Strict SSRF filtering and domain allowlists
+- Docker sandbox with CAP_DROP and RO mounts
+- TEC validation and Critic verification layer
+
+---
+
+## 24.4 Data Lifecycle & Retention
+
+| Data Type | Retention Policy |
+| :--- | :--- |
+| Mission Logs | 30 days |
+| Memory (SQL) | Persistent |
+| Vector Embeddings | Re-indexed periodically |
+| Redis Streams | TTL-based eviction |
+
+---
+
+## 24.5 Failure Blast Radius Analysis
+
+| Failure | Impact Scope |
+| :--- | :--- |
+| Redis Failure | Mission state loss (critical) |
+| LLM Timeout | DAG fallback to heuristic mode |
+| Agent Crash | Isolated to node, retry triggered |
+| DCN Partition | Node enters isolation mode |
+
+---
+
+## 24.6 Cognitive Limitations
+
+- Confidence scoring is heuristic and not probabilistic.
+- Memory recall does not guarantee factual correctness.
+- LLM reasoning may degrade under high-context or ambiguous queries.
+- Autonomous learning is bounded by deterministic rule graduation (no self-modifying code).
+
+---
+
+## 24.7 Multi-Tenancy & Isolation
+
+- User memory is namespace-isolated via `user_id` partitioning.
+- No cross-user memory sharing without explicit federation rules.
+- Rate limiting enforced per-user and per-IP.
+
+---
+
+## 24.8 Benchmarking & Comparative Analysis
+
+| System | Comparison |
+| :--- | :--- |
+| Single LLM | LEVI provides structured multi-step reasoning |
+| LangGraph | LEVI adds memory tiers + agent contracts |
+| AutoGPT | LEVI is deterministic and DAG-governed |
+
+---
+
+## 24.9 Upgrade & Migration Strategy
+
+- Schema versioning enforced via migration scripts.
+- Memory projections are backward-compatible via MCM adapters.
+- Rolling deployments use Blue/Green strategy with rollback support.
+
+---
+
+## 24.10 Safe Usage Boundaries
+
+LEVI-AI is **NOT recommended** for:
+- Real-time life-critical decision systems
+- Unverified financial execution without human-in-the-loop
+- Autonomous weaponization or unrestricted system control
+
+Human oversight is required for all high-risk missions.
+
 ---
 **LEVI-AI Team | 🛰️ Sovereign AI Excellence**
