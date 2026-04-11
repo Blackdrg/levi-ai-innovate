@@ -18,13 +18,17 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 logger = logging.getLogger(__name__)
 
 def setup_tracing(app: Optional[Any] = None) -> trace.Tracer:
-    """Configures the global TracerProvider and instruments the FastAPI app."""
-    service_name = os.getenv("OTEL_SERVICE_NAME", "levi-backend")
+    """
+    Sovereign v14.2.0: OpenTelemetry Tracer Configuration.
+    Establishes distributed tracing for high-fidelity cognitive audit.
+    """
+    service_name = os.getenv("OTEL_SERVICE_NAME", "levi-ai-sovereign")
     otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
 
-    resource = Resource(attributes={
-        SERVICE_NAME: service_name,
-        "version": "v14.0.0-Autonomous"
+    resource = Resource.create(attributes={
+        "service.name": service_name,
+        "service.version": "14.2.0",
+        "deployment.environment": os.getenv("ENVIRONMENT", "production")
     })
 
     provider = TracerProvider(resource=resource)
@@ -32,22 +36,29 @@ def setup_tracing(app: Optional[Any] = None) -> trace.Tracer:
     try:
         if not isinstance(trace.get_tracer_provider(), TracerProvider):
             trace.set_tracer_provider(provider)
+        
         provider = trace.get_tracer_provider()
+        
         if otlp_endpoint:
+            from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
             span_processor = BatchSpanProcessor(OTLPSpanExporter(endpoint=otlp_endpoint))
             provider.add_span_processor(span_processor)
             logger.info("[Tracing] OpenTelemetry initialized. Exporting to %s", otlp_endpoint)
         else:
-            logger.info("[Tracing] OpenTelemetry initialized without remote exporter.")
+            from opentelemetry.sdk.trace.export import ConsoleSpanExporter
+            processor = BatchSpanProcessor(ConsoleSpanExporter())
+            provider.add_span_processor(processor)
+            logger.info("[Tracing] OpenTelemetry initialized with ConsoleExporter (Baseline).")
 
         if app:
             FastAPIInstrumentor.instrument_app(app)
             logger.info("[Tracing] FastAPI instrumentation active.")
             
     except Exception as e:
-        logger.warning("[Tracing] Failed to initialize OTLP exporter: %s. Defaulting to local tracer.", e)
+        logger.warning("[Tracing] OTEL init anomaly: %s. Continuing with default tracer.", e)
         
-    return trace.get_tracer(__name__)
+    return trace.get_tracer("levi.sovereign")
+
 
 # Global Tracer
 tracer = trace.get_tracer("levi.sovereign")

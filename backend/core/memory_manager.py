@@ -26,7 +26,8 @@ from backend.db.redis import r as redis_client, HAS_REDIS
 from backend.db.postgres import PostgresDB
 from backend.db.models import Mission, Message, UserFact, UserProfile, UserTrait, UserPreference, MissionMetric, CreationJob
 from backend.services.learning.logic import UserPreferenceModel
-from backend.api.v8.telemetry import broadcast_mission_event
+from backend.api.telemetry import broadcast_mission_event
+
 
 # Internal v8 Cognitive Modules
 from backend.memory.cache import MemoryCache
@@ -50,14 +51,15 @@ class MemoryManager:
     async def initialize(self) -> None:
         """Initialize memory tiers and connections."""
         logger.info("[MemoryV8] Initializing Sovereign Memory Engine tiers...")
-        # Add any async init logic for DAOs/Clients here if needed
-        pass
+        from backend.services.mcm import mcm_service
+        await mcm_service.start()
 
     async def shutdown(self) -> None:
         """Graceful teardown of memory tiers."""
         logger.info("[MemoryV8] Shutting down memory tiers...")
-        # Add any async cleanup logic here
-        pass
+        from backend.services.mcm import mcm_service
+        await mcm_service.stop()
+
 
     # ── Tier 1/2: Short-term & Episodic Retrieval ───────────────────────────
 
@@ -216,6 +218,15 @@ class MemoryManager:
         
         # 1. Tier 1 Update (Working Pulse)
         await self._store_working_memory(user_id, session_id, user_input, response)
+        
+        # 2. Emit Consistency Event (Redis Stream)
+        from backend.services.mcm import mcm_service
+        await mcm_service.emit_event("interaction", user_id, session_id, {
+            "input": user_input,
+            "response": response,
+            "fidelity": fidelity
+        })
+
         
         # 2. Tier 3/4 Extraction (Semantic & Evolution)
         if user_id and not str(user_id).startswith("guest:"):

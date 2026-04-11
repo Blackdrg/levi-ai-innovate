@@ -50,19 +50,22 @@ class SlidingWindowRateLimiter:
             
             results = await pipe.execute()
             
-            # 🌐 Phase 3: Global Quota Sync (If near limit, gossip to other regions)
+            # 🌐 Phase 4: Global Quota Sync (If near limit, gossip to other regions)
             if results[6] > (tier_config["rpd"] * 0.8):
                 from backend.utils.global_gossip import global_swarm_bridge
                 await global_swarm_bridge.initialize()
-                await global_swarm_bridge.publisher.publish(
-                    global_swarm_bridge.topic_path,
-                    json.dumps({
-                        "fragment_id": f"quota-{user_id}",
-                        "fidelity_s": 0.99,
-                        "payload": {"type": "quota_alert", "user_id": user_id, "consumed": results[6]},
-                        "is_global": True
-                    }).encode()
-                )
+                if global_swarm_bridge.publisher:
+                    global_swarm_bridge.publisher.publish(
+                        global_swarm_bridge.topic_path,
+                        json.dumps({
+                            "type": "QUOTA_ALERT",
+                            "user_id": user_id,
+                            "consumed": results[6],
+                            "source_region": os.getenv("GCP_REGION", "global"),
+                            "is_global": True
+                        }).encode("utf-8")
+                    )
+
 
             if results[2] > tier_config["rpm"] or results[6] > tier_config["rpd"]:
                 return False
