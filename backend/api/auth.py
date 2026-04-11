@@ -12,10 +12,37 @@ from fastapi import APIRouter, Depends, Response
 from backend.utils.exceptions import LEVIException
 from backend.services.auth.logic import get_current_user
 
+from backend.auth.jwt_provider import JWTProvider
+from backend.services.auth.logic import get_current_user
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="", tags=["Auth"])
 
-@router.get("/users/me")
+@router.post("/identify")
+async def identify_handshake(payload: dict):
+    """
+    Sovereign v14.2.0: Asymmetric Handshake.
+    Resolves identity and returns a secure RS256 token.
+    """
+    user_id = payload.get("uid") or "guest"
+    # Logic to verify user (e.g., via Firebase or DB)
+    
+    token = JWTProvider.create_token({"sub": user_id, "role": "user"})
+    return {
+        "status": "success",
+        "identity_token": token,
+        "handshake_timestamp": datetime.utcnow().isoformat()
+    }
+
+@router.post("/refresh")
+async def refresh_token(current_user: dict = Depends(get_current_user)):
+    """
+    Renews the cosmic session.
+    """
+    user_id = current_user.get("uid") or current_user.get("id")
+    new_token = JWTProvider.create_token({"sub": user_id, "role": current_user.get("role", "user")})
+    return {"status": "success", "token": new_token}
+
 @router.get("/me")
 async def get_me(current_user: dict = Depends(get_current_user)):
     """

@@ -66,6 +66,34 @@ class TaskGraph(BaseModel):
                 self.results[node_id] = result
                 break
 
+    def estimate_cost(self) -> float:
+        """
+        Sovereign v14.2.0: Predictive CU (Compute Unit) Solver.
+        Calculates total complexity weight for billing and resource allocation.
+        """
+        AGENT_WEIGHTS = {
+            "search_agent": 2.0,
+            "browser_agent": 4.0,
+            "code_agent": 5.0,
+            "python_repl_agent": 3.0,
+            "image_agent": 10.0,
+            "video_agent": 50.0,
+            "chat_agent": 1.0,
+            "critic_agent": 1.5,
+            "consensus_agent": 1.2,
+            "relation_agent": 2.5
+        }
+        total = 0.0
+        for node in self.nodes:
+            weight = AGENT_WEIGHTS.get(node.agent, 1.0)
+            # Complexity scales with retries and criticality
+            node_cost = weight * (1 + (node.retry_count * 0.2))
+            if node.critical:
+                node_cost *= 1.2
+            total += node_cost
+        
+        return round(total, 2)
+
     def is_complete(self) -> bool:
         """Returns True if all nodes have results."""
         return all(n.result is not None for n in self.nodes)

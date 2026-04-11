@@ -12,120 +12,65 @@ from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from backend.auth import SovereignAuth, UserIdentity
-from backend.core.orchestrator import orchestrator as brain
+from backend.auth import get_current_user
+from backend.main import orchestrator as brain
 
-async def handle_chat(user_input, user_id, session_id=None, tier='free'):
-    """v14.0: Unified cognitive execution pass."""
-    result = await brain.run(
-        user_input=user_input, 
-        user_id=user_id,
-        session_id=session_id
-    )
-    return result
+logger = logging.getLogger(__name__)
+router = APIRouter(prefix="", tags=["Sovereign Orchestration"])
 
-async def stream_chat(user_input, user_id, session_id=None, tier='free'):
-    """v14.0: Token-by-token cognitive streaming."""
-    yield {"type": "activity", "data": "Synchronizing Sovereignty..."}
+class MissionRequest(BaseModel):
+    message: str = Field(..., description="Mission objective")
+    mode: str = "AUTONOMOUS"
+
+@router.post("/mission")
+async def create_cognitive_mission(
+    request: MissionRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Sovereign v14.2.0: Strategic Mission Initialization.
+    Dispatches a vision to the Brain and begins the DAG wave.
+    """
+    user_id = current_user.get("uid") or current_user.get("id")
+    logger.info(f"[Orchestrator] Strategic mission started for {user_id}")
     
-    async for chunk in brain.stream(
-        user_id=user_id,
-        user_input=user_input,
-        session_id=session_id
-    ):
-        if "token" in chunk:
-            yield {"type": "token", "data": chunk["token"]}
-        elif "event" in chunk:
-            yield {"type": "activity", "data": chunk.get("data") or f"Mission Pulse: {chunk['event']}"}
+    try:
+        mission = await brain.create_mission(
+            user_id=user_id,
+            objective=request.message,
+            mode=request.mode
+        )
+        return mission
+    except Exception as e:
+        logger.error(f"[Orchestrator] Creation failure: {e}")
+        raise HTTPException(status_code=500, detail="The cosmic brain encountered an creation anomaly.")
 
+@router.get("/mission/{mission_id}")
+async def get_mission_status(
+    mission_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Returns the current state and checkpoint of a mission."""
+    user_id = current_user.get("uid") or current_user.get("id")
+    mission = await brain.get_mission(mission_id, user_id)
+    if not mission:
+        raise HTTPException(status_code=404, detail="Mission not found in the manifest.")
+    return mission
 
-class ChatRequest(BaseModel):
-    message: str = Field(..., description="User's query")
-    session_id: Optional[str] = None
-    mood: str = "philosophical"
-
-async def get_sovereign_identity(request: Request) -> UserIdentity:
-    """Dependency to extract and verify the Sovereign Identity pulse."""
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        # Default to guest identity for open-access endpoints
-        return UserIdentity(user_id=f"guest_{request.client.host if request.client else 'local'}")
-    
-    token = auth_header.split(" ")[1]
-    identity = SovereignAuth.verify_token(token)
-    if not identity:
-        raise HTTPException(status_code=401, detail="Sovereign Identity verification failed.")
-    return identity
+@router.delete("/mission/{mission_id}")
+async def cancel_mission(
+    mission_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Inhibits an in-flight mission wave."""
+    user_id = current_user.get("uid") or current_user.get("id")
+    await brain.cancel_mission(mission_id, user_id)
+    return {"status": "inhibited", "mission_id": mission_id}
 
 @router.post("/chat")
-async def orchestrate_vision(
-    request: ChatRequest,
-    identity: UserIdentity = Depends(get_sovereign_identity)
+async def chat_legacy_bridge(
+    request: MissionRequest,
+    current_user: dict = Depends(get_current_user)
 ):
-    """
-    Standard AI mission (Blocking).
-    Dispatches the vision to the Brain and awaits the final synthesis.
-    """
-    logger.info(f"[Gateway] Strategic mission started for {identity.user_id}")
-    
-    # Injection & PII protection at the edge
-    if SovereignSecurity.detect_injection(request.message):
-        raise HTTPException(status_code=400, detail="Neural protocol violation detected.")
-
-    try:
-        # We bridge to the production LeviBrain engine (v14.0)
-        res = await brain.run(
-            user_id=identity.user_id,
-            user_input=request.message,
-            session_id=request.session_id,
-            mood=request.mood
-        )
-        
-        return {
-            "response": res.get("response", ""),
-            "intent": res.get("intent", "chat"),
-            "session_id": request.session_id or str(asyncio.get_event_loop().time()),
-            "status": "success",
-            "metadata": res.get("decision", {})
-        }
-    except Exception as e:
-        logger.error(f"[Gateway] Orchestration failure: {e}")
-        return {"status": "error", "message": "The cosmic brain encountered an anomaly."}
-
-@router.post("/chat/stream")
-async def orchestrate_stream(
-    request: ChatRequest,
-    identity: UserIdentity = Depends(get_sovereign_identity)
-):
-    """
-    Streaming AI mission (SSE).
-    Real-time neural synthesis with activity pulses.
-    """
-    logger.info(f"[Gateway] Streaming mission started for {identity.user_id}")
-
-    async def _brain_stream():
-        # 1. Identity Pulse
-        yield f"event: activity\ndata: {json.dumps('Sovereign Orchestration Active')}\n\n"
-        
-        try:
-            # 2. Engage the production LeviBrain mission stream (v14.0)
-            async for chunk in brain.stream(
-                user_id=identity.user_id,
-                user_input=request.message,
-                session_id=request.session_id,
-                mood=request.mood
-            ):
-                # Standardized v7 SSE Protocol
-                if "token" in chunk:
-                    yield f"event: choice\ndata: {json.dumps(chunk['token'])}\n\n"
-                elif "event" in chunk:
-                    yield f"event: {chunk['event']}\ndata: {json.dumps(chunk['data'])}\n\n"
-            
-            # 3. Finalization pulse
-            yield f"event: done\ndata: {json.dumps('[MISSION_COMPLETE]')}\n\n"
-            
-        except Exception as e:
-            logger.error(f"[Gateway] Streaming failure: {e}")
-            yield f"event: error\ndata: {json.dumps('Cosmic synchronization failed.')}\n\n"
-
-    return StreamingResponse(_brain_stream(), media_type="text/event-stream")
+    """Legacy bridge for simple chat interface (Phase 6 compatible)."""
+    return await create_cognitive_mission(request, current_user)

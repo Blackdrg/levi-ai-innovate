@@ -52,12 +52,13 @@ class BrainService:
     async def analyze_intent(self, query: str, context: Optional[Dict[str, Any]] = None) -> IntentResult:
         """Deep intent classification wrapper."""
         from backend.core.perception import PerceptionEngine
-        from backend.memory.manager import MemoryManager
+        from backend.core.memory_manager import MemoryManager
         
         # We use a temporary memory manager for perception if not provided
         perception_engine = PerceptionEngine(MemoryManager())
         perception = await perception_engine.perceive(query, "system", "brain_service_analysis")
         return perception["intent"]
+
 
     async def compute_scores(self, query: str, intent: IntentResult) -> DecisionScores:
         """Computes granular scores for policy decision."""

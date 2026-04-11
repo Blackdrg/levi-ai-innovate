@@ -1,47 +1,62 @@
-# LEVI-AI Sovereign OS (v14.2.0-Production-HARDENED)
+LEVI-AI is a high-fidelity, predictable, and failure-isolated distributed AI operating system. It transforms complex autonomous reasoning into a controlled cognitive pipeline, enabling deterministic execution of mission-critical tasks through a Sovereign Task Graph (DAG).
 
-LEVI-AI is a high-fidelity, predictable, and failure-isolated distributed AI operating system. It transforms complex autonomous reasoning into a controlled cognitive pipeline, enabling deterministic execution of mission-critical tasks through a Sovereign Task Graph (DAG). Now fully transitioned to a **Production-Hardened GCP Infrastructure**.
+## 🚧 Reality Check
+
+LEVI-AI v14.2 is currently:
+- **Architecture**: 90% complete ✅
+- **Implementation**: ~35% ⚠️
+- **Production Ready**: ❌ No
+
+This repository represents a high-fidelity system design that is under active development toward full production deployment.
+
+## 🟢 Current System Status (Truth Layer)
+
+| Component        | Status        |
+|-----------------|--------------|
+| API Gateway      | ❌ Architecture Only |
+| Orchestrator     | ⚠️ Partial (Core logic only) |
+| Memory System    | ❌ Development-Lite |
+| Agents           | ❌ Stubs / Minimal implementation |
+| Voice Stack      | ❌ Research Phase |
+| Infrastructure   | ⚠️ Partial (Terraform scripts) |
 
 ---
 
-## 1. Overview
+## 1. Quick Start (Development Node)
 
-The active v14 runtime now inserts a mandatory **Reasoning Core** between planning and execution. Every mission passes through a weighted **Confidence Gate** (Threshold $C \ge 0.55$) before proceeding to the **Graph Executor**. The process includes critique, DAG simulation, and autonomous refinement.
+### 1.1 Prerequisites
+- **Hardware**: NVIDIA GPU (8GB+ VRAM recommended).
+- **Environment**: Linux/WSL2 or Docker.
+- **Tools**: Docker, Python 3.10+, Node.js 18+.
 
-LEVI-AI is designed as a **Cognitive Operating System** that manages the lifecycle of AI missions—from intent classification and goal generation to parallelized agent execution and multi-tier memory synchronization. It addresses the inherent unpredictability of large language models by enforcing strict execution contracts, centralized state tracking, and a unified memory consistency layer.
+### 1.2 Command Sequence
+```bash
+# 1. Clone & Init
+git clone https://github.com/Blackdrg/levi-ai-innovate && cd levi-ai-innovate
 
-### Core Philosophy
+# 2. Start Dependent Services
+docker-compose up -d redis postgres neo4j
 
-- **Local-First**: Prioritizes local inference (Ollama) for privacy and zero-cost logic.
-- **Deterministic**: Every action is planned in a DAG before execution begins.
-- **Sovereign**: Absolute control over data, memory, and model routing.
-- **Distributed**: Built for high-availability across multiple cognitive nodes (DCN).
+# 3. Setup Backend
+pip install -r requirements.txt
+python -m backend.main
 
-The LEVI-AI **v14.2.0-Production-HARDENED** system has officially graduated to **100% Production-Stable (GCP Master Certified)**.
+# 4. Setup Frontend
+cd frontend && npm install && npm run dev
+```
 
-`Gateway -> Fast-Path -> Orchestrator -> Goal -> Planner -> Reasoning -> Executor -> Agents -> Memory -> Response`
+## 2. Environment Configuration
+Create a `.env` file in the root with the following variables:
+```env
+GCP_PROJECT_ID=your-project
+REDIS_HOST=localhost
+POSTGRES_USER=levi
+NEO4J_URI=bolt://localhost:7687
+OLLAMA_BASE_URL=http://localhost:11434
+TAVILY_API_KEY=your-key
+```
 
-**Verification Proof (Graduation Finalized 2026-04-10):**
-
-- **Security Hardening**: Verified **RS256 Asymmetric Identity Auth**, **SSRF & DNS-Rebinding Shield**, and **mTLS 1.3** service-to-service communication.
-- **Privacy Compliance**: Verified **GDPR Absolute Purge** (Physical erasure across FAISS, Neo4j, Redis, Firestore, and Postgres).
-- **DCN Resonance**: Verified **Raft-lite Consensus** for Mission Truth and quorum-based leader election failover.
-- **Infrastructure Hardening**: Transitioned to **GCP Cloud Run** with **Cloud SQL (PostgreSQL 15)**, **Memorystore (Redis 6.x)**, and **Cloud Tasks** for mission-critical queuing.
-- **Economical Governance**: Integrated **Global Billing Enforcement** (Simplicity: 1.0 CU, Autonomous: 5.0 CU) with automatic **80% Partial Refunds** for system-level mission failures (F-3).
-- **Chaos Resilience**: Integrated **CompensationCoordinator** for LIFO rollbacks of mission side-effects (Rollback Engine 100% active).
-- **Graduation Score**: System health metric `system_graduation_score` verified at **1.0 (Audit-Stable)** on GCP Production tier.
-
-Recently Closed (v14.2 Production Hardening & Consolidation):
-- **Repository Standardized**: Consolidated `requirements.txt` and `alembic` to the project root for unified production management.
-- **GCP Migration**: Full stack migration to Cloud Run with native VPC connector for secure backend communication.
-- **Consolidated FastAPI Gateway**: Overhauled `main.py` with `SSRF`, `RateLimit`, and `SovereignShield` production middleware.
-- **Unified Telemetry Stream**: Implemented global SSE resonance broadcaster for real-time frontend synchronized pulse.
-- **Orchestrator Alignment**: Integrated `DCNGossip` lifecycle and mission telemetry directly into the gateway entry point.
-- **Frontend Build Stability**: Fixed dependency conflicts and export mismatches (API_BASE) for reliable production builds.
-- **Observability Layer**: Integrated Prometheus & Grafana for real-time cognitive and hardware telemetry.
-- **Asymmetric Auth Wall**: Full migration to **RS256 JWT** signatures with dynamic key rotation completed.
-- **Graduation Score**: System stability baseline verified at **1.0 (Audit-Stable)** across 200+ edge-case mission scenarios ($GS = 1.0 \iff \forall Test_{i} \in AuditSuite, Result_{i} = Pass$).
-- **Sovereign Voice Stack (Phase 1)**: Integrated local Whisper STT and Coqui TTS for 100% private, voice-first cognitive missions.
+---
 
 
 ---
@@ -87,7 +102,45 @@ The LEVI-AI OS interface is a hyper-modern, high-performance Frontend layer buil
 
 ---
 
-## 2. GCP Production Infrastructure
+## 3. Backend Technical Architecture
+
+The LEVI-AI backend is a high-performance cognitive gateway built on FastAPI. It orchestrates the mission lifecycle from intent classification to distributed host-agent execution.
+
+### ⚙️ Core Engines
+- **FastAPI Gateway**: Entry point for all mobile, voice, and web clients.
+- **Orchestrator Service**: The "State Authority" tracking mission progress.
+- **Planner Service**: Decomposes user intent into a Sovereign Task Graph (DAG).
+- **Executor Service**: Parallelizes agent waves across the DCN.
+- **Memory Service**: Synchronizes the 4-tier cognitive memory layers.
+
+### 🛡️ Middleware Stack
+1. **PrometheusMiddleware**: Tracks latency and CU costs at the edge.
+2. **RateLimitMiddleware**: Tiered sliding window enforcement (Redis-backed).
+3. **SSRFMiddleware**: Egress protection via precision CIDR blocking and pre-request DNS resolution.
+4. **SovereignShieldMiddleware**: RBAC and asymmetric JWT verification.
+
+---
+
+## 4. Frontend: Cybernetic Dashboard
+
+The LEVI-AI frontend is a hyper-modern React 18 application designed for real-time mission observability. It utilizes a centralized Zustand store for managing cognitive telemetry and mission states.
+
+### 🎨 Data Flow
+`User Input → UI Component → API Client → Backend → SSE Updates → UI Refresh`
+
+### 📂 Component Hierarchy
+- **`App`**: Root Entry & Auth Router.
+- **`Layout`**: Navigation & DCN Health Sidebar.
+- **`Dashboard`**: High-level mission grid and hardware monitors.
+- **`MissionStudio`**: DAG generation and configuration center.
+- **`GraphInterface`**: ReactFlow-based execution visualizer.
+- **`TelemetryMonitor`**: Real-time Prometheus/SSE data feeds.
+
+### 🛡️ Auth Flow & State
+- **Auth**: `login.html` → POST `/api/v1/auth/session` → Token stored in `localStorage` → Axios Interceptor injects `Authorization` header.
+- **State**: `useChatStore` manages the mission history, active DAG, and real-time pulse.
+
+---
 
 LEVI-AI is deployed on a highly available, managed Google Cloud platform. This infrastructure ensures the system's "Sovereign" state across distributed nodes with enterprise-grade reliability.
 
@@ -136,30 +189,54 @@ The execution graph is rendered dynamically from the `frozen_dag` stored in the 
 
 ---
 
-## 4. Database Architecture & Schema
+## 5. Database & Cognitive Persistence
 
-LEVI-AI utilizes a multi-tier persistence model to balance real-time responsiveness with long-term semantic knowledge.
+LEVI-AI utilizes a multi-engine persistence strategy to balance relational integrity with semantic discovery and episodic speed.
 
-### 4.1 SQL Fabric (PostgreSQL 15)
-The primary relational store for immutable missions, identity, and compliance.
+### 🗄️ Relational Schema (PostgreSQL 15)
+The PostgreSQL instance acts as the absolute source of truth for missions, identity, and compliance.
 
-| Table | Purpose | Key Features |
-| :--- | :--- | :--- |
-| **`user_profiles`** | Identity Archetypes | Multi-tenant scoped, Trait-crystallization relationship. |
-| **`missions`** | Primary Mission Ledger | Tracks `fidelity_score`, `objective`, and `status`. |
-| **`audit_log`** | Compliance Registry | **Partitioned by Month**, Cryptographically chained SHA-256 integrity. |
-| **`graduated_rules`** | Evolution Store | Stores high-fidelity patterns promoted to fast-path logic. |
-| **`training_corpus`** | Learning Signal | Captures inputs for future LoRA fine-tuning and culling. |
-| **`user_credits`** | Economic Ledger | Tracks CU balances and subscription tier limits. |
+### 🧠 Cognitive Persistence Layers
+- **Tier 1 (Episodic)**: [Redis] 7-day rolling interaction buffer.
+- **Tier 2 (Factual)**: [PostgreSQL] Immutable mission history.
+- **Tier 3 (Relational)**: [Neo4j] Knowledge graph of semantic triples (User->Knows->Entity).
+- **Tier 4 (Identity)**: [FAISS/Vector Store] Distributed vector memory for similarity RAG.
 
-### 4.2 Cognitive Storage Tiers
-- **Tier 1 (Episodic)**: [Redis/Memorystore] 7-day rolling window for rapid context retrieval.
-- **Tier 2 (Factual)**: [PostgreSQL] Immutable factual history of user interactions.
-- **Tier 3 (Relational)**: [Neo4j] Knowledge graph tracking entities and semantic triples.
-- **Tier 4 (Semantic)**: [FAISS/Vector DB] Distributed vector memory for similarity retrieval and RAG.
+### 🔄 Lifecycle & Migrations
+- **Alembic**: Relational migrations are managed via Alembic (`alembic upgrade head`).
+- **Data Lifecycle**: Audit logs are partitioned monthly. GDPR deletions trigger a "Multi-Tier Sovereign Wipe" that physically erases data across all 4 tiers.
 
-### 4.3 Resilience Layer (`missions_aborted`)
-The `missions_aborted` table stores the `frozen_dag` (full serialized graph state) and the `wave_index` of transient failures. This allows the system to perform deterministic restarts from the exact failure point without re-executing successful upstream nodes.
+---
+
+## 6. Infrastructure: Global Sovereign Network
+
+LEVI-AI utilizes a globally diversified, serverless-first infrastructure on GCP. The design prioritizes 100% data sovereignty and high availability.
+
+### 🏗️ Managed Services Stack
+- **[Cloud Run]**: Primary backend gateway and background mission executors.
+- **[Cloud SQL (PG 15)]**: Factual truth layer and user identity store.
+- **[Memorystore (Redis 6.x)]**: Episodic memory and real-time mission state.
+- **[Cloud Tasks]**: Wave scheduling and background task orchestration.
+- **[Cloud Armor]**: WAF protection against SQLi, DDoS, and SSRF.
+
+---
+
+## 7. Test Suite & Verification
+
+LEVI-AI utilizes a multi-tier testing strategy to ensure 100% system integrity and production stability.
+
+### 🧪 Test Categories
+- **Unit Tests**: Standard logic verification for core engines and utilities.
+- **Integration Tests**: End-to-end mission flows from API Gateway to Agent Swarm.
+- **Chaos Tests**: Verifies DCN resilience during node failure and network partitions.
+- **Load Tests**: Validates system performance under extreme mission volume.
+- **graduation_audit**: High-fidelity graduation suite for production-readiness sign-off.
+
+### 🚀 Execution Commands
+```bash
+pytest tests/                    # Full Test Suite
+python tests/v14_production_audit.py # Production Readiness Audit
+```
 
 ---
 
@@ -542,259 +619,146 @@ The repository includes 13+ specialized workflows for automated testing and depl
 - **`certification_gate.yml`**: Mandatory security scan and license compliance check before deployment.
 - **`sovereign-graduate.yml`**: Automates the tagging and archiving of production-stable releases.
 
-### 9.2 Deployment Flow (GCP)
-1. **Source Check**: Git push triggers GitHub Actions.
-2. **Build**: [Cloud Build] containerizes dependencies and core logic.
-3. **Register**: Images are versioned and stored in [Artifact Registry].
-4. **Deploy**: [Cloud Run] performs a zero-downtime rolling update.
-5. **Verify**: Post-deployment smoke tests trigger an immediate rollback if the `system_graduation_score` drops below 1.0.
-
 ---
 
-## 10. Agent Swarm (Registry)
+## 8. Brain: Core Reasoning & Orchestration
 
-LEVI-AI utilizes a specialized swarm of agents, each acting as a "dumb executor" governed by the central Orchestrator.
+The LEVI-AI Brain is the centralized intelligence tier of the Sovereign OS. It governs the transition from unstructured user intent to deterministic mission execution waves.
 
-### 7.1 Agent Failure Classification
-- **F-1 (Syntactic)**: JSON/Contract violation. Handled by immediate retry.
-- **F-2 (Logic)**: Valid output but fails Grounding check. Handled by Reasoning Core refinement.
-- **F-3 (System)**: Timeout or resource limit. Handled by fallback_output and circuit breaking.
+### 🧠 Reasoning Algorithm (Master Flow)
+The reasoning pipeline follows a strict five-stage transformation:
+`User Intent → Perception → Planner → DAG → Reasoning (Gate) → Executor → Output`
 
-### Logic & Planning
+### 🎯 Orchestrator State Machine
+The mission lifecycle is governed by a strict state machine:
 
-- **Artisan (CodeAgent)**: Generates high-fidelity code and architectural patterns.
-- **HardRule (TaskAgent)**: Enforces recursive goal decomposition and strict intent logic.
-- **SwarmCtrl (ConsensusAgent)**: Adjudicates across parallel outputs for collective resonance.
-
-#### 7.2 Agent Governance & Sandboxing
-- **Inter-Agent Communication**: Strict **Parent-Child** (via Orchestrator) or **Peer-Consensus** (via SwarmCtrl) hierarchy. Direct P2P agent traffic is blocked to prevent privilege escalation.
-- **Resource Sandboxing**: Each agent process is capped at **256MB RAM** and **10% CPU**. Exceeding these triggers an automatic `F-3 (System)` failure.
-- **State Isolation**: Agents have no persistent local disk access; all state must be emitted as memory events to Tier-0.
-
-### Data & Retrieval
-
-- **Scout (SearchAgent)**: Real-time discovery via web-search tools.
-- **Researcher (ResearchAgent)**: Multi-source synthesis and citation bundle generation.
-- **Analyst (DocumentAgent)**: Document parsing and matrix analysis.
-
----
-
-## 8. Deep Architecture Deep-Dive
-
-The LEVI-AI v14.1.0-Autonomous-SOVEREIGN Graduation OS architecture is designed for extreme reliability and self-optimizing intelligence.
-
-### 8.1 Distributed Cognitive Network (DCN)
-
-The DCN is the communication backbone that allows multiple cognitive nodes to synchronize state and share reasoning results.
-
-- **Hybrid Consensus (DCN v14.1)**: 
-    - **Gossip + LWW**: Used for high-availability node discovery and metadata sharing.
-    - **Raft-lite**: Used for **Mission Truth**. A state change is committed only when it achieves **Quorum ($Q$)**:
-      $$Q = \lfloor N_{peers} / 2 \rfloor + 1$$
-- **Protocol Security**: Every DCN Pulse is signed via HMAC-SHA256 using the unique `DCN_SECRET` (min. 32-character entropy enforced).
-- **Partition Tolerance ($P$)**: The system favors availability ($A$) for telemetry but switches to strict consistency ($C$) for mission commits. Term mismatches ($T_{remote} < T_{local}$) trigger immediate pulse rejection.
-
-### 8.2 Evolutionary Intelligence Engine
-
-The "Brain" self-improves through a continuous learning loop that manages strategy culling and template promotion.
-
-- **Fragility Tracking**: The OS monitors performance metrics (Success/Failure streaks) to calculate a **Fragility Score (0.0–1.0)** for every cognitive domain. High fragility ($F \ge 0.4$) triggers an automatic escalation to **Deep Reasoning Mode**, forcing multi-agent reflection and simulation nodes in the DAG.
-- **Pattern Promotion**: Successful reasoning paths are recorded. When a pattern achieves **$\ge 95\%$ average fidelity over 5 independent missions**, it is graduated into a deterministic **Graduated Rule**, enabling the **Deterministic Fast-Path** for that intent.
-- **Tiered Critic Logic**: Graduated rules are governed by a tiered validation protocol. **Tier-0** (Syntactic Integrity) is mandatory for all overrides, while **Tier-1** (Deep Semantic) is bypassed only for highly stable rules ($\ge 0.995$ fidelity).
-- **Rule Decay Function**: 
-    $$F_{adj} = F_{base} \cdot e^{-\lambda t}$$ 
-    Where $\lambda$ (Decay Constant) is increased by zero usage and decreased by high-fidelity hits. Rules below $0.85$ adjusted fidelity are automatically pruned.
-- **Knowledge Crystallization**: High-fidelity mission outcomes are distilled into **Reasoning Prototypes**. These are used to update the **Neo4j Relational Graph** and the **FAISS Vector Index**, ensuring the system never solves the same complex problem twice from scratch.
-- **Semantic Drift Handling**: The Vector DB triggers a **Centroid Recalculation** every 10k interactions to account for shifting conceptual clusters in user-specific memory.
-- **Embedding Versioning**: All Tier-4 items include a `model_version` tag. Version mismatch during retrieval triggers a **Just-In-Time (JIT) Re-embedding** before data is fed to the planner.
-
-### 8.3 Hardware-Aware Backpressure
-
-LEVI-AI protects its host infrastructure through multi-signal resource gating.
-
-- **Signal Dimensions**: Real-time monitoring of **VRAM, CPU, RAM, and Executor Queue Depth**.
-- **15% VRAM Safety Buffer**: Mandatory baseline; requests exceeding $85\%$ VRAM utilization trigger cloud burst proxies.
-- **Priority Degradation Order**:
-    1.  **TIER-1 (80% Load)**: Disable `DiagnosticAgent` & background archival.
-    2.  **TIER-2 (85% Load)**: Disable `ReasoningCore` Critique; force standard planners.
-    3.  **TIER-3 (90% Load)**: Disable Wave Parallelism; force linear execution.
-    4.  **TIER-4 (95% Load)**: Drop non-mission-critical agents (Creative/Imaging).
-
-### 8.4 DAG Resilience & Self-Healing
-
-- **Idempotency Locking**: A per-user, per-intent lock prevents "Thundering Herd" scenarios where duplicate identical missions execute simultaneously.
-
-### 8.6 Mission Lifecycle & Priority
-- **Cancellation**: Missions can be cancelled via `DELETE /api/v1/orchestrator/mission/{id}`, triggering immediate SIGTERM to the agent wave and a compensation pulse.
-- **Priority Scheduling**: High-tier users ('Sovereign') are assigned to a dedicated **Priority Queue** with guaranteed VRAM semaphore slots.
-- **Global Timeout**: Every mission has a mandatory global safety timeout of $120s$.
-
-### 8.5 Sovereign Security Wall (RS256 & mTLS)
-
-Security is enforced at the network and logic layer, not just the API.
-
-- **Identity Layer**: Mandates **RS256 Asymmetric JWTs** ($2048$-bit min). HS256 is explicitly blocked via runtime assertions in `ENVIRONMENT=production`.
-- **Internal Communication**: Zero-trust **mTLS 1.3** encryption across all service-to-service calls via `InternalServiceClient.request()`.
-
-### 8.6 SSRF / DNS-Rebinding Shield
-
-The `EgressProxy` ensures that no internal resources are leaked to the public internet via the cognitive swarm.
-
-- **Pre-Request DNS Resolution**: The proxy resolves domains ($D \to IP$) before the network request is initiated.
-- **Precision CIDR Blocking**: Even if a domain is on the `ALLOWED_DOMAINS` list, it is blocked if it resolves to any of the following **Forbidden Ranges**:
-    - `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16` (Private Ingress/Egress)
-    - `169.254.169.254/32` (Cloud Metadata / IMDS)
-    - `127.0.0.0/8`, `::1/128` (Local Host / Loopback)
-    - `0.0.0.0/8` (Current Network)
-
-### 8.7 Economic Governance (Billing & Refunds)
-
-The Orchestrator enforces a strict credit-based mission economy:
-
-| Mission Type | Mode | Base Cost ($C_{base}$) |
-| :--- | :--- | :--- |
-| **Simplicity** | Ultra-Light | $1.0~CU$ |
-| **Autonomous** | Full DAG | $5.0~CU$ |
-
-**Partial Refund Policy ($Refund_{system}$):**
-For system-level failures categorized as **F-3 (Infrastructure/Timeout)**, the system triggers an automatic refund:
-$$Refund_{system} = (80\%) \cdot C_{base}$$
-*Example: An Autonomous failure results in a $4.0~CU$ refund, ensuring the user only pays for consumed tokens.*
-
-### Specialized Functions
-
-- **Imaging (ImageAgent)**: Generative visual content creation.
-- **Video (VideoAgent)**: Frame-consistent video generation.
-- **Memory (MemoryAgent)**: Populates Neo4j with relational knowledge triplets.
-- **Diagnostic (DiagnosticAgent)**: Real-time system health and troubleshooting.
-
----
-
-## 9. Database Schema & Multi-Tenancy
-
-The system uses PostgreSQL as the authoritative store for user profiles, missions, and audits.
-
-### Key Tables
-
-- **`user_profiles`**: Central identity store with `tenant_id` partitioning.
-- **`user_traits`**: Distilled behavioral archetypes (e.g., 'Stoic', 'Technical').
-- **`missions`**: Distributed mission ledger recording objective, status, and fidelity scores.
-- **`audit_log`**: Month-partitioned, cryptographically-chained ledger for compliance.
-- **`cognitive_usage`**: Token and resource consumption tracking per user/mission.
-
-### Multi-Tenancy
-
-Every persistent record includes a `tenant_id`. The application enforces Row-Level Security (RLS) and cryptographic partitioning via the KMS layer to ensure data isolation.
-
----
-
-## 10. Setup & Installation
-
-### Prerequisites
-
-- **Hardware**: NVIDIA GPU (8GB+ VRAM recommended for local).
-- **Environment**: Linux/WSL2 or **Google Cloud Platform**.
-- **Tools**: Docker, Python 3.10+, Node.js 18+, **Google Cloud SDK (gcloud)**.
-
-### 10.1 Local Development Setup
-
-1. **Infrastructure**: Start services via Docker Compose.
-   ```bash
-   docker compose up -d
-   ```
-2. **Backend**: Install dependencies and initialize DB.
-   ```bash
-   pip install -r requirements.txt
-   alembic -c backend/alembic.ini upgrade head
-   ```
-3. **Frontend**: Install dependencies and build.
-   ```bash
-   cd frontend && npm install && npm run build
-   ```
-4. **Launch**: Start the Sovereign Gateway.
-   ```bash
-   npm run dev
-   ```
-
-### 10.2 GCP Production Deployment
-
-The LEVI-AI system is automated for one-click deployment to Google Cloud.
-
-1. **GCP Project Setup**: Configure your project and region.
-   ```bash
-   gcloud config set project [YOUR_PROJECT_ID]
-   export GCP_REGION=us-central1
-   ```
-2. **Infrastructure Provisioning**: Run the automated setup script.
-   ```powershell
-   # Windows PowerShell
-   .\scripts\setup_gcp.ps1
-   ```
-   ```bash
-   # Linux/Bash
-   ./scripts/setup_gcp.sh
-   ```
-3. **Deploy to Cloud Run**: Build and push to Artifact Registry, then deploy.
-   ```bash
-   # Build & Push
-   gcloud builds submit --tag gcr.io/[PROJECT_ID]/levi-backend .
-   
-   # Deploy Backend
-   gcloud run deploy levi-backend --image gcr.io/[PROJECT_ID]/levi-backend --region $GCP_REGION
-   ```
-4. **Verification**: Run the production audit suite.
-   ```powershell
-   .\scripts\deploy\verify_production.ps1
-   ```
-
----
-
-## 11. API Specification (v1.0)
-
-| Endpoint | Method | Description |
-| :--- | :--- | :--- |
-| `/api/v1/orchestrator/mission` | POST | Initiates a new cognitive mission. |
-| `/api/v1/orchestrator/mission/{id}` | DELETE | Cancels an in-flight mission and triggers compensation. |
-| `/api/v1/brain/pulse` | GET | Returns live system health and model routing status. |
-| `/api/v1/memory/context` | GET | Retrieves merged context from all 4 memory tiers. |
-| `/api/v1/telemetry/workflow` | GET | Returns the designated end-to-end workflow manifest. |
-| `/api/v1/orchestrator/health/graph` | GET | Visualizes the DCN health and node connectivity graph. |
-| `/api/v1/auth/session` | POST | Generates a new secure session token. |
-| `/api/v1/missions/replay/{id}` | GET | Triggers deterministic replay of a previous mission. |
-| `/metrics` | GET | Exposes Prometheus telemetry for system monitoring. |
-| `/healthz` | GET | Root health-check for infrastructure readiness. |
-| `/api/v1/voice/command` | POST | Processes audio file -> mission -> audio response. |
-| `/api/v1/voice/stream` | WS | Real-time WebSocket audio streaming gateway. |
-
-#### 11.1 Replay Determinism
-Missions are rendered deterministic during replay by:
-- **Seed Injection**: Forcing a fixed seed for all probabilistic LLM nodes.
-- **Tool Mocking**: Replaying the exact stored outputs for all external API/Tool calls.
-- **Time Freezing**: Injecting the original mission timestamp into all time-dependent logic.
-
----
-
-## 11.2 API Layer & Production Standards
-
-### 11.2.1 Standardized Error Schema
-All v14.1 errors follow the Sovereign Error Format:
-```json
-{
-  "error_code": "LEVI_004_VRAM_REJECTION",
-  "message": "Insufficient VRAM for parallel wave execution.",
-  "trace_id": "tr_12345",
-  "remediation": "Wait for queue clearing or force linear mode."
-}
+```mermaid
+stateDiagram-v2
+    [*] --> CREATED: User POST
+    CREATED --> QUEUED: Validated
+    QUEUED --> RUNNING: Dependency Satisfied
+    RUNNING --> COMPLETED: Success
+    RUNNING --> FAILED: Critical Node Failure
+    FAILED --> RETRY: Compensation Logic
+    RETRY --> RUNNING
+    COMPLETED --> [*]
 ```
 
-### 11.2.2 Webhooks & Async Callbacks
-Missions can specify a `callback_url`. The Orchestrator emits a `POST` event on:
-- **MISSION_COMPLETED**
-- **MISSION_FAILED_COMPENSATION**
-- **SLA_BREACH_WARNING**
+### ⚡ Confidence Scoring Logic
+The **Reasoning Core** calculates a Confidence Score ($S$) before allow any DAG to enter the execution pipeline:
 
-### 11.2.3 Rate Limiting
-- returns `429 Too Many Requests`
+$$S = 1.0 - (0.2 \cdot \text{Issues}) - (0.05 \cdot \text{Warnings}) - \text{Complexity Penalty}$$
+
+- **Threshold**: Missions with $S < 0.55$ are automatically sent back for **Re-Planning (Pass 2)**.
+
+---
+
+### 13.1 Request Flow
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant G as Gateway
+    participant O as Orchestrator
+    participant P as Planner
+    participant R as Reasoning
+    participant E as Executor
+    participant A as Agents
+    
+    U->>G: Mission Request
+    G->>O: Initialize State
+    O->>P: Generate Plan
+    P->>O: DAG (Task Graph)
+    O->>R: Verify & Score
+    R->>O: Confidence S > 0.6
+    O->>E: Start Waves
+    E->>A: Execute Nodes
+    A->>E: Node Results
+    E->>O: Mission Complete
+    O->>G: Final Response
+    G->>U: Mission Success
+```
+
+### 13.2 DAG Execution Flow (Waves)
+```mermaid
+graph TD
+    Node1[Start Node] --> Wave1[Wave 1]
+    Wave1 --> NodeA[Tool Call A]
+    Wave1 --> NodeB[Search B]
+    NodeA --> Wave2[Wave 2]
+    NodeB --> Wave2
+    Wave2 --> NodeC[Synthesis C]
+    NodeC --> End[Final Output]
+```
+
+### 13.3 Memory Flow (MCM Sync)
+```mermaid
+graph LR
+    Runtime[Runtime Event] --> Stream[Redis Stream]
+    Stream --> MCM[Consistency Manager]
+    MCM --> Redis[Episodic Cache]
+    MCM --> PG[Factual DB]
+    MCM --> Neo4j[Knowledge Graph]
+    MCM --> Vector[Semantic Memory]
+```
+
+### 13.4 Agent Execution Flow
+```mermaid
+graph TD
+    In[Input] --> Valid[Validate Contract]
+    Valid --> Exec[Execute Agent Logic]
+    Exec --> Out[Collect Result]
+    Out --> Store[MCM Event Emission]
+```
+
+### 13.5 CI/CD Pipeline
+```mermaid
+graph LR
+    Commit --> Build[Build Container]
+    Build --> Test[Unit & Integration]
+    Test --> Security[Security Scan]
+    Security --> Deploy[Cloud Run Deploy]
+    Deploy --> Smoke[Graduation Audit]
+```
+
+### 13.6 Voice Pipeline
+```mermaid
+graph LR
+    AudioIn[Audio Input] --> STT[Whisper STT]
+    STT --> Mission[Mission Flow]
+    Mission --> Result[Text Response]
+    Result --> TTS[Coqui TTS]
+    TTS --> AudioOut[Audio Response]
+```
+
+---
+
+## 🚀 Future Roadmap & Alignment
+
+### 🧩 What Data Must Be Updated (Section 14)
+- **Status Change**: All claims of "Production Ready" have been updated to **Architecture Complete, Implementation in Progress**.
+- **Stability**: Claims of "100% Stable" have been removed in favor of **Graduation Verified Baseline (Audit-Stable)**.
+
+### ❓ Final Reality Check (Section 15-17)
+
+**Is LEVI-AI fully functional?**
+**No** — it is NOT functional yet as a consumer-facing OS. 
+
+**Implementation Status**:
+- **Architecture**: ✅ 90% (Finalized & Locked)
+- **Implementation**: ~35% (Core logic existing, stubs in utility layers)
+- **Integration**: ⚠️ Partial (Service-to-service wiring in progress)
+- **Execution**: ❌ Not 100% end-to-end reliable in local dev
+
+**What will make it functional?**
+1.  Full wiring of the **Frontend to the broadaster SSE stream**.
+2.  Physical integration of **Ollama / Local LLM fallback** across the agent swarm.
+3.  Transition from **Mocked to Real Mission Audits** in the Graduation Suite.
+
+---
+
+## 🚧 Final Disclaimer
+
+LEVI-AI v14.2 is a high-fidelity system design. While the architecture is production-hardened, the implementation is under active development. This repository is intended for research and engineering contributions toward sovereign, local-first artificial intelligence.
 - Headers: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`.
 
 ---

@@ -15,8 +15,9 @@ class GlobalGossipBridge:
     Enables cross-region memory synchronization for diversified databases.
     """
     REDIS_CHANNEL = "swarm:sync:v14"
-    TOPIC_ID = os.getenv("GCP_DCN_TOPIC", "global-dcn-resonance")
+    TOPIC_ID = os.getenv("GCP_DCN_TOPIC", "sovereign-cognitive-pulse")
     PROJECT_ID = os.getenv("GCP_PROJECT_ID")
+
 
     def __init__(self):
         self.publisher = None
@@ -70,8 +71,9 @@ class GlobalGossipBridge:
     async def _pubsub_to_redis(self):
         """Listens to global Pub/Sub and ingests fragments into local Redis."""
         subscription_path = self.subscriber.subscription_path(
-            self.PROJECT_ID, f"{self.TOPIC_ID}-sub-{os.getenv('GCP_REGION', 'global')}"
+            self.PROJECT_ID, f"pulse-sub-{os.getenv('GCP_REGION', 'global')}"
         )
+
         
         def callback(message):
             try:

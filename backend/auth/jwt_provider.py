@@ -50,7 +50,8 @@ class JWTProvider:
             if not cls._private_key or not cls._public_key:
                  if is_prod:
                      logger.critical("🚨 PRODUCTION BLOCKER: RS256 Identity Keys MISSING from /certs. Graduation ABORTED.")
-                     raise RuntimeError("Production Graduation Failure: RS256 keys required.")
+                     # In production, we MUST fail if keys are missing. HS256 fallback is a security risk.
+                     raise RuntimeError("Production Graduation Failure: RS256 keys required for Sovereign Identity Layer.")
 
                  # Fallback to HS256 if keys are missing (Dev Only)
                  cls.ALGORITHM = "HS256"

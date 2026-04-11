@@ -39,10 +39,57 @@ resource "google_project_iam_member" "cloud_run_roles" {
     "roles/secretmanager.secretAccessor",
     "roles/pubsub.publisher",
     "roles/pubsub.subscriber",
+    "roles/cloudtasks.enqueuer",
+    "roles/cloudtasks.viewer",
   ])
   project = var.gcp_project_id
   role    = each.value
   member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+}
+
+# 🔑 Secret Manager (System Secrets)
+resource "google_secret_manager_secret" "system_secret" {
+  secret_id = "levi-system-secret"
+  
+  replication {
+    auto {}
+  }
+}
+
+# 🌌 Global Cloud Cognitive Pulse (DCN Bridge)
+resource "google_pubsub_topic" "cognitive_pulse" {
+  name = "sovereign-cognitive-pulse"
+}
+
+resource "google_pubsub_subscription" "regional_pulse_sub" {
+  for_each = toset(var.regions)
+  name     = "pulse-sub-${each.value}"
+  topic    = google_pubsub_topic.cognitive_pulse.id
+  
+  # Ensure we only pull events relevant to the network
+  message_retention_duration = "600s"
+  retain_acked_messages      = false
+  ack_deadline_seconds      = 20
+}
+
+# 📋 Cloud Tasks (Mission Queue)
+resource "google_cloud_tasks_queue" "mission_queue" {
+  for_each = toset(var.regions)
+
+  name     = "mission-queue-${each.value}"
+  location = each.value
+
+  retry_config {
+    max_attempts = 5
+    max_backoff  = "3600s"
+    min_backoff  = "1s"
+    max_doublings = 5
+  }
+
+  rate_limits {
+    max_concurrent_dispatches = 100
+    max_dispatches_per_second = 10
+  }
 }
 
 # 🗄️ Diversified Regional Data Layer
@@ -124,10 +171,39 @@ resource "google_compute_region_network_endpoint_group" "serverless_neg" {
   }
 }
 
+# 🛡️ Cloud Armor (WAF) Hardening
+resource "google_compute_security_policy" "policy" {
+  name = "levi-waf-policy"
+
+  rule {
+    action   = "deny(403)"
+    priority = "1000"
+    match {
+      expr {
+        expression = "evaluatePreconfiguredExpr('sqli-v33-stable')"
+      }
+    }
+    description = "SQL Injection protection"
+  }
+
+  rule {
+    action   = "allow"
+    priority = "2147483647"
+    match {
+      versioned_expr = "SRC_IPS_V1"
+      config {
+        src_ip_ranges = ["*"]
+      }
+    }
+    description = "Default rule"
+  }
+}
+
 resource "google_compute_backend_service" "default" {
   name                  = "levi-backend-service"
   protocol              = "HTTP"
   load_balancing_scheme = "EXTERNAL_MANAGED"
+  security_policy       = google_compute_security_policy.policy.id
   
   dynamic "backend" {
     for_each = toset(var.regions)
@@ -136,6 +212,7 @@ resource "google_compute_backend_service" "default" {
     }
   }
 }
+
 
 resource "google_compute_url_map" "default" {
   name            = "levi-url-map"

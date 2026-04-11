@@ -18,6 +18,9 @@ from .diagnostic_agent import DiagnosticAgent
 from .image_agent     import ImageAgent
 from .video_agent     import VideoAgent
 from .relay_agent     import RelayAgent
+from .artisan_agent   import ArtisanAgent
+from .scout_agent     import ScoutAgent
+from .hard_rule_agent import HardRuleAgent
 
 AGENT_REAGENT_MAP = {
     # Core Logic
@@ -40,13 +43,13 @@ AGENT_REAGENT_MAP = {
 }
 
 AGENT_REGISTRY = {
-    "Artisan": CodeAgent(),
-    "Scout": SearchAgent(),
+    "Artisan": ArtisanAgent(),
+    "Scout": ScoutAgent(),
     "Critic": CriticAgent(),
     "Coder": PythonReplAgent(),
     "Researcher": ResearchAgent(),
     "Analyst": DocumentAgent(),
-    "HardRule": TaskAgent(),
+    "HardRule": HardRuleAgent(),
     "SwarmCtrl": ConsensusAgentV11(),
     "Optimizer": OptimizerAgent(),
     "Memory": MemoryAgent(),
