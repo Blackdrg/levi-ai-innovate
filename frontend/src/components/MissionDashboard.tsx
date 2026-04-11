@@ -76,31 +76,31 @@ export function MissionDashboard({ missionId }: { missionId: string }) {
   );
 
   return (
-    <div className="p-6 glass rounded-2xl border border-white/10 shadow-2xl relative overflow-hidden group">
+    <div className="p-4 md:p-6 glass rounded-2xl border border-white/10 shadow-2xl relative overflow-hidden group">
       {/* Background Glow */}
       <div className="absolute -top-10 -right-10 w-32 h-32 bg-purple-500/20 blur-3xl rounded-full group-hover:bg-purple-500/30 transition-all duration-700" />
       
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
         <div className="flex flex-col">
-          <h3 className="text-xs font-heading font-bold tracking-widest text-white/40 uppercase mb-1">Mission Absolute Status</h3>
+          <h3 className="text-[10px] font-heading font-bold tracking-widest text-white/40 uppercase mb-1">Mission Absolute Status</h3>
           <div className="flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full ${pulse.status === "FINALIZED" ? "bg-emerald-500 shadow-[0_0_8px_#10b981]" : "bg-purple-500 animate-pulse shadow-[0_0_8px_#a855f7]"}`} />
-            <span className="text-lg font-bold text-white tracking-tight">{pulse.status}</span>
+            <span className="text-base md:text-lg font-bold text-white tracking-tight">{pulse.status}</span>
           </div>
         </div>
-        <div className="px-3 py-1.5 glass-pill rounded-lg border border-white/5 flex items-center gap-2">
+        <div className="px-3 py-1.5 glass-pill rounded-lg border border-white/5 flex items-center gap-2 self-start sm:self-auto">
           <Layers size={14} className="text-purple-400" />
           <span className="text-xs font-mono text-purple-200">Wave {pulse.current_wave}</span>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-1 xs:grid-cols-2 gap-4 mb-6">
         <div className="p-4 rounded-xl bg-white/5 border border-white/5 hover:border-white/10 transition-colors">
           <div className="flex items-center gap-2 mb-2 text-white/30">
             <Shield size={14} />
             <span className="text-[10px] font-bold uppercase tracking-widest">Fidelity Score</span>
           </div>
-          <span className="text-2xl font-heading font-bold text-gradient">
+          <span className="text-xl md:text-2xl font-heading font-bold text-gradient">
             {(pulse.fidelity_score * 100).toFixed(1)}%
           </span>
         </div>
@@ -110,7 +110,7 @@ export function MissionDashboard({ missionId }: { missionId: string }) {
             <Cpu size={14} />
             <span className="text-[10px] font-bold uppercase tracking-widest">CU Consume</span>
           </div>
-          <span className="text-2xl font-heading font-bold text-white">
+          <span className="text-xl md:text-2xl font-heading font-bold text-white">
             {pulse.cu_consumed.toFixed(2)}
           </span>
         </div>
@@ -134,7 +134,7 @@ export function MissionDashboard({ missionId }: { missionId: string }) {
       {pulse.resource_saturation && (
          <div className="mt-6 pt-4 border-t border-white/5 flex items-center justify-between">
             <span className="text-[9px] text-white/20 uppercase tracking-tighter">Resource Saturation</span>
-            <div className="h-1 w-32 bg-white/5 rounded-full overflow-hidden">
+            <div className="h-1 w-24 sm:w-32 bg-white/5 rounded-full overflow-hidden">
                <div className="h-full bg-gradient-to-r from-purple-500 to-emerald-500 transition-all duration-1000" style={{ width: pulse.resource_saturation }} />
             </div>
          </div>
