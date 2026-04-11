@@ -67,6 +67,14 @@ export function MissionDashboard({ missionId }: { missionId: string }) {
     return () => es.close();
   }, [missionId]);
 
+  const saturationRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (saturationRef.current && pulse?.resource_saturation) {
+      saturationRef.current.style.width = pulse.resource_saturation;
+    }
+  }, [pulse?.resource_saturation]);
+
   if (error) return <div className="text-red-500 text-xs animate-pulse p-4 border border-red-500/20 rounded-lg">{error}</div>;
   if (!pulse) return (
     <div className="flex flex-col items-center gap-4 p-8 glass rounded-2xl border border-white/10">
@@ -135,7 +143,7 @@ export function MissionDashboard({ missionId }: { missionId: string }) {
          <div className="mt-6 pt-4 border-t border-white/5 flex items-center justify-between">
             <span className="text-[9px] text-white/20 uppercase tracking-tighter">Resource Saturation</span>
             <div className="h-1 w-24 sm:w-32 bg-white/5 rounded-full overflow-hidden">
-               <div className="h-full bg-gradient-to-r from-purple-500 to-emerald-500 transition-all duration-1000" style={{ width: pulse.resource_saturation }} />
+               <div ref={saturationRef} className="h-full bg-gradient-to-r from-purple-500 to-emerald-500 transition-all duration-1000" />
             </div>
          </div>
       )}

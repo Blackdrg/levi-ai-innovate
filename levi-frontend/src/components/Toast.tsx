@@ -66,7 +66,7 @@ export const ToastContainer: React.FC = () => {
                )}
             </div>
 
-            <button onClick={() => removeToast(toast.id)} className="close-btn"><X size={14} /></button>
+            <button onClick={() => removeToast(toast.id)} className="close-btn" title="Close Notification"><X size={14} /></button>
           </motion.div>
         ))}
       </AnimatePresence>

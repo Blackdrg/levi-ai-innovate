@@ -39,7 +39,7 @@ export const TaskHistory: React.FC = () => {
             <Search size={16} />
             <input type="text" placeholder="Search tasks..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <select value={filter} onChange={(e) => setFilter(e.target.value as any)} className="filter-select">
+          <select value={filter} onChange={(e) => setFilter(e.target.value as any)} className="filter-select" title="Filter by status">
             <option value="ALL">ALL STATUSES</option>
             <option value="DONE">DONE</option>
             <option value="FAILED">FAILED</option>
@@ -73,7 +73,7 @@ export const TaskHistory: React.FC = () => {
                 </td>
                 <td className="time-cell">{task.created_at}</td>
                 <td className="action-cell">
-                  <button className="replay-btn" onClick={(e) => { e.stopPropagation(); setIsReplaying(true); setSelectedTask(task); }}>
+                  <button className="replay-btn" title="Replay Mission" onClick={(e) => { e.stopPropagation(); setIsReplaying(true); setSelectedTask(task); }}>
                     <Play size={14} />
                     REPLAY
                   </button>
@@ -84,9 +84,9 @@ export const TaskHistory: React.FC = () => {
         </table>
 
         <div className="pagination">
-          <button disabled><ChevronLeft size={18} /></button>
+          <button disabled title="Previous Page"><ChevronLeft size={18} /></button>
           <span>PAGE 1 OF 12</span>
-          <button><ChevronRight size={18} /></button>
+          <button title="Next Page"><ChevronRight size={18} /></button>
         </div>
       </main>
 
@@ -100,7 +100,7 @@ export const TaskHistory: React.FC = () => {
           >
             <div className="detail-header">
               <h2>TASK DETAILS: {selectedTask.id}</h2>
-              <button onClick={() => { setSelectedTask(null); setIsReplaying(false); }}><X size={20} /></button>
+              <button onClick={() => { setSelectedTask(null); setIsReplaying(false); }} title="Close Details"><X size={20} /></button>
             </div>
             
             <div className="detail-content">

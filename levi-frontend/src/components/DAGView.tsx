@@ -16,9 +16,15 @@ import { useTelemetryStore } from '../stores/telemetryStore';
 import { TaskStatus } from '../lib/types';
 import { motion } from 'framer-motion';
 
+interface SovereignNodeData extends Record<string, unknown> {
+  label: string;
+  status: TaskStatus;
+}
+
 // Custom Node Component
-const SovereignNode = ({ id, data }: NodeProps) => {
-  const currentStatus = useTelemetryStore((state) => state.taskStatuses[id] || data.status);
+const SovereignNode = ({ id, data }: NodeProps<any>) => {
+  const nodeData = data as SovereignNodeData;
+  const currentStatus = useTelemetryStore((state) => state.taskStatuses[id] || nodeData.status) as TaskStatus;
 
   const getStatusColor = (status: TaskStatus) => {
     switch (status) {
@@ -43,10 +49,10 @@ const SovereignNode = ({ id, data }: NodeProps) => {
         } : {}}
         transition={{ repeat: Infinity, duration: 2 }}
         className="node-body"
-        style={{ borderColor: getStatusColor(currentStatus) }}
+        style={{ borderColor: getStatusColor(currentStatus), '--status-color': getStatusColor(currentStatus) } as any}
       >
-        <div className="node-label">{data.label}</div>
-        <div className="node-status" style={{ color: getStatusColor(currentStatus) }}>
+        <div className="node-label">{nodeData.label}</div>
+        <div className="node-status">
           {currentStatus}
         </div>
       </motion.div>
@@ -75,6 +81,7 @@ const SovereignNode = ({ id, data }: NodeProps) => {
           text-transform: uppercase;
           margin-top: 4px;
           font-family: 'JetBrains Mono', monospace;
+          color: var(--status-color);
         }
       `}</style>
     </div>
@@ -98,7 +105,7 @@ export const DAGView: React.FC<DAGViewProps> = ({ initialNodes, initialEdges }) 
   // For simplicity, we assume nodes data has current status and the custom node reads from store
 
   return (
-    <div style={{ width: '100%', height: '500px', background: '#020617' }}>
+    <div className="dag-viewer-root">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -124,6 +131,11 @@ export const DAGView: React.FC<DAGViewProps> = ({ initialNodes, initialEdges }) 
           font-family: 'JetBrains Mono', monospace;
           border: 1px solid rgba(56, 189, 248, 0.3);
           backdrop-filter: blur(4px);
+        }
+        .dag-viewer-root {
+          width: 100%;
+          height: 500px;
+          background: #020617;
         }
       `}</style>
     </div>

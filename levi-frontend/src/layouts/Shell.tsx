@@ -60,7 +60,7 @@ export const Shell: React.FC = () => {
               <span className="user-role">{user?.role || 'GUEST'}</span>
             </div>
           </div>
-          <button onClick={logout} className="logout-btn">
+          <button onClick={logout} className="logout-btn" title="Logout">
             <LogOut size={16} />
           </button>
         </div>
