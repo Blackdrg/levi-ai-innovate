@@ -61,11 +61,71 @@ class GraphExecutor:
     MAX_WAVES = 8
     WARNING_THRESHOLD = 8
 
-    def __init__(self):
+    def __init__(self, max_concurrent_nodes: int = 4):
         self._node_breakers: Dict[str, Dict[str, float]] = {}
         self._wave_lock = asyncio.Lock()
+        self._shutdown_event = asyncio.Event()
+        self._max_slots = max_concurrent_nodes
+        self._slot_semaphore = asyncio.Semaphore(max_concurrent_nodes)
+        
+        # mTLS 1.3 Configuration (Wiring #2)
+        self.cert_dir = "certs"
+        self.client_cert = os.path.join(self.cert_dir, "client.pem")
+        self.client_key = os.path.join(self.cert_dir, "client-key.pem")
+        self.ca_cert = os.path.join(self.cert_dir, "ca.pem")
 
-    async def execute(self, graph: Any, perception: Dict[str, Any], user_id: str = "global", policy: Optional[Any] = None, safe_mode: bool = False) -> List[ToolResult]:
+    def _create_ssl_context(self) -> Optional['ssl.SSLContext']:
+        """
+        Sovereign v14.2: mTLS 1.3 SSL Factory.
+        Creates a secure context for agent swarm communication.
+        """
+        import ssl
+        try:
+            if not os.path.exists(self.client_cert):
+                logger.warning(f"[SSL] Client cert not found at {self.client_cert}. Falling back to insecure.")
+                return None
+
+            ctx = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cafile=self.ca_cert)
+            ctx.load_cert_chain(certfile=self.client_cert, keyfile=self.client_key)
+            ctx.verify_mode = ssl.CERT_REQUIRED
+            ctx.check_hostname = False # Dev-local flexibility
+            ctx.minimum_version = ssl.TLSVersion.TLSv1_3
+            return ctx
+        except Exception as e:
+            logger.error(f"[SSL] Context creation failure: {e}")
+            return None
+
+    async def _execute_node_resilient(self, node: Any, perception: Dict[str, Any], user_id: str) -> ToolResult:
+        """
+        Sovereign v14.2 Tiered Execution Escalation.
+        1. Attempt with standard timeout.
+        2. If timeout -> Retry with 2x timeout.
+        3. If persistent failure -> Linear Fallback (Safe Mode).
+        """
+        async with self._slot_semaphore:
+            attempts = 0
+            max_attempts = 2
+            current_timeout = getattr(node, "timeout", 30)
+            
+            while attempts < max_attempts:
+                try:
+                    return await asyncio.wait_for(
+                        self._wrapped_execute(node, perception, user_id),
+                        timeout=current_timeout
+                    )
+                except asyncio.TimeoutError:
+                    attempts += 1
+                    current_timeout *= 2
+                    logger.warning(f"[Executor] Node {node.id} timed out. Escalating... (Attempt {attempts}/{max_attempts})")
+                    if attempts >= max_attempts:
+                        return ToolResult(success=False, output="Node execution timed out after escalation.", node_id=node.id)
+                except Exception as e:
+                    logger.error(f"[Executor] Node {node.id} failed: {e}")
+                    return ToolResult(success=False, output=str(e), node_id=node.id)
+        
+        return ToolResult(success=False, output="Unknown execution error", node_id=node.id)
+
+    async def execute(self, graph: Any, perception: Dict[str, Any], user_id: str = "global", policy: Optional[Any] = None, safe_mode: bool = True) -> List[ToolResult]:
 
 
         logger.info("[V13.1 Executor] Executing Task Graph...")
@@ -95,57 +155,63 @@ class GraphExecutor:
         running_tasks: Dict[asyncio.Task, Any] = {}
         
         while remaining_nodes or running_tasks:
-            # 1. Mission Cancellation Check
+            # 1. Mission Cancellation / Abort Check
             from backend.utils.mission import MissionControl
-            if MissionControl.is_cancelled(mission_id):
-                logger.warning(f"[V14.1 Executor] Mission {mission_id} cancelled. Aborting...")
-                for t in running_tasks: t.cancel()
+            if MissionControl.is_cancelled(mission_id) or self._shutdown_event.is_set():
+                logger.warning(f"[V14.2 Executor] Mission {mission_id} aborted or shutdown in progress. Halting.")
+                for t in list(running_tasks.keys()):
+                    t.cancel()
                 break
 
             # 2. Identify and Schedule Executable Nodes
-            async with self._wave_lock:
-                executable_nodes = [
-                    n for n in remaining_nodes
-                    if all(dep in completed_ids for dep in n.dependencies)
-                ]
+            executable = [n for n in list(remaining_nodes) if graph.can_execute(n, completed_ids)]
             
-            # Constraint check (Parallelism & Budget)
-            snapshot = capture_resource_pressure(vram_pressure=False, queue_depth=len(remaining_nodes))
-            pressure_factor = 1.0
-            if "vram" in snapshot.active_dimensions or "ram" in snapshot.active_dimensions:
-                pressure_factor = 0.5
-            if "cpu" in snapshot.active_dimensions:
-                pressure_factor = 0.25
-            
-            base_parallel = policy.parallel_waves if policy else 4
-            max_parallel = 1 if safe_mode else max(1, int(base_parallel * pressure_factor))
-            
-            if pressure_factor < 1.0:
-                logger.warning(f"[Executor] Resource pressure detected ({snapshot.active_dimensions}). Throttling concurrency to {max_parallel}.")
-            
-            slots_available = max_parallel - len(running_tasks)
-            
-            if slots_available > 0 and executable_nodes:
-                nodes_to_start = executable_nodes[:slots_available]
-                for node in nodes_to_start:
-                    if budget_tracker.remaining_tool_calls() <= 0:
-                        logger.error("[Shield] Tool budget exhausted.")
-                        break
+            if executable:
+                pressure = capture_resource_pressure(len(running_tasks))
+                
+                # Backpressure Logic: If critical pressure, throttle
+                if pressure.active_dimensions:
+                    logger.warning(f"[V14.2 Executor] Critical backpressure: {pressure.active_dimensions}. Throttling...")
+                    await asyncio.sleep(0.5) 
+
+                for node in executable:
+                    # Slot Management
+                    if safe_mode and len(running_tasks) >= 1: break
+                    if not safe_mode and self._slot_semaphore.locked(): break
+                    
+                    # --- v14.2 Neural Load Balancing ---
+                    if pressure.active_dimensions and not safe_mode:
+                        # Attempt to find a remote node with capacity
+                        remote_node = await dcn_balancer.get_optimal_node(required_capabilities=getattr(node, "capabilities", []))
+                        if remote_node and remote_node != os.getenv("DCN_NODE_ID"):
+                            logger.info(f"[Executor] MISSION MIGRATION: Offloading {node.id} to {remote_node} due to local pressure.")
+                            node.state = NodeState.SCHEDULED
+                            # Mark node as remote for tracking
+                            node.metadata["remote_host"] = remote_node
+                            task = asyncio.create_task(self._execute_remote_node(node, remote_node, perception))
+                            running_tasks[task] = node
+                            remaining_nodes.remove(node)
+                            continue
+
+                    remaining_nodes.remove(node)
                     
                     # formal lifecycle: SCHEDULED
                     node.state = NodeState.SCHEDULED
                     task = asyncio.create_task(
-                        self._execute_node(node, results, perception, blackboard=blackboard, user_id=user_id, wave_count=wave_count, policy=policy, mission_sm=mission_sm)
+                        self._execute_node(
+                            node, results, perception, blackboard=blackboard, 
+                            user_id=user_id, wave_count=wave_count, policy=policy, 
+                            mission_sm=mission_sm
+                        )
                     )
                     running_tasks[task] = node
-                    remaining_nodes.remove(node)
                     budget_tracker.reserve_tool_calls(1)
                     total_nodes_executed += 1
                     logger.debug(f"[Executor] Scheduled node {node.id}")
 
             if not running_tasks:
                 if remaining_nodes:
-                    logger.error(f"[V14.1 Executor] Deadlock detected. Remaining: {[n.id for n in remaining_nodes]}")
+                    logger.error(f"[V14.1 Executor] DEADLOCK: Remaining nodes {[n.id for n in remaining_nodes]} but none executable.")
                 break
 
             # 3. Wait for any task to complete
@@ -158,36 +224,36 @@ class GraphExecutor:
                     results[node.id] = res
                     completed_ids.add(node.id)
                     
-                    # v14.1 Compensation & Refund Logic
+                    # v14.1 Resilience Logic
                     if not res.success and node.critical:
-                        logger.warning(f"[V14.1 Executor] Critical failure on {node.id}")
+                        logger.warning(f"[Resilience] Critical failure on {node.id}. Categorizing error...")
+                        failure_type = await self._categorize_failure(res.error or "Unknown")
                         
-                        # Partial Refund for System failures
-                        failure_type = self._categorize_failure(res.error or "Unknown")
                         if failure_type == "F-3": # System/Infra
-                             refund_amount = 0.8 * 5.0 # 80% of autonomous cost
-                             logger.info(f"[Billing] Triggering partial refund ({refund_amount} credits) for system failure.")
-                             await billing_service.add_credits(user_id, amount=refund_amount)
+                             refund = 4.0 # 80% of autonomous cost
+                             await billing_service.add_credits(user_id, amount=refund)
                         
                         if not safe_mode:
-                            logger.info("[Resilience] Escalating to Safe Mode (Linear).")
+                            logger.info("[Resilience] PERFORMANCE MODE ABORTED. Falling back to Safe Mode (Linear).")
                             safe_mode = True
                         else:
-                            # Already in safe mode and failed critical node -> ROLLBACK
-                            logger.error("[Resilience] Safe mode exhausted. Triggering Compensation Rollback.")
+                            logger.error("[Resilience] Safe mode exhausted on critical node. Triggering Rollback.")
                             await compensation_coordinator.compensate()
+                            # Mark remaining as skipped
+                            for n in list(remaining_nodes): n.state = NodeState.SKIPPED
+                            remaining_nodes.clear()
                             break
                     
-                    # Update budget
                     budget_tracker.add_tokens(node.agent, getattr(res, "total_tokens", 0))
                     
                 except Exception as e:
-                    logger.error(f"[Executor] Task crash for {node.id}: {e}")
+                    logger.error(f"[Executor] Task CRASH for {node.id}: {e}")
                     results[node.id] = ToolResult(success=False, error=str(e), agent=node.agent)
                     completed_ids.add(node.id)
 
-            # Safeguard
             if total_nodes_executed > self.MAX_MISSION_NODES:
+                logger.error(f"[Shield] Node limit reached ({self.MAX_MISSION_NODES}). Aborting.")
+                break
                 results[n.id] = res
                 completed_ids.add(n.id)
                 remaining_nodes.remove(n)
@@ -405,7 +471,10 @@ class GraphExecutor:
                         timeout = policy.budget.cpu_time_limit_ms / 1000.0
 
                     logger.debug(f"[TEC] Executing {node.id} with timeout={timeout}s, scope={memory_scope}")
-
+                    
+                    # 3. Agent Dispatch Selection (Wiring #2)
+                    agent_config = AGENT_REGISTRY.get(agent_name)
+                    
                     async with traced_span(
                         "executor.node",
                         mission_id=mission_id,
@@ -418,31 +487,42 @@ class GraphExecutor:
                                 await ChaosMonkey.simulate_agent_timeout(agent_name, timeout_ms=int(timeout * 1000))
                             if os.getenv("CHAOS_TOOL_CRASH", "").lower() == agent_name.lower():
                                 ChaosMonkey.simulate_tool_crash(agent_name, failure_rate=1.0)
-                        raw_res = await asyncio.wait_for(
-                            ai_service_breaker.async_call(
-                                call_tool,
-                                agent_name,
-                                {
-                                    **merged_params,
-                                    "__memory_scope__": memory_scope,
-                                    "__sandbox__": policy.sandbox_required if policy else False,
-                                },
-                                {
-                                    **perception.get("context", {}),
-                                    "model_tier": getattr(node, "model_tier", "L2"),
-                                    "trace_id": mission_id,
-                                    "mission_id": mission_id,
-                                    "node_id": node.id,
-                                    "request_id": mission_id,
-                                },
-                            ),
-                            timeout=timeout,
-                        )
 
-                    if not isinstance(raw_res, ToolResult):
-                        result = ToolResult(**raw_res) if isinstance(raw_res, dict) else ToolResult(success=True, message=str(raw_res), agent=agent_name)
-                    else:
-                        result = raw_res
+                        from backend.core.agent_config import AgentConfig
+                        if isinstance(agent_config, AgentConfig):
+                            # Distributed mTLS Dispatch
+                            result = await self._dispatch_remote_agent_call(
+                                agent_config, 
+                                {**merged_params, "__memory_scope__": memory_scope},
+                                perception.get("context", {}),
+                                timeout=timeout
+                            )
+                        else:
+                            # Legacy Local Call
+                            raw_res = await asyncio.wait_for(
+                                ai_service_breaker.async_call(
+                                    call_tool,
+                                    agent_name,
+                                    {
+                                        **merged_params,
+                                        "__memory_scope__": memory_scope,
+                                        "__sandbox__": policy.sandbox_required if policy else False,
+                                    },
+                                    {
+                                        **perception.get("context", {}),
+                                        "model_tier": getattr(node, "model_tier", "L2"),
+                                        "trace_id": mission_id,
+                                        "mission_id": mission_id,
+                                        "node_id": node.id,
+                                        "request_id": mission_id,
+                                    },
+                                ),
+                                timeout=timeout,
+                            )
+                            if not isinstance(raw_res, ToolResult):
+                                result = ToolResult(**raw_res) if isinstance(raw_res, dict) else ToolResult(success=True, message=str(raw_res), agent=agent_name)
+                            else:
+                                result = raw_res
                     self._validate_payload_schema(
                         result.model_dump(),
                         getattr(getattr(node, "contract", None), "output_schema", {}),
@@ -584,9 +664,98 @@ class GraphExecutor:
                     "compensation": compensation,
                 },
             )
-
         finally:
             AgentSandbox.deactivate(sandbox_token)
+
+    async def _execute_remote_node(self, node: Any, remote_node: str, perception: Dict[str, Any]) -> ToolResult:
+        """
+        Sovereign v14.2 Distributed Offloading.
+        1. Package task meta and inputs.
+        2. Broadcast REMOTE_EXECUTION_REQUEST pulse.
+        3. Poll for REMOTE_RESULT pulse or Redis state change.
+        """
+        mission_id = perception.get("request_id", "swarm_mission")
+        logger.info(f"[DCN] Packaging {node.id} for remote execution on {remote_node}...")
+        
+        from backend.core.dcn_protocol import DCNProtocol
+        dcn = DCNProtocol()
+        if not dcn.is_active:
+             return ToolResult(success=False, error="DCN Protocol offline", agent=node.agent)
+
+        payload = {
+            "node_id": node.id,
+            "agent": node.agent,
+            "inputs": node.inputs,
+            "perception": perception,
+            "target_node": remote_node
+        }
+        
+        # Broadcast the request
+        await dcn.broadcast_gossip(mission_id, payload, pulse_type="remote_execution_request")
+        
+        # 4. Wait for Result (Polling Redis status for simplicity in v14.2)
+        start_wait = time.time()
+        max_wait = getattr(node.contract, "timeout_ms", 60000) / 1000.0
+        
+        while time.time() - start_wait < max_wait:
+            state_data = CentralExecutionState.get_full_data(mission_id)
+            if state_data:
+                node_events = state_data.get("nodes", {}).get(node.id, {}).get("events", [])
+                for evt in node_events:
+                    if evt.get("status") == "completed":
+                        info = evt.get("info", {})
+                        logger.info(f"[DCN] Remote task {node.id} result recovered from cluster state.")
+                        return ToolResult(
+                            success=True,
+                            message=info.get("message", ""),
+                            agent=node.agent,
+                            data=info.get("data", {}),
+                            latency_ms=info.get("latency_ms", 0)
+                        )
+                    elif evt.get("status") == "failed":
+                        return ToolResult(success=False, error=evt.get("info", {}).get("error", "Remote failure"), agent=node.agent)
+            
+            await asyncio.sleep(2)
+            
+        return ToolResult(success=False, error=f"Remote execution timeout ({max_wait}s) on {remote_node}", agent=node.agent)
+
+    async def _dispatch_remote_agent_call(self, config: Any, params: Dict[str, Any], context: Dict[str, Any], timeout: float = 30.0) -> ToolResult:
+        """
+        Sovereign v14.2: Secure mTLS Dispatch.
+        Establishes a mutual TLS 1.3 connection to a remote agent endpoint.
+        """
+        import aiohttp
+        ssl_ctx = self._create_ssl_context()
+        
+        headers = {
+            "X-Sovereign-Internal": os.getenv("INTERNAL_SERVICE_KEY", "dev-secret"),
+            "Content-Type": "application/json"
+        }
+        
+        try:
+            async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=ssl_ctx)) as session:
+                async with session.post(
+                    f"{config.mtls_endpoint}/execute",
+                    json={"params": params, "context": context},
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=timeout)
+                ) as response:
+                    if response.status != 200:
+                        txt = await response.text()
+                        return ToolResult(success=False, error=f"Remote agent {config.name} rejected call ({response.status}): {txt}", agent=config.type)
+                    
+                    data = await response.json()
+                    # Expecting standard ToolResult format
+                    return ToolResult(
+                        success=data.get("success", False),
+                        message=data.get("message", ""),
+                        agent=config.type,
+                        data=data.get("data", {}),
+                        latency_ms=data.get("latency_ms", 0)
+                    )
+        except Exception as e:
+            logger.error(f"[mTLS] Dispatch failure to {config.name}: {e}")
+            return ToolResult(success=False, error=f"Secure dispatch failure: {str(e)}", agent=config.type)
 
     async def _categorize_failure(self, error: str) -> str:
         """v14.1 Failure Classification."""

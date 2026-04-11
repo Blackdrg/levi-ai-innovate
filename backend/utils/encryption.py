@@ -96,4 +96,41 @@ class SovereignVault:
         """Sets up the system for the next key rotation cycle."""
         logger.info(f"SovereignVault: Rotating to Master Key version {new_version}")
         # In practice, this would trigger a background task to re-encrypt all stored T3/T4 data
-        pass
+class SovereignKMS:
+    """
+    Sovereign KMS Interface for high-fidelity cognitive signing.
+    Used for HMAC-based audit chains and cryptographic verification.
+    """
+    
+    @staticmethod
+    def sign_trace(payload: str) -> str:
+        """
+        Signs a trace payload using the system secret.
+        Returns a hex-encoded HMAC-SHA256 signature.
+        """
+        import hmac
+        import hashlib
+        
+        secret = os.getenv("SYSTEM_SECRET", "levi-default-0000").encode()
+        signature = hmac.new(
+            secret,
+            payload.encode("utf-8"),
+            hashlib.sha256
+        ).hexdigest()
+        
+        return signature
+
+    @staticmethod
+    def verify_trace(payload: str, signature: str) -> bool:
+        """Verifies a trace payload against a signature."""
+        import hmac
+        import hashlib
+        
+        secret = os.getenv("SYSTEM_SECRET", "levi-default-0000").encode()
+        expected = hmac.new(
+            secret,
+            payload.encode("utf-8"),
+            hashlib.sha256
+        ).hexdigest()
+        
+        return hmac.compare_digest(expected, signature)

@@ -15,16 +15,16 @@ router = APIRouter(prefix="/telemetry", tags=["Sovereign Telemetry"])
 async def stream_mission(mission_id: str, current_user = Depends(get_current_user)):
     """
     SSE stream for mission telemetry.
-    Real-time mission wave progress and logic pulses.
+    Sovereign v14.2: Diverted to per-user channel with client-side filtering.
     """
     if not orchestrator:
         raise HTTPException(status_code=503, detail="Orchestrator offline")
 
-    async def event_generator():
-        async for event in orchestrator.stream_mission_events(mission_id):
-            yield f"data: {json.dumps(event)}\n\n"
-    
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    user_id = getattr(current_user, "id", "global")
+    return StreamingResponse(
+        orchestrator.stream_mission_events(user_id), 
+        media_type="text/event-stream"
+    )
 
 @router.get("/pulse")
 async def global_telemetry_stream(current_user = Depends(get_current_user)):
@@ -64,10 +64,9 @@ async def get_workflow_trace(mission_id: str, current_user = Depends(get_current
 
 def broadcast_mission_event(user_id: str, event_type: str, data: dict):
     """
-    Sovereign v14.2.0: Telemetry Pulse Broadcaster.
-    Emits cognitive events to the local log and prepares them for SSE streaming.
+    Sovereign v14.2: Telemetry Pulse Broadcaster.
+    Emits events to Redis PubSub for SSE consumption.
     """
-    logger.info(f"[Telemetry] {event_type} for {user_id}: {json.dumps(data)}")
-    # In a full production setup, this would push to a Redis PubSub channel 
-    # that the SSE generators (stream_mission) are listening to.
+    from backend.broadcast_utils import SovereignBroadcaster
+    SovereignBroadcaster.publish(event_type, data, user_id=user_id)
 

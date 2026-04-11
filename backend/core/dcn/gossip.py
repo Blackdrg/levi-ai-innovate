@@ -69,6 +69,7 @@ class DCNGossip:
             "send_ts": time.time(), # Added for RTT calculation
             "term": self.current_term, # Added for consensus
             "type": payload.get("type", "generic"),
+            "region": payload.get("region", os.getenv("DCN_REGION", "us-east")),
             "payload": payload
         }
         msg_json = json.dumps(msg_dict)
@@ -165,6 +166,7 @@ class DCNGossip:
                 node_data["node_id"] = pulse.get("node")
                 node_data["role"] = pulse.get("role")
                 node_data["weight"] = pulse.get("weight")
+                node_data["region"] = pulse.get("region", "unknown")
                 node_data["capabilities"] = node_data.get("capabilities", ["llm"])
                 node_data["last_seen"] = time.time()
                 

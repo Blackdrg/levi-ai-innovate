@@ -44,57 +44,42 @@ class PythonReplAgentV8(BaseV8Agent[PythonInput]):
                       message="Neural link blocked due to security integrity breach."
                   )
 
-        # 2. Local Restricted Execution
-        output_buffer = io.StringIO()
-        old_stdout, old_stderr = sys.stdout, sys.stderr
-        sys.stdout, sys.stderr = output_buffer, output_buffer
+        # 2. Sovereign Sandbox Execution (Tier 2/3)
+        from backend.core.execution_guardrails import AgentSandbox
+        
+        # Prepare script for container: Wrap code in print() if it's a single expression 
+        # but usually we just execute it as a script.
+        # We pass the code via a command-line argument or a piped file. 
+        # For simplicity in this v14.2 implementation, we use a 'python -c' call.
+        
+        container_code = f"""
+import json, math, datetime, random, statistics
+# Restricted Globals Inject (V8 Hardened)
+class SovereignContext:
+    def __init__(self):
+        self.math = math
+        self.json = json
+        self.datetime = datetime
+        self.random = random
+        self.statistics = statistics
 
-        # Restricted Globals (V8.8 Hardened)
-        import math
-        import json
-        import datetime
-        import random
-        import statistics
-        restricted_globals = {
-            "__builtins__": {
-                "print": print, "range": range, "len": len, "int": int, "float": float,
-                "str": str, "list": list, "dict": dict, "set": set, "sum": sum,
-                "min": min, "max": max, "abs": abs, "round": round, "map": map, "filter": filter,
-                "any": any, "all": all, "enumerate": enumerate, "bool": bool, "zip": zip,
-                "pow": pow, "divmod": divmod
-            },
-            "math": math,
-            "json": json,
-            "datetime": datetime,
-            "random": random,
-            "statistics": statistics
-        }
-
-        try:
-            def _exec_logic():
-                # Perform the execution in a dedicated scope
-                exec(code, restricted_globals)
-            
-            # 3. Async Safe Threading
-            await asyncio.wait_for(asyncio.to_thread(_exec_logic), timeout=input_data.timeout)
-            
-            output = output_buffer.getvalue()
-            
+{code}
+"""
+        
+        sandbox_res = await AgentSandbox.run_in_sandbox(
+            command=["python", "-c", container_code],
+            timeout=input_data.timeout
+        )
+        
+        if sandbox_res["success"]:
             return AgentResult(
                 success=True,
-                message=output if output else "Logic pass completed with null output.",
-                data={"output": output, "execution_success": True}
+                message=sandbox_res["stdout"] if sandbox_res["stdout"] else "Logic pass completed with null output.",
+                data={"output": sandbox_res["stdout"], "execution_success": True}
             )
-            
-        except asyncio.TimeoutError:
-            return AgentResult(success=False, error=f"Mission timed out after {input_data.timeout}s.")
-        except Exception as e:
-            error_trace = traceback.format_exc()
-            self.logger.warning(f"[Python-V8] Logic Mission failed: {e}")
+        else:
             return AgentResult(
                 success=False,
-                error=f"Logic Anomaly: {str(e)}",
-                data={"traceback": error_trace}
+                error=f"Logic Anomaly: {sandbox_res.get('stderr') or sandbox_res.get('error')}",
+                data={"exit_code": sandbox_res.get("exit_code")}
             )
-        finally:
-            sys.stdout, sys.stderr = old_stdout, old_stderr

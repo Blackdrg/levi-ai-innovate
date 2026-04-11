@@ -44,8 +44,40 @@ class AnomalyDetectorService:
                          # In production, we'd fire an alert or trigger auto-scaling
             
             # 2. Fidelity Anomalies (Cognitive Drift)
-            # This would check Mission fidelity_score vs historic per-intent averages
-            pass
+            # 🛡️ Graduation #16: Detecting decaying cognitive performance
+            fidelity_stmt = select(MissionMetric.fidelity_score).where(
+                MissionMetric.created_at >= datetime.now(timezone.utc) - timedelta(days=1) # 24h baseline
+            )
+            res = await session.execute(fidelity_stmt)
+            scores = [r[0] for r in res.all() if r[0] > 0]
+            
+            if len(scores) >= 20:
+                avg_fidelity = np.mean(scores)
+                # Flag missions with > 30% drop from baseline
+                low_fidelity_limit = avg_fidelity * 0.7 
+                
+                check_stmt = select(MissionMetric).where(
+                    MissionMetric.fidelity_score < low_fidelity_limit,
+                    MissionMetric.created_at >= datetime.now(timezone.utc) - timedelta(minutes=15)
+                )
+                res = await session.execute(check_stmt)
+                outliers = res.scalars().all()
+                
+                for m in outliers:
+                    logger.warning(f"⚠️ [CognitiveDrift] High-fragility mission: {m.mission_id} (Fidelity: {m.fidelity_score:.2f} vs avg {avg_fidelity:.2f})")
+                    # Push to FragilityIndex for domain-level tracking
+                    from backend.db.models import FragilityIndex
+                    domain = m.intent or "unknown"
+                    frag_stmt = select(FragilityIndex).where(FragilityIndex.domain == domain)
+                    res = await session.execute(frag_stmt)
+                    frag = res.scalar_one_or_none()
+                    if frag:
+                        frag.failure_count += 1
+                        frag.last_updated = datetime.now(timezone.utc)
+                    else:
+                        session.add(FragilityIndex(domain=domain, failure_count=1))
+                
+                await session.commit()
 
     async def start(self):
         while True:

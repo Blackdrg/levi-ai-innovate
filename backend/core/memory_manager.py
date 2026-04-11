@@ -53,6 +53,9 @@ class MemoryManager:
         logger.info("[MemoryV8] Initializing Sovereign Memory Engine tiers...")
         from backend.services.mcm import mcm_service
         await mcm_service.start()
+        
+        # Start background maintenance tasks
+        create_tracked_task(self._background_reindexing_loop(), name="memory-reindexing-loop")
 
     async def shutdown(self) -> None:
         """Graceful teardown of memory tiers."""
@@ -276,9 +279,16 @@ class MemoryManager:
             # 4. Trigger Autonomous Evolution (Fact -> Trait)
             await self._trigger_evolution(user_id)
             
-            # 5. Telemetry Pulse
+            # 5. Telemetry Pulse & MCM Broadcast (Graduation #6)
             broadcast_mission_event(user_id, "facts_extracted", {
                 "count": len(new_facts)
+            })
+            
+            from backend.services.mcm import mcm_service
+            await mcm_service.emit_event("fact_extracted", user_id, "background_extraction", {
+                "facts": new_facts,
+                "count": len(new_facts),
+                "timestamp": time.time()
             })
             
         except Exception as e:
@@ -324,10 +334,47 @@ class MemoryManager:
             if new_traits:
                 for trait in new_traits: trait["category"] = "trait"
                 await store_facts(user_id, new_traits)
+                
+                # Global MCM Pulse (Graduation #6)
+                from backend.services.mcm import mcm_service
+                for trait in new_traits:
+                    await mcm_service.emit_event("trait_distilled", user_id, "evolution_cycle", {
+                        "trait": trait.get("fact"),
+                        "importance": trait.get("importance", 0.95),
+                        "timestamp": time.time()
+                    })
+
                 logger.info(f"[MemoryV8] Evolution Complete: Consolidated {len(facts_data)} facts into {len(new_traits)} traits.")
 
         except Exception as e:
             logger.error(f"[MemoryV8] Distillation failure: {e}")
+
+    async def _background_reindexing_loop(self):
+        """Cyclical background maintenance: Re-indexes memory for active users."""
+        logger.info("[MemoryV8] Background maintenance loop: [ACTIVE]")
+        while True:
+            try:
+                # Wait for 4 hours between full cycles
+                await asyncio.sleep(4 * 3600) 
+                
+                logger.info("[MemoryV8] Starting cyclical memory re-indexing pass...")
+                from sqlalchemy import select
+                async with PostgresDB._session_factory() as session:
+                    # Identify 'active' users as those with recent missions
+                    stmt = select(Mission.user_id).distinct().order_by(Mission.updated_at.desc()).limit(100)
+                    result = await session.execute(stmt)
+                    active_users = result.scalars().all()
+                    
+                for user_id in active_users:
+                    if user_id and not str(user_id).startswith("guest:"):
+                        await SovereignVectorStore.reindex_user_memory(user_id)
+                        # Yield to other tasks
+                        await asyncio.sleep(1)
+                
+                logger.info(f"[MemoryV8] Cyclical re-indexing complete for {len(active_users)} users.")
+            except Exception as e:
+                logger.error(f"[MemoryV8] Background maintenance error: {e}")
+                await asyncio.sleep(600)
 
     # ── Utilities ────────────────────────────────────────────────────────────
 
@@ -420,7 +467,15 @@ class MemoryManager:
             except Exception as e:
                 logger.error(f"Redis purge failed: {e}")
 
-        # 5. Mission Telemetry
+        # 5. Global MCM Pulse (Tier 5)
+        try:
+            from backend.services.mcm import mcm_service
+            await mcm_service.emit_event("PURGE_USER", user_id, "compliance_wipe", {"timestamp": time.time()})
+            logger.info(f"[MCM] Broadcasted PURGE_USER pulse for {user_id}")
+        except Exception as e:
+            logger.error(f"[MCM] Global purge pulse failed: {e}")
+
+        # 6. Mission Telemetry
         broadcast_mission_event(user_id, "memory_wipe_complete", {
             "facts_cleared": cleared_count
         })
