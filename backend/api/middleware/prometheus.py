@@ -24,10 +24,12 @@ MISSION_COST_GAUGE = Counter(
     ["user_id", "tier"]
 )
 
+from backend.utils.metrics import MetricsHub, MISSION_CU
+
 class PrometheusMiddleware(BaseHTTPMiddleware):
     """
-    Sovereign v14.2.0: Prometheus Observability Middleware.
-    Tracks high-fidelity metrics for all cognitive and API traffic.
+    Sovereign v14.2.0: High-Fidelity Prometheus Observability.
+    Tracks API traffic, cognitive unit consumption, and system health.
     """
     async def dispatch(self, request: Request, call_next):
         if request.url.path == "/metrics":
@@ -38,13 +40,20 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
         
         start_time = time.time()
         
-        response = await call_next(request)
-        
-        latency = time.time() - start_time
-        status_code = str(response.status_code)
-        
-        # Update metrics
-        REQUEST_COUNT.labels(method=method, endpoint=endpoint, status_code=status_code).inc()
-        REQUEST_LATENCY.labels(method=method, endpoint=endpoint).observe(latency)
-        
+        try:
+            response = await call_next(request)
+            status_code = str(response.status_code)
+        except Exception as e:
+            status_code = "500"
+            raise e
+        finally:
+            latency = time.time() - start_time
+            
+            # 1. Update Standard API Metrics
+            REQUEST_COUNT.labels(method=method, endpoint=endpoint, status_code=status_code).inc()
+            REQUEST_LATENCY.labels(method=method, endpoint=endpoint).observe(latency)
+            
+            # 2. Trigger System Telemetry Capture
+            MetricsHub.capture_system_telemetry()
+            
         return response

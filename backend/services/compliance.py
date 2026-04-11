@@ -83,28 +83,43 @@ async def export_audit_logs_csv(user_id: str, days: int = 30) -> str:
         logger.error(f"[Compliance] Export failure: {e}")
         return "Failed to manifest audit artifact."
 
-async def hard_delete_user_data(user_id: str) -> bool:
+async def hard_delete_user_data(user_id: str) -> Dict[str, Any]:
     """
     Sovereign v14.2.0: Permanent Data Scrubbing (GDPR Art 17).
-    Executes an absolute purge of all user-linked data across 4 Cognitive Tiers.
+    Executes an absolute purge of all user-linked data across 5 Cognitive Tiers.
+    Returns a signed deletion receipt for forensic proof.
     """
     try:
         from backend.core.memory_manager import MemoryManager
         mm = MemoryManager()
         
-        # 1. Trigger Absolute Purge (Multi-Tier)
+        # 1. Trigger Absolute Purge (Multi-Tier + Global Pulse)
         cleared_count = await mm.clear_all_user_data(user_id)
         
-        # 2. Final Trace Erasure
+        # 2. Generate Signed Receipt
+        receipt_payload = f"PURGE_SUCCESS|{user_id}|{datetime.now(timezone.utc).isoformat()}|{cleared_count}"
+        signature = hmac.new(
+            SOVEREIGN_AUDIT_SECRET.encode(),
+            receipt_payload.encode(),
+            hashlib.sha256
+        ).hexdigest()
+        
+        # 3. Final Trace Erasure
         await log_audit_action(
             user_id, 
             "HARD_DELETE_SUCCESS", 
-            detail=f"Absolute GDPR data erasure finalized. Cleared {cleared_count} records."
+            detail=f"Absolute GDPR data erasure finalized (Receipt: {signature[:8]}...)."
         )
         
-        logger.info(f"[Compliance] Permanent cognitive wipe successful for {user_id}.")
-        return True
+        logger.info(f"[Compliance] Permanent cognitive wipe successful for {user_id}. Receipt generated.")
+        return {
+            "status": "success",
+            "user_id": user_id,
+            "cleared_count": cleared_count,
+            "receipt": signature,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
     except Exception as e:
         logger.error(f"[Compliance] Hard delete failure for {user_id}: {e}")
-        return False
+        return {"status": "failure", "error": str(e)}
 

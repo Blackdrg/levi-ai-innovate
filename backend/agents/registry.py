@@ -1,60 +1,45 @@
-"""
-Sovereign Agent Registry v9.
-Centralized mapping for autonomous cognitive agents.
-All agents are fully wired — no stubs remain.
-"""
-
-from .research_agent  import ResearchAgent
-from .code_agent      import CodeAgent
-from .search_agent    import SearchAgent
-from .critic_agent    import CriticAgent
-from .python_repl_agent import PythonReplAgent
-from .document_agent  import DocumentAgent
-from .task_agent      import TaskAgent
-from .consensus_agent import ConsensusAgentV11
-from .optimizer_agent import OptimizerAgent
-from .memory_agent    import MemoryAgent
-from .diagnostic_agent import DiagnosticAgent
-from .image_agent     import ImageAgent
-from .video_agent     import VideoAgent
-from .relay_agent     import RelayAgent
-from .artisan_agent   import ArtisanAgent
-from .scout_agent     import ScoutAgent
-from .hard_rule_agent import HardRuleAgent
-
-AGENT_REAGENT_MAP = {
-    # Core Logic
-    "artisan": "ArtisanAgent",
-    "scout": "ScoutAgent",
-    "critic": "CriticAgent",
-    "coder": "CoderAgent",
-    "researcher": "ResearcherAgent",
-    "analyst": "AnalystAgent",
-    "hard_rule": "HardRuleAgent",
-    "swarm_ctrl": "SwarmCtrlAgent",
-    "optimizer": "OptimizerAgent",
-    "memory": "MemoryAgent",
-    "diagnostic": "DiagnosticAgent",
-    "relay": "RelayAgent",
-    
-    # Multimedia
-    "imaging": "ImagingAgent",
-    "video": "VideoAgent"
-}
+import os
+from backend.core.agent_config import AgentConfig
 
 AGENT_REGISTRY = {
-    "Artisan": ArtisanAgent(),
-    "Scout": ScoutAgent(),
-    "Critic": CriticAgent(),
-    "Coder": PythonReplAgent(),
-    "Researcher": ResearchAgent(),
-    "Analyst": DocumentAgent(),
-    "HardRule": HardRuleAgent(),
-    "SwarmCtrl": ConsensusAgentV11(),
-    "Optimizer": OptimizerAgent(),
-    "Memory": MemoryAgent(),
-    "Diagnostic": DiagnosticAgent(),
-    "Imaging": ImageAgent(),
-    "Video": VideoAgent(),
-    "Relay": RelayAgent(),
+    "Artisan": AgentConfig(
+        name="Artisan Agent",
+        type="artisan",
+        mtls_endpoint=os.getenv("AGENT_ARTISAN_MTLS_ENDPOINT", "https://localhost:5002"),
+        sandbox_image="python:3.10-slim",
+        capabilities=["code_execution", "file_management"]
+    ),
+    "Scout": AgentConfig(
+        name="Scout Agent",
+        type="scout",
+        mtls_endpoint=os.getenv("AGENT_SCOUT_MTLS_ENDPOINT", "https://localhost:5001"),
+        timeout_ms=15000,
+        capabilities=["web_search", "crawling"]
+    ),
+    "Critic": AgentConfig(
+        name="Critic Agent",
+        type="critic",
+        mtls_endpoint=os.getenv("AGENT_CRITIC_MTLS_ENDPOINT", "https://localhost:5003"),
+        capabilities=["plan_critique", "validation"]
+    ),
+    "Coder": AgentConfig(
+        name="Coder Agent",
+        type="coder",
+        mtls_endpoint=os.getenv("AGENT_CODER_MTLS_ENDPOINT", "https://localhost:5004"),
+        sandbox_image="python:3.10-slim-buster",
+        capabilities=["low_level_code", "debugging"]
+    ),
+    "Researcher": AgentConfig(
+        name="Researcher Agent",
+        type="researcher",
+        mtls_endpoint=os.getenv("AGENT_RESEARCH_MTLS_ENDPOINT", "https://localhost:5005"),
+        timeout_ms=60000,
+        capabilities=["deep_research", "synthesis"]
+    ),
+    "Analyst": AgentConfig(
+        name="Analyst Agent",
+        type="analyst",
+        mtls_endpoint=os.getenv("AGENT_ANALYST_MTLS_ENDPOINT", "https://localhost:5006"),
+        capabilities=["document_analysis", "nlp"]
+    ),
 }

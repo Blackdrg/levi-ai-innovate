@@ -40,6 +40,16 @@ class ReasoningCore:
             critique = self._critique_graph(goal, perception, graph)
             simulation = self._simulate_graph(graph)
             confidence = self._score_confidence(graph, critique, simulation, decision)
+            
+            # 🛡️ Graduation #13: Agentic Critique (Meta-Reasoning Bridge)
+            if confidence < 0.7:
+                logger.info(f"[ReasoningCore] Low confidence ({confidence}). Invoking Agentic Critique...")
+                agentic_feedback = await self._invoke_agentic_critique(goal, graph)
+                if agentic_feedback and not agentic_feedback.get("success", True):
+                    critique["issues"].append(f"Agentic Critique: {agentic_feedback.get('feedback', 'Plan failed deep-logic validation.')}")
+                    # Recalculate confidence after Agentic feedback
+                    confidence = self._score_confidence(graph, critique, simulation, decision)
+
             strategy = self._select_execution_strategy(graph, critique, simulation, decision)
 
         enriched = copy.deepcopy(graph)
@@ -49,7 +59,7 @@ class ReasoningCore:
                 "reasoning_strategy": strategy,
                 "critique": critique,
                 "simulation": simulation,
-                "passes": ["plan_generation", "plan_critique"],
+                "passes": ["plan_generation", "plan_critique", "agentic_meta_critique" if confidence < 0.7 else None],
                 "graph_signature": self.graph_signature(graph),
                 "reasoning_active": not strategy.get("reasoning_skipped", False),
             }
@@ -61,6 +71,29 @@ class ReasoningCore:
             "confidence": confidence,
             "strategy": strategy,
         }
+
+    async def _invoke_agentic_critique(self, goal: Any, graph: TaskGraph) -> Dict[str, Any]:
+        """
+        Calls the CriticAgent to perform high-fidelity audit of the proposed DAG.
+        """
+        try:
+            from backend.agents.critic_agent import CriticAgent, CriticInput
+            agent = CriticAgent()
+            
+            # Format graph for the critic
+            graph_desc = "\n".join([f"- {node.id}: use {node.agent} to {node.objective}. Depends on: {node.dependencies}" for node in graph.nodes])
+            
+            payload = CriticInput(
+                goal=getattr(goal, "objective", "unknown"),
+                agent_output=f"Proposed Task Graph:\n{graph_desc}",
+                context={"perception_mode": "architectural_validation"}
+            )
+            
+            result = await agent._run(payload)
+            return result
+        except Exception as e:
+            logger.error(f"[ReasoningCore] Agentic Critique failed: {e}")
+            return {"success": True, "feedback": "Bridge failure"}
 
     @staticmethod
     def graph_signature(graph: TaskGraph) -> str:
@@ -133,15 +166,21 @@ class ReasoningCore:
         return self._compute_complexity_score(perception, decision, TaskGraph())
 
     def _critique_graph(self, goal: Any, perception: Dict[str, Any], graph: TaskGraph) -> Dict[str, Any]:
+        """
+        Sovereign v14.2 High-Fidelity Graph Critique.
+        Checks for: Structural Integrity, Tool Sufficiency, and Logic Depth.
+        """
         issues: List[str] = []
         warnings: List[str] = []
         node_ids = set()
         available = {node.id for node in graph.nodes}
+        agent_types = {node.agent for node in graph.nodes}
 
         if not graph.nodes:
             issues.append("Planner produced an empty graph.")
 
         for node in graph.nodes:
+            # 1. Structural Checks
             if node.id in node_ids:
                 issues.append(f"Duplicate node id detected: {node.id}")
             node_ids.add(node.id)
@@ -150,22 +189,44 @@ class ReasoningCore:
             if missing:
                 issues.append(f"Node {node.id} has missing dependencies: {missing}")
 
+            # 2. Resiliency Checks
             if not node.fallback_output and node.critical:
                 warnings.append(f"Critical node {node.id} has no fallback output.")
 
-            if not node.compensation_action and node.critical:
-                warnings.append(f"Critical node {node.id} has no compensation action.")
+            # 3. Cognitive Quality Checks
+            if "research_agent" in agent_types and "search_agent" in agent_types:
+                warnings.append("Potential logic redundancy: Both researcher and searcher active.")
+            
+            # Sub-graph depth check for complex queries
+            if len(node.dependencies) > 4:
+                warnings.append(f"Node {node.id} is a bottleneck with {len(node.dependencies)} dependencies.")
 
         objective = getattr(goal, "objective", "") or perception.get("input", "")
+        
+        # 4. Complexity Mismatch detection
         if objective and len(graph.nodes) == 1 and len(objective.split()) > 18:
             warnings.append("Single-node plan for a high-context objective may be too shallow.")
+            # Trigger harder penalty if it's very shallow
+            if len(objective.split()) > 40:
+                issues.append("Plan is critically shallow for the provided context complexity.")
 
-        return {"issues": issues, "warnings": warnings, "goal": objective}
+        return {
+            "issues": issues, 
+            "warnings": warnings, 
+            "goal": objective,
+            "agent_diversity": len(agent_types)
+        }
 
     def _simulate_graph(self, graph: TaskGraph) -> Dict[str, Any]:
+        """
+        Sovereign v14.2 Simulation Pass with Resource Prediction.
+        """
         produced: Dict[str, str] = {}
         unresolved: List[str] = []
         order: List[List[Dict[str, Any]]] = []
+        
+        total_predicted_tokens = 0
+        vram_est_mb = 0
 
         pending = {node.id: node for node in graph.nodes}
 
@@ -183,12 +244,19 @@ class ReasoningCore:
             for node in ready:
                 mock_output = f"simulated:{node.agent}:{node.id}"
                 produced[node.id] = mock_output
+                
+                # Dynamic Resource Prediction
+                node_tokens = 500 if "research" in node.agent else 200
+                total_predicted_tokens += node_tokens
+                if "imaging" in node.agent or "video" in node.agent:
+                    vram_est_mb += 2048
+                
                 layer.append(
                     {
                         "node_id": node.id,
                         "agent": node.agent,
                         "depends_on": list(node.dependencies),
-                        "mock_output": mock_output,
+                        "predicted_tokens": node_tokens
                     }
                 )
                 del pending[node.id]
@@ -199,6 +267,11 @@ class ReasoningCore:
             "status": "ok" if not unresolved else "blocked",
             "unresolved_nodes": unresolved,
             "dry_run": order,
+            "resource_prediction": {
+                "estimated_tokens": total_predicted_tokens,
+                "vram_mb": vram_est_mb,
+                "concurrency_max": max((len(layer) for layer in order), default=0)
+            }
         }
 
     def _score_confidence(
@@ -209,29 +282,36 @@ class ReasoningCore:
         decision: Optional[Any],
     ) -> float:
         """
-        v14.1 Adaptive ML Confidence Scoring.
+        v14.2 High-Fidelity Confidence Scoring.
+        Now factors in resource prediction and agent diversity.
         """
+        res = simulation.get("resource_prediction", {})
         features = {
             "depth": float(self._graph_depth(graph)),
             "node_count": float(len(graph.nodes)),
-            "dependencies": float(sum(len(node.dependencies) for node in graph.nodes)),
-            "historical_success": self._historical_success_rate(graph),
-            "complexity": getattr(decision, "complexity_score", 0.5) if decision else 0.5,
+            "agent_diversity": float(critique.get("agent_diversity", 1)),
+            "est_tokens": float(res.get("estimated_tokens", 0)),
             "issue_count": float(len(critique["issues"])),
             "warning_count": float(len(critique["warnings"])),
-            "simulation_blocked": 1.0 if simulation["status"] not in {"ok", "skipped"} else 0.0
+            "sim_blocked": 1.0 if simulation["status"] != "ok" else 0.0
         }
         
-        # Call the ML model
-        base_confidence = confidence_model.predict(features)
+        # Base score starts from simulation status
+        score = 0.9 if simulation["status"] == "ok" else 0.4
         
-        # Apply deterministic penalties for critical issues
-        penalty = 0.2 * len(critique["issues"])
-        if features["simulation_blocked"] > 0:
-            penalty += 0.2
+        # Penalties
+        score -= (features["issue_count"] * 0.15)
+        score -= (features["warning_count"] * 0.05)
+        
+        # Penalty for excessive resource usage (Fragility risk)
+        if features["est_tokens"] > 5000:
+            score -= 0.1
+        
+        # Complexity Reward for multi-node planning success
+        if features["node_count"] > 2 and simulation["status"] == "ok":
+            score += 0.05
             
-        final_score = max(0.05, min(0.99, round(base_confidence - penalty, 3)))
-        return final_score
+        return max(0.05, min(0.99, round(score, 3)))
 
     def _select_execution_strategy(
         self,

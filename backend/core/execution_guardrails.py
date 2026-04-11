@@ -117,26 +117,62 @@ class AgentSandbox:
         _sandbox_context.reset(token)
 
     @staticmethod
-    def current() -> Dict[str, Any]:
-        return dict(_sandbox_context.get({}))
+    async def run_in_sandbox(command: List[str], image: str = "python:3.11-slim", timeout: int = 10) -> Dict[str, Any]:
+        """
+        Sovereign v14.2 Tier 2 Execution: Hardened Docker Isolation.
+        Now uses the consolidated DockerSandbox engine.
+        """
+        from backend.core.executor.sandbox import get_sandbox
+        
+        # Mock class/config for get_sandbox
+        class SandboxConfig:
+            def __init__(self, img):
+                self.sandbox_image = img
+                self.memory_limit_mb = 256
+                self.cpu_cores = 1.0
+        
+        sandbox = get_sandbox(SandboxConfig(image))
+        return await sandbox.run_command(command, timeout=float(timeout))
 
-    @staticmethod
-    def tool_allowed(tool_name: str) -> bool:
-        ctx = _sandbox_context.get({})
-        allowed = ctx.get("allowed_tools") or set()
-        return not allowed or tool_name in allowed
 
+def _get_vram_info() -> Dict[str, int]:
+    """Probes NVIDIA GPU status if available."""
+    try:
+        import subprocess
+        # Probing nvidia-smi for total/used VRAM
+        res = subprocess.run(
+            ["nvidia-smi", "--query-gpu=memory.total,memory.used", "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, check=True
+        )
+        total, used = map(int, res.stdout.strip().split(", "))
+        return {"total": total * 1024**2, "used": used * 1024**2}
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        # Fallback or Mock for environments without NVIDIA GPUs (Local Dev)
+        return {"total": 8 * 1024**3, "used": 0}
 
-def capture_resource_pressure(vram_pressure: bool, queue_depth: int) -> ResourcePressureSnapshot:
+def capture_resource_pressure(queue_depth: int) -> ResourcePressureSnapshot:
+    """
+    Sovereign v14.2: High-fidelity resource pressure capture.
+    Calculates dynamic backpressure for CPU, RAM, and VRAM.
+    """
     vm = psutil.virtual_memory()
+    gpu_info = _get_vram_info()
+    
+    vram_percent = (gpu_info["used"] / gpu_info["total"]) * 100 if gpu_info["total"] > 0 else 0
+    vram_pressure = vram_percent >= 85.0
+    
     snapshot = ResourcePressureSnapshot(
         cpu_percent=psutil.cpu_percent(),
         ram_used_bytes=int(vm.used),
         ram_percent=float(vm.percent),
         queue_depth=max(queue_depth, 0),
-        vram_pressure=bool(vram_pressure),
+        vram_pressure=vram_pressure,
     )
+    
+    # Record to Metrics Hub
     MetricsHub.set_queue_depth(snapshot.queue_depth)
     for resource in ("cpu", "ram", "queue", "vram"):
+        # resource in snapshot.active_dimensions handles the 85% thresholds
         MetricsHub.set_backpressure(resource, resource in snapshot.active_dimensions)
+        
     return snapshot

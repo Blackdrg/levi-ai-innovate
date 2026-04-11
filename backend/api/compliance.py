@@ -46,9 +46,15 @@ async def delete_user_data(
         raise HTTPException(status_code=403, detail="Forbidden: You can only purge your own data.")
 
     from backend.services.compliance import hard_delete_user_data
-    success = await hard_delete_user_data(user_id)
+    result = await hard_delete_user_data(user_id)
     
-    if not success:
-        raise HTTPException(status_code=500, detail="Data erasure failed. Manual intervention logged.")
+    if result.get("status") == "failure":
+        raise HTTPException(status_code=500, detail=result.get("error", "Data erasure failed."))
         
-    return {"status": "success", "message": f"Data for {user_id} has been physically scrubbed."}
+    return {
+        "status": "success", 
+        "message": f"Data for {user_id} has been physically scrubbed.",
+        "receipt": result.get("receipt"),
+        "timestamp": result.get("timestamp"),
+        "cleared_count": result.get("cleared_count")
+    }

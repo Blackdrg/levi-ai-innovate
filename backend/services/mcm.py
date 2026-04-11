@@ -155,12 +155,21 @@ class MemoryConsistencyManager:
             await asyncio.sleep(10)
 
     async def _process_event(self, event_type: str, user_id: str, session_id: str, payload: Dict[str, Any], source_region: str):
-        """Syncs cognitive tiers. If event is local, relays to Global Cloud Pulse."""
-        logger.info(f"[MCM] Synchronizing {event_type} event for {user_id}")
+        """Syncs cognitive tiers with LWW conflict resolution."""
+        # 0. LWW (Last-Write-Wins) Resolution
+        event_ts = float(payload.get("version", payload.get("timestamp", 0)))
+        lww_key = f"mcm:last_seen:{user_id}:{event_type}"
+        
+        if HAS_REDIS:
+            last_ts = redis_client.get(lww_key)
+            if last_ts and float(last_ts) > event_ts:
+                logger.info(f"[MCM] DROPPING stale {event_type} for {user_id} (Incoming: {event_ts} < Local: {last_ts})")
+                return
+            redis_client.set(lww_key, event_ts, ex=3600 * 24) # 24h retention for versioning
+            
+        logger.info(f"[MCM] Synchronizing {event_type} for {user_id} (v:{event_ts})")
 
         # 1. Regional Sync Logic
-        # (Tier 3: Neo4j, Tier 4: Vector Store as previously implemented)
-        # ... [Logic remains same for brevity in this replace call] ...
         
         # 2. Global Bridge Logic: If event originated HERE, relay to Pub/Sub
         if source_region == self.region and self.publisher and event_type in ["interaction", "trait_distilled"]:
@@ -176,20 +185,43 @@ class MemoryConsistencyManager:
             except Exception as e:
                 logger.error(f"[MCM] Global Relay Failed: {e}")
 
-        # Implementation core...
+        # Implementation core (Hardened v14.2)
         if event_type == "interaction":
             from backend.db.neo4j_client import Neo4jClient
-            try: await Neo4jClient.add_interaction(user_id, payload.get("input", ""), payload.get("response", ""), session_id=session_id)
-            except Exception: pass
-            
             from backend.memory.vector_store import SovereignVectorStore
-            try: await SovereignVectorStore.store_fact(user_id, f"Interaction recorded in {source_region}: {payload.get('input')[:50]}...", category="interaction")
-            except Exception: pass
+            try: 
+                # Sync to Graph
+                await Neo4jClient.add_interaction(user_id, payload.get("input", ""), payload.get("response", ""), session_id=session_id)
+                # Sync to Vector Pulse
+                await SovereignVectorStore.store_fact(user_id, f"Interaction recorded in {source_region}: {payload.get('input')[:50]}...", category="interaction")
+            except Exception as e: 
+                logger.error(f"[MCM] Interaction sync failed: {e}")
+
+        elif event_type == "fact_extracted":
+            from backend.memory.vector_store import SovereignVectorStore
+            try:
+                facts = payload.get("facts", [])
+                for f in facts:
+                    await SovereignVectorStore.store_fact(user_id, f["fact"], category=f.get("category", "semantic"), importance=f.get("importance", 0.5))
+                logger.info(f"[MCM] Synchronized {len(facts)} extracted facts for {user_id}")
+            except Exception as e:
+                logger.error(f"[MCM] Fact sync failed: {e}")
 
         elif event_type == "trait_distilled":
             from backend.memory.vector_store import SovereignVectorStore
-            try: await SovereignVectorStore.store_fact(user_id, payload.get("trait", ""), category="trait")
-            except Exception: pass
+            try: 
+                trait = payload.get("trait", "")
+                await SovereignVectorStore.store_fact(user_id, trait, category="trait", importance=0.95)
+                logger.info(f"[MCM] Integrated distilled trait for {user_id} (Source: {source_region})")
+            except Exception as e: 
+                logger.error(f"[MCM] Trait sync failed: {e}")
+
+        elif event_type == "PURGE_USER":
+            if source_region != self.region:
+                logger.warning(f"[MCM] GLOBAL PURGE TRIGGERED for {user_id} from {source_region}")
+                from backend.core.memory_manager import MemoryManager
+                mm = MemoryManager()
+                await mm.clear_all_user_data(user_id)
 
 mcm_service = MemoryConsistencyManager()
 

@@ -215,13 +215,25 @@ class LlmDecomposer:
     """
     @staticmethod
     async def decompose(objective: str, user_input: str, perception: Dict[str, Any]) -> Optional[TaskGraph]:
+        # Sovereign v14.2: Neo4j Graph Resonance Integration
+        context = perception.get("context", {})
+        graph_resonance = context.get("long_term", {}).get("graph_resonance", [])
+        
+        resonance_text = ""
+        if graph_resonance:
+            resonance_text = "\nSovereign Knowledge Graph Resonance:\n" + "\n".join([
+                f"- {r.get('entity', {}).get('text') or r.get('entity', {}).get('name')} (Type: {r.get('labels', [])})"
+                for r in graph_resonance
+            ])
+
         prompt = f"""
 You are the LEVI Sovereign Planner (v14.2.0).
 Decompose this mission into a Directed Acyclic Graph (DAG) of specialized agent tasks.
 
 Mission Objective: {objective}
 User Input: {user_input}
-Context: {json.dumps(perception.get('context', {}), indent=2)}
+Context: {json.dumps(context, indent=2)}
+{resonance_text}
 
 Available Agents:
 - search_agent, browser_agent, code_agent, python_repl_agent, document_agent, image_agent, video_agent, critic_agent, consensus_agent

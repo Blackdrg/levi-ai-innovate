@@ -5,6 +5,7 @@ Hardened self-improvement engine managing fragility tracking and pattern graduat
 
 import logging
 import json
+import time
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
 from sqlalchemy import select, update, insert
@@ -159,6 +160,24 @@ class EvolutionaryIntelligenceEngine:
                     json.dumps(rule.result_data)
                 )
                 logger.info(f"[Evolution] 🎓 Rule {rule_id} Graduated to Fast-Path Cache.")
+
+                # Graduation #14: DCN Swarm Pulse
+                # Notify the network that a new rule has stabilized
+                try:
+                    from backend.core.dcn_protocol import DCNProtocol
+                    dcn = DCNProtocol()
+                    await dcn.broadcast_gossip(
+                        mission_id="swarm_evolution",
+                        payload={
+                            "rule_id": rule_id,
+                            "pattern": rule.task_pattern,
+                            "fidelity": rule.fidelity_score,
+                            "timestamp": time.time()
+                        },
+                        pulse_type="rule_graduated"
+                    )
+                except Exception as dcn_err:
+                    logger.warning(f"[Evolution] Failed to broadcast graduation pulse: {dcn_err}")
         except Exception as e:
             logger.error(f"[Evolution] Graduation callback failure: {e}")
 

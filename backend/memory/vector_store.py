@@ -113,6 +113,57 @@ class SovereignVectorStore:
             logger.error(f"Vector search anomaly: {e}")
             return []
 
+    @staticmethod
+    async def reindex_user_memory(user_id: str):
+        """
+        Sovereign v14.2: High-fidelity memory re-indexing.
+        Pulls facts from MongoDB and rebuilds the local FAISS index to ensure consistency.
+        """
+        if not user_id: return
+        
+        logger.info(f"[VectorStore] Starting memory re-indexing for {user_id}...")
+        try:
+            from backend.db.mongo import MongoDB
+            db = await MongoDB.get_db()
+            if db is None:
+                logger.error("[VectorStore] MongoDB unavailable for re-indexing.")
+                return
+
+            # 1. Fetch all facts for this user from the primary store
+            cursor = db.user_facts.find({"user_id": user_id})
+            facts_to_index = await cursor.to_list(length=1000)
+            
+            if not facts_to_index:
+                logger.info(f"[VectorStore] No facts found in database for {user_id}. Clearing local index.")
+                user_memory = await SovereignVectorStore.get_user_memory(user_id)
+                await user_memory.clear()
+                return
+
+            # 2. Decrypt and prepare texts and metadatas
+            texts = []
+            metadatas = []
+            for doc in facts_to_index:
+                try:
+                    # Remove MongoDB _id before storing in FAISS metadata
+                    doc.pop("_id", None)
+                    raw_fact = SovereignVault.decrypt(doc.get("fact", ""))
+                    if raw_fact:
+                        texts.append(raw_fact)
+                        metadatas.append(doc)
+                except Exception as dec_err:
+                    logger.warning(f"[VectorStore] Failed to decrypt fact {doc.get('fact_id')} during re-index: {dec_err}")
+
+            # 3. Perform a Hard Rebuild of the FAISS collection
+            if texts:
+                user_memory = await SovereignVectorStore.get_user_memory(user_id)
+                # Clear and batch add
+                await user_memory.clear()
+                await user_memory.add(texts, metadatas)
+                logger.info(f"[VectorStore] Successfully re-indexed {len(texts)} facts for {user_id}.")
+
+        except Exception as e:
+            logger.error(f"[VectorStore] Re-indexing failed for {user_id}: {e}")
+
     # --- Global Wisdom logic ---
     @staticmethod
     async def store_global_wisdom(input_text: str, output_text: str, mood: str):

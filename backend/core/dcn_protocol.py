@@ -41,6 +41,8 @@ class DCNPulse(BaseModel):
     prev_log_index: int = 0
     prev_log_term: int = 0
     
+    region: str = "us-east" # Regional awareness (v14.2)
+    
     signature: Optional[str] = None
     timestamp: float = Field(default_factory=time.time)
 
@@ -70,10 +72,14 @@ class DCNProtocol:
 
         # Audit Point 27: Strict Secret Validation
         if not self.secret or len(self.secret) < 32:
-            logger.warning(
-                f"[DCN] INSECURE CONFIGURATION: DCN_SECRET is too short. "
-                "DCN gossip will remain OFFLINE to prevent unauthenticated injection."
+            msg = (
+                f"[DCN] INSECURE CONFIGURATION: DCN_SECRET is too short (min 32 chars). "
+                "DCN nodes MUST run with high-entropy secrets in production."
             )
+            logger.critical(msg)
+            if os.getenv("ENV") == "production":
+                raise ValueError(msg)
+            self.is_active = False
         else:
             self.is_active = True
             logger.info(f"[DCN] Protocol v14.1.0 Active (Hybrid Consensus). Node: {self.node_id}")
@@ -88,7 +94,8 @@ class DCNProtocol:
             payload=payload,
             mode=mode,
             term=self.gossip.current_term if self.gossip else 0,
-            index=self.last_applied_index + 1 if mode == ConsensusMode.RAFT else 0
+            index=self.last_applied_index + 1 if mode == ConsensusMode.RAFT else 0,
+            region=self.region
         )
         
         # We need a predictable string for signing. Using model_dump_json is good but exclude signature.
@@ -166,19 +173,23 @@ class DCNProtocol:
                     logger.warning(f"[DCN] Dropping unauthenticated pulse from {pulse.node_id}")
                     return
                 
-                # Consensus Rule Enforcement
+                # Consensus Rule Enforcement (Wiring #5)
                 if pulse.mode == ConsensusMode.RAFT:
                     if pulse.term < self.gossip.current_term:
                         logger.warning(f"[DCN] RAFT: Stale pulse rejected (Term {pulse.term} < {self.gossip.current_term})")
                         return
-                    # Reconcile local state index
-                    if pulse.index > self.commit_index:
-                        self.commit_index = pulse.index
-                        logger.debug(f"[DCN] RAFT: Commit Index updated to {self.commit_index}")
                     
                     # 🛡️ Quorum Enforcement (v14.1 Scaling)
                     quorum_size = (len(self.peers) // 2) + 1
                     logger.debug(f"[DCN] RAFT: Quorum calculated at {quorum_size} nodes (Total Peers: {len(self.peers)})")
+
+                    # Reconcile local state index if drift detected
+                    if pulse.index > self.last_applied_index:
+                         await self.reconcile_state(pulse.mission_id, pulse.index)
+                    
+                    if pulse.index > self.commit_index:
+                        self.commit_index = pulse.index
+                        logger.debug(f"[DCN] RAFT: Commit Index updated to {self.commit_index}")
 
                 if pulse.payload_type == "node_heartbeat":
                     peer_meta = pulse.payload
@@ -195,18 +206,45 @@ class DCNProtocol:
         create_tracked_task(self.gossip.listen(secure_handler), name="dcn-gossip-listener")
 
     async def verify_pulse(self, pulse: DCNPulse) -> bool:
-        """Verifies the integrity and authenticity of an incoming pulse."""
+        """Verifies the integrity, authenticity, and temporal validity of an incoming pulse."""
+        if not pulse.signature:
+            logger.warning(f"[DCN] Missing signature from {pulse.node_id}")
+            return False
+
+        # Anti-Replay: 60-second window
+        drift = abs(time.time() - pulse.timestamp)
+        if drift > 60:
+            logger.warning(f"[DCN] Pulse from {pulse.node_id} rejected due to timestamp drift: {drift:.2f}s")
+            return False
+
         msg_json = pulse.model_dump_json(exclude={"signature"})
         expected_sig = hmac.new(self.secret.encode(), msg_json.encode(), hashlib.sha256).hexdigest()
         return hmac.compare_digest(pulse.signature, expected_sig)
 
-    def verify_quorum(self, votes: int) -> bool:
-        """Checks if a given vote count meets the Raft-lite quorum threshold."""
+    def verify_quorum(self, votes: int, regional_diversity: Optional[List[str]] = None, enforce_diversity: bool = False) -> bool:
+        """
+        Sovereign v14.2: Hardened Quorum Verification.
+        Checks if a given vote count meets the Raft-lite quorum threshold.
+        If enforce_diversity is True, requires votes from at least 2 distinct regions.
+        """
         total_peers = len(self.peers)
         if total_peers <= 1:
             return True # Single node swarm always has quorum
+            
         required = (total_peers // 2) + 1
-        return votes >= required
+        meets_count = votes >= required
+        
+        if not enforce_diversity:
+            return meets_count
+            
+        # Cross-region RAFT: Enforce geographical diversity for DEEP/SECURE missions
+        distinct_regions = set(regional_diversity) if regional_diversity else set()
+        has_diversity = len(distinct_regions) >= 2
+        
+        if meets_count and not has_diversity:
+             logger.warning(f"[DCN] Quorum count met ({votes}), but REGIONAL DIVERSITY failed. Required >= 2 regions.")
+             
+        return meets_count and has_diversity
 
     async def reconcile_state(self, mission_id: str, remote_index: int):
         """Forces a state reconciliation if local index drifts from Raft commit index."""

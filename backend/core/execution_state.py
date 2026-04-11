@@ -132,8 +132,22 @@ class CentralExecutionState:
         if not HAS_REDIS:
             return True
         claim_key = f"mission:{idempotency_key}:lock"
+        # First attempt to claim (NX)
         claimed = redis_client.set(claim_key, mission_id, nx=True, ex=ttl_seconds)
+        if not claimed:
+            # If already claimed, refresh TTL (Sliding Window) per user request
+            current_owner = redis_client.get(claim_key)
+            if current_owner:
+                redis_client.expire(claim_key, ttl_seconds)
         return bool(claimed)
+
+    @staticmethod
+    def clear_idempotency(user_id: str, idempotency_key: str) -> None:
+        """Sovereign v14.2: Explicitly releases a mission lock for immediate retry."""
+        if not HAS_REDIS:
+            return
+        redis_client.delete(f"mission:{idempotency_key}:lock")
+        
 
     @staticmethod
     def get_claimed_mission(user_id: str, idempotency_key: str) -> Optional[str]:
@@ -145,18 +159,15 @@ class CentralExecutionState:
         return str(raw) if raw else None
 
     @staticmethod
-    def get_state(mission_id: str) -> Optional[str]:
+    def get_full_data(mission_id: str) -> Optional[Dict[str, Any]]:
         if not HAS_REDIS:
             return None
-        raw: Any = redis_client.get(f"mission:state:{mission_id}")  # type: ignore[assignment]
+        raw: Any = redis_client.get(f"mission:state:{mission_id}")
         if not raw:
             return None
         try:
             if isinstance(raw, (bytes, bytearray)):
                 raw = raw.decode("utf-8")
-            if not isinstance(raw, str):
-                raw = str(raw)
-            data = json.loads(raw)
-            return data.get("state")
+            return json.loads(raw)
         except Exception:
             return None

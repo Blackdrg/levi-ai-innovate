@@ -64,30 +64,29 @@ class VoiceProcessor:
 
             logger.info(f"[VoiceGateway] User Command: {user_text}")
 
-            # 3. Trigger Mission via Orchestrator
-            # We assume orchestrator has a 'run_mission_sync' or 'create_mission' method
-            mission_res = await orchestrator_ref.create_mission(
+            # 3. Trigger Mission via Orchestrator (Graduation #14)
+            # Use handle_mission for production state-machine integration
+            mission_res = await orchestrator_ref.handle_mission(
                 user_id=user_id,
                 objective=user_text,
-                mode="AUTONOMOUS"
+                session_id=session_id or f"voice-{uuid.uuid4().hex[:8]}",
+                mode="AUTONOMOUS",
+                request_id=f"voice-{uuid.uuid4().hex[:12]}"
             )
             
-            # For Phase 1, we might need to await the actual result if we want to speak it back immediately
-            # or return the mission_id. Let's assume we want to wait for a quick response for the 'voice chat' feel.
-            # If the mission takes too long, we might just acknowledge it.
-            
-            response_text = mission_res.get("response", "Mission initiated.")
+            response_text = mission_res.get("response", "The thought stream was interrupted.")
             
             # 4. TTS (Speak the response back)
-            output_file = os.path.join(self.tmp_dir, f"{uuid.uuid4()}.wav")
+            output_filename = f"resp-{uuid.uuid4().hex[:8]}.wav"
+            output_file = os.path.join(self.tmp_dir, output_filename)
             await self.tts.generate_speech_async(response_text, output_file)
 
             return {
                 "status": "success",
                 "transcription": user_text,
                 "response_text": response_text,
-                "audio_url": output_file, # In a real app, this would be a static file URL
-                "mission_id": mission_res.get("mission_id")
+                "audio_url": f"/api/v1/voice/stream/{output_filename}", 
+                "mission_id": mission_res.get("request_id")
             }
 
         except Exception as e:
