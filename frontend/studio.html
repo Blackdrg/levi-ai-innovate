@@ -61,7 +61,7 @@
                     <div class="grid grid-cols-2 gap-6">
                         <div class="space-y-4">
                             <label class="text-[10px] uppercase tracking-[0.3em] text-slate-500 font-bold">Artistic Style</label>
-                            <select id="studio-style" class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm text-slate-300 focus:ring-neural focus:border-neural">
+                            <select id="studio-style" title="Select Artistic Style" class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm text-slate-300 focus:ring-neural focus:border-neural">
                                 <option value="cinematic">Cinematic</option>
                                 <option value="oil_painting">Oil Painting</option>
                                 <option value="cyberpunk">Cyberpunk</option>
@@ -70,7 +70,7 @@
                         </div>
                         <div class="space-y-4">
                             <label class="text-[10px] uppercase tracking-[0.3em] text-slate-500 font-bold">Aspect Ratio</label>
-                            <select id="studio-ratio" class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm text-slate-300 focus:ring-neural focus:border-neural">
+                            <select id="studio-ratio" title="Select Aspect Ratio" class="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm text-slate-300 focus:ring-neural focus:border-neural">
                                 <option value="1:1">1:1 Square</option>
                                 <option value="16:9">16:9 Widescreen</option>
                                 <option value="9:16">9:16 Vertical</option>
@@ -136,7 +136,7 @@
                     <span class="material-symbols-outlined text-6xl text-neural/20">auto_fix_high</span>
                     <p class="text-[10px] uppercase tracking-[0.4em] text-slate-600 font-bold">Spectral Preview</p>
                 </div>
-                <img id="studio-result-img" class="w-full h-full object-cover hidden" />
+                <img id="studio-result-img" alt="Synthesis Result" title="Synthesis Result" class="w-full h-full object-cover hidden" />
                 <video id="studio-result-vid" class="w-full h-full object-cover hidden" controls loop></video>
                 
                 <!-- HUD Overlay -->

@@ -104,9 +104,7 @@ resource "google_sql_database_instance" "postgres" {
     availability_type = "ZONAL" # Zonal for Cost Management in diversified setup
     
     ip_configuration {
-      require_ssl       = true
       private_network   = google_compute_network.vpc[each.value].id
-      enable_private_path_import = true
     }
   }
   deletion_protection = false # Fast teardown for graduation testing
@@ -149,8 +147,11 @@ resource "google_cloud_run_service" "backend" {
           value = "true"
         }
       }
-      vpc_access_connector {
-        name = google_vpc_access_connector.connector[each.value].id
+      metadata {
+        annotations = {
+          "run.googleapis.com/vpc-access-connector" = google_vpc_access_connector.connector[each.value].name
+          "run.googleapis.com/vpc-access-egress"    = "all-traffic"
+        }
       }
     }
   }
