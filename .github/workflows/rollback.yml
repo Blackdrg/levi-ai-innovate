@@ -6,7 +6,7 @@ on:
     types: [trigger-rollback]
 
 env:
-  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
   SERVICE_NAME: levi-backend
 
 jobs:

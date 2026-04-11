@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useTelemetryStore } from '../stores/telemetryStore';
 import { AgentStatus } from '../lib/types';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Cpu, Activity, RefreshCw, Layers, Target } from 'lucide-react';
+import { Cpu, Activity, RefreshCw, Layers, Target, ShieldCheck } from 'lucide-react';
 import { api } from '../lib/api';
 
 const AgentCard = ({ agent }: { agent: AgentStatus }) => {
