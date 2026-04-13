@@ -1,9 +1,12 @@
 import time
 import logging
-from fastapi import Request, HTTPException, Depends
+import json
+import os
+from fastapi import Request, Response
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from backend.db.redis import r_async as redis_client, HAS_REDIS_ASYNC
-from backend.db.postgres_db import PostgresDB
+from backend.db.postgres import PostgresDB
 from backend.db.models import User
 from sqlalchemy import select
 
@@ -53,18 +56,24 @@ class SlidingWindowRateLimiter:
             # 🌐 Phase 4: Global Quota Sync (If near limit, gossip to other regions)
             if results[6] > (tier_config["rpd"] * 0.8):
                 from backend.utils.global_gossip import global_swarm_bridge
-                await global_swarm_bridge.initialize()
                 if global_swarm_bridge.publisher:
-                    global_swarm_bridge.publisher.publish(
-                        global_swarm_bridge.topic_path,
-                        json.dumps({
-                            "type": "QUOTA_ALERT",
-                            "user_id": user_id,
-                            "consumed": results[6],
-                            "source_region": os.getenv("GCP_REGION", "global"),
-                            "is_global": True
-                        }).encode("utf-8")
-                    )
+                    try:
+                        # Ensure bridge is initialized at least once
+                        if not global_swarm_bridge.topic_path:
+                            await global_swarm_bridge.initialize()
+                        
+                        global_swarm_bridge.publisher.publish(
+                            global_swarm_bridge.topic_path,
+                            json.dumps({
+                                "type": "QUOTA_ALERT",
+                                "user_id": user_id,
+                                "consumed": results[6],
+                                "source_region": os.getenv("GCP_REGION", "global"),
+                                "is_global": True
+                            }).encode("utf-8")
+                        )
+                    except Exception as gossip_err:
+                        logger.warning(f"[RateLimit] Global sync failed: {gossip_err}")
 
 
             if results[2] > tier_config["rpm"] or results[6] > tier_config["rpd"]:
@@ -98,6 +107,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         
         if not await self.limiter.is_allowed(user_id):
             logger.warning(f"[RateLimit] Blocked request from {user_id}")
-            raise HTTPException(status_code=429, detail="Sovereign pulse threshold exceeded.")
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Sovereign pulse threshold exceeded. Please scale your cognitive tier."}
+            )
             
         return await call_next(request)

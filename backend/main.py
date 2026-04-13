@@ -1,5 +1,5 @@
 # backend/main.py
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
@@ -14,6 +14,7 @@ from backend.api.middleware.prometheus import PrometheusMiddleware
 from backend.utils.tracing import setup_tracing
 from backend.auth import get_current_user
 from backend.api.v1.voice import router as voice_router
+from backend.api.v8.telemetry import router as telemetry_v8_router
 from datetime import datetime, timezone
 from fastapi.responses import JSONResponse
 from backend.services.mcm import mcm_service
@@ -22,6 +23,7 @@ from backend.db.redis import r_async as redis_async
 from backend.services.ollama_health import ollama_monitor
 from backend.services.health_monitor import health_monitor
 from backend.core.goal_engine import goal_engine
+from backend.services.voice.processor import AudioPulseProcessor
 
 # Initialize logger
 logger = logging.getLogger("levi")
@@ -30,13 +32,14 @@ logger = logging.getLogger("levi")
 orchestrator: Orchestrator = None
 memory_manager: MemoryManager = None
 dcn_gossip: DCNGossip = None
+audio_processor: AudioPulseProcessor = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    global orchestrator, memory_manager, dcn_gossip
+    global orchestrator, memory_manager, dcn_gossip, audio_processor
     
-    logger.info("🚀 LEVI-AI Sovereign OS v14.2.0 starting...")
+    logger.info("🚀 LEVI-AI Sovereign OS v15.0.0-GA starting...")
     
     # Initialize core services
     orchestrator = Orchestrator()
@@ -62,6 +65,7 @@ async def lifespan(app: FastAPI):
                 reason = pulse.payload.get("reason", "Distributed abort pulse received.")
                 logger.info(f"🚨 [DCN-Abort] Received global abort signal for {mission_id}. Reason: {reason}")
                 MissionControl.cancel_mission(mission_id)
+        dcn_gossip = dcn_protocol.gossip
         await dcn_protocol.start_listener(dcn_handler)
     
     # 5. Starting DCN Global Bridge
@@ -79,7 +83,41 @@ async def lifespan(app: FastAPI):
     await health_monitor.start()
     await goal_engine.start()
     
-    logger.info("✅ LEVI-AI online and globally synchronized")
+    # 8. Start Memory Maintenance Loops (v15.0 Full Fulfillment)
+    from backend.memory.background_reindexer import BackgroundReindexer
+    reindexer = BackgroundReindexer(interval_seconds=3600)
+    create_tracked_task(reindexer.start(), name="background-reindexer")
+    
+    # MCM Reconciliation Pulse
+    async def mcm_reconciliation_pulse():
+        while True:
+            await mcm_service.run_reconciliation()
+            await asyncio.sleep(60) # 1 minute pulse
+    create_tracked_task(mcm_reconciliation_pulse(), name="mcm-reconciliation")
+    
+    # 9. Start Audio Pulse Recon (Phase 5)
+    audio_processor = AudioPulseProcessor(user_id="system_recon")
+    create_tracked_task(audio_processor.start(), name="audio-pulse-recon")
+    
+    # 🛡️ Phase 2: Model Pre-loading (Risk 2.2 Mitigation)
+    # Pre-load embedding models and intent anchors during startup to eliminate first-request latency.
+    logger.info("🧠 Pre-loading cognitive models (Embeddings & Intent anchors)...")
+    try:
+        from backend.embeddings import ONNXEmbedder
+        from backend.core.intent_classifier import HybridIntentClassifier
+        
+        # 1. Start ONNX/BERT pre-loading
+        await ONNXEmbedder.get_instance()
+        
+        # 2. Initialize Intent Anchors (Pre-calculates embeddings)
+        classifier = HybridIntentClassifier()
+        await classifier._initialize_anchors()
+        
+        logger.info("✅ Cognitive models warmed up.")
+    except Exception as e:
+        logger.error(f"⚠️ Model pre-loading failed: {e}. System will lazy-load models on demand.")
+
+    logger.info("✅ LEVI-AI online and globally synchronized (Tier 2)")
     
     yield
     
@@ -88,6 +126,7 @@ async def lifespan(app: FastAPI):
     
     # 1. Graceful Orchestration Drainage (Graduation #8)
     if orchestrator:
+        await orchestrator.force_abort_all("SYSTEM_SHUTDOWN")
         await orchestrator.teardown_gracefully(timeout=30)
     
     if dcn_gossip:
@@ -98,13 +137,16 @@ async def lifespan(app: FastAPI):
     await ollama_monitor.stop()
     await goal_engine.stop()
     
+    if audio_processor:
+        audio_processor.stop()
+        
     await memory_manager.shutdown()
     logger.info("✅ Shutdown complete")
 
 # Create FastAPI app
 app = FastAPI(
     title="LEVI-AI Sovereign OS",
-    version="14.2.0",
+    version="15.0.0-GA",
     lifespan=lifespan
 )
 
@@ -125,13 +167,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """
+    Sovereign v15.0: Global Anti-Leaky Error Handler.
+    Logs full trace internally but returns sanitized message to client.
+    """
+    logger.error(f"🚨 [GlobalError] {request.method} {request.url.path} failed: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={
+            "status": "error",
+            "message": "An internal cognitive anomaly occurred. The mission has been safely quarantined.",
+            "type": type(exc).__name__ if os.getenv("ENVIRONMENT") != "production" else "InternalError"
+        }
+    )
+
 # Routes
 from backend.api.v1.router import router as v1_router
 app.include_router(v1_router, prefix="/api/v1")
+app.include_router(telemetry_v8_router, prefix="/api/v8/telemetry")
 
 @app.get("/healthz")
 async def health_check():
-    """Health check endpoint"""
     """Liveness probe: returns 200 iff the process is up."""
     return {"status": "alive", "timestamp": datetime.now(timezone.utc).isoformat()}
 
@@ -154,9 +212,9 @@ async def readiness_check():
             "global_sync": "active" if HAS_PUBSUB else "degraded ⚠️"
         },
         "swarm_info": {
-            "node_id": dcn_gossip.node_id if "dcn_gossip" in globals() else "standalone",
-            "coordinator": "active" if ("dcn_gossip" in globals() and dcn_gossip.is_coordinator) else "follower",
-            "term": dcn_gossip.current_term if "dcn_gossip" in globals() else 0
+            "node_id": dcn_gossip.node_id if dcn_gossip else "standalone",
+            "coordinator": "active" if (dcn_gossip and dcn_gossip.is_coordinator) else "follower",
+            "term": dcn_gossip.current_term if dcn_gossip else 0
         },
         "graduation_score": await orchestrator.get_graduation_score() if orchestrator else 0.0
     }
@@ -168,22 +226,20 @@ async def readiness_check():
         
     # 2. Critical Dependency: Postgres
     try:
-        async with PostgresDB._session_factory() as session:
+        from backend.db.connection import PostgresSessionManager
+        async with await PostgresSessionManager.get_scoped_session() as session:
             from sqlalchemy import text
             await session.execute(text("SELECT 1"))
             
             # 🛡️ Graduation #23: Pool Monitoring
-            engine = PostgresDB.get_engine()
-            if engine:
-                pool = engine.pool
-                health["dependencies"]["postgres"] = {
-                    "status": "connected",
-                    "pool_size": pool.size(),
-                    "checked_out": pool.checkedout(),
-                    "overflow": pool.overflow()
-                }
-            else:
-                health["dependencies"]["postgres"] = "connected"
+            from backend.db.connection import engine as db_engine
+            pool = db_engine.pool
+            health["dependencies"]["postgres"] = {
+                "status": "connected",
+                "pool_size": pool.size(),
+                "checked_out": pool.checkedout(),
+                "overflow": pool.overflow()
+            }
     # 3. Optional Dependency: Ollama
     try:
         import httpx
@@ -209,9 +265,12 @@ async def readiness_check():
 @app.get("/api/v1/brain/pulse")
 async def system_pulse(current_user = Depends(get_current_user)):
     """System health and routing status"""
+    from backend.utils.hardware import gpu_monitor
+    vram = gpu_monitor.get_vram_usage()
+    
     return {
         "system_graduation_score": await orchestrator.get_graduation_score() if orchestrator else 1.0,
-        "vram_pressure": await orchestrator.check_vram_pressure() if orchestrator else 0.0,
+        "vram_status": vram,
         "active_missions": await orchestrator.count_active_missions() if orchestrator else 0,
         "dcn_health": await orchestrator.get_dcn_health() if orchestrator else "offline"
     }

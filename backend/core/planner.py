@@ -205,20 +205,34 @@ class PolicyEngine:
             policy.cloud_fallback = False
         return policy
 
-# v14.1 Prebuilt Optimized Templates
+# v15.0 Prebuilt Optimized Templates (Tier 2 Speed Layer)
 HARD_TEMPLATES = {
     "search": [
-        {"id": "t_search", "agent": "search_agent", "description": "Search pass", "critical": True},
-        {"id": "t_synth", "agent": "chat_agent", "description": "Synthesis pass", "dependencies": ["t_search"]}
+        {"id": "t_search", "agent": "SearchAgent", "description": "Global Web Pulse", "critical": True},
+        {"id": "t_synth", "agent": "ChatAgent", "description": "Cognitive Synthesis", "dependencies": ["t_search"]}
     ],
     "code": [
-        {"id": "t_code", "agent": "code_agent", "description": "Code generation", "critical": True},
-        {"id": "t_verify", "agent": "python_repl_agent", "description": "Sandbox verification", "dependencies": ["t_code"]}
+        {"id": "t_code", "agent": "Artisan", "description": "Computational Logic", "critical": True},
+        {"id": "t_verify", "agent": "Critic", "description": "Logic Verification", "dependencies": ["t_code"]}
     ],
     "research": [
-        {"id": "t_search", "agent": "search_agent", "description": "Initial search", "critical": True},
-        {"id": "t_browse", "agent": "browser_agent", "description": "Deep research", "dependencies": ["t_search"]},
-        {"id": "t_synth", "agent": "chat_agent", "description": "Final report", "dependencies": ["t_browse"]}
+        {"id": "t_arch", "agent": "ResearchArchitect", "description": "Recursive Discovery", "critical": True},
+        {"id": "t_browse", "agent": "SearchAgent", "description": "Deep Retrieval", "dependencies": ["t_arch"]},
+        {"id": "t_synth", "agent": "Analyst", "description": "Thematic Synthesis", "dependencies": ["t_browse"]}
+    ],
+    "image": [
+        {"id": "t_image", "agent": "ImageArchitect", "description": "Visual Synthesis", "critical": True}
+    ],
+    "video": [
+        {"id": "t_video", "agent": "VideoArchitect", "description": "Temporal Rendering", "critical": True}
+    ],
+    "document": [
+        {"id": "t_lib", "agent": "Librarian", "description": "Semantic RAG", "critical": True},
+        {"id": "t_analyst", "agent": "Analyst", "description": "Document Synthesis", "dependencies": ["t_lib"]}
+    ],
+    "knowledge": [
+        {"id": "t_mem", "agent": "MemoryAgent", "description": "Fact Crystallization", "critical": True},
+        {"id": "t_search", "agent": "SearchAgent", "description": "Global Context", "dependencies": ["t_mem"]}
     ]
 }
 
@@ -365,9 +379,8 @@ class DAGPlanner:
                 graph.metadata["cost_estimate"] = graph.estimate_cost()
                 return graph
 
-        # Default fallback creation logic (existing)...
+        # Default fallback creation logic
         graph = TaskGraph()
-        # ... (rest of simple logic) ...
         node_id = "t_core"
         graph.add_node(TaskNode(
             id=node_id,
@@ -378,6 +391,38 @@ class DAGPlanner:
         ))
         
         graph.metadata["cost_estimate"] = graph.estimate_cost()
+        return graph
+
+    def _build_from_static_template(self, template: List[Dict[str, Any]], user_input: str, perception: Dict[str, Any], decision: Optional[BrainDecision]) -> TaskGraph:
+        """
+        Sovereign v15.0: Hydrates a static task template into a runnable TaskGraph.
+        """
+        graph = TaskGraph()
+        for node_data in template:
+            # Deep copy to avoid mutating the master template
+            data = copy.deepcopy(node_data)
+            tid = data["id"]
+            agent = data["agent"]
+            
+            # Resolve inputs for the node
+            inputs = data.get("inputs", {})
+            if "query" in inputs or agent.lower() in ["searchagent", "scout", "librarian"]:
+                inputs["query"] = user_input
+            if "input" in inputs or not inputs:
+                inputs["input"] = user_input
+            
+            # Generate Contract (TEC)
+            contract = self._generate_contract(tid, agent)
+            
+            graph.add_node(TaskNode(
+                id=tid,
+                agent=agent,
+                description=data.get("description", "Node execution"),
+                inputs=inputs,
+                dependencies=data.get("dependencies", []),
+                critical=data.get("critical", False),
+                contract=contract
+            ))
         return graph
 
     def validate_graph(self, graph: Any, max_depth: int = 8):

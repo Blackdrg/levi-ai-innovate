@@ -46,6 +46,8 @@ from backend.utils.logging_context import log_request_id, log_user_id, log_sessi
 from backend.utils.metrics import MetricsHub
 from backend.utils.tracing import traced_span
 from backend.core.executor.guardrails import capture_resource_pressure
+from backend.core.cloud_fallback import CloudFallbackProxy
+from backend.config.system import CLOUD_FALLBACK_ENABLED
 from datetime import datetime, timezone
 import asyncio
 
@@ -276,16 +278,20 @@ class Orchestrator:
             "is_isolated": self.dcn_manager.is_isolated
         }
 
-    def _prune_context(self, context: Dict[str, Any], user_id: str) -> Dict[str, Any]:
-        """Hardens context window by pruning history and non-essential metadata."""
-        pruned = context.copy()
-        history = pruned.get("history", [])
-        if len(history) > 5:
-            pruned["history"] = history[-5:]
-        internal_keys = ["raw_logs", "debug_trace", "intermediate_steps"]
-        for key in internal_keys:
-            if key in pruned: del pruned[key]
-        return pruned
+    def _get_context_hash(self, user_id: str, user_input: str) -> str:
+        """
+        Sovereign v15.0: Generates a stable hash for the current cognitive context.
+        Used to index context-aware shortcuts.
+        """
+        import hashlib
+        # In a full implementation, this uses current intention + system state
+        # For Phase 1, we use user_id + coarse domain (detected via light regex)
+        domain = "general"
+        if any(k in user_input.lower() for k in ["code", "script", "file", "debug"]): domain = "dev"
+        elif any(k in user_input.lower() for k in ["delete", "remove", "wipe"]): domain = "ops"
+        
+        features = f"{user_id}:{domain}"
+        return hashlib.sha256(features.encode()).hexdigest()[:12]
 
 
     # Blue-Green Deployment Strategy (v14.0)
@@ -320,17 +326,52 @@ class Orchestrator:
         interaction_medium = metadata.get("interaction_medium", "TEXT")
         avg_logprob = metadata.get("avg_logprob", 0)
 
-        # 🛡️ v15.0 VOICE SAFETY GATE
+        # 🛡️ v15.0 VOICE SAFETY GATE & SOVEREIGN SHORTCUT
         if interaction_medium == "VOICE":
-            risky_keywords = ["delete", "remove", "wipe", "format", "shutdown", "reset", "clear memory", "rollback"]
-            input_lower = user_input.lower()
+            input_lower = user_input.lower().strip()
+            redis = get_redis_client()
+            context_hash = self._get_context_hash(user_id, user_input)
             
+            # 1. Handle "Levi, Execute" Shortcut Bypass
+            if "levi, execute" in input_lower or "levi execute" in input_lower:
+                if redis:
+                    shortcut_data = redis.get(f"shortcut:{user_id}:{context_hash}")
+                    if shortcut_data:
+                        data = json.loads(shortcut_data)
+                        logger.info(f"🚀 [Shortcut] Executing context-aware bypass for {user_id}")
+                        # Re-route to original command
+                        user_input = data["command"]
+                        # Log shortcut usage
+                        from backend.utils.audit_helper import SovereignAuditHelper
+                        asyncio.create_task(SovereignAuditHelper.record_event(
+                            event_type="SHORTCUT", action="SHORTCUT_EXECUTION",
+                            user_id=user_id, metadata={"context_hash": context_hash, "command": user_input}
+                        ))
+                        # Bypassing further gating
+                        avg_logprob = 0.0 # Force high confidence
+
+            # 2. Risky Intent Detection
+            risky_keywords = ["delete", "remove", "wipe", "format", "shutdown", "reset", "clear memory", "rollback"]
             if any(k in input_lower for k in risky_keywords):
-                if avg_logprob < -0.4: # Ultra-strict gate for destructive voice intent
+                # Check for "Levi, Execute" bypass (logprob already forced if shortcut matched)
+                if avg_logprob < -0.4: 
                     logger.warning(f"[Orchestrator-v15] Destructive voice command blocked (Conf: {avg_logprob}): {user_input}")
+                    
+                    # Store as a pending shortcut for 10 seconds to allow "Levi, Execute" confirmation
+                    if redis:
+                        redis.setex(
+                            f"shortcut:{user_id}:{context_hash}", 10,
+                            json.dumps({
+                                "command": user_input,
+                                "intent_signature": "destructive_op",
+                                "last_used": time.time(),
+                                "priority_score": 1.0
+                            })
+                        )
+                    
                     return {
-                        "response": "CRITICAL_RISK_BLOCK: A destructive command was detected via voice with insufficient signal clarity. Please repeat or use text input for safety.",
-                        "status": "error", # Signal failure to VoiceProcessor
+                        "response": "CRITICAL_RISK_BLOCK: A destructive command was detected via voice. Please say 'Levi, Execute' within 10 seconds to confirm, or use text input.",
+                        "status": "verify_required", # Signal multi-turn verification to front-end
                         "request_id": kwargs.get("request_id", "risk-block")
                     }
 
@@ -498,7 +539,45 @@ class Orchestrator:
             
             sm.transition(MissionState.EXECUTING, term=term)
             CognitiveTracer.add_step(request_id, "executing", {})
-            SovereignBroadcaster.publish("MISSION_STARTED", {"request_id": request_id, "objective": user_input}, user_id=user_id)
+            # --- v15.0 Regional DCN Offloading ---
+            pressure = await self.check_vram_pressure()
+            if pressure > 0.8: # High pressure trigger
+                from backend.core.dcn.resource_manager import ResourceManager
+                rm = ResourceManager()
+                optimal_node = await rm.find_optimal_node(
+                    model_tier="L2", 
+                    required_capability="llm"
+                )
+                
+                if optimal_node and optimal_node != self.dcn_manager.node_id:
+                    logger.info(f"[Orchestrator] OFF-LOADING mission {request_id} to node {optimal_node} due to pressure {pressure:.2f}")
+                    SovereignBroadcaster.publish("MISSION_OFFLOADED", {
+                        "request_id": request_id, 
+                        "target_node": optimal_node,
+                        "local_pressure": pressure
+                    }, user_id=user_id)
+                    
+                    # Implementation of remote dispatch...
+                    # For now, we delegate to the DCN Protocol's remote execution path
+                    from backend.core.dcn_protocol import DCNProtocol
+                    dcn = DCNProtocol()
+                    result = await dcn.broadcast_gossip(
+                        mission_id=request_id,
+                        payload={"objective": user_input, "user_id": user_id, "session_id": session_id},
+                        pulse_type="remote_execution_request"
+                    )
+                    
+                    # Transition and return
+                    sm.transition(MissionState.COMPLETE, term=term)
+                    return {
+                        "response": f"Mission delegated to regional cluster node {optimal_node}.",
+                        "request_id": request_id,
+                        "status": "delegated",
+                        "target_node": optimal_node
+                    }
+            
+            # --- v14.2 High-Availability Cloud Fallback (Legacy) ---
+            if pressure > 0.95 and CLOUD_FALLBACK_ENABLED:
             
             # --- START COGNITIVE PIPELINE ---
             MetricsHub.mission_started()
@@ -648,7 +727,8 @@ class Orchestrator:
                     results = await self.executor.execute(task_graph, perception, user_id=user_id, policy=decision.execution_policy)
                     draft_response = await synthesize_response(results, perception["context"])
             
-            final_response = draft_response
+            from backend.utils.shield import SovereignShield
+            final_response = SovereignShield.mask_pii(draft_response)
             memory_event = None
             
             # 7. MEMORY SYNC
@@ -728,8 +808,6 @@ class Orchestrator:
                 "mode": decision.mode.value,
                 "results": [r.model_dump() for r in results],
                 "reasoning": reasoning,
-                "status": "complete"
-            }
                 "memory": {
                     "event_id": memory_event.get("id") if isinstance(memory_event, dict) else None,
                     "checksum": memory_event.get("checksum") if isinstance(memory_event, dict) else None,
@@ -907,6 +985,25 @@ class Orchestrator:
         else:
             # For LocalKMS, we'd update the SYSTEM_SECRET version
             logger.info("[KMS] Local Master Key rotation queued.")
+
+    async def get_dcn_health(self) -> Dict[str, Any]:
+        """
+        Sovereign v15.0: DCN Observer.
+        Retrieves real-time peering information and cluster node distribution.
+        """
+        from backend.main import dcn_protocol
+        if not dcn_protocol:
+            return {"status": "alone", "peers": 0, "message": "DCN Protocol uninitialized"}
+            
+        peers = list(dcn_protocol.peers)
+        return {
+            "status": "synchronized" if len(peers) > 0 else "peering",
+            "peers": len(peers),
+            "peer_list": peers,
+            "region": dcn_protocol.region,
+            "node_id": dcn_protocol.node_id,
+            "term": dcn_protocol.hybrid_gossip.raft_term if dcn_protocol.hybrid_gossip else 0
+        }
 
     async def teardown_gracefully(self, timeout=30):
         """

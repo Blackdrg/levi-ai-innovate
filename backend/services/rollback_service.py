@@ -2,7 +2,6 @@ import os
 import logging
 import httpx
 from typing import Optional, Dict, Any
-from backend.main import orchestrator as brain
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +21,12 @@ class RollbackService:
         logger.critical(f"⚠️ [EMER-REVERT] Global Rollback triggered! User: {user_id}, Reason: {reason}")
         
         # 1. Local Task Abort (LIFO Compensation)
-        count = await brain.force_abort_all(user_id)
-        
+        from backend.main import orchestrator as brain
+        count = 0
+        if brain:
+            count = await brain.force_abort_all(user_id)
+        else:
+            logger.warning("[EMER-REVERT] Orchestrator not found. Abort signal skipped.")
         # 2. GitHub Dispatch for Container-Level Revert
         gh_token = os.getenv("ROLLBACK_TOKEN")
         repo = os.getenv("GITHUB_REPO", "Blackdrg/levi-ai-innovate")

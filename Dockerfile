@@ -1,54 +1,53 @@
-# Build stage
-FROM python:3.11-slim as builder
+# 🛡️ LEVI-AI Sovereign OS v15.0-GA Production Dockerfile
+# Multi-stage build for minimum surface area and maximum security.
+
+# --- Stage 1: Build Dependencies ---
+FROM python:3.11-slim-bookworm as builder
 
 WORKDIR /app
 
-# Install build dependencies
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements
 COPY requirements.txt .
+RUN pip install --upgrade pip && \
+    pip install --user --no-cache-dir -r requirements.txt
 
-# Install Python dependencies
-RUN pip install --no-cache-dir --upgrade pip
-RUN pip install --user --no-cache-dir -r requirements.txt
-
-# Runtime stage
-FROM python:3.11-slim
+# --- Stage 2: Final Production Image ---
+FROM python:3.11-slim-bookworm
 
 WORKDIR /app
 
-# Install runtime dependencies only
+# Non-root user for security
+RUN groupadd -r levi && useradd -r -g levi levi
+
+# Install runtime libraries
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    postgresql-client \
+    libpq5 \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy Python packages from builder
-COPY --from=builder /root/.local /root/.local
-
-# Set PATH
-ENV PATH=/root/.local/bin:$PATH \
-    PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+# Copy installed packages from builder
+COPY --from=builder /root/.local /home/levi/.local
+ENV PATH=/home/levi/.local/bin:$PATH
 
 # Copy application code
-COPY backend/ ./backend/
-COPY alembic/ ./alembic/
-COPY alembic.ini .
+COPY . .
 
-# Create non-root user
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
-USER appuser
+# Set ownership and permissions
+RUN chown -R levi:levi /app
+USER levi
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-    CMD curl -f http://localhost:8000/healthz || exit 1
+# Healthcheck for orchestration
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
 
-# Expose port
 EXPOSE 8000
 
-# Run migrations & start server
-CMD ["sh", "-c", "alembic upgrade head && uvicorn backend.main:app --host 0.0.0.0 --port 8000 --workers 4"]
+# Entrypoint utilizes uvicorn for high performance
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--limit-concurrency", "500"]

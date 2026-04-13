@@ -2,7 +2,7 @@
 import logging
 import json
 import asyncio
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 
 from backend.auth import get_current_user
@@ -50,6 +50,47 @@ async def global_telemetry_stream(current_user = Depends(get_current_user)):
             await asyncio.sleep(2)
             
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+    
+@router.websocket("/ws/{client_id}")
+async def telemetry_websocket(websocket: WebSocket, client_id: str):
+    """
+    Sovereign v15.0: Bi-Directional Telemetry WebSocket.
+    Provides sub-100ms updates on cognitive ops.
+    """
+    await websocket.accept()
+    from backend.broadcast_utils import SovereignBroadcaster
+    
+    # Subscribe to global and client-specific channels
+    queue = asyncio.Queue()
+    
+    def on_event(event_data):
+        asyncio.create_task(queue.put(event_data))
+
+    subscription = SovereignBroadcaster.subscribe(f"user:{client_id}", on_event)
+    global_sub = SovereignBroadcaster.subscribe("system:pulse", on_event)
+    
+    try:
+        while True:
+            # Check for incoming messages (e.g. commands to pause/resume)
+            try:
+                # Non-blocking check for internal queue
+                event = await asyncio.wait_for(queue.get(), timeout=0.1)
+                await websocket.send_json(event)
+            except asyncio.TimeoutError:
+                pass
+            
+            # Check for client disconnect
+            try:
+                # We don't expect much from client, but we must pump the receiver
+                await asyncio.wait_for(websocket.receive_text(), timeout=0.01)
+            except asyncio.TimeoutError:
+                pass
+                
+    except (WebSocketDisconnect, asyncio.CancelledError):
+        logger.info(f"[Telemetry] WebSocket client {client_id} disconnected.")
+    finally:
+        SovereignBroadcaster.unsubscribe(subscription)
+        SovereignBroadcaster.unsubscribe(global_sub)
 
 @router.get("/workflow/{mission_id}")
 async def get_workflow_trace(mission_id: str, current_user = Depends(get_current_user)):

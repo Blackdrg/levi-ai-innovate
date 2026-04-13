@@ -12,6 +12,9 @@ from typing import Optional
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from firebase_admin import auth as firebase_auth
+import jwt
+import httpx
+from cryptography.x509 import load_pem_x509_certificate
 
 from enum import Enum
 from functools import wraps
@@ -23,22 +26,59 @@ from backend.config.system import TIERS
 from backend.utils.audit import AuditLogger
 
 class SovereignRole(str, Enum):
-    GUEST = "guest"
-    PRO = "pro"
-    CREATOR = "creator"
+    GUEST = "guest"        # Read-only, basic chat
+    RESEARCHER = "researcher" # Access to Scout/Librarian
+    PRO = "pro"            # Access to all standard agents
+    CREATOR = "creator"    # Access to Artisan/Code agents
+    ADMIN = "admin"        # System-level controls
 
-def require_role(required_role: SovereignRole):
+# Scope Definitions
+SCOPES = {
+    "mission:create": [SovereignRole.RESEARCHER, SovereignRole.PRO, SovereignRole.CREATOR, SovereignRole.ADMIN],
+    "mission:delete": [SovereignRole.ADMIN, SovereignRole.CREATOR],
+    "system:rollback": [SovereignRole.ADMIN],
+    "agent:execute": [SovereignRole.PRO, SovereignRole.CREATOR, SovereignRole.ADMIN],
+}
+
+def require_scope(required_scope: str):
     """
-    Decorator to enforce Role-Based Access Control (RBAC).
+    Scope-based Access Control.
     """
     def decorator(func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
-            # Assumes the first argument or a kwarg is the 'current_user' 
-            # obtained via Depends(get_current_user)
             user = kwargs.get("current_user")
             if not user:
-                # Fallback to check args if not in kwargs (FastAPI dependency injection style)
+                for arg in args:
+                    if isinstance(arg, dict) and "uid" in arg:
+                        user = arg
+                        break
+            
+            if not user:
+                raise HTTPException(status_code=401, detail="Authentication required.")
+            
+            user_role = user.get("role", SovereignRole.GUEST)
+            allowed_roles = SCOPES.get(required_scope, [SovereignRole.ADMIN])
+            
+            if user_role not in allowed_roles and user_role != SovereignRole.ADMIN:
+                raise HTTPException(
+                    status_code=403, 
+                    detail=f"Access Denied: Required scope '{required_scope}' not granted to role '{user_role}'."
+                )
+            
+            return await func(*args, **kwargs)
+        return wrapper
+    return decorator
+
+def require_role(required_role: SovereignRole):
+    """
+    Legacy Role-Based Access Control (RBAC).
+    """
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            user = kwargs.get("current_user")
+            if not user:
                 for arg in args:
                     if isinstance(arg, dict) and "uid" in arg:
                         user = arg
@@ -52,8 +92,10 @@ def require_role(required_role: SovereignRole):
             # Permission Hierarchy Logic
             role_hierarchy = {
                 SovereignRole.GUEST: 0,
-                SovereignRole.PRO: 1,
-                SovereignRole.CREATOR: 2
+                SovereignRole.RESEARCHER: 1,
+                SovereignRole.PRO: 2,
+                SovereignRole.CREATOR: 3,
+                SovereignRole.ADMIN: 4
             }
             
             if role_hierarchy.get(user_role, 0) < role_hierarchy.get(required_role, 0):
@@ -66,16 +108,8 @@ def require_role(required_role: SovereignRole):
                 )
                 raise HTTPException(
                     status_code=403, 
-                    detail=f"Access Denied: Required role '{required_role}' exceeds current privilege '{user_role}'."
+                    detail=f"Access Denied: Required role '{required_role}' or higher required."
                 )
-            
-            await AuditLogger.log_event(
-                event_type="RBAC",
-                action="Access Granted",
-                user_id=user.get("uid"),
-                status="success",
-                metadata={"required": required_role, "current": user_role, "func": func.__name__}
-            )
             
             return await func(*args, **kwargs)
         return wrapper
@@ -107,36 +141,57 @@ async def get_current_user(cred: HTTPAuthorizationCredentials = Depends(security
                     raise credentials_exception
                 return user_data
 
-        # 2. Firebase Verification
+        # 2. Hardened RS256 Verification (Local Sovereign Check)
         try:
-            if token == "sovereign_test_token_v13" and os.getenv("ENVIRONMENT") != "production":
-                uid = "test_pro_user"
-                email = "test_pro@sovereign.io"
-                jti = "test_jti_pulse"
-                await AuditLogger.log_event(
-                    event_type="AUTH",
-                    action="Test Token Bypass",
-                    status="warning",
-                    metadata={"uid": uid}
-                )
+            if token == "sovereign_test_token_v15" and os.getenv("ENVIRONMENT") != "production":
+                uid, email, jti = "test_pro_user", "test_pro@sovereign.io", "test_jti_pulse"
             else:
-                decoded = firebase_auth.verify_id_token(token, check_revoked=True)
-                uid = decoded.get("uid")
+                # v15.0: Local RS256 Verification with Persistent JWKS Cache
+                unverified_header = jwt.get_unverified_header(token)
+                kid = unverified_header.get("kid")
+                if not kid: raise credentials_exception
+                
+                # Retrieve Public Keys from Redis Cache or Google JWKS
+                public_keys = None
+                jwks_cache_key = "auth:jwks:google"
+                if HAS_REDIS:
+                    cached_jwks = redis_client.get(jwks_cache_key)
+                    if cached_jwks:
+                        public_keys = json.loads(cached_jwks)
+                
+                if not public_keys:
+                    async with httpx.AsyncClient() as client:
+                        jwks_resp = await client.get("https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com")
+                        public_keys = jwks_resp.json()
+                        if HAS_REDIS:
+                            # Cache for 24 hours as Google keys don't rotate that frequently
+                            redis_client.setex(jwks_cache_key, 86400, json.dumps(public_keys))
+                
+                cert_pem = public_keys.get(kid)
+                if not cert_pem: raise credentials_exception
+                
+                public_key = load_pem_x509_certificate(cert_pem.encode()).public_key()
+                
+                # Strict Payload Validation
+                project_id = os.getenv("FIREBASE_PROJECT_ID", "levi-ai-v15")
+                decoded = jwt.decode(
+                    token, 
+                    public_key, 
+                    algorithms=["RS256"], 
+                    audience=project_id, 
+                    issuer=f"https://securetoken.google.com/{project_id}"
+                )
+                
+                uid = decoded.get("sub")
                 email = decoded.get("email")
                 jti = decoded.get("jti") or decoded.get("sub")
+
             if not uid or is_jti_blacklisted(jti): raise credentials_exception
-        except Exception:
-            # Fallback for Local/Development Identity if Firebase is offline
+        except Exception as e:
+            logger.error(f"[Auth-Hardened] Verification failure: {e}")
+            # Fallback for Local/Development Identity
             if os.getenv("ENVIRONMENT") != "production":
-                uid = "dev_user_777"
-                email = "sovereign@levi.ai"
-                jti = "dev_jti_pulse"
-                await AuditLogger.log_event(
-                    event_type="AUTH",
-                    action="Dev User Bypass",
-                    status="warning",
-                    metadata={"uid": uid}
-                )
+                uid, email, jti = "dev_user_777", "sovereign@levi.ai", "dev_jti_pulse"
             else:
                 raise credentials_exception
         

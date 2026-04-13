@@ -75,3 +75,20 @@ class GraphEngine:
 
     async def close(self):
         await self.store.close()
+    async def delete_mission_nodes(self, mission_id: str):
+        """
+        Sovereign v14.2: Targeted graph pruning.
+        Purges all nodes and relationships associated with a specific mission ID.
+        """
+        if not mission_id: return
+        cypher = "MATCH (n {mission_id: $mid}) DETACH DELETE n"
+        # We need a way to run raw cypher via Neo4jStore
+        if hasattr(self.store, 'run_query'):
+            await self.store.run_query(cypher, {"mid": mission_id})
+        else:
+            # Fallback for manual session management if run_query is missing
+            driver = await self.store.connect()
+            async with driver.session() as session:
+                await session.run(cypher, mid=mission_id)
+        
+        logger.info(f"[GraphEngine] Purged nodes for mission {mission_id}")

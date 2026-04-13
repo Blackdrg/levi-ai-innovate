@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 from opentelemetry import propagate
 from .v13.vram_guard import VRAMGuard
 from .dcn.load_balancer import dcn_balancer
+from .dcn.peer_discovery import HybridGossip
 
 logger = logging.getLogger(__name__)
 
@@ -66,12 +67,17 @@ class DCNProtocol:
         self.node_id = node_id or os.getenv("DCN_NODE_ID", "node_alpha")
         self.secret = os.getenv("DCN_SECRET", "")
         self.is_active = False
+        self.node_state = "follower" # follow, candidate, leader
+        self.votes_received = 0
         self.gossip: Optional[DCNGossip] = None
         self.vram_guard = VRAMGuard()
         self.last_applied_index = 0
         self.commit_index = 0
         self.region = os.getenv("DCN_REGION", "us-east")
         self.peers = set() # Tracked via heartbeats
+        self.hybrid_gossip: Optional[HybridGossip] = None
+        self.last_leader_pulse = time.time()
+        self.election_timeout = 90 # 3x heartbeat interval
 
         # Audit Point 27: Strict Secret Validation
         if not self.secret or len(self.secret) < 32:
@@ -85,8 +91,36 @@ class DCNProtocol:
             self.is_active = False
         else:
             self.is_active = True
-            logger.info(f"[DCN] Protocol v14.1.0 Active (Hybrid Consensus). Node: {self.node_id}")
+            logger.info(f"[DCN] Protocol v15.0 Active (Hybrid Consensus). Node: {self.node_id}")
             self.gossip = DCNGossip()
+            self.hybrid_gossip = HybridGossip(
+                node_id=self.node_id,
+                secret=self.secret,
+                redis_client=self.gossip.r if self.gossip else None
+            )
+
+    async def start_election(self):
+        """Transition to candidate and request votes from known peers."""
+        if not self.is_active or self.node_state == "leader":
+             return
+             
+        self.node_state = "candidate"
+        self.votes_received = 1 # Vote for self
+        logger.info(f"🗳️ [DCN] Starting election for node {self.node_id} (Term Increment)")
+        
+        # Broadcast vote request
+        await self.broadcast_gossip(
+            mission_id="election", 
+            payload={"candidate_id": self.node_id}, 
+            pulse_type="vote_request"
+        )
+
+    async def become_leader(self):
+        """Transition to leader state and start authority heartbeats."""
+        self.node_state = "leader"
+        logger.info(f"👑 [DCN] Node {self.node_id} elected LEADER for region {self.region}.")
+        # Broadcast authority heartbeat
+        await self.broadcast_gossip(mission_id="system", payload={}, pulse_type="authority_heartbeat")
 
     def sign_pulse(self, mission_id: str, payload: Any, mode: ConsensusMode = ConsensusMode.GOSSIP) -> DCNPulse:
         """Signs a pulse with the node's secret and consensus metadata."""
@@ -96,7 +130,7 @@ class DCNProtocol:
             payload_type="mission_state" if mode == ConsensusMode.RAFT else "cognitive_gossip",
             payload=payload,
             mode=mode,
-            term=self.gossip.current_term if self.gossip else 0,
+            term=self.hybrid_gossip.raft_term if self.hybrid_gossip else 0,
             index=self.last_applied_index + 1 if mode == ConsensusMode.RAFT else 0,
             region=self.region,
             trace_parent=self._get_current_trace_parent()
@@ -155,7 +189,15 @@ class DCNProtocol:
                     # Update local peer list
                     self.peers.add(self.node_id)
                     dcn_balancer.register_node_heartbeat(self.node_id, metadata)
-                    await self.broadcast_gossip(mission_id="swarm_pulse", payload=metadata, pulse_type="node_heartbeat")
+                    await self.broadcast_gossip(mission_id="system", payload=metadata, pulse_type="node_heartbeat")
+                    
+                    # 🗳️ Election Check (v14.1 Fault Tolerance)
+                    if self.node_state != "leader":
+                        drift = time.time() - self.last_leader_pulse
+                        if drift > self.election_timeout:
+                            logger.warning(f"🚨 [DCN] Leader Timeout ({drift:.2s}s). Triggering autonomous election.")
+                            await self.start_election()
+
                     await asyncio.sleep(interval)
                 except Exception as e:
                     logger.error(f"[DCN] Heartbeat error: {e}")
@@ -205,6 +247,23 @@ class DCNProtocol:
                     if pulse.index > self.commit_index:
                         self.commit_index = pulse.index
                         logger.debug(f"[DCN] RAFT: Commit Index updated to {self.commit_index}")
+
+                if pulse.payload_type == "authority_heartbeat":
+                    self.last_leader_pulse = time.time()
+                    if self.node_state == "candidate":
+                         self.node_state = "follower"
+                         logger.info(f"Leader detected. Stepping down candidate {self.node_id}")
+
+                if pulse.payload_type == "vote_request":
+                    if self.node_state == "follower":
+                         logger.info(f"🗳️ Granting vote to {pulse.node_id}")
+                         await self.broadcast_gossip(mission_id="election", payload={"vote_for": pulse.node_id}, pulse_type="vote_granted")
+
+                if pulse.payload_type == "vote_granted":
+                    if self.node_state == "candidate" and pulse.payload.get("vote_for") == self.node_id:
+                         self.votes_received += 1
+                         if self.verify_quorum(self.votes_received):
+                              await self.become_leader()
 
                 if pulse.payload_type == "node_heartbeat":
                     peer_meta = pulse.payload

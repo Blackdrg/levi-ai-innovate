@@ -5,16 +5,18 @@ from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
-# Standard Allowlist for Graduate-Level Sovereign OS
+# Standard Allowlist for Sovereign OS v15.0
 ALLOWED_DOMAINS = [
     "localhost", "127.0.0.1",
-    "api.openai.com", "api.anthropic.com", "api.groq.com", "api.together.xyz",
-    "github.com", "api.github.com",
     "google.com", "api.google.com",
-    "firebase.google.com",
-    "api.tavily.com",
-    "huggingface.co",
-    "api-inference.huggingface.co"
+    "github.com", "api.github.com",
+    "huggingface.co", "api-inference.huggingface.co",
+    "openai.com", "api.openai.com",
+    "anthropic.com", "api.anthropic.com",
+    "groq.com", "api.groq.com",
+    "together.xyz", "api.together.xyz",
+    "tavily.com", "api.tavily.com",
+    "firebase.google.com"
 ]
 
 # SSRF Blocklist: Private and Internal IP Ranges
@@ -22,8 +24,8 @@ FORBIDDEN_NETWORK_RANGES = [
     ipaddress.ip_network("10.0.0.0/8"),
     ipaddress.ip_network("172.16.0.0/12"),
     ipaddress.ip_network("192.168.0.0/16"),
-    ipaddress.ip_network("169.254.169.254/32"), # Cloud Metadata Service
-    ipaddress.ip_network("127.0.0.0/8"),        # Loopback
+    ipaddress.ip_network("169.254.169.254/32"), # Cloud Metadata
+    ipaddress.ip_network("127.0.0.0/8"),
     ipaddress.ip_network("::1/128"),
     ipaddress.ip_network("0.0.0.0/8")
 ]

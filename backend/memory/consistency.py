@@ -1,6 +1,7 @@
 import json
 import time
 import hashlib
+import hmac
 import logging
 from typing import Dict, Any, Optional, List
 from pydantic import BaseModel, Field
@@ -17,6 +18,7 @@ class MemoryEvent(BaseModel):
     payload: Dict[str, Any]
     timestamp: float = Field(default_factory=time.time)
     version: int = 1
+    previous_hash: str = "0" * 64
     checksum: str = ""
 
 class MemoryConsistencyManager:
@@ -28,47 +30,60 @@ class MemoryConsistencyManager:
     """
 
     @staticmethod
-    def compute_checksum(payload: Dict[str, Any]) -> str:
+    def compute_checksum(payload: Dict[str, Any], prev_hash: str = "") -> str:
+        """v14.2: HMAC-chained checksum for audit integrity."""
         canonical = json.dumps(payload, sort_keys=True, default=str)
-        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+        secret = os.getenv("AUDIT_SECRET", "sovereign_fallback_secret").encode()
+        message = (prev_hash + canonical).encode()
+        return hmac.new(secret, message, hashlib.sha256).hexdigest()
 
     @staticmethod
     def register_event(user_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         """
         Appends a new event to the single source of truth (Event Log).
-        Returns a dict for system-wide compatibility.
+        Implements Hash Chaining for high-fidelity audit integrity.
         """
+        prev_hash = "0" * 64
+        if HAS_REDIS:
+            last_hash = redis_client.get(f"mcm:last_hash:{user_id}")
+            if last_hash:
+                prev_hash = last_hash.decode() if isinstance(last_hash, bytes) else last_hash
+
         event = MemoryEvent(
             user_id=user_id,
             type=payload.get("type", "generic"),
             payload=payload,
-            version=payload.get("version", 1)
+            version=payload.get("version", 1),
+            previous_hash=prev_hash
         )
-        event.checksum = MemoryConsistencyManager.compute_checksum(event.payload)
+        event.checksum = MemoryConsistencyManager.compute_checksum(event.payload, prev_hash)
         
         event_dict = event.model_dump()
-        # Aliases for legacy compatibility (id vs event_id)
         event_dict["id"] = event.event_id
         
         if not HAS_REDIS:
-            logger.warning("[MCM] Redis OFFLINE. Event registered in-memory only.")
+            logger.warning("[MCM] Redis OFFLINE. Event registered in-memory only (Chain broken).")
             return event_dict
 
         try:
-            # Append to Redis Stream (Event Log)
+            # 1. Append to Redis Stream (The Chain)
             redis_client.xadd(
                 MEMORY_EVENT_STREAM, 
                 {"event": json.dumps(event_dict)},
-                maxlen=10000, 
+                maxlen=50000, 
                 approximate=True
             )
-            # Index by content hash for dedup
+            
+            # 2. Update the Head of the Chain for this user
+            redis_client.set(f"mcm:last_hash:{user_id}", event.checksum)
+            
+            # 3. Content Dedup index
             content_hash = hashlib.sha256(event.checksum.encode()).hexdigest()
             redis_client.setex(f"mcm:content_hash:{user_id}:{content_hash}", 86400, event.event_id)
             
-            logger.debug(f"[MCM] Event Logged: {event.event_id} ({event.type})")
+            logger.debug(f"[MCM] Audit Event Linked: {event.event_id} -> {prev_hash[:8]}...")
         except Exception as e:
-            logger.error(f"[MCM] Failed to log event: {e}")
+            logger.error(f"[MCM] Hash Chain Write failure: {e}")
             
         return event_dict
 
@@ -101,8 +116,28 @@ class MemoryConsistencyManager:
                     if not event_raw: continue
                     
                     event_dict = json.loads(event_raw)
-                    # Dispatch to derived stores logic here
-                    logger.info(f"[MCM] Reconciling event: {event_dict.get('id')} type: {event_dict.get('type')}")
+                    # 🛡️ Graduation #10: Event Sourcing Full-Circle
+                    user_id = event_dict.get("user_id")
+                    payload = event_dict.get("payload", {})
+                    
+                    if event_dict.get("type") == "fact":
+                        from backend.memory.vector_store import SovereignVectorStore
+                        await SovereignVectorStore.store_fact(
+                            user_id, 
+                            payload.get("text"), 
+                            category=payload.get("category", "factual")
+                        )
+                    elif event_dict.get("type") == "triplet":
+                         from backend.memory.graph_engine import GraphEngine
+                         ge = GraphEngine()
+                         await ge.upsert_triplet(
+                             user_id,
+                             payload.get("subject"),
+                             payload.get("relation"),
+                             payload.get("object")
+                         )
+                    
+                    logger.info(f"[MCM] Synchronized event: {event_dict.get('id')} to derived stores.")
                     
                     # Update local checkpoint
                     redis_client.set("mcm:last_synced_event_id", entry_id)

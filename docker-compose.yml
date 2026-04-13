@@ -1,145 +1,55 @@
-# LEVI-AI Sovereign OS Stack
+# docker-compose.yml
+version: '3.8'
 
 services:
-  # Backend API
-  backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    ports:
-      - "8000:8000"
-    environment:
-      POSTGRES_URL: postgresql+asyncpg://levi:levi@postgres:5432/levi
-      REDIS_URL: redis://redis:6379/0
-      NEO4J_URI: bolt://neo4j:7687
-      OLLAMA_HOST: http://ollama:11434
-      JWT_SECRET: your-super-secret-key-change-in-prod
-      DCN_SECRET: sovereign_dev_secret_32_chars_long_minimum_integrity
-      LOG_LEVEL: DEBUG
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      neo4j:
-        condition: service_healthy
-      ollama:
-        condition: service_healthy
-    volumes:
-      - ./backend:/app/backend
-    networks:
-      - levi
-
-  # PostgreSQL Database
-  postgres:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_DB: levi
-      POSTGRES_USER: levi
-      POSTGRES_PASSWORD: levi
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./backend/migrations/init.sql:/docker-entrypoint-initdb.d/01-init.sql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U levi"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    networks:
-      - levi
-
-  # Redis Cache
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
-    command: redis-server --appendonly yes --save 60 1000 --appendfsync everysec
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    networks:
-      - levi
 
-  # Neo4j Graph Database
-  neo4j:
-    image: neo4j:5-community
+  postgres:
+    image: postgres:15-alpine
     environment:
-      NEO4J_AUTH: neo4j/levi
-      NEO4J_PLUGINS: '["apoc"]'
+      POSTGRES_USER: levi
+      POSTGRES_PASSWORD: levi_password
+      POSTGRES_DB: levi_db
     ports:
-      - "7474:7474"  # HTTP
-      - "7687:7687"  # Bolt
-    volumes:
-      - neo4j_data:/var/lib/neo4j/data
-    healthcheck:
-      test: ["CMD", "neo4j", "status"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    networks:
-      - levi
+      - "5432:5432"
 
-  # Ollama Local LLM
-  ollama:
-    image: ollama/ollama:latest
-    ports:
-      - "11434:11434"
+  api-alpha:
+    build: .
     environment:
-      OLLAMA_HOST: "0.0.0.0:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - levi
-    command: serve
-
-  # Frontend (optional, for dev)
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    ports:
-      - "3000:3000"
-    environment:
-      VITE_API_URL: http://localhost:8000
+      - DATABASE_URL=postgresql+asyncpg://levi:levi_password@postgres:5432/levi_db
+      - REDIS_URL=redis://redis:6379/0
+      - DCN_NODE_ID=node-us-east1-alpha
+      - DCN_REGION=us-east-1
+      - DCN_SECRET=super_secret_dcn_token_32_chars_long_12345
     depends_on:
-      - backend
-    networks:
-      - levi
-
-  # Observability Layer
-  prometheus:
-    image: prom/prometheus:latest
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - redis
+      - postgres
     ports:
-      - "9090:9090"
-    networks:
-      - levi
+      - "8001:8000"
+      - "9001:9000"
 
-  grafana:
-    image: grafana/grafana:latest
+  api-bravo:
+    build: .
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://levi:levi_password@postgres:5432/levi_db
+      - REDIS_URL=redis://redis:6379/0
+      - DCN_NODE_ID=node-us-east1-bravo
+      - DCN_REGION=us-east-1
+      - DCN_SECRET=super_secret_dcn_token_32_chars_long_12345
+    depends_on:
+      - redis
+      - postgres
     ports:
-      - "3001:3000"
-    networks:
-      - levi
+      - "8002:8000"
+      - "9002:9000"
 
-volumes:
-  postgres_data:
-  redis_data:
-  neo4j_data:
-  ollama_data:
-
-networks:
-  levi:
-    driver: bridge
+  dashboard:
+    build:
+      context: ./frontend_react
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8001

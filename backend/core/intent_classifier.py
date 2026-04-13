@@ -12,6 +12,9 @@ from .orchestrator_types import IntentResult
 from .intent_rules import INTENT_RULES
 from backend.embeddings import embed_text
 
+import torch
+from transformers import pipeline
+
 logger = logging.getLogger(__name__)
 
 @dataclass
@@ -42,6 +45,7 @@ class HybridIntentClassifier:
         self.rules = self._load_rules()
         self.anchors = INTENT_ANCHORS
         self._anchor_embeddings = {}
+        self._ml_pipeline = None # Lazy load BERT pipeline
 
     def _load_rules(self) -> List[Dict[str, Any]]:
         return INTENT_RULES
@@ -129,13 +133,42 @@ class HybridIntentClassifier:
     async def _match_ml(self, text: str) -> IntentResult:
         """
         Layer 3: Cognitive ML Layer.
-        Uses a local classifier (DistilBERT stub) and Tiny LLM for complex cases.
+        Uses a local BERT classifier (Zero-Shot) and Tiny LLM for complex cases.
         """
-        logger.info("[Intent ML] Invoking ML Layer for input: %s", text[:50])
+        logger.info("[Intent ML] Invoking BERT Layer for input: %s", text[:50])
         
-        # 1. DistilBERT Prediction (Stubbed)
-        # In a real scenario, this would call a local model.predict()
-        # For now, we use a lightweight LLM call to simulate a high-quality classifier
+        # 1. BERT Zero-Shot Classification (v15.0 Hardened)
+        if self._ml_pipeline is None:
+            try:
+                # Using a lightweight distilbert for speed in Sovereign OS
+                model_name = "typeform/distilbert-base-uncased-mnli"
+                device = 0 if torch.cuda.is_available() else -1
+                self._ml_pipeline = pipeline("zero-shot-classification", model=model_name, device=device)
+            except Exception as e:
+                logger.error(f"[Intent ML] BERT Load failure: {e}")
+
+        if self._ml_pipeline:
+            try:
+                candidate_labels = [a.intent for a in self.anchors] + ["chat"]
+                # zero-shot is blocking, run in thread
+                res = await asyncio.to_thread(lambda: self._ml_pipeline(text, candidate_labels=candidate_labels))
+                
+                best_label = res["labels"][0]
+                best_score = res["scores"][0]
+                
+                if best_score > 0.6: # Confidence threshold
+                    anchor = next((a for a in self.anchors if a.intent == best_label), None)
+                    return IntentResult(
+                        intent_type=best_label,
+                        complexity_level=anchor.complexity if anchor else 1,
+                        estimated_cost_weight=anchor.cost_weight if anchor else "low",
+                        confidence_score=float(best_score),
+                        is_sensitive=False
+                    )
+            except Exception as e:
+                logger.error(f"[Intent ML] BERT Inference failure: {e}")
+
+        # 2. LLM Fallback (Stubbed/Legacy)
         from backend.utils.llm_utils import call_lightweight_llm
         
         prompt = (
@@ -148,7 +181,6 @@ class HybridIntentClassifier:
         try:
             res_str = await call_lightweight_llm([{"role": "user", "content": prompt}])
             import json
-            # Extract JSON from potential markdown code blocks
             json_match = re.search(r"\{.*\}", res_str, re.DOTALL)
             if json_match:
                 res = json.loads(json_match.group(0))
@@ -160,7 +192,7 @@ class HybridIntentClassifier:
                     is_sensitive=False
                 )
         except Exception as e:
-            logger.error(f"[Intent ML] Layer 3 failure: {e}")
+            logger.error(f"[Intent ML] Layer 3 (LLM) failure: {e}")
 
         return IntentResult(
             intent_type="chat",

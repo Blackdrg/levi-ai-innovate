@@ -71,3 +71,12 @@ opentelemetry-exporter-otlp==1.24.0
 tiktoken==0.7.0
 passlib[bcrypt]==1.7.4
 openai==1.30.1
+
+# Hardware & Device Integration
+PyAudio==0.2.14
+sounddevice==0.4.6
+soundfile==0.12.1
+librosa==0.10.1
+nvidia-ml-py==12.535.133
+psutil==5.9.8
+aiohttp==3.9.5

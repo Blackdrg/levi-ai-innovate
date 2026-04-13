@@ -1,0 +1,49 @@
+# infrastructure/k8s/dcn-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: levi-dcn-config
+  namespace: levi-cognitive
+data:
+  DCN_REGION: "us-east-1"
+  CLOUD_FALLBACK_ENABLED: "true"
+---
+# infrastructure/k8s/api-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: levi-api
+  namespace: levi-cognitive
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: levi-api
+  template:
+    metadata:
+      labels:
+        app: levi-api
+    spec:
+      containers:
+      - name: levi-api
+        image: gcr.io/levi-ai/api:v15.0
+        envFrom:
+        - configMapRef:
+            name: levi-dcn-config
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: levi-secrets
+              key: database_url
+        ports:
+        - containerPort: 8000
+          name: http
+        - containerPort: 9000
+          name: grpc-gossip
+        livenessProbe:
+          httpGet:
+            path: /api/v1/health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10

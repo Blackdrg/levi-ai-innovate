@@ -6,6 +6,7 @@ Protects internal endpoints from unauthorized cross-service access via spoofed h
 
 import logging
 import ipaddress
+import os
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 

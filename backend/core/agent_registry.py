@@ -1,109 +1,111 @@
+# backend/core/agent_registry.py
 import logging
-from typing import Dict, Any, Type
-
-from backend.core.agent_base import SovereignAgent, AgentResult
-from backend.core.v8.agents.chat import ChatAgentV8 as ChatAgent
-from backend.core.v8.agents.code import CodeAgentV8 as CodeAgent
-from backend.core.v8.agents.document import DocumentAgentV8 as DocumentAgent
-from backend.core.v8.agents.research import ResearchAgentV8 as ResearchAgent
-from backend.core.v8.agents.python_repl import PythonReplAgentV8 as PythonReplAgent
-from backend.core.v8.agents.critic import CriticAgentV8 as CriticAgent
-from backend.utils.sanitizer import PromptSanitizer
-from backend.utils.audit import AuditLogger
-
-# Specialized/Legacy Support
-from backend.agents.image_agent import ImageAgent
-from backend.agents.video_agent import VideoAgent
-from backend.agents.local_agent import LocalAgent
-from backend.agents.memory_agent import MemoryAgent
-from backend.agents.optimizer_agent import OptimizerAgent
-from backend.agents.task_agent import TaskAgent
-from backend.agents.diagnostic_agent import DiagnosticAgent
-from backend.agents.relay_agent import RelayAgent
-
+import jsonschema
+from dataclasses import dataclass
+from typing import Dict, Any, List, Optional
 
 logger = logging.getLogger(__name__)
 
+@dataclass
+class AgentCapability:
+    name: str
+    agent_type: str
+    input_schema: dict
+    output_schema: dict
+    timeout_seconds: int = 60
+    max_retries: int = 3
+    is_sovereign: bool = True
+
 class AgentRegistry:
     """
-    Central Registry for the Sovereign Agent Fleet v7.
-    Handles mission routing, instance management, and schema validation.
+    Sovereign v15.0 Agent Registry.
+    Enforces strict TEC (Task Execution Contract) via JSON Schema.
     """
-    
-    _agents: Dict[str, Type[SovereignAgent]] = {
-        "chat": ChatAgent,
-        "code": CodeAgent,
-        "critic": CriticAgent,
-        "diagnostic": DiagnosticAgent,
-        "document": DocumentAgent,
-        "image":      ImageAgent,
-        "video":      VideoAgent,
-        "local":      LocalAgent,
-        "memory":     MemoryAgent,
-        "optimizer":  OptimizerAgent,
-        "python":     PythonReplAgent,
-        "relay":      RelayAgent,
-        "research":   ResearchAgent,
-        "task":       TaskAgent,
-    }
+    _agents: Dict[str, AgentCapability] = {}
 
     @classmethod
-    async def dispatch(cls, name: str, context: Dict[str, Any], lang: str = "en") -> AgentResult:
-        """
-        Dispatches a mission to the specified Sovereign Agent.
-        Verifies schema and executes within the standardized agent lifecycle.
-        """
-        agent_cls = cls._agents.get(name.lower())
-        input_cls = cls._inputs.get(name.lower())
+    def register(cls, name: str, capability: AgentCapability):
+        cls._agents[name.lower()] = capability
+        logger.info(f"[Registry] Registered agent: {capability.name} ({capability.agent_type})")
 
-        if not agent_cls or not input_cls:
-            logger.error(f"Agent Registry: Agent '{name}' is not commissioned.")
-            return AgentResult(
-                success=False, 
-                error=f"Agent '{name}' not found.",
-                agent="Registry"
-            )
+    @classmethod
+    def get_agent(cls, name: str) -> Optional[AgentCapability]:
+        return cls._agents.get(name.lower())
 
+    @classmethod
+    async def validate_input(cls, agent_name: str, payload: dict) -> bool:
+        agent = cls.get_agent(agent_name)
+        if not agent:
+            logger.warning(f"[Registry] Agent {agent_name} not found for validation.")
+            return False
         try:
-            # 1. Instantiate Agent (Per-mission for isolation)
-            agent = agent_cls()
-            
-            # 2. Mission Schema Preparation
-            # v8 Agents expect a Dict or Pydantic model directly.
-            raw_input = context.get("query", context.get("message", context.get("text", "")))
-            
-            # 🛡️ Global Prompt Injection Shield (v14.0.0)
-            # All 14 agent endpoints are sanitized here before dispatch.
-            sanitized_input = PromptSanitizer.sanitize(raw_input)
-            
-            if sanitized_input != raw_input:
-                await AuditLogger.log_event(
-                    event_type="SECURITY",
-                    action="Prompt Sanitized",
-                    user_id=context.get("user_id", "unknown"),
-                    status="warning",
-                    metadata={"agent": name, "original": raw_input[:50], "sanitized": sanitized_input[:50]}
-                )
+            jsonschema.validate(instance=payload, schema=agent.input_schema)
+            return True
+        except jsonschema.ValidationError as e:
+            logger.error(f"[Registry] Input validation FAILED for {agent_name}: {e.message}")
+            return False
 
-            mission_input = {
-                "input": sanitized_input,
-                **context
+# Default Agent Configurations (Hardened v15.0)
+DEFAULT_AGENTS = {
+    "scout": AgentCapability(
+        name="Scout",
+        agent_type="search",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "minLength": 3},
+                "provider": {"type": "string", "enum": ["google", "tavily", "brave"], "default": "google"}
+            },
+            "required": ["query"]
+        },
+        output_schema={
+            "type": "object",
+            "properties": {
+                "results": {"type": "array"},
+                "total": {"type": "integer"}
             }
+        }
+    ),
+    "artisan": AgentCapability(
+        name="Artisan",
+        agent_type="coder",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "code": {"type": "string"},
+                "language": {"type": "string", "enum": ["python", "javascript", "bash"]}
+            },
+            "required": ["code", "language"]
+        },
+        output_schema={
+            "type": "object",
+            "properties": {
+                "stdout": {"type": "string"},
+                "exit_code": {"type": "integer"}
+            }
+        }
+    ),
+    "librarian": AgentCapability(
+        name="Librarian",
+        agent_type="research",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "file_id": {"type": "string"},
+                "depth": {"type": "string", "enum": ["surface", "deep", "exhaustive"]}
+            },
+            "required": ["file_id"]
+        },
+        output_schema={
+            "type": "object",
+            "properties": {
+                "summary": {"type": "string"},
+                "citations": {"type": "array"}
+            }
+        }
+    )
+}
 
-            # 3. Execute Mission
-            logger.info(f"Registry: Dispatching '{name}' mission (v8).")
-            if hasattr(agent, "execute"):
-                 return await agent.execute(mission_input, lang=lang)
-            return await agent(mission_input)
-
-        except Exception as e:
-            logger.exception(f"Registry: Mission Dispatch Failure for '{name}': {e}")
-            return AgentResult(
-                success=False,
-                error=str(e),
-                agent=name
-            )
-
-    @classmethod
-    def get_commissioned_agents(cls) -> list:
-        return list(cls._agents.keys())
+# Initialize with defaults
+for name, cap in DEFAULT_AGENTS.items():
+    AgentRegistry.register(name, cap)

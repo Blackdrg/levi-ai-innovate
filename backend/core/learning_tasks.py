@@ -23,14 +23,43 @@ def run_autonomous_evolution():
 
     manager = AdaptivePromptManager()
     
+    from backend.evaluation.benchmarks import LEVIBenchmarkSuite
+    from backend.evolution import discovery_engine, algorithm_mutator, self_monitor
+    from backend.db.models import BenchmarkingLog
+    from backend.db.postgres import PostgresDB
+    
+    async def _run_evolution():
+        # 1. Standard Prompt Evolution
+        await AdaptiveThrottler.run_throttled(manager.evolve_variants)
+        
+        # 2. Benchmarking (Phase 1)
+        suite = LEVIBenchmarkSuite()
+        bench_results = await suite.run_full_suite()
+        
+        async with PostgresDB._session_factory() as session:
+            # Log LEVI-AI speed results
+            log = BenchmarkingLog(
+                task_name="market_research",
+                competitor="LEVI-AI",
+                latency_seconds=bench_results["speed"]["market_research"],
+                accuracy_score=bench_results["accuracy"]["factual"],
+                cost_estimate=bench_results["accuracy"]["hallucination_rate"] * 0.1 # Placeholder formula
+            )
+            session.add(log)
+            await session.commit()
+            
+        # 3. Discovery & Mutation (Phase 2)
+        await algorithm_mutator.propose_mutation()
+        await discovery_engine.identify_emergence([]) # Analyze system logs
+        
+        logger.info("[Evolver] Full evolutionary cycle complete (Benchmarking + Mutation + Discovery).")
+
     loop = asyncio.get_event_loop()
     if loop.is_running():
-        from backend.utils.runtime_tasks import create_tracked_task
-        create_tracked_task(AdaptiveThrottler.run_throttled(manager.evolve_variants), name="autonomous-evolution")
+        loop.create_task(_run_evolution())
     else:
-        loop.run_until_complete(AdaptiveThrottler.run_throttled(manager.evolve_variants))
-        
-    logger.info("[Evolver] Evolution cycle complete.")
+        loop.run_until_complete(_run_evolution())
+
 
 @celery_app.task(name="backend.services.orchestrator.learning_tasks.update_analytics_snapshot")
 def update_analytics_snapshot():

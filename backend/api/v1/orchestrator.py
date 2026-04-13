@@ -25,68 +25,43 @@ class MissionRequest(BaseModel):
     message: str = Field(..., description="Sovereign OS query")
     session_id: Optional[str] = None
     context: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    priority: int = Field(default=5, ge=1, le=10)
 
 @router.post("/chat")
-async def orchestrate_mission_v13(
+async def orchestrate_chat_v14(
     request: MissionRequest,
     identity: Any = Depends(get_sovereign_identity)
 ):
     """
-    Standard Sovereign Mission (v14.0.0) - Synchronous.
+    Standard Sovereign Chat (v15.0.0) - Synchronous.
     """
     uid = getattr(identity, "uid", "guest")
-    logger.info(f"[Orchestrator-v13] Synchronous mission started: {uid}")
+    logger.info(f"[Orchestrator-v15] Chat mission started: {uid}")
     
     if SovereignSecurity.detect_injection(request.message):
         raise HTTPException(status_code=400, detail="Neural protocol violation.")
 
     try:
-        res = await brain_gateway.run_mission_sync(
-            input_text=request.message,
+        from backend.main import orchestrator
+        if not orchestrator:
+            raise HTTPException(status_code=503, detail="Orchestrator offline.")
+            
+        res = await orchestrator.handle_mission(
+            user_input=request.message,
             user_id=uid,
             session_id=request.session_id,
-            context=request.context
+            context=request.context,
+            simplicity_mode=True # Chat uses simplicity mode by default
         )
         
         return {
             "response": res.get("response", ""),
-            "intent": res.get("decision", "chat"),
-            "fidelity": res.get("fidelity_score", 1.0),
             "status": "success",
-            "metadata": {
-                 "engine": "sovereign_os_v14.0.0",
-                 "latency_ms": res.get("latency_ms")
-            }
+            "request_id": res.get("request_id")
         }
     except Exception as e:
-        logger.error(f"[Orchestrator-v13] Anomaly: {e}")
+        logger.error(f"[Orchestrator-v15] Chat Anomaly: {e}")
         return {"status": "error", "message": "Sovereign OS synchronization drift."}
 
-@router.post("/chat/stream")
-async def orchestrate_stream_v13(
-    request: MissionRequest,
-    identity: Any = Depends(get_sovereign_identity)
-):
-    """
-    Streaming Sovereign Mission (v14.0.0 SSE).
-    """
-    uid = getattr(identity, "uid", "guest")
-    logger.info(f"[Orchestrator-v13] SSE mission started: {uid}")
 
-    async def _sovereign_stream():
-        try:
-            async for event in brain_gateway.run_mission_stream(
-                user_input=request.message,
-                user_id=uid,
-                session_id=request.session_id,
-                context=request.context
-            ):
-                event_type = event.get("event", "data")
-                yield f"event: {event_type}\ndata: {json.dumps(event.get('data', event))}\n\n"
-            
-            yield f"event: done\ndata: {json.dumps('[MISSION_COMPLETE]')}\n\n"
-        except Exception as e:
-            logger.error(f"[Orchestrator-v13] Stream drift: {e}")
-            yield f"event: error\ndata: {json.dumps('Sovereign OS flux.')}\n\n"
-
-    return StreamingResponse(_sovereign_stream(), media_type="text/event-stream")
+# Remaining routes are now managed in orchestrator_routes.py

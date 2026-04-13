@@ -1,4 +1,5 @@
 from sqlalchemy.orm import relationship, backref
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text, Boolean, JSON, JSONB
 from backend.db.postgres import Base
 from datetime import datetime, timezone
 import os
@@ -157,28 +158,22 @@ class AuditLog(Base):
     created_at = Column(DateTime, primary_key=True, default=lambda: datetime.now(timezone.utc))
 
     @classmethod
-    def calculate_checksum(cls, prev_checksum: str, row_data: dict) -> str:
+    def calculate_checksum(cls, prev_hash: str, row_data: dict) -> str:
         """
-        Sovereign v15.0: Hardened HMAC Integrity Chaining.
-        HMAC-SHA256(prev_checksum + row_data) using AUDIT_CHAIN_SECRET.
+        Sovereign v15.0: Hash-Chained Integrity Ledger.
+        Formula: hash_n = SHA256(data_n + hash_{n-1})
         """
-        import hmac
         import hashlib
         import json
         
-        secret = os.getenv("AUDIT_CHAIN_SECRET")
-        if not secret:
-            # Fallback for development, but warning in production
-            secret = "levi_ai_audit_genesis_fallback_v15_unsecure"
-            
+        # Consistent serialization of row data
         data_str = json.dumps(row_data, sort_keys=True)
-        combined = f"{prev_checksum}:{data_str}".encode()
         
-        return hmac.new(
-            secret.encode(), 
-            combined, 
-            hashlib.sha256
-        ).hexdigest()
+        # Combine data with previous hash as per user formula
+        # We include a separator to prevent ambiguity
+        combined = f"{data_str}|{prev_hash}".encode()
+        
+        return hashlib.sha256(combined).hexdigest()
 
 class MissionSchedule(Base):
     """
@@ -452,3 +447,97 @@ class UserCredit(Base):
     tier = Column(String, default="seeker") # seeker, pro, creator
     next_reset_at = Column(DateTime)
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+class BenchmarkingLog(Base):
+    """
+    Sovereign Benchmarking Ledger (Phase 1: Measurement).
+    Records comparative performance against other AI frameworks.
+    """
+    __tablename__ = "benchmarking_logs"
+
+    id = Column(Integer, primary_key=True)
+    task_name = Column(String, index=True) # e.g., "market_research", "code_gen"
+    competitor = Column(String, index=True) # e.g., "LangChain", "CrewAI", "LEVI-AI"
+    latency_seconds = Column(Float)
+    accuracy_score = Column(Float)
+    cost_estimate = Column(Float)
+    hardware_specs = Column(String)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+class EvolutionMetric(Base):
+    """
+    Sovereign Self-Monitoring Ledger (Phase 2: Self-Mutation).
+    Continuously tracks system accuracy, hallucination, and efficiency.
+    """
+    __tablename__ = "evolution_metrics"
+
+    id = Column(Integer, primary_key=True)
+    mission_id = Column(String, ForeignKey("missions.mission_id"), index=True)
+    accuracy_score = Column(Float)
+    hallucination_rate = Column(Float)
+    reasoning_score = Column(Float)
+    latency_ms = Column(Float)
+    cost_usd = Column(Float)
+    status = Column(String)
+    metadata_json = Column(JSON, default={})
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+class FailurePattern(Base):
+    """
+    Sovereign Failure Intelligence (Phase 2: Analyzer).
+    Stores root cause analysis and fix suggestions for recurrent failures.
+    """
+    __tablename__ = "failure_patterns"
+
+    id = Column(Integer, primary_key=True)
+    failure_type = Column(String, index=True) # e.g., "agent_timeout", "hallucination"
+    root_cause = Column(Text)
+    fix_suggestion = Column(Text)
+    occurrence_count = Column(Integer, default=1)
+    last_seen_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+class SuccessPattern(Base):
+    """
+    Sovereign Success Intelligence (Phase 2: Learner).
+    Stores proven agent high-fidelity sequences and parameters.
+    """
+    __tablename__ = "success_patterns"
+
+    id = Column(Integer, primary_key=True)
+    objective_pattern = Column(Text, unique=True, index=True)
+    agent_sequence = Column(JSON)
+    parameters = Column(JSON)
+    fidelity_avg = Column(Float)
+    win_count = Column(Integer, default=1)
+    last_used_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+class MutationProposal(Base):
+    """
+    Sovereign Self-Mutation Ledger (Phase 2: Mutator).
+    Records system-generated improvements to algorithms and strategies.
+    """
+    __tablename__ = "mutation_proposals"
+
+    id = Column(Integer, primary_key=True)
+    mutation_type = Column(String) # "algorithm" or "strategy"
+    proposal_name = Column(String)
+    logic_diff = Column(Text)
+    target_metric = Column(String)
+    expected_improvement = Column(Float)
+    status = Column(String, default="proposed") # proposed, testing, adopted, rejected
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+class DiscoveredCapability(Base):
+    """
+    Sovereign Emergence Ledger (Phase 2: Discovery).
+    Records capabilities identified by the system that weren't explicitly designed.
+    """
+    __tablename__ = "discovered_capabilities"
+
+    id = Column(Integer, primary_key=True)
+    capability_name = Column(String, unique=True)
+    agents_involved = Column(JSON)
+    novelty_score = Column(Float)
+    use_cases = Column(JSON)
+    first_detected_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+

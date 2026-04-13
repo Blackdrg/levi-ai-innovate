@@ -104,4 +104,44 @@ async def project_to_neo4j(node_result: Dict[str, Any], sync: bool = True, timeo
         logger.error(f"[Neo4j] Projection failure for {params['id']}: {e}")
         return {"status": "error", "error": str(e)}
 
+async def get_resonance_entities(user_id: str, query_text: str) -> List[Dict[str, Any]]:
+    """
+    Retrieves entities and interactions related to the current query context.
+    v15.0: Hardened resonance with phrase expansion and multi-hop awareness.
+    """
+    if not query_text: return []
+    
+    stop_words = {"what", "how", "show", "give", "find", "this", "that", "user"}
+    terms = [t.lower() for t in query_text.replace("?", "").split() if len(t) > 3 and t.lower() not in stop_words]
+    
+    if not terms: return []
+
+    cypher = """
+    MATCH (u:User {id: $user_id})-[:PERFORMED|KNOWS|PREFERS]->(n)
+    WHERE any(term IN $terms WHERE n.text CONTAINS term OR n.name CONTAINS term OR n.intent CONTAINS term)
+    RETURN n as entity, labels(n) as labels, 
+           (CASE WHEN n.importance IS NOT NULL THEN n.importance ELSE 0.5 END) as weight
+    ORDER BY weight DESC LIMIT 10
+    """
+    
+    return await execute_query(cypher, {"user_id": user_id, "terms": terms[:5]})
+
+async def add_interaction(user_id: str, query: str, response: str, intent: str, sync: bool = True):
+    """Creates a knowledge node for a user interaction."""
+    cypher = """
+    MERGE (u:User {id: $user_id})
+    CREATE (i:Interaction {
+        text: $query,
+        response: $response,
+        timestamp: datetime(),
+        intent: $intent
+    })
+    CREATE (u)-[:PERFORMED]->(i)
+    """
+    if sync:
+        await execute_query(cypher, {"user_id": user_id, "query": query, "response": response, "intent": intent})
+    else:
+        asyncio.create_task(execute_query(cypher, {"user_id": user_id, "query": query, "response": response, "intent": intent}))
+
+import asyncio
 import time

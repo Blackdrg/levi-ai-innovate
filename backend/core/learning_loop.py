@@ -3,7 +3,8 @@ import json
 import logging
 import os
 from typing import Any, Dict, Optional
-from sqlalchemy import select, insert, desc, func
+from sqlalchemy import select, desc, func
+from sqlalchemy.dialects.postgresql import insert
 from backend.db.postgres import PostgresDB
 from backend.db.models import TrainingPattern
 

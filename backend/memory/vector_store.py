@@ -211,3 +211,26 @@ class SovereignVectorStore:
             await global_memory.add([input_text], [data])
         except Exception as e:
             logger.error(f"Global wisdom failure: {e}")
+    @staticmethod
+    async def delete_fact(user_id: str, fact_id: str):
+        """
+        Sovereign v14.2: Targeted memory pruning.
+        Removes a fact from the local FAISS index by marking it as deleted and 
+        eventually rebuilding (or using mask-based filtering).
+        """
+        if not user_id or not fact_id: return
+        
+        try:
+            user_memory = await SovereignVectorStore.get_user_memory(user_id)
+            # 1. Identify index of fact in metadata
+            indices_to_remove = []
+            for i, meta in enumerate(user_memory.metadata):
+                if meta.get("fact_id") == fact_id:
+                    indices_to_remove.append(i)
+            
+            if indices_to_remove:
+                # 2. Trigger Remove Indices (Marks as deleted)
+                await user_memory.remove_indices(indices_to_remove, hard_delete=False)
+                logger.info(f"[VectorStore] Fact {fact_id} marked for deletion in {user_id}'s memory.")
+        except Exception as e:
+            logger.error(f"[VectorStore] Failed to delete fact {fact_id}: {e}")

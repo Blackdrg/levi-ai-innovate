@@ -1,48 +1,33 @@
-import subprocess
 import logging
 import asyncio
 from backend.db.redis import r_async as redis_client
 from backend.utils.metrics import MetricsHub
+from backend.utils.hardware import gpu_monitor
 
 logger = logging.getLogger(__name__)
-
-async def get_vram_usage():
-    """
-    Queries nvidia-smi for VRAM telemetry.
-    Returns free VRAM in MB.
-    """
-    try:
-        # Querying free memory in MB
-        result = await asyncio.to_thread(
-            subprocess.check_output,
-            ["nvidia-smi", "--query-gpu=memory.free", "--format=csv,nounit,noheader"],
-            encoding="utf-8"
-        )
-        free_mb = int(result.strip().split("\n")[0])
-        return free_mb
-    except Exception as e:
-        logger.error(f"[VRAM Monitor] Failed to query nvidia-smi: {e}")
-        return None
 
 async def vram_monitor_loop():
     """
     Background loop that publishes VRAM status to Redis every 5s.
+    Sovereign v15.0: Uses NVML-backed GPUMonitor.
     """
     logger.info("[VRAM Monitor] Starting Sovereign VRAM Telemetry...")
     while True:
         try:
-            free_mb = await get_vram_usage()
-            if free_mb is not None:
-                # Publish to Redis
+            usage = gpu_monitor.get_vram_usage()
+            
+            if usage.get("active"):
+                # Publish to Redis (available VRAM in MB for legacy compat)
+                free_mb = int(usage["available"] * 1024)
                 await redis_client.set("vram:live", free_mb, ex=10)
                 
-                # Check for pressure (threshold < 3000MB)
-                pressure = "true" if free_mb < 3000 else "false"
+                # Check for pressure (threshold < 20% available or < 3GB)
+                pressure = "true" if (usage["percent"] > 85 or usage["available"] < 3.0) else "false"
                 await redis_client.set("vram:pressure", pressure, ex=10)
                 MetricsHub.set_backpressure("vram", pressure == "true")
                 
                 if pressure == "true":
-                    logger.warning(f"[VRAM Monitor] CRITICAL: VRAM Pressure detected! Free: {free_mb}MB")
+                    logger.warning(f"[VRAM Monitor] CRITICAL: VRAM Pressure! Used: {usage['percent']:.1f}% Free: {usage['available']:.1f}GB")
             
             await asyncio.sleep(5)
         except Exception as e:
@@ -50,5 +35,4 @@ async def vram_monitor_loop():
             await asyncio.sleep(5)
 
 if __name__ == "__main__":
-    # For standalone testing
     asyncio.run(vram_monitor_loop())

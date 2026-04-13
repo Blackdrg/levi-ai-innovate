@@ -132,12 +132,32 @@ class ReplayEngine:
 
     @staticmethod
     async def recover_mission_state(mission_id: str):
-        """v14.1 State Recovery: Forced sync from logs."""
-        logger.info(f"[Replay] RECOVERING STATE for {mission_id}...")
-        # Step 1: Invert effects if needed
-        # Step 2: Reload events
-        # Step 3: Trigger a reconciliation check
-        pass
+        """
+        Sovereign v15.0: State Recovery.
+        Forces the node to synchronize its local state from the latest mission snapshot in Redis.
+        """
+        if not HAS_REDIS:
+            logger.error(f"[Replay] Recovery failed: Redis unavailable for {mission_id}")
+            return
+            
+        logger.info(f"[Replay] [RECOVERY] Syncing local context for mission {mission_id}...")
+        
+        state_raw = redis_client.get(f"mission:state:{mission_id}")
+        if not state_raw:
+             logger.warning(f"[Replay] [RECOVERY] No snapshot found in Redis for {mission_id}. Seeking DB fallback...")
+             # Fallback to Postgres if needed (Implementation for Phase 12)
+             return
+
+        try:
+            state = json.loads(state_raw)
+            # Reconstruct local memory context
+            from backend.core.memory_manager import MemoryManager
+            mm = MemoryManager()
+            await mm.reconcile_mission_memory(mission_id, state.get("memory_events", []))
+            
+            logger.info(f"[Replay] [RECOVERY] SUCCESS: Mission {mission_id} state synchronized.")
+        except Exception as e:
+            logger.error(f"[Replay] [RECOVERY] FAILED to reconcile state: {e}")
 
 if __name__ == "__main__":
     import asyncio

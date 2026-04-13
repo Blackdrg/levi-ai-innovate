@@ -66,6 +66,55 @@ class TaskGraph(BaseModel):
                 self.results[node_id] = result
                 break
 
+    def get_execution_waves(self) -> List[List[TaskNode]]:
+        """
+        Sovereign v15.0: Cognitive Wave Partitioning.
+        Groups tasks into parallel execution waves based on dependency resolution.
+        """
+        waves = []
+        # Copy inbound degrees
+        inbound = {node.id: len(node.dependencies) for node in self.nodes}
+        outbound: Dict[str, List[str]] = {node.id: [] for node in self.nodes}
+        for node in self.nodes:
+            for dep in node.dependencies:
+                outbound[dep].append(node.id)
+
+        # Nodes with no dependencies are Level 0
+        current_wave_ids = [node.id for node in self.nodes if inbound[node.id] == 0]
+        
+        nodes_map = {n.id: n for n in self.nodes}
+        
+        while current_wave_ids:
+            waves.append([nodes_map[nid] for nid in sorted(current_wave_ids)])
+            next_wave_ids = []
+            for node_id in current_wave_ids:
+                for child_id in outbound[node_id]:
+                    inbound[child_id] -= 1
+                    if inbound[child_id] == 0:
+                        next_wave_ids.append(child_id)
+            current_wave_ids = next_wave_ids
+            
+        return waves
+
+    def generate_mermaid(self) -> str:
+        """
+        Generates a Mermaid JS representation of the task graph for visualization.
+        """
+        lines = ["graph TD"]
+        # Define nodes with styles
+        for node in self.nodes:
+            label = f"{node.id}['{node.agent}<br/>{node.description}']"
+            lines.append(f"    {label}")
+            if node.critical:
+                lines.append(f"    style {node.id} stroke:#f66,stroke-width:2px")
+            
+        # Define edges
+        for node in self.nodes:
+            for dep in node.dependencies:
+                lines.append(f"    {dep} --> {node.id}")
+                
+        return "\n".join(lines)
+
     def estimate_cost(self) -> float:
         """
         Sovereign v14.2.0: Predictive CU (Compute Unit) Solver.

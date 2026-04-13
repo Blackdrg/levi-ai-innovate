@@ -88,39 +88,47 @@ class VRAMGuard:
             return self.device_slots
 
     async def _probe_hardware(self) -> List[Dict[str, Any]]:
-        """Probes hardware for NVIDIA GPUs using nvidia-smi."""
+        """Probes hardware for NVIDIA GPUs using the centralized gpu_monitor."""
+        from backend.utils.hardware import gpu_monitor
+        
         try:
-            # Audit Point 52: Hardware Telemetry via subprocess
-            # We use a non-blocking approach to run nvidia-smi
-            process = await asyncio.create_subprocess_exec(
-                "nvidia-smi", "--query-gpu=index,name,memory.total,memory.free,utilization.gpu", "--format=csv,noheader,nounits",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await process.communicate()
-
-            if process.returncode != 0:
-                raise Exception(f"nvidia-smi failed: {stderr.decode()}")
-
-            slots = []
-            for line in stdout.decode().strip().split("\n"):
-                if not line: continue
-                idx, name, total, free, util = [x.strip() for x in line.split(",")]
-                slots.append({
-                    "id": f"gpu-{idx}",
-                    "name": name,
-                    "vram_total_mb": int(total),
-                    "vram_free_mb": int(free),
-                    "utilization_percent": int(util),
-                    "is_simulated": False
-                })
+            if not gpu_monitor.has_gpu:
+                raise Exception("No NVIDIA GPU detected by NVML.")
+                
+            info = gpu_monitor.get_vram_usage()
+            if not info.get("active"):
+                raise Exception("GPU Monitor query failed.")
+                
+            # NVML provides more precise data than nvidia-smi subprocess
+            slots = [{
+                "id": "gpu-0",
+                "name": "NVIDIA Sovereign Accelerator",
+                "vram_total_mb": int(info["total"] * 1024),
+                "vram_free_mb": int(info["available"] * 1024),
+                "utilization_percent": int(info.get("utilization", 0)),
+                "is_simulated": False
+            }]
             VRAMGuard.CPU_FALLBACK_ACTIVE = False
             return slots
 
         except Exception as e:
-            logger.warning(f"[VRAMGuard] DEGRADED MODE (CPU Fallback): NVIDIA-SMI probe failed ({e}).")
+            logger.warning(f"[VRAMGuard] DEGRADED MODE (CPU Fallback): GPU probe failed ({e}).")
             VRAMGuard.CPU_FALLBACK_ACTIVE = True
             return self._get_heuristic_slots()
+            
+    async def enforce_capacity(self, model_tier: str):
+        """
+        Sovereign v15.0: Proactive Capacity Enforcement.
+        Raises ResourceExhaustedError if the requested tier cannot be served locally.
+        """
+        if self.CPU_FALLBACK_ACTIVE:
+            logger.info(f"[VRAMGuard] CPU Fallback active. Allowing {model_tier} in degraded mode.")
+            return
+
+        has_capacity = await self.check_capacity(model_tier)
+        if not has_capacity:
+            logger.critical(f"🚨 [VRAMGuard] Resource Exhaustion: Insufficient VRAM for tier {model_tier}")
+            raise RuntimeError(f"Cognitive resource exhaustion: Local VRAM cannot accommodate {model_tier} model.")
 
     def _get_heuristic_slots(self) -> List[Dict[str, Any]]:
         """Fallback for local dev or systems without NVML/nvidia-smi."""

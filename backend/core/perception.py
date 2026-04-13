@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Dict, Any, List
 
-from .planner import detect_intent
+from .intent_classifier import HybridIntentClassifier
 from .orchestrator_types import IntentResult, IntentGraph, IntentNode, IntentEdge
 from backend.memory.manager import MemoryManager
 from backend.utils.shield import SovereignShield
@@ -18,11 +18,12 @@ logger = logging.getLogger(__name__)
 
 class PerceptionEngine:
     """
-    v14.0 Perception Layer.
-    Implements Intent Compression and Context Hydration.
+    v15.0 Perception Layer.
+    Implements Intent Compression, Context Hydration, and Hybrid Classification.
     """
     def __init__(self, memory: MemoryManager):
         self.memory = memory
+        self.classifier = HybridIntentClassifier()
 
     async def perceive(self, user_input: str, user_id: str, session_id: str, **kwargs) -> Dict[str, Any]:
         """
@@ -32,8 +33,8 @@ class PerceptionEngine:
         # 0. Sovereign Shield: PII Masking
         safe_input = SovereignShield.mask_pii(user_input)
         
-        # 1. Intent Analysis
-        intent = await detect_intent(safe_input)
+        # 1. Hybrid Intent Analysis (v15.0 Hardened)
+        intent = await self.classifier.classify(safe_input)
 
         # 2. INTENT COMPRESSION (v14.0 Upgrade)
         intent_graph = self._compress_intent(safe_input, intent)

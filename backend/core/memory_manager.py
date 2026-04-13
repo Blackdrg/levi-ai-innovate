@@ -33,7 +33,8 @@ from backend.api.telemetry import broadcast_mission_event
 from backend.memory.cache import MemoryCache
 from backend.memory.vector_store import SovereignVectorStore
 from backend.memory.resonance import MemoryResonance
-from backend.db.neo4j_client import Neo4jClient
+from backend.db.neo4j_db import get_resonance_entities as get_graph_resonance
+from backend.db.neo4j_db import execute_query as execute_graph_query
 from backend.memory.bm25_retriever import BM25Retriever
 
 logger = logging.getLogger(__name__)
@@ -80,7 +81,8 @@ class MemoryManager:
 
         try:
             from sqlalchemy import select
-            async with PostgresDB._session_factory() as session:
+            from backend.db.connection import PostgresSessionManager
+            async with await PostgresSessionManager.get_scoped_session() as session:
                 stmt = select(Mission).where(Mission.user_id == user_id).order_by(Mission.updated_at.desc()).limit(limit)
                 result = await session.execute(stmt)
                 missions = result.scalars().all()
@@ -115,7 +117,7 @@ class MemoryManager:
             keyword_facts = bm25.compute_bm25_scores(query, vector_facts)
             
             # 3. Graph Resonance (Neo4j)
-            graph_resonance = await Neo4jClient.get_resonance_entities(user_id, query)
+            graph_resonance = await get_graph_resonance(user_id, query)
             
             # 4. Resonance Decay Application (v14.0 4-Factor)
             decayed = MemoryResonance.apply_decay(keyword_facts)
@@ -359,7 +361,8 @@ class MemoryManager:
                 
                 logger.info("[MemoryV8] Starting cyclical memory re-indexing pass...")
                 from sqlalchemy import select
-                async with PostgresDB._session_factory() as session:
+                from backend.db.connection import PostgresSessionManager
+                async with await PostgresSessionManager.get_scoped_session() as session:
                     # Identify 'active' users as those with recent missions
                     stmt = select(Mission.user_id).distinct().order_by(Mission.updated_at.desc()).limit(100)
                     result = await session.execute(stmt)
@@ -422,7 +425,8 @@ class MemoryManager:
         cleared_count = 0
         
         try:
-            async with PostgresDB._session_factory() as session:
+            from backend.db.connection import PostgresSessionManager
+            async with await PostgresSessionManager.get_scoped_session() as session:
                 async with session.begin():
                     # Order matters for foreign keys
                     # Wipe Tier 3: Learned Facts
@@ -430,7 +434,6 @@ class MemoryManager:
                     cleared_count += res.rowcount
                     
                     # Wipe Tier 2: Episodic (Missions & Messages)
-                    # Need to subquery for mission_messages if not cascade delete at DB level
                     mission_ids_stmt = select(Mission.mission_id).where(Mission.user_id == user_id)
                     mission_ids_res = await session.execute(mission_ids_stmt)
                     mission_ids = mission_ids_res.scalars().all()
@@ -446,15 +449,16 @@ class MemoryManager:
                     await session.execute(delete(MissionMetric).where(MissionMetric.user_id == user_id))
                     await session.execute(delete(CreationJob).where(CreationJob.user_id == user_id))
                     await session.execute(delete(UserProfile).where(UserProfile.user_id == user_id))
-                    
-                await session.commit()
+                
+                # Commit is handled by session.begin() context manager if it finishes
             logger.info(f"[Postgres] Absolute SQL resonance purge complete for user: {user_id}")
         except Exception as e:
             logger.error(f"Postgres purge failed for {user_id}: {e}")
 
         # 3. Neo4j Graph Purge (Relationships & Nodes)
         try:
-            await Neo4jClient.clear_user_data(user_id)
+            purge_cypher = "MATCH (u:User {id: $user_id}) OPTIONAL MATCH (u)-[r]-(n) DETACH DELETE u, n, r"
+            await execute_graph_query(purge_cypher, {"user_id": user_id})
         except Exception as e:
             logger.error(f"Neo4j purge failed for {user_id}: {e}")
 

@@ -43,11 +43,10 @@ class BackgroundReindexer:
                 logger.info(f"[Reindexer] Purging {len(deleted_facts)} facts from Vector Store.")
                 for fact in deleted_facts:
                     # In a real implementation, we'd delete by ID or content hash
-                    # await SovereignVectorStore.delete_fact(fact.user_id, fact.id)
-                    pass
+                    await SovereignVectorStore.delete_fact(str(fact.user_id), fact.fact_id)
                 
                 # Physical delete from Postgres after tier-sync
-                # await session.execute(delete(UserFact).where(UserFact.is_deleted == True))
+                await session.execute(delete(UserFact).where(UserFact.is_deleted == True))
             
             # 2. Prune Missions
             stmt = select(Mission).where(Mission.is_deleted == True)
@@ -57,8 +56,10 @@ class BackgroundReindexer:
             if deleted_missions:
                 logger.info(f"[Reindexer] Purging {len(deleted_missions)} missions from Graph/Cache.")
                 for mission in deleted_missions:
-                    # self.graph.delete_mission_nodes(mission.mission_id)
-                    pass
+                    await self.graph.delete_mission_nodes(mission.mission_id)
+                
+                # Physical delete
+                await session.execute(delete(Mission).where(Mission.is_deleted == True))
             
             await session.commit()
             

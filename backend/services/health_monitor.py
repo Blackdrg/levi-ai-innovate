@@ -6,7 +6,6 @@ from typing import Optional, Dict, Any
 from backend.services.ollama_health import ollama_monitor
 from backend.services.rollback_service import rollback_service
 from backend.db.redis_client import r as redis_client, HAS_REDIS
-from backend.main import orchestrator as brain
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +61,7 @@ class AutonomousHealthMonitor:
             self.failure_counters["ollama"] = 0
 
         # 2. VRAM Pressure
+        from backend.main import orchestrator as brain
         if brain:
             vram_pressure = await brain.check_vram_pressure()
             if vram_pressure >= 1.0: # 1.0 means critical/OOM saturation (P0 Hardening)
@@ -69,6 +69,8 @@ class AutonomousHealthMonitor:
                 logger.warning(f"⚠️ [HealthMonitor] VRAM Saturation detected ({self.failure_counters['vram']}/{self.FAIL_THRESHOLD})")
             else:
                 self.failure_counters["vram"] = 0
+        else:
+             logger.debug("[HealthMonitor] Orchestrator not yet initialized. Skipping VRAM check.")
         
         # 3. Decision: Trigger Rollback?
         for cause, count in self.failure_counters.items():

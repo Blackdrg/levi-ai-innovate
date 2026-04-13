@@ -9,7 +9,10 @@ PII_PATTERNS = {
     "email": r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+",
     "phone": r"\+?\d{1,4}?[-.\s]?\(?\d{1,3}?\)?[-.\s]?\d{1,4}[-.\s]?\d{1,4}[-.\s]?\d{1,9}",
     "ssn": r"\d{3}-\d{2}-\d{4}",
-    "credit_card": r"\b(?:\d[ -]*?){13,16}\b"
+    "credit_card": r"\b(?:\d[ -]*?){13,16}\b",
+    "iban": r"[A-Z]{2}\d{2}[A-Z\d]{12,30}",
+    "jwt": r"eyJ[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*",
+    "api_key": r"(?:api_key|secret|token|password)[^a-zA-Z0-9][a-zA-Z0-9]{16,}"
 }
 
 class SovereignShield:
