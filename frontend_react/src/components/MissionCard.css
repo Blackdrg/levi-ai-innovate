@@ -1,0 +1,64 @@
+/* frontend_react/src/components/MissionCard.css */
+.mission-card {
+  padding: 1.5rem;
+  border-radius: 12px;
+  background: #111;
+  border: 1px solid #222;
+  transition: all 0.3s ease;
+}
+
+.mission-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.5rem;
+}
+
+.card-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #fff;
+}
+
+.status-badge {
+  font-size: 0.7rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-weight: bold;
+  letter-spacing: 1px;
+}
+
+.progress-bar-bg {
+  height: 6px;
+  background: #222;
+  border-radius: 3px;
+  margin-bottom: 1rem;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #00ffcc, #0099ff);
+  transition: width 0.5s ease-in-out;
+  width: var(--mission-progress, 0%);
+}
+
+.card-footer {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: #666;
+}
+
+.fidelity-metric {
+  color: var(--warning);
+}
+
+.fidelity-high {
+  color: var(--success);
+}

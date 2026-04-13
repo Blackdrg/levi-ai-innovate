@@ -1,0 +1,47 @@
+/* frontend_react/src/components/AuthBoundary.css */
+.auth-overlay {
+  padding: 4rem;
+  text-align: center;
+  background: #0a0a0a;
+  color: #00ffcc;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.auth-overlay h1 {
+  text-transform: uppercase;
+  letter-spacing: 4px;
+}
+
+.auth-message {
+  color: #aaa;
+  margin: 1rem 0 2rem;
+}
+
+.login-button {
+  padding: 1rem 2rem;
+  background: transparent;
+  color: #00ffcc;
+  border: 1px solid #00ffcc;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  transition: all 0.3s ease;
+  align-self: center;
+}
+
+.login-button:hover {
+  background: rgba(0, 255, 204, 0.1);
+  box-shadow: 0 0 15px rgba(0, 255, 204, 0.3);
+}
+
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  color: #00ffcc;
+  font-family: 'Space Mono', monospace;
+}

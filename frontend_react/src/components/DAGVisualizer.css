@@ -1,0 +1,10 @@
+/* frontend_react/src/components/DAGVisualizer.css */
+.dag-container {
+  background: #0a0a0a;
+  border-radius: 8px;
+  border: 1px solid #222;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}

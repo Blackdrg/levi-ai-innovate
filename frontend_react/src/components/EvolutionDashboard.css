@@ -1,0 +1,158 @@
+:root {
+  --evo-bg: #0b0b0f;
+  --evo-card: rgba(20, 20, 28, 0.7);
+  --evo-accent: #00f2ff;
+  --evo-purple: #7000ff;
+  --evo-border: rgba(255, 255, 255, 0.1);
+}
+
+.evolution-container {
+  padding: 2rem;
+  background: var(--evo-bg);
+  min-height: 100vh;
+  color: white;
+  font-family: 'Inter', sans-serif;
+}
+
+.evolution-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.evolution-header h1 {
+  font-size: 2.5rem;
+  background: linear-gradient(90deg, var(--evo-accent), var(--evo-purple));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+
+  font-weight: 800;
+}
+
+.evolution-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.evo-card {
+  background: var(--evo-card);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+
+  border: 1px solid var(--evo-border);
+  border-radius: 16px;
+  padding: 1.5rem;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.evo-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: var(--evo-accent);
+}
+
+.evo-card:hover {
+  transform: translateY(-5px);
+  border-color: var(--evo-accent);
+  box-shadow: 0 10px 30px rgba(0, 242, 255, 0.1);
+}
+
+.evo-stat {
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 0.5rem 0;
+  color: var(--evo-accent);
+}
+
+.evo-label {
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.evo-progress-container {
+  margin-top: 1rem;
+}
+
+.evo-progress-bar {
+  height: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 100px;
+  overflow: hidden;
+}
+
+.evo-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--evo-accent), var(--evo-purple));
+  transition: width 1s cubic-bezier(0.17, 0.67, 0.83, 0.67);
+}
+
+.mutation-log {
+  grid-column: span 2;
+  font-family: 'Fira Code', monospace;
+  font-size: 0.85rem;
+}
+
+.mutation-item {
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--evo-border);
+  display: flex;
+  justify-content: space-between;
+}
+
+.mutation-tag {
+  color: var(--evo-accent);
+}
+
+.impact-badge {
+  background: rgba(0, 242, 255, 0.1);
+  color: var(--evo-accent);
+  padding: 4px 12px;
+  border-radius: 100px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.evo-subtitle {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.9rem;
+}
+
+.evo-card-note {
+  font-size: 0.8rem;
+  margin-top: 10px;
+}
+
+.evo-card-note.accent { color: var(--evo-accent); }
+.evo-card-note.purple { color: #b780ff; }
+.evo-card-note.muted { color: rgba(255, 255, 255, 0.4); }
+
+.evo-label.secondary { margin-top: 10px; }
+.evo-label.log-title { margin-bottom: 1rem; }
+
+.mutation-boost {
+  color: var(--evo-accent);
+  font-weight: 600;
+}
+
+.no-mutations {
+  color: rgba(255, 255, 255, 0.3);
+  font-style: italic;
+}
+
+.next-cycle {
+  margin-top: 1rem;
+  color: rgba(255, 255, 255, 0.3);
+  text-align: right;
+  font-size: 0.75rem;
+}

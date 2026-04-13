@@ -1,0 +1,97 @@
+/* frontend_react/src/components/MicrophoneInput.css */
+
+.microphone-input {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 2rem;
+  background: rgba(15, 15, 20, 0.8);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
+  border: 1px solid rgba(0, 255, 204, 0.2);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  transition: all 0.3s ease;
+}
+
+.voice-button {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: none;
+  background: linear-gradient(135deg, #00ffcc, #0099ff);
+  color: #000;
+  font-size: 2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-shadow: 0 0 20px rgba(0, 255, 204, 0.3);
+}
+
+.voice-button:hover {
+  transform: scale(1.1);
+  box-shadow: 0 0 30px rgba(0, 255, 204, 0.6);
+}
+
+.voice-button.recording {
+  background: linear-gradient(135deg, #ff0055, #ff6600);
+  animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 0, 85, 0.7); }
+  50% { transform: scale(1.05); box-shadow: 0 0 0 15px rgba(255, 0, 85, 0); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 0, 85, 0); }
+}
+
+.recording-status {
+  color: #ff0055;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  animation: blink 1s infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.transcription-result {
+  width: 100%;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 1rem;
+  border-radius: 12px;
+}
+
+.transcription-result p {
+  margin: 0;
+  color: #fff;
+  font-style: italic;
+}
+
+.confidence-meter {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  margin-top: 10px;
+  overflow: hidden;
+}
+
+.confidence-meter .fill {
+  height: 100%;
+  background: #00ffcc;
+  transition: width 0.5s ease-out;
+  width: var(--confidence-width, 0%);
+}
+
+.voice-error {
+  color: #ff4d4d;
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+}

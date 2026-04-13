@@ -1,0 +1,42 @@
+/* frontend_react/src/components/PeeringStatus.css */
+.peering-status-widget {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 1.5rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.peer-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.peer-load {
+  flex: 1;
+  margin-left: 1rem;
+}
+
+.load-bar {
+  height: 4px;
+  background: #222;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.load-fill {
+  height: 100%;
+  transition: width 0.5s ease;
+  width: var(--peer-load, 0%);
+}
+
+/* Status specific colors */
+.load-normal {
+  background: #00ffcc;
+}
+
+.load-high {
+  background: #ff3333;
+}
