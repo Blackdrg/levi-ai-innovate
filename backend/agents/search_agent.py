@@ -8,7 +8,7 @@ import logging
 from typing import Dict, Any
 from pydantic import BaseModel, Field
 from backend.agents.base import SovereignAgent, AgentResult
-from backend.engines.chat.generation import SovereignGenerator
+from backend.core.local_engine import handle_local_sync
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,6 @@ class SearchAgent(SovereignAgent[SearchInput, AgentResult]):
         summary = results.get("summary", "No factual pulses detected.")
         
         # 2. Final Sovereign Search Synthesis
-        generator = SovereignGenerator()
         system_prompt = (
             "You are the LEVI Search Navigator. Your role is to provide real-time factual insights.\n"
             "Technical Requirements:\n"
@@ -61,11 +60,11 @@ class SearchAgent(SovereignAgent[SearchInput, AgentResult]):
             "- Resilience: If no data exists, admit it gracefully.\n"
         )
         
-        # Engage the council for factual grounding
-        final_response = await generator.council_of_models([
+        # Engage the local LLM stack for factual grounding
+        final_response = await handle_local_sync([
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"Search Data Summary: {summary}\n\nSearch Question: {query}"}
-        ])
+        ], model_type="default")
 
         return {
             "message": final_response,

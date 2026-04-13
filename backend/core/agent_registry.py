@@ -15,6 +15,7 @@ class AgentCapability:
     timeout_seconds: int = 60
     max_retries: int = 3
     is_sovereign: bool = True
+    required_role: str = "user" # RBAC: guest, user, admin, developer
 
 class AgentRegistry:
     """
@@ -77,6 +78,7 @@ DEFAULT_AGENTS = {
             },
             "required": ["code", "language"]
         },
+        required_role="developer",
         output_schema={
             "type": "object",
             "properties": {

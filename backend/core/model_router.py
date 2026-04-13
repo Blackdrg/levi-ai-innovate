@@ -23,9 +23,29 @@ class ModelRouter:
     @classmethod
     def get_model_for_tier(cls, tier: str, session_id: str = None, complexity: float = 1.0) -> str:
         """
-        Sovereign v14.0: Shadow-Aware & Cost-Optimized Routing.
-        Maps Agent Tiers to models, with A/B testing and token-optimization overrides.
+        Sovereign v15.0: Phase 7 Infra Load Shift.
+        Dynamically routes to local vs. cloud fallback based on live node pressure.
         """
+        from backend.core.executor.guardrails import capture_resource_pressure
+        from backend.config.system import CLOUD_FALLBACK_ENABLED
+        
+        # 1. Infra Load Shift (Phase 7): Check local VRAM & CPU load
+        try:
+            from backend.utils.hardware import gpu_monitor
+            vram_usage = gpu_monitor.get_vram_usage()
+            is_vram_strained = vram_usage.get("percent", 0) > 85.0
+        except Exception:
+            is_vram_strained = False
+            
+        pressure = capture_resource_pressure(is_vram_strained, 0)
+        if pressure.cpu_percent > 85.0 or pressure.ram_percent > 90.0 or pressure.vram_pressure:
+            if CLOUD_FALLBACK_ENABLED and tier in ["L3", "L4"]:
+                logger.warning(f"⚖️ [Load Shift] High local node pressure (CPU: {pressure.cpu_percent}%, VRAM Strained: {pressure.vram_pressure}). Shifting {tier} task to cloud.")
+                return "cloud-overflow-tier"
+        else:
+            # Force local if under threshold
+            logger.debug(f"⚖️ [Load Shift] Local load nominal ({pressure.cpu_percent}% CPU). Retaining task on edge.")
+
         # Overriding expensive tiers for extremely low complexity (Token Cost Optimization)
         if tier in ["L3", "L4"] and complexity < 0.25:
             logger.info(f"[ModelRouter] Token Optimization: Downgrading {tier} task due to low complexity ({complexity}).")

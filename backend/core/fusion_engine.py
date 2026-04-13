@@ -1,6 +1,6 @@
 import logging
 from typing import List, Dict
-from backend.engines.chat.generation import SovereignGenerator
+from backend.core.local_engine import handle_local_sync
 from backend.engines.utils.security import SovereignSecurity
 from backend.engines.utils.i18n import SovereignI18n
 
@@ -64,12 +64,11 @@ class FusionEngine:
         """
 
         # 3. ⚡ Execute High-Fidelity Synthesis via Council of Models
-        generator = SovereignGenerator()
         messages = [{"role": "system", "content": "You are the Sovereign Synthesizer."}, {"role": "user", "content": fusion_prompt}]
         
         try:
-            # We use the council of models for the final synthesis to ensure highest quality
-            fused_msg = await generator.council_of_models(messages)
+            # Phase 1 Local Shift: Synthesize natively
+            fused_msg = await handle_local_sync(messages, model_type="default")
             
             # Final security check on synthesized output
             return SovereignSecurity.mask_pii(fused_msg)

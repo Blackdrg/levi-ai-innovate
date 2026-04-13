@@ -88,7 +88,7 @@ async def synthesize_response(
     """
     # ... logic delegated to v13 internal synthesis ...
     # This remains as a bridge for legacy v1 orchestrator calls
-    from backend.engines.chat.generation import _async_call_llm_api
+    from backend.core.local_engine import handle_local_sync
     
     # 1. v13 SQL Profile Sync
     user_id = context.get("user_id", "guest")
@@ -106,10 +106,9 @@ async def synthesize_response(
     )
 
     try:
-        return await _async_call_llm_api(
+        return await handle_local_sync(
             messages=[{"role": "system", "content": synth_prompt}],
-            model="llama-3.1-70b-versatile",
-            provider="groq"
+            model_type="default"
         )
     except Exception:
         return "I have crystallized the mission requirements. Synthesis complete."
@@ -147,7 +146,7 @@ async def synthesize_streaming_response(
         return
 
     # 4. LLM Synthesis (Response Composition)
-    from backend.engines.chat.generation import async_stream_llm_response
+    from backend.core.local_engine import generate_local_stream
     from backend.services.learning.logic import UserPreferenceModel
 
     user_id = context.get("user_id", "guest")
@@ -179,12 +178,12 @@ async def synthesize_streaming_response(
     # Tiered Model Selection
     user_tier = context.get("user_tier", "free")
     complexity = context.get("complexity_level", 2)
-    model = "llama-3.1-70b-versatile" if (user_tier in ("pro", "creator") or complexity == 3) else "llama-3.1-8b-instant"
+    model_type = "default" if (user_tier in ("pro", "creator") or complexity == 3) else "small"
 
     try:
-        async for token in async_stream_llm_response(
+        async for token in generate_local_stream(
             messages=[{"role": "system", "content": synth_prompt}],
-            model=model,
+            model_type=model_type,
         ):
             yield {"token": token}
             

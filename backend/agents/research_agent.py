@@ -16,8 +16,9 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field
 from backend.agents.base import SovereignAgent, AgentResult
-from backend.engines.chat.generation import SovereignGenerator
+from backend.core.local_engine import handle_local_sync
 from backend.broadcast_utils import SovereignBroadcaster
+from backend.memory.vector_store import SovereignVectorStore
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +119,8 @@ class ResearchAgent(SovereignAgent[ResearchInput, AgentResult]):
         })
 
         if not self.tavily_key:
-            return {"message": "Tavily Pulse is currently offline.", "success": False}
+            self.logger.warning("Tavily Pulse offline. Escalating to Internal RAG Knowledge Base.")
+            return await self._internal_rag_fallback(topic, session_id, lang)
 
         # ── 1. Discovery pass ─────────────────────────────────────────
         raw_results = await self.search(topic, depth="basic", session_id=session_id)
@@ -186,6 +188,32 @@ class ResearchAgent(SovereignAgent[ResearchInput, AgentResult]):
     # Helpers
     # ------------------------------------------------------------------
 
+    async def _internal_rag_fallback(self, topic: str, session_id: str, lang: str) -> Dict[str, Any]:
+        """PHASE 2: Internal RAG pipeline replacing external search dependencies."""
+        # 1. Retrieve from internal knowledge base (FAISS)
+        vector_facts = await SovereignVectorStore.search_facts("global", topic, limit=10)
+        
+        if not vector_facts:
+            return {"message": "Internal knowledge base contains no resonance for this topic.", "success": False}
+            
+        # 2. Synthesize findings
+        context = "\n".join([f"- {f.get('fact', '')}" for f in vector_facts])
+        summary = await handle_local_sync([
+            {"role": "system", "content": "You are the LEVI Internal RAG Synthesizer. Generate a comprehensive report based ONLY on the provided internal knowledge."},
+            {"role": "user", "content": f"Topic: '{topic}'\nInternal Data:\n{context}"},
+        ], model_type="default")
+        
+        bundle = self._build_citation_bundle(topic, summary, [], len(vector_facts))
+        return {
+            "message": summary,
+            "citations": ["internal://sovereign-vector-store"],
+            "citation_bundle": bundle.model_dump(),
+            "data": {
+                "sources_deduped": len(vector_facts),
+                "rag_fallback_active": True
+            }
+        }
+
     def _build_citation_bundle(
         self,
         topic: str,
@@ -243,16 +271,14 @@ class ResearchAgent(SovereignAgent[ResearchInput, AgentResult]):
             f"Source: {r.get('url')}\nContent: {r.get('content', '')[:500]}"
             for r in results[:5]
         ])
-        generator = SovereignGenerator()
-        return await generator.council_of_models([
+        return await handle_local_sync([
             {"role": "system", "content": "You are the LEVI v13 Research Architect."},
             {"role": "user", "content": f"Synthesise v13 report on: {topic}\n\n{context}"},
-        ])
+        ], model_type="default")
 
     async def _generate_sub_queries(self, topic: str, results: List[Dict]) -> List[str]:
-        generator = SovereignGenerator()
-        raw = await generator.council_of_models([
+        raw = await handle_local_sync([
             {"role": "system", "content": "You are the LEVI v13 Research Architect."},
             {"role": "user", "content": f"Topic: '{topic}'\nIdentify 2 sub-questions."},
-        ])
+        ], model_type="default")
         return [q.strip() for q in raw.split("\n") if q.strip() and "?" in q][:2]

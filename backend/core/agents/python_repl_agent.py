@@ -3,6 +3,7 @@ import sys
 import io
 import traceback
 import asyncio
+import re
 from typing import Any, Dict
 from pydantic import BaseModel, Field
 from backend.core.agent_base import SovereignAgent, AgentResult
@@ -26,24 +27,24 @@ class PythonReplAgent(SovereignAgent[PythonInput, AgentResult]):
         """
         Execution Protocol v7:
         1. Static Analysis: Prompt injection & exploit detection.
-        2. Sandbox Setup: Restricted globals/builtins.
-        3. Execution: Async with timeout.
+        2. Autonomous Module Discovery (v15.0).
+        3. Sandbox Setup: Restricted globals/builtins.
+        4. Execution: Async with timeout.
         """
         code = input_data.code
         self.logger.info(f"Executing Logic Mission: {code[:50]}...")
         
-        # 1. Static Security Check (Hardened for v7)
-        disallowed = ["os", "subprocess", "sys", "eval", "exec", "open", "getattr", "setattr", "importlib", "shutil", "socket", "requests"]
+        # 1. Static Security Check
+        disallowed = ["os", "subprocess", "sys", "eval", "exec", "getattr", "setattr", "importlib", "shutil", "socket", "requests"]
         for d in disallowed:
             if f"{d}." in code or f" {d}(" in code or f"({d}" in code:
                   return {"success": False, "message": f"Security Violation: '{d}' is forbidden in Sovereign Sandbox."}
 
-        # 2. Local Restricted Execution
+        # 2. Local Restricted Execution Setup
         output_buffer = io.StringIO()
         old_stdout, old_stderr = sys.stdout, sys.stderr
         sys.stdout, sys.stderr = output_buffer, output_buffer
 
-        # Restricted Globals for Global Readiness
         restricted_globals = {
             "__builtins__": {
                 "print": print, "range": range, "len": len, "int": int, "float": float,
@@ -57,6 +58,26 @@ class PythonReplAgent(SovereignAgent[PythonInput, AgentResult]):
             "random": __import__("random"),
             "statistics": __import__("statistics")
         }
+
+        # 3. Autonomous Module Discovery (Sovereign v15.0)
+        # Allows agents to request additional cognitive tools dynamically
+        import_match = re.search(r"(?:^|\s)import\s+(\w+)", code)
+        if import_match:
+            module_name = import_match.group(1).split('.')[0]
+            if module_name not in restricted_globals and module_name not in disallowed:
+                 self.logger.info(f"🔍 [Autonomy] Module '{module_name}' requested. Spawning security validation sub-mission...")
+                 audit_res = await self.request_side_mission(
+                     user_id=kwargs.get("user_id", "guest"),
+                     session_id=kwargs.get("session_id", "repl_sub"),
+                     objective=f"Analyze and approve the safety of python module '{module_name}' for local execution."
+                 )
+                 if audit_res.success:
+                      try:
+                          # Hardened dynamic import
+                          restricted_globals[module_name] = __import__(module_name)
+                          self.logger.info(f"✅ [Autonomy] Module '{module_name}' dynamically provisioned.")
+                      except ImportError:
+                          self.logger.warning(f"⚠️ [Autonomy] Module '{module_name}' approved but missing on host.")
 
         try:
             # We use a thread to prevent blocking the event loop

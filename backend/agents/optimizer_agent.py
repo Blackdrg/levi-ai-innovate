@@ -8,7 +8,7 @@ import logging
 from typing import Any, Dict
 from pydantic import BaseModel, Field
 from backend.agents.base import SovereignAgent, AgentResult
-from backend.engines.chat.generation import SovereignGenerator
+from backend.core.local_engine import handle_local_sync
 
 logger = logging.getLogger(__name__)
 
@@ -49,12 +49,10 @@ class OptimizerAgent(SovereignAgent[OptimizerInput, AgentResult]):
             "Return ONLY the refined response."
         )
         
-        generator = SovereignGenerator()
-        
-        refined_text = await generator.council_of_models([
+        refined_text = await handle_local_sync([
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"Draft to elevate: {draft}"}
-        ])
+        ], model_type="default")
 
         return {
             "message": refined_text.strip(),

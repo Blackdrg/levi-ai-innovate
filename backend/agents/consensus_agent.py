@@ -9,7 +9,7 @@ import json
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 from backend.agents.base import SovereignAgent, AgentResult
-from backend.engines.chat.generation import SovereignGenerator
+from backend.core.local_engine import handle_local_sync
 from backend.utils.validators import HardRuleValidator
 from backend.utils.grounding import FactualGroundingHub
 
@@ -106,14 +106,11 @@ class ConsensusAgentV14(SovereignAgent[ConsensusInput, AgentResult]):
             "Output ONLY valid JSON: { \"winner_index\": 0, \"fidelity\": 0.98, \"justification\": \"...\" }"
         )
 
-        generator = SovereignGenerator()
-        
-        # 3. Parallel Swarm Appraisal
         user_content = f"Goal: {input_data.goal}\n\nObjective Inputs:\n{rubric_summaries}\n\nCandidates:\n{candidate_block}"
-        raw_json = await generator.council_of_models([
+        raw_json = await handle_local_sync([
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content}
-        ])
+        ], model_type="default")
 
         try:
             content = raw_json.strip()

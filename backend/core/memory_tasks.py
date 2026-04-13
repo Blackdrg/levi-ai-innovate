@@ -1,18 +1,9 @@
 """
-backend/services/orchestrator/memory_tasks.py
+backend/core/memory_tasks.py
 
-PHASE 47: Debounced Firestore Writes for User Memory Facts.
-
-This module contains Celery tasks that flush the Redis write buffer
-(populated by memory_utils.store_facts) to Firestore on a 30-second schedule.
-
-Architecture:
-  store_facts()  →  Redis List  →  [Beat every 30s]  →  flush_all_memory_buffers()
-                                                       →  flush_memory_buffer(user_id)  →  Firestore
-
-DEPLOYMENT NOTE:
-  Requires a Celery Beat process to be running:
-    celery -A backend.celery_app beat --loglevel=info
+Sovereign Memory Tasks v15.0-GA.
+Handles asynchronous memory maintenance, distillation, and background re-indexing.
+Utilizes Postgres SQL Fabric for primary persistence.
 """
 
 import json
@@ -20,10 +11,12 @@ import logging
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 
-from ..utils.archiver import SovereignArchiver
+from backend.db.postgres import PostgresDB
+from backend.db.models import UserFact, Mission
+from backend.memory.vector_store import SovereignVectorStore
+from backend.core.memory_manager import MemoryManager
 
 logger = logging.getLogger(__name__)
-
 
 def _get_redis():
     """Get the sync Redis client. Returns (client, has_redis) tuple."""
@@ -33,268 +26,91 @@ def _get_redis():
     except Exception:
         return None, False
 
-
-def _get_firestore():
-    """Get the Firestore client."""
-    from backend.db.firebase import db
-    return db
-
-
-def _flush_user_facts(user_id: str, redis_client) -> int:
-    """
-    Atomically drain the Redis buffer for a user and write to Firestore.
-    Returns the number of facts flushed.
-    """
-    buffer_key = f"mem_buffer:{user_id}"
-    db = _get_firestore()
-    flushed = 0
-
-    # Atomically pop all items from the buffer list using a pipeline
-    # LRANGE + DEL is effectively atomic for our use case (single writer per user)
-    pipe = redis_client.pipeline()
-    pipe.lrange(buffer_key, 0, -1)   # Get all items
-    pipe.delete(buffer_key)           # Atomically clear the buffer
-    results = pipe.execute()
-
-    raw_facts: List[bytes] = results[0]
-    if not raw_facts:
-        return 0
-
-    logger.info(f"Flushing {len(raw_facts)} buffered facts for user '{user_id}' to Firestore.")
-
-    # Write to Firestore using a batch for efficiency
-    batch = db.batch()
-    batch_count = 0
-    MAX_BATCH_SIZE = 500  # Firestore batch limit
-
-    for raw in raw_facts:
-        try:
-            fact_data: Dict[str, Any] = json.loads(raw)
-            doc_id = fact_data.pop("fact_id", None)
-            if not doc_id:
-                continue
-
-            # Convert ISO string back to datetime for Firestore
-            created_at_raw = fact_data.get("created_at")
-            if isinstance(created_at_raw, str):
-                try:
-                    fact_data["created_at"] = datetime.fromisoformat(created_at_raw)
-                except ValueError:
-                    fact_data["created_at"] = datetime.utcnow()
-            else:
-                fact_data["created_at"] = datetime.utcnow()
-
-            doc_ref = db.collection("user_facts").document(doc_id)
-            batch.set(doc_ref, fact_data)
-            batch_count += 1
-            flushed += 1
-
-            # Commit in chunks if we hit the Firestore batch limit
-            if batch_count >= MAX_BATCH_SIZE:
-                batch.commit()
-                batch = db.batch()
-                batch_count = 0
-
-        except Exception as e:
-            logger.error(f"Error processing buffered fact for user '{user_id}': {e}")
-
-    # Commit any remaining docs
-    if batch_count > 0:
-        try:
-            batch.commit()
-        except Exception as e:
-            logger.error(f"Firestore batch commit failed for user '{user_id}': {e}")
-            # Re-push failed facts back to Redis to avoid data loss
-            if raw_facts:
-                pipe2 = redis_client.pipeline()
-                for raw_item in raw_facts:
-                    pipe2.rpush(buffer_key, raw_item)
-                pipe2.expire(buffer_key, 3600)
-                pipe2.execute()
-                logger.warning(f"Re-queued {len(raw_facts)} facts for user '{user_id}' after commit failure.")
-            return 0
-
-    logger.info(f"Successfully flushed {flushed} facts for user '{user_id}' to Firestore.")
-    return flushed
-
-
 # ── Celery Tasks ─────────────────────────────────────────────
 
-def _get_celery_app():
-    from backend.celery_app import celery_app
-    return celery_app
-
-from backend.celery_app import celery_app  # noqa: E402
-
+from backend.celery_app import celery_app
 
 @celery_app.task(
-    name="backend.services.orchestrator.memory_tasks.flush_memory_buffer",
+    name="backend.core.memory_tasks.flush_memory_buffer",
     bind=True,
     max_retries=3,
-    default_retry_delay=5,
-    acks_late=True,
 )
 def flush_memory_buffer(self, user_id: str):
     """
-    Celery task: Flush all buffered memory facts for a specific user to Firestore.
-    
-    Called either:
-    - Directly when the buffer threshold (10 facts) is exceeded.
-    - By flush_all_memory_buffers() every 30 seconds.
+    Sovereign v15: Flush buffered memory facts for a specific user to Postgres.
     """
     redis_client, has_redis = _get_redis()
     if not has_redis or redis_client is None:
-        logger.warning("flush_memory_buffer: Redis unavailable, skipping flush.")
         return {"flushed": 0, "user_id": user_id}
 
+    buffer_key = f"mem_buffer:{user_id}"
     try:
-        count = _flush_user_facts(user_id, redis_client)
-        return {"flushed": count, "user_id": user_id}
-    except Exception as exc:
-        logger.error(f"flush_memory_buffer failed for user '{user_id}': {exc}", exc_info=True)
-        raise self.retry(exc=exc)
-
-
-@celery_app.task(
-    name="backend.services.orchestrator.memory_tasks.flush_all_memory_buffers",
-    bind=True,
-)
-def flush_all_memory_buffers(self):
-    """
-    Celery Beat periodic task (every 30s): Discover all active memory buffers
-    in Redis and dispatch individual flush tasks for each user.
-    
-    Uses SCAN to avoid blocking Redis with KEYS in production.
-    """
-    redis_client, has_redis = _get_redis()
-    if not has_redis or redis_client is None:
-        logger.warning("flush_all_memory_buffers: Redis unavailable, skipping periodic flush.")
-        return {"dispatched": 0}
-
-    dispatched = 0
-    try:
-        # Use SCAN to iterate all mem_buffer:* keys (non-blocking)
-        cursor = 0
-        user_ids_to_flush = []
-        while True:
-            cursor, keys = redis_client.scan(cursor, match="mem_buffer:*", count=100)
-            for key in keys:
-                # Extract user_id from "mem_buffer:{user_id}"
-                key_str = key.decode() if isinstance(key, bytes) else key
-                user_id = key_str.removeprefix("mem_buffer:")
-                if user_id:
-                    user_ids_to_flush.append(user_id)
-            if cursor == 0:
-                break
-
-        if not user_ids_to_flush:
-            return {"dispatched": 0}
-
-        logger.info(f"flush_all_memory_buffers: Dispatching flushes for {len(user_ids_to_flush)} users.")
-        for uid in user_ids_to_flush:
-            flush_memory_buffer.delay(uid)
-            dispatched += 1
-
-    except Exception as e:
-        logger.error(f"flush_all_memory_buffers error: {e}", exc_info=True)
-
-    return {"dispatched": dispatched}
-
-
-@celery_app.task(
-    name="backend.services.orchestrator.memory_tasks.flush_conversation_buffer",
-    bind=True,
-)
-def flush_conversation_buffer(self):
-    """
-    Periodic task to flush buffered conversations from Redis to Firestore.
-    Reduces write frequency to Firestore.
-    """
-    redis_client, has_redis = _get_redis()
-    if not has_redis or redis_client is None:
-        return {"flushed": 0}
-
-    db = _get_firestore()
-    flushed = 0
-    
-    try:
-        # Atomic pull
+        # Atomic drain
         pipe = redis_client.pipeline()
-        pipe.lrange("conv_buffer", 0, -1)
-        pipe.delete("conv_buffer")
+        pipe.lrange(buffer_key, 0, -1)
+        pipe.delete(buffer_key)
         results = pipe.execute()
         
-        raw_payloads = results[0]
-        if not raw_payloads:
-            return {"flushed": 0}
+        raw_facts = results[0]
+        if not raw_facts: return {"flushed": 0}
 
-        # Deduplicate: only the latest version of a session in this batch needs to be saved
-        deduplicated = {}
-        for raw in raw_payloads:
-            payload = json.loads(raw)
-            sid = payload.get("session_id")
-            if sid:
-                deduplicated[sid] = payload
-
-        batch = db.batch()
         count = 0
-        for sid, data in deduplicated.items():
-            doc_ref = db.collection("conversations").document(sid)
-            batch.set(doc_ref, data, merge=True)
-            count += 1
-            flushed += 1
-            if count >= 500:
-                batch.commit()
-                batch = db.batch()
-                count = 0
+        async def process_flush():
+             nonlocal count
+             async with PostgresDB._session_factory() as session:
+                for raw in raw_facts:
+                    data = json.loads(raw)
+                    new_fact = UserFact(
+                        user_id=user_id,
+                        fact=data.get("fact"),
+                        category=data.get("category", "general"),
+                        importance=data.get("importance", 0.5)
+                    )
+                    session.add(new_fact)
+                    count += 1
+                await session.commit()
         
-        if count > 0:
-            batch.commit()
-            
-        logger.info(f"Successfully flushed {flushed} conversations from buffer.")
-        return {"flushed": flushed}
+        import asyncio
+        asyncio.run(process_flush())
         
-    except Exception as e:
-        logger.error(f"Error flushing conversion buffer: {e}")
-        return {"error": str(e)}
+        return {"flushed": count, "user_id": user_id}
+    except Exception as exc:
+        logger.error(f"flush_memory_buffer failure: {exc}")
+        raise self.retry(exc=exc)
 
 @celery_app.task(
-    name="backend.services.orchestrator.memory_tasks.garbage_collect_memory",
+    name="backend.core.memory_tasks.garbage_collect_memory",
     bind=True,
 )
 def garbage_collect_memory(self, user_id: str):
     """
-    Celery task: Run the FAISS garbage collection process for a specific user.
-    Prunes expired/low-importance facts from the user's vector index.
+    Rebuilds the local FAISS index from Postgres truth.
     """
     import asyncio
-    from .memory_utils import garbage_collect_index
     try:
-        asyncio.run(garbage_collect_index(user_id))
-        return {"status": "gc_complete", "user_id": user_id}
+        asyncio.run(SovereignVectorStore.reindex_user_memory(user_id))
+        return {"status": "reindexed", "user_id": user_id}
     except Exception as e:
         logger.error(f"Memory GC task failed for user {user_id}: {e}")
         return {"status": "failed", "error": str(e)}
+
 @celery_app.task(
-    name="backend.services.orchestrator.memory_tasks.distill_user_memories",
+    name="backend.core.memory_tasks.distill_user_memories",
     bind=True,
     max_retries=2,
 )
 def distill_user_memories(self, user_id: str):
     """
-    Sovereign v9.8.1: Memory Distillation (Dreaming).
+    Sovereign v15: Memory Distillation (Dreaming).
     Crystallizes recent episodic/mid-term patterns into permanent traits.
     """
-    from backend.memory.manager import MemoryManager
     import asyncio
     
-    logger.info(f"[Dreaming] Executing distillation loop for user: {user_id}")
+    logger.info(f"[Dreaming] Executing v15 distillation for user: {user_id}")
     try:
         manager = MemoryManager()
-        # V9.8.1: Use the enhanced dream() method
         success = asyncio.run(manager.dream(user_id))
         
-        # Clear the flag in Redis upon success
         if success:
              redis_client, has_redis = _get_redis()
              if has_redis and redis_client:
@@ -306,142 +122,56 @@ def distill_user_memories(self, user_id: str):
         return {"status": "failed", "error": str(e)}
 
 @celery_app.task(
-    name="backend.services.orchestrator.memory_tasks.dream_all_users",
+    name="backend.core.memory_tasks.dream_all_users",
     bind=True,
 )
 def dream_all_users(self):
     """
-    Sovereign v9.8.1: Periodic Dreaming discovery.
-    Scans Redis for 'dream_ready' signals and dispatches distillation tasks.
+    Discovery loop for users ready for dreaming.
     """
     redis_client, has_redis = _get_redis()
-    if not has_redis or redis_client is None:
-        logger.warning("[Dreaming] Redis offline. Skipping discovery.")
-        return {"scheduled": 0}
+    if not has_redis or redis_client is None: return {"scheduled": 0}
 
     scheduled = 0
     try:
         cursor = 0
         while True:
-            # Discover users who have triggered the dream_ready signal
             cursor, keys = redis_client.scan(cursor, match="user:*:dream_ready", count=100)
             for key in keys:
                 key_str = key.decode() if isinstance(key, bytes) else key
-                # Extract user_id from "user:{user_id}:dream_ready"
                 parts = key_str.split(":")
                 if len(parts) >= 2:
                     uid = parts[1]
                     distill_user_memories.delay(uid)
                     scheduled += 1
-            if cursor == 0:
-                break
+            if cursor == 0: break
                 
-        logger.info(f"[Dreaming] Task Discovery complete. {scheduled} users scheduled for distillation.")
         return {"scheduled": scheduled}
-        
     except Exception as e:
         logger.error(f"[Dreaming] Discovery loop failed: {e}")
         return {"error": str(e)}
 
 @celery_app.task(
-    name="backend.services.orchestrator.memory_tasks.run_global_maintenance",
+    name="backend.core.memory_tasks.run_global_maintenance",
     bind=True,
 )
 def run_global_maintenance(self):
     """
-    Sovereign v9.8.1: Global Maintenance Sweep.
-    Dispatches maintenance jobs for all users to ensure system hygiene.
+    Sovereign v15: Global Maintenance Sweep.
     """
-    db = _get_firestore()
-    # Fetch active users (Simplified for Monolith scalability)
-    conv_ref = db.collection("conversations")
-    uids = set()
+    import asyncio
+    async def get_active_users():
+        from sqlalchemy import select
+        async with PostgresDB._session_factory() as session:
+            stmt = select(Mission.user_id).distinct().limit(100)
+            res = await session.execute(stmt)
+            return res.scalars().all()
+    
     try:
-        # Get users from the last 72 hours
-        docs = conv_ref.limit(500).get()
-        for doc in docs:
-            uid = doc.to_dict().get("user_id")
-            if uid: uids.add(uid)
-            
+        uids = asyncio.run(get_active_users())
         for uid in uids:
             garbage_collect_memory.delay(uid)
-            # We don't force dreaming here; it's handled by dream_all_users logic
-            
-        logger.info(f"[Maintenance] Scheduled hygiene for {len(uids)} users.")
         return {"scheduled": len(uids)}
     except Exception as e:
         logger.error(f"[Maintenance] Sweep drift: {e}")
         return {"error": str(e)}
-
-@celery_app.task(
-    name="backend.core.memory_tasks.run_survival_hygiene",
-    bind=True,
-)
-def run_survival_hygiene(self, user_id: Optional[str] = None):
-    """
-    Sovereign v9.8.1: Autonomous Survival Gating.
-    Prunes low-resonance memories (R < 0.35) to encrypted cold storage.
-    """
-    db = _get_firestore()
-    from backend.utils.vector_db import get_vector_db
-    vector_db = get_vector_db()
-    from backend.memory.resonance import MemoryResonance
-    
-    purged_count = 0
-    now = datetime.now(timezone.utc)
-    
-    try:
-        # 1. Fetch user facts (Stream based for memory efficiency)
-        query = db.collection("user_facts")
-        if user_id:
-            query = query.where("user_id", "==", user_id)
-        
-        docs = query.stream()
-        
-        to_archive = {} # user_id -> [memories]
-        doc_ids_to_purge = []
-        
-        for doc in docs:
-            data = doc.to_dict()
-            uid = data.get("user_id")
-            importance = data.get("importance", 0.5)
-            created_at = data.get("created_at")
-            access_count = data.get("access_count", 1)
-            
-            # 2. Calculate Resonance Score (R)
-            resonance = MemoryResonance.calculate_resonance(importance, created_at, access_count)
-            
-            # 3. Flag for Archival (Threshold < 0.35)
-            if resonance < 0.35 and importance < 0.95:
-                if uid not in to_archive:
-                    to_archive[uid] = []
-                
-                mem_entry = {**data, "fact_id": doc.id, "final_resonance": resonance}
-                to_archive[uid].append(mem_entry)
-                doc_ids_to_purge.append((uid, doc.id))
-
-        # 4. Process Archival and Deletion
-        import asyncio
-        for uid, memories in to_archive.items():
-            # Encrypted Displacement
-            asyncio.run(SovereignArchiver.archive_memories(uid, memories))
-            
-            # Atomic Purge (Firestore Batch)
-            batch = db.batch()
-            for fact_uid, fact_id in doc_ids_to_purge:
-                if fact_uid == uid:
-                    batch.delete(db.collection("user_facts").document(fact_id))
-                    purged_count += 1
-            
-            batch.commit()
-            
-            # Vector Index Synchronization
-            indices = [mid for fuid, mid in doc_ids_to_purge if fuid == uid]
-            vector_db.remove_indices(indices)
-            
-        logger.info(f"[SurvivalGater] Hygiene complete. Displaced {purged_count} memories to cold storage.")
-        return {"displaced_count": purged_count}
-        
-    except Exception as e:
-        logger.error(f"[SurvivalGater] Gating failure: {e}")
-        return {"error": str(e), "displaced_count": purged_count}

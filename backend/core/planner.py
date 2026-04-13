@@ -247,6 +247,29 @@ class LlmDecomposer:
         context = perception.get("context", {})
         graph_resonance = context.get("long_term", {}).get("graph_resonance", [])
         
+        # 🧠 Phase 3: Context Injection Layer (Semantic + Episodic)
+        semantic_traits = context.get("traits", [])
+        semantic_prefs = context.get("preferences", {})
+        episodic = context.get("mid_term", [])
+        
+        semantic_text = ""
+        if semantic_traits or semantic_prefs:
+            semantic_text = "\nSovereign Semantic Memory (Traits & Preferences):\n"
+            for t in semantic_traits: 
+                semantic_text += f"- {t}\n"
+            if isinstance(semantic_prefs, dict):
+                for k, v in semantic_prefs.items():
+                    if k not in ["user_id", "id"] and v:
+                        semantic_text += f"- {k}: {v}\n"
+            elif isinstance(semantic_prefs, list):
+                for p in semantic_prefs: semantic_text += f"- {p}\n"
+                
+        episodic_text = ""
+        if episodic:
+            episodic_text = "\nSovereign Episodic Memory (Recent Missions):\n"
+            for m in episodic:
+                episodic_text += f"- [{m.get('status', 'unknown')}] {m.get('objective', 'Unknown mission')}\n"
+
         resonance_text = ""
         if graph_resonance:
             resonance_text = "\nSovereign Knowledge Graph Resonance:\n" + "\n".join([
@@ -255,13 +278,12 @@ class LlmDecomposer:
             ])
 
         prompt = f"""
-You are the LEVI Sovereign Planner (v14.2.0).
+You are the LEVI Sovereign Planner (Phase 3 Context-Aware).
 Decompose this mission into a Directed Acyclic Graph (DAG) of specialized agent tasks.
 
 Mission Objective: {objective}
 User Input: {user_input}
-Context: {json.dumps(context, indent=2)}
-{resonance_text}
+{semantic_text}{episodic_text}{resonance_text}
 
 Available Agents:
 - search_agent, browser_agent, code_agent, python_repl_agent, document_agent, image_agent, video_agent, critic_agent, consensus_agent
@@ -360,6 +382,27 @@ class DAGPlanner:
         user_input = perception.get("input", "")
         mode = decision.mode if decision else BrainMode.BALANCED
         
+        # --- Step 2.4: Graduated Rule Override (REAL EVOLUTION) ---
+        rule_override = await LearningLoop.check_rules(user_input)
+        if rule_override:
+            logger.info(f"🎯 [RuleEngine] Applying graduated override for '{user_input[:30]}...'")
+            agents = rule_override.get("agent_sequence", [])
+            # Convert sequence to tasks
+            template = []
+            prev_id = None
+            for i, agent in enumerate(agents):
+                tid = f"rule_task_{i}"
+                node = {"id": tid, "agent": agent, "description": f"Rule-based execution ({agent})", "critical": True}
+                if prev_id:
+                    node["dependencies"] = [prev_id]
+                template.append(node)
+                prev_id = tid
+            
+            graph = self._build_from_static_template(template, user_input, perception, decision)
+            if graph:
+                graph.metadata["origin"] = "graduated_rule"
+                return graph
+
         # 1. High Complexity / DEEP Mode: Dynamic LLM Decomposition
         if (intent and intent.complexity_level >= 3) or mode == BrainMode.DEEP:
             logger.info("[Planner] Elevating to Neural Decomposition...")

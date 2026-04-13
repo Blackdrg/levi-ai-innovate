@@ -11,7 +11,8 @@ from datetime import datetime, timezone
 from typing import List, Dict, Any
 
 from backend.db.vector_store import VectorDB, SovereignVault
-from backend.db.firestore_db import db as firestore_db
+from backend.db.postgres import PostgresDB
+from backend.db.models import UserFact
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +34,9 @@ class SovereignVectorStore:
         return await VectorDB.get_collection("global")
 
     @staticmethod
-    async def store_fact(user_id: str, fact_text: str, category: str = "factual", importance: float = 0.5, success_impact: float = 0.5):
-        """Standardized fact storage with FAISS deduplication and cloud backup (v11.0)."""
+    async def store_fact(user_id: str, fact_text: str, category: str = "factual", importance: float = 0.5, success_impact: float = 0.5, 
+                   usage_score: float = 1.0, recency_score: float = 1.0):
+        """Standardized fact storage with FAISS deduplication, cloud backup, and Step 1.4 scoring."""
         if not user_id or not fact_text: return
 
         try:
@@ -59,6 +61,8 @@ class SovereignVectorStore:
                 "fact_id": f"{user_id}_{fact_id}", 
                 "importance": importance,
                 "success_impact": success_impact,
+                "usage_score": usage_score,
+                "recency_score": recency_score,
                 "access_count": 1,
                 "created_at": datetime.now(timezone.utc).isoformat(),
             }
@@ -66,17 +70,22 @@ class SovereignVectorStore:
             # 4. Add to Local FAISS (Keep raw text for searching local index)
             await user_memory.add([fact_text], [doc_data])
             
-            # 5. Backup to MongoDB (Prod Engine) & Firestore (Legacy)
-            from backend.db.mongo import MongoDB
-            db = await MongoDB.get_db()
-            if db is not None:
-                from backend.utils.runtime_tasks import create_tracked_task
-                create_tracked_task(db.user_facts.insert_one(doc_data), name=f"vector-mongo-backup-{user_id}")
-            
-            from backend.utils.runtime_tasks import create_tracked_task
-            create_tracked_task(asyncio.to_thread(
-                lambda: firestore_db.collection("user_facts").document(doc_data["fact_id"]).set(doc_data)
-            ), name=f"vector-firestore-backup-{user_id}")
+            # 5. Persist to Postgres (Tier 3: SQL Resonance - Source of Truth)
+            async with PostgresDB._session_factory() as session:
+                new_fact = UserFact(
+                    user_id=user_id,
+                    fact=encrypted_fact,
+                    category=category,
+                    importance=importance,
+                    is_deleted=False
+                )
+                session.add(new_fact)
+                await session.commit()
+                await session.refresh(new_fact)
+                # Update meta with the official DB ID
+                await user_memory.update_metadata("fact_id", doc_data["fact_id"], {"db_id": new_fact.id})
+
+            logger.info(f"[VectorStore] Fact synchronized: FAISS + Postgres ({new_fact.id})")
 
         except Exception as e:
             logger.error(f"Vector Store insertion failed: {e}")
@@ -91,10 +100,16 @@ class SovereignVectorStore:
             user_memory = await SovereignVectorStore.get_user_memory(user_id)
             all_results = await user_memory.search(query, limit=20)
             
-            # 2. Weighting & Decryption
+            # 2. Weighting, Decryption, and Step 1.4 Scoring
             user_facts = []
+            now = datetime.now(timezone.utc)
             for res in all_results:
                 if res.get("user_id") == user_id and res.get("score", 0) > 0.4:
+                    # Calculate Recency Score (Decay over 30 days)
+                    created_at = datetime.fromisoformat(res.get("created_at", now.isoformat()))
+                    delta_days = (now - created_at).days
+                    recency = max(0, 1.0 - (delta_days / 30.0))
+                    
                     weight = 1.0
                     cat = res.get("category", "factual")
                     if cat == "preference": weight = 1.4
@@ -103,8 +118,22 @@ class SovereignVectorStore:
                     # Decrypt fact for synthesis
                     raw_fact = SovereignVault.decrypt(res.get("fact", ""))
                     res["fact"] = raw_fact
-                    res["final_score"] = res["score"] * weight * (1.0 + res.get("importance", 0.5))
+                    
+                    # Final Score: importance * usage * recency * base_score
+                    usage = res.get("usage_score", 1.0)
+                    importance = res.get("importance", 0.5)
+                    
+                    res["final_score"] = res["score"] * weight * (1.0 + importance) * (0.5 + recency * 0.5) * (0.8 + usage * 0.2)
+                    res["recency_score"] = recency
                     user_facts.append(res)
+                    
+                    # Update usage count in background
+                    usage_inc = usage + 0.05
+                    res["usage_score"] = usage_inc
+                    
+                    # Persist usage update
+                    if "fact_id" in res:
+                        asyncio.create_task(user_memory.update_metadata("fact_id", res["fact_id"], {"usage_score": usage_inc}))
 
             user_facts.sort(key=lambda x: x["final_score"], reverse=True)
             return user_facts[:limit]
@@ -123,18 +152,14 @@ class SovereignVectorStore:
         
         logger.info(f"[VectorStore] Starting memory re-indexing for {user_id}...")
         try:
-            from backend.db.mongo import MongoDB
-            db = await MongoDB.get_db()
-            if db is None:
-                logger.error("[VectorStore] MongoDB unavailable for re-indexing.")
-                return
-
-            # 1. Fetch all facts for this user from the primary store
-            cursor = db.user_facts.find({"user_id": user_id})
-            facts_to_index = await cursor.to_list(length=1000)
+            from sqlalchemy import select
+            async with PostgresDB._session_factory() as session:
+                stmt = select(UserFact).where(UserFact.user_id == user_id, UserFact.is_deleted == False)
+                res = await session.execute(stmt)
+                facts_to_index = res.scalars().all()
             
             if not facts_to_index:
-                logger.info(f"[VectorStore] No facts found in database for {user_id}. Clearing local index.")
+                logger.info(f"[VectorStore] No facts found in Postgres for {user_id}. Clearing local index.")
                 user_memory = await SovereignVectorStore.get_user_memory(user_id)
                 await user_memory.clear()
                 return
@@ -142,16 +167,23 @@ class SovereignVectorStore:
             # 2. Decrypt and prepare texts and metadatas
             texts = []
             metadatas = []
-            for doc in facts_to_index:
+            for fact_obj in facts_to_index:
                 try:
-                    # Remove MongoDB _id before storing in FAISS metadata
-                    doc.pop("_id", None)
-                    raw_fact = SovereignVault.decrypt(doc.get("fact", ""))
+                    # Decrypt and prepare texts and metadatas
+                    raw_fact = SovereignVault.decrypt(fact_obj.fact)
                     if raw_fact:
                         texts.append(raw_fact)
-                        metadatas.append(doc)
+                        metadatas.append({
+                            "user_id": user_id,
+                            "fact": fact_obj.fact,
+                            "category": fact_obj.category,
+                            "importance": fact_obj.importance,
+                            "db_id": fact_obj.id,
+                            "fact_id": f"{user_id}_{hashlib.md5(raw_fact.encode()).hexdigest()}",
+                            "created_at": fact_obj.created_at.isoformat()
+                        })
                 except Exception as dec_err:
-                    logger.warning(f"[VectorStore] Failed to decrypt fact {doc.get('fact_id')} during re-index: {dec_err}")
+                    logger.warning(f"[VectorStore] Failed to decrypt fact {fact_obj.id} during re-index: {dec_err}")
 
             # 3. Perform a Hard Rebuild of the FAISS collection
             if texts:
@@ -233,4 +265,12 @@ class SovereignVectorStore:
                 await user_memory.remove_indices(indices_to_remove, hard_delete=False)
                 logger.info(f"[VectorStore] Fact {fact_id} marked for deletion in {user_id}'s memory.")
         except Exception as e:
-            logger.error(f"[VectorStore] Failed to delete fact {fact_id}: {e}")
+    @staticmethod
+    async def clear_user_memory(user_id: str):
+        """Absolute wipe of a user's semantic local cache."""
+        try:
+            user_memory = await SovereignVectorStore.get_user_memory(user_id)
+            await user_memory.clear()
+            logger.info(f"[VectorStore] Hard-cleared local FAISS index for {user_id}")
+        except Exception as e:
+            logger.error(f"[VectorStore] Clear failed for {user_id}: {e}")

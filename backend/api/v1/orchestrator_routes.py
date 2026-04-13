@@ -59,6 +59,8 @@ async def dispatch_mission_v15(
         logger.error(f"[Orchestrator-v15] Mission Dispatch Anomaly: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+    return state
+
 @router.get("/mission/{mission_id}")
 async def get_mission_status(
     mission_id: str,
@@ -75,6 +77,19 @@ async def get_mission_status(
         raise HTTPException(status_code=404, detail="Mission not found in cluster state.")
     
     return state
+
+@router.get("/")
+async def list_missions(
+    identity: Any = Depends(get_sovereign_identity)
+):
+    """Lists all active and history missions for the user."""
+    uid = getattr(identity, "uid", "guest")
+    from backend.main import orchestrator
+    if not orchestrator:
+        raise HTTPException(status_code=503, detail="Orchestrator offline.")
+    
+    missions = await orchestrator.get_user_missions(uid)
+    return missions
 
 @router.get("/chat/stream")
 async def orchestrate_stream_v15(

@@ -63,6 +63,50 @@ class SovereignAgent(abc.ABC, Generic[T, R]):
         # Phase 2: State Persistence
         self.state = AgentState()
 
+    # ── Phase 5: Agent Communication Bus ───────────────────────────
+    async def publish(self, topic: str, payload: Dict[str, Any]):
+        """Publishes a decentralized message to the swarm bus for cross-agent collaboration."""
+        if self.bus:
+            await self.bus.publish(topic, {"sender": self.name, "payload": payload})
+            
+    async def subscribe(self, topic: str, handler: callable):
+        """Subscribes to events from other autonomous agents for self-healing and data-sharing."""
+        if self.bus:
+            await self.bus.subscribe(topic, handler)
+
+    # ── Phase 5.1: Agent Brain (Mini Reasoning Engine) ───────────────
+    async def think(self, prompt: str, context: str = "") -> str:
+        """Sovereign Agent Brain: Internal cognitive reasoning step."""
+        from backend.core.local_engine import handle_local_sync
+        return await handle_local_sync([
+            {"role": "system", "content": f"You are {self.name}, {self.profile}. Think step-by-step. {context}"},
+            {"role": "user", "content": prompt}
+        ], model_type="small")
+
+    async def decide(self, options: List[str], context: str) -> str:
+        """Sovereign Agent Brain: Autonomous decision capability."""
+        prompt = f"Context: {context}\nOptions: {', '.join(options)}\nChoose the best option to achieve your goal. Return ONLY the exact option string."
+        decision = await self.think(prompt, "You are a precise decision-making unit.")
+        for opt in options:
+            if opt.lower() in decision.lower():
+                return opt
+        return options[0] if options else ""
+        
+    async def request_side_mission(self, user_id: str, session_id: str, objective: str, **kwargs) -> AgentResult:
+        """Sovereign Phase 5.1: Autonomous Side-Mission Request (Delegation)."""
+        self.logger.info(f"🚀 [Autonomy] Agent {self.name} requesting side-mission: {objective[:50]}...")
+        from backend.core.orchestrator import Orchestrator
+        orchestrator = Orchestrator()
+        result = await orchestrator.handle_mission(
+            user_input=objective, user_id=user_id, session_id=session_id, is_side_mission=True, **kwargs
+        )
+        if isinstance(result, dict):
+             return AgentResult(
+                 success=result.get("status", "failed") == "success", message=result.get("response", ""),
+                 data=result, agent="orchestrator_sub_mission"
+             )
+        return AgentResult(success=False, message="Side-mission failed.", agent=self.name)
+
     def _get_state_key(self, session_id: str) -> str:
         return f"sovereign:agent:state:{self.name.lower()}:{session_id}"
 

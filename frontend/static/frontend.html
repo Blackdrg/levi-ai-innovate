@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LEVI-AI | Sovereign OS Interface</title>
+  <link rel="stylesheet" href="../shared/style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet" />
+</head>
+
+<body>
+  <div class="app">
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <h2>LEVI-AI</h2>
+      <button onclick="newChat()">+ New Mission</button>
+      <div style="margin-top: auto; font-size: 10px; color: rgba(255,255,255,0.3); letter-spacing: 1px;">
+        SOVEREIGN OS v15.0-GA
+      </div>
+    </div>
+
+    <!-- Main Chat -->
+    <div class="chat-container">
+
+      <div id="messages" class="messages" style="display: flex; flex-direction: column;">
+        <div class="msg system">Welcome to LEVI-AI. Neural link established. Define your mission.</div>
+      </div>
+
+      <div class="input-box">
+        <input id="input" placeholder="Define your mission..." onkeydown="if(event.key==='Enter') sendMessage()" />
+        <button onclick="sendMessage()">Send</button>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script src="../shared/config.js"></script>
+  <script src="../shared/api.js"></script>
+  <script src="../shared/socket.js"></script>
+
+  <script>
+    const messagesDiv = document.getElementById("messages");
+    const inputField = document.getElementById("input");
+
+    function appendMessage(role, text) {
+      const div = document.createElement("div");
+      div.className = "msg " + role;
+      div.innerText = text;
+      messagesDiv.appendChild(div);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    function newChat() {
+        messagesDiv.innerHTML = '<div class="msg system">New mission session initiated. Define your objective.</div>';
+    }
+
+    async function sendMessage() {
+      const text = inputField.value.trim();
+      if (!text) return;
+
+      inputField.value = "";
+      appendMessage("user", text);
+
+      try {
+        const data = await createMission(text);
+        appendMessage("system", "Mission dispatched. ID: " + (data.mission_id || data.id || "pending..."));
+        
+        if (data.status === "error") {
+            appendMessage("system", "Error: " + data.message);
+        }
+      } catch (err) {
+        console.error(err);
+        appendMessage("system", "Connection error. Ensure backend is running at " + API_URL);
+      }
+    }
+
+    // Connect WebSocket for telemetry
+    connectWebSocket((data) => {
+        // Handle incoming telemetry pulses if needed
+        if (data.type === "telemetry" && data.message) {
+            // appendMessage("system", data.message);
+            console.log("Telemetry pulse:", data);
+        }
+    });
+  </script>
+
+</body>
+</html>

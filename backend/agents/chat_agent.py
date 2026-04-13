@@ -8,7 +8,7 @@ import logging
 from typing import Any, Dict, List
 from pydantic import BaseModel, Field
 from backend.agents.base import SovereignAgent, AgentResult
-from backend.engines.chat.generation import SovereignGenerator
+from backend.core.local_engine import handle_local_sync
 
 logger = logging.getLogger(__name__)
 
@@ -36,11 +36,10 @@ class ChatAgent(SovereignAgent[ChatInput, AgentResult]):
         query = input_data.input
         self.logger.info(f"Dialogue Mission: '{query[:40]}'")
         
-        generator = SovereignGenerator()
-        
-        # Engagement of the Council of Models
-        final_response = await generator.council_of_models(
-            messages=input_data.history + [{"role": "user", "content": query}]
+        # Engagement of the Local LLM
+        final_response = await handle_local_sync(
+            messages=input_data.history + [{"role": "user", "content": query}],
+            model_type="default"
         )
 
         return {

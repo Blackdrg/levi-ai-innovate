@@ -63,10 +63,10 @@ export const DAGVisualizer = ({ nodes, links, width = 800, height = 400 }: DAGPr
           default: return '#555';
         }
       })
-      .call(d3.drag<SVGCircleElement, DAGNode>()
+      .call(d3.drag<any, DAGNode>()
         .on("start", dragstarted)
         .on("drag", dragged)
-        .on("end", dragended));
+        .on("end", dragended) as any);
 
     nodeSelection.append("title").text((d: DAGNode) => `${d.id} (${d.agent})`);
 
@@ -113,7 +113,7 @@ export const DAGVisualizer = ({ nodes, links, width = 800, height = 400 }: DAGPr
       event.subject.fy = null;
     }
 
-    return () => simulation.stop();
+    return () => { simulation.stop(); };
   }, [nodes, links, width, height]);
 
   return (

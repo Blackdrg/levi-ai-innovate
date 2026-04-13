@@ -252,9 +252,11 @@ class CentralExecutionState:
 
     @staticmethod
     def get_full_data(mission_id: str) -> Optional[Dict[str, Any]]:
+        """Sovereign v15.0: Standardized cluster-wide state retrieval."""
         if not HAS_REDIS:
             return None
-        raw: Any = redis_client.get(f"mission:state:{mission_id}")
+        # Hash retrieval from the standardized missions key
+        raw: Any = redis_client.hget("orchestrator:missions", mission_id)
         if not raw:
             return None
         try:

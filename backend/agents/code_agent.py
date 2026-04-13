@@ -8,7 +8,7 @@ import logging
 from typing import Any, Dict, Optional
 from pydantic import BaseModel, Field
 from backend.agents.base import SovereignAgent, AgentResult
-from backend.engines.chat.generation import SovereignGenerator
+from backend.core.local_engine import handle_local_sync
 from backend.core.v8.blackboard import MissionBlackboard
 
 logger = logging.getLogger(__name__)
@@ -68,11 +68,10 @@ class CodeAgent(SovereignAgent[CodeInput, AgentResult]):
 
     async def generate_code(self, task: str, lang: str, blackboard_context: str = "") -> str:
         """Generates high-fidelity code solutions."""
-        generator = SovereignGenerator()
-        code = await generator.council_of_models([
+        code = await handle_local_sync([
             {"role": "system", "content": self.system_prompt_template.replace("{lang}", lang)},
             {"role": "user", "content": f"Context: {blackboard_context}\n\nTask: {task}"}
-        ])
+        ], model_type="default")
         # Clean markdown if model ignored the instruction
         if "```" in code:
             if f"``` {lang.lower()}" in code.lower():

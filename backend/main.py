@@ -1,9 +1,12 @@
 # backend/main.py
-from fastapi import FastAPI, Depends, HTTPException, Request
-from fastapi.middleware import CORSMiddleware
+from fastapi import FastAPI, Depends, HTTPException, Request, WebSocket
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import logging
 import json
+import os
+import asyncio
 
 from backend.core.orchestrator import Orchestrator
 from backend.core.memory_manager import MemoryManager
@@ -65,6 +68,25 @@ async def lifespan(app: FastAPI):
                 reason = pulse.payload.get("reason", "Distributed abort pulse received.")
                 logger.info(f"🚨 [DCN-Abort] Received global abort signal for {mission_id}. Reason: {reason}")
                 MissionControl.cancel_mission(mission_id)
+            
+            # 🚀 Step 5.3: Task Distribution (Remote Execution)
+            elif pulse.payload_type == "remote_execution_request":
+                # Check if this node is the intended target
+                target_node = pulse.payload.get("target_node")
+                local_node_id = dcn_protocol.node_id
+                
+                if target_node == local_node_id:
+                    if orchestrator:
+                        # Execute in background to avoid blocking the gossip listener
+                        from backend.utils.runtime_tasks import create_tracked_task
+                        create_tracked_task(
+                            orchestrator.execute_remote_mission(pulse.mission_id, pulse.payload),
+                            name=f"remote-exec-{pulse.mission_id}"
+                        )
+                    else:
+                        logger.warning(f"⚠️ [DCN] Remote task rejected: Orchestrator uninitialized on {local_node_id}")
+                else:
+                    logger.debug(f"[DCN] Remote task for {target_node} ignored by {local_node_id}")
         dcn_gossip = dcn_protocol.gossip
         await dcn_protocol.start_listener(dcn_handler)
     
@@ -188,6 +210,27 @@ from backend.api.v1.router import router as v1_router
 app.include_router(v1_router, prefix="/api/v1")
 app.include_router(telemetry_v8_router, prefix="/api/v8/telemetry")
 
+# 🌐 Frontend Architecture Mounting (Sovereign v15.0)
+# Serve shared assets (CSS/JS)
+app.mount("/shared", StaticFiles(directory="frontend/shared"), name="shared")
+
+# Serve static fallback UI
+app.mount("/ui", StaticFiles(directory="frontend/static", html=True), name="static_ui")
+
+# Serve main React application
+# Note: Ensure React is built into frontend/react-app/dist
+app.mount("/app", StaticFiles(directory="frontend/react-app/dist", html=True), name="react_app")
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """
+    Root WebSocket gateway for LEVI-AI telemetry.
+    Delegates to the Sovereign Telemetry service.
+    """
+    from backend.api.telemetry import telemetry_websocket
+    # Use a generic client ID for static frontend or handle auth as needed
+    await telemetry_websocket(websocket, "gateway_client")
+
 @app.get("/healthz")
 async def health_check():
     """Liveness probe: returns 200 iff the process is up."""
@@ -240,6 +283,9 @@ async def readiness_check():
                 "checked_out": pool.checkedout(),
                 "overflow": pool.overflow()
             }
+    except Exception as e:
+        logger.error(f"Postgres health check failed: {e}")
+        health["dependencies"]["postgres"] = "disconnected"
     # 3. Optional Dependency: Ollama
     try:
         import httpx

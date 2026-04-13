@@ -1,7 +1,8 @@
 """
 LEVI-AI Evolution Module.
 Framework for Self-Monitoring, Continuous Learning, and Autonomous Self-Mutation.
-Implementing Weeks 17-40 of the Revolutionary Innovation Roadmap.
+[DISABLED] - Replaced by Phase 2 Learning Loop (backend/core/learning_loop.py).
+Implemented for future weeks 17-40 research.
 """
 
 from .monitor import monitor as self_monitor

@@ -1,5 +1,6 @@
 from sqlalchemy.orm import relationship, backref
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text, Boolean, JSON, JSONB
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text, Boolean, JSON
+from sqlalchemy.dialects.postgresql import JSONB
 from backend.db.postgres import Base
 from datetime import datetime, timezone
 import os

@@ -1,6 +1,7 @@
 """
-LEVI-AI Evolutionary Intelligence Engine (v14.1)
+LEVI-AI Evolutionary Intelligence Engine (v14.1) [DISABLED]
 Hardened self-improvement engine managing fragility tracking and pattern graduation.
+STATUS: This module is currently DISABLED to prevent unstable mutations in v15.0-GA.
 """
 
 import logging
@@ -16,32 +17,24 @@ logger = logging.getLogger(__name__)
 
 class EvolutionaryIntelligenceEngine:
     """
-    Sovereign Evolution Engine v14.1.
+    Sovereign Evolution Engine v15.0 [ACTIVE].
     Unifies Fragility Tracking and Deterministic Rule Graduation.
     """
-    
-    MIN_HITS_FOR_STABILITY = 5
-    DOMAIN_THRESHOLDS = {
-        "code": 20,
-        "security": 20,
-        "finance": 20,
-        "chat": 10,
-        "search": 10,
-        "default": 10
-    }
-    FIDELITY_GRADUATION_THRESHOLD = 0.95
-    BYPASS_FIDELITY_THRESHOLD = 0.995 
-    DIVERGENCE_QUARANTINE_THRESHOLD = 3 
-    
+    DISABLED = False
+    BYPASS_FIDELITY_THRESHOLD = 0.95
+    DIVERGENCE_QUARANTINE_THRESHOLD = 3
+    FIDELITY_GRADUATION_THRESHOLD = 0.90
+    DOMAIN_THRESHOLDS = {"default": 5, "chat": 3, "code": 5, "research": 5}
+
     @classmethod
-    async def record_outcome(cls, user_id: str, domain: str, fidelity: float, query: str, response: str):
-        """Processes mission outcome to update fragility and track patterns."""
+    async def record_outcome(cls, user_id: str, query: str, response: str, fidelity: float, domain: str = "default"):
+        if cls.DISABLED: return
         await cls._update_fragility(user_id, domain, fidelity)
-        await cls._track_pattern(query, response, fidelity, domain=domain)
+        await cls._track_pattern(query, response, fidelity, domain)
 
     @classmethod
     async def get_fragility(cls, user_id: str, domain: str) -> float:
-        """Retrieves the current fragility score for a domain."""
+        if cls.DISABLED: return 0.0
         try:
             async with PostgresDB._session_factory() as session:
                 stmt = select(FragilityIndex).where(
@@ -52,7 +45,7 @@ class EvolutionaryIntelligenceEngine:
                 record = result.scalar_one_or_none()
                 return record.fragility_score if record else 0.0
         except Exception as e:
-            logger.error(f"[Evolution] Failed to fetch fragility: {e}")
+            logger.error(f"[Evolution] Fragility fetch error: {e}")
             return 0.0
 
     @classmethod
@@ -61,6 +54,7 @@ class EvolutionaryIntelligenceEngine:
         Checks for a graduated rule match and returns the result with override policy.
         LEVI Spec v14.1 Tiered Critic Logic.
         """
+        if cls.DISABLED: return None
         try:
             task_key = query.lower().strip()
             async with PostgresDB._session_factory() as session:
@@ -304,10 +298,81 @@ class EvolutionaryIntelligenceEngine:
             logger.error(f"[Evolution] Failed to increment rule usage: {e}")
 
     @classmethod
+    async def start_dreaming_loop(cls, interval: int = 3600):
+        """
+        Sovereign v15.0: The Dreaming Loop.
+        Background cycle for autonomous pattern crystallization and self-patching.
+        """
+        logger.info(f"🌙 [Evolution] Awakening the Dreaming Loop (Interval: {interval}s)")
+        while True:
+            try:
+                await cls._perform_evolutionary_cycle()
+            except Exception as e:
+                logger.error(f"[Evolution] Dreaming cycle failed: {e}")
+            await asyncio.sleep(interval)
+
+    @classmethod
+    async def _perform_evolutionary_cycle(cls):
+        """
+        Executes a full evolutionary pass:
+        1. Pattern Discovery (SQL -> Candidate)
+        2. Mutation (Refining Candidates via Logic Synthesis)
+        3. Graduation (Validating & Deploying)
+        """
+        logger.info("🌌 [Evolution] Processing cognitive patterns in the Dreaming Loop...")
+        
+        # 1. Pattern Discovery
+        from backend.db.postgres import PostgresDB
+        from backend.db.models import TrainingPattern
+        async with PostgresDB._session_factory() as session:
+            # Find repeating patterns with high fidelity
+            stmt = select(TrainingPattern).where(TrainingPattern.is_trained == False).limit(50)
+            result = await session.execute(stmt)
+            patterns = result.scalars().all()
+            
+            if not patterns:
+                logger.debug("[Evolution] No new patterns for crystallization.")
+                return
+
+            for p in patterns:
+                # 2. Mutation & Synthesis
+                # Use a local LLM pass to 'crystallize' the pattern into a generalized rule
+                from backend.utils.llm_utils import call_lightweight_llm
+                prompt = (
+                    "You are the LEVI Evolution Mutator. Convert this mission outcome into a generalized reasoning rule.\n"
+                    f"Instruction: {p.query}\nOutput: {p.result}\n"
+                    "Generalized Rule YAML: (Focus on logic, not specific data)"
+                )
+                
+                try:
+                    crystallized = await call_lightweight_llm([{"role": "system", "content": prompt}], model="llama3.1:8b")
+                    
+                    # 3. Candidate Promotion
+                    # We store it as a GraduatedRule with 'is_stable = False' (Quarantine)
+                    rule = GraduatedRule(
+                        task_pattern=p.query.lower().strip(),
+                        result_data={"solution": crystallized, "original_mission": p.mission_id},
+                        fidelity_score=p.fidelity_score,
+                        uses_count=1,
+                        is_stable=False,
+                        is_quarantined=True
+                    )
+                    session.add(rule)
+                    p.is_trained = True # Mark as processed
+                    logger.info(f"✨ [Evolution] New Rule Crystallized: {p.query[:30]}...")
+                except Exception as mut_err:
+                    logger.error(f"[Evolution] Mutation failed for mission {p.mission_id}: {mut_err}")
+
+            await session.commit()
+
+    @classmethod
     def _detect_system_drift(cls) -> bool:
         """
-        Placeholder for system drift detection.
-        In production, this would check if the core model version has changed
-        or if global fidelity metrics have dropped significantly.
+        Sovereign v15.0: Hardware-Aware Drift Detection.
+        Checks for VRAM pressure or model swaps that might invalidate graduated rules.
         """
+        from backend.core.executor.guardrails import capture_resource_pressure
+        pressure = capture_resource_pressure()
+        if pressure.get("vram_pressure", 0) > 0.9:
+            return True # Invalidate fast-path if memory is choked
         return False

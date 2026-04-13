@@ -8,7 +8,7 @@
     "server": "python -m uvicorn backend.api.main:app --host 127.0.0.1 --port 8000",
     "client": "python -m http.server 8080 --bind 127.0.0.1 --directory frontend",
     "dev": "concurrently \"npm run server\" \"npm run client\"",
-    "build:frontend": "npm run --prefix frontend build",
+    "build:frontend": "npm run --prefix frontend/react-app build",
     "audit:sovereign": "python tests/graduation_audit_extended.py"
   },
   "devDependencies": {

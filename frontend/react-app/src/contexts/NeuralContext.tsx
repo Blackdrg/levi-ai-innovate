@@ -33,6 +33,8 @@ interface NeuralContextType {
   globalLoad: number;  
   updateMission: (id: string, update: Partial<Mission>) => void;
   addMission: (mission: Mission) => void;
+  dispatchMission: (objective: string) => Promise<void>;
+  fetchInitialData: () => Promise<void>;
 }
 
 const NeuralContext = createContext<NeuralContextType | undefined>(undefined);
@@ -42,7 +44,42 @@ export const NeuralProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [telemetryHistory, setTelemetryHistory] = useState<TelemetryPulse[]>([]);
   const [globalLoad, setGlobalLoad] = useState(0);
 
+  const fetchInitialData = useCallback(async () => {
+    try {
+      const res = await fetch('/api/v1/orchestrator');
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setActiveMissions(data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch initial missions:", err);
+    }
+  }, []);
+
+  const dispatchMission = useCallback(async (objective: string) => {
+    try {
+      const res = await fetch('/api/v1/orchestrator/mission', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: objective })
+      });
+      const data = await res.json();
+      if (data.mission_id) {
+        addMission({
+            id: data.mission_id,
+            objective,
+            status: 'PENDING',
+            progress: 0,
+            fidelity_score: 1.0
+        });
+      }
+    } catch (err) {
+      console.error("Mission dispatch failed:", err);
+    }
+  }, []);
+
   useEffect(() => {
+    fetchInitialData();
     const token = localStorage.getItem('sovereign_token');
     if (!token) return;
 
@@ -93,7 +130,15 @@ export const NeuralProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, []);
 
   return (
-    <NeuralContext.Provider value={{ activeMissions, telemetryHistory, globalLoad, updateMission, addMission }}>
+    <NeuralContext.Provider value={{ 
+        activeMissions, 
+        telemetryHistory, 
+        globalLoad, 
+        updateMission, 
+        addMission, 
+        dispatchMission, 
+        fetchInitialData 
+    }}>
       {children}
     </NeuralContext.Provider>
   );

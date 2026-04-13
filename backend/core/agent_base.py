@@ -91,6 +91,35 @@ class SovereignAgent(abc.ABC, Generic[T, R]):
                 latency_ms=latency
             )
 
+    async def request_side_mission(self, user_id: str, session_id: str, objective: str, **kwargs) -> AgentResult:
+        """
+        Sovereign v15.0: Autonomous Side-Mission Request.
+        Allows an agent to spawn a sub-mission to solve complex dependencies.
+        """
+        self.logger.info(f"🚀 [Autonomy] Agent {self.name} requesting side-mission: {objective[:50]}...")
+        from backend.core.orchestrator import Orchestrator
+        # We use a late import and local instance to avoid circular dependency
+        # In a fully optimized system, this would use a registry or shared bus
+        orchestrator = Orchestrator()
+        
+        result = await orchestrator.handle_mission(
+            user_input=objective,
+            user_id=user_id,
+            session_id=session_id,
+            is_side_mission=True,
+            **kwargs
+        )
+        
+        # Convert orchestrator output to AgentResult
+        if isinstance(result, dict):
+             return AgentResult(
+                 success=result.get("status") == "success",
+                 message=result.get("response", ""),
+                 data=result,
+                 agent="orchestrator_sub_mission"
+             )
+        return AgentResult(success=False, message="Side-mission failed.")
+
     @abc.abstractmethod
     async def _run(self, input_data: T, lang: str = "en", **kwargs) -> Any:
         """Internal mission implementation to be overridden by subclasses."""

@@ -75,11 +75,27 @@ class WorkflowEngine:
             logger.info(f"[WorkflowEngine] Refinement required: {reflection.get('issues', ['Unknown issue'])}")
             current_goal = await self.refine_goal(current_goal, reflection, draft_response)
             
+        # 🔌 Phase 8: Kill Dead Ends (Ensure WorkflowEngine feeds back to memory)
+        try:
+            from backend.core.memory_manager import MemoryManager
+            memory = MemoryManager()
+            await memory.store(
+                user_id=user_id,
+                session_id=request_id,
+                user_input=initial_goal.objective,
+                response=state["final_output"],
+                perception=perception,
+                results=[],
+                fidelity=1.0 if state["success"] else 0.5
+            )
+        except Exception as e:
+            logger.error(f"[WorkflowEngine] Feedback Sync Failed: {e}")
+
         return state
 
     async def refine_goal(self, current_goal: Any, reflection: Dict[str, Any], last_output: str) -> Any:
         """Evolves the mission goal based on feedback/failures using Sovereign Reasoning."""
-        from backend.engines.chat.generation import SovereignGenerator
+        from backend.core.local_engine import handle_local_sync
         
         refine_prompt = (
             f"Current Goal: {current_goal.objective}\n"
@@ -89,11 +105,10 @@ class WorkflowEngine:
             "to resolve the issues and achieve the mission goal."
         )
         
-        generator = SovereignGenerator()
-        new_objective = await generator.council_of_models([
+        new_objective = await handle_local_sync([
             {"role": "system", "content": "You are the LEVI Mission Architect."},
             {"role": "user", "content": refine_prompt}
-        ])
+        ], model_type="default")
         
         current_goal.objective = new_objective.strip()
         return current_goal

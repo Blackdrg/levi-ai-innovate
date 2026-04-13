@@ -13,7 +13,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from backend.auth import get_current_user
-from backend.main import orchestrator as brain
+
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="", tags=["Sovereign Orchestration"])
@@ -34,6 +34,7 @@ async def create_cognitive_mission(
     user_id = current_user.get("uid") or current_user.get("id")
     logger.info(f"[Orchestrator] Strategic mission started for {user_id}")
     
+    from backend.main import orchestrator as brain
     try:
         mission = await brain.create_mission(
             user_id=user_id,
@@ -52,6 +53,7 @@ async def get_mission_status(
 ):
     """Returns the current state and checkpoint of a mission."""
     user_id = current_user.get("uid") or current_user.get("id")
+    from backend.main import orchestrator as brain
     mission = await brain.get_mission(mission_id, user_id)
     if not mission:
         raise HTTPException(status_code=404, detail="Mission not found in the manifest.")
@@ -64,6 +66,7 @@ async def cancel_mission(
 ):
     """Inhibits an in-flight mission wave."""
     user_id = current_user.get("uid") or current_user.get("id")
+    from backend.main import orchestrator as brain
     await brain.cancel_mission(mission_id, user_id)
     return {"status": "inhibited", "mission_id": mission_id}
 

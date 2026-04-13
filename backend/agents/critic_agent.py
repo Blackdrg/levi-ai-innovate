@@ -9,7 +9,7 @@ import json
 from typing import Any, Dict
 from pydantic import BaseModel, Field
 from backend.agents.base import SovereignAgent, AgentResult
-from backend.engines.chat.generation import SovereignGenerator
+from backend.core.local_engine import handle_local_sync
 
 logger = logging.getLogger(__name__)
 
@@ -51,17 +51,13 @@ class CriticAgent(SovereignAgent[CriticInput, AgentResult]):
             "}"
         )
         
-        generator = SovereignGenerator()
-        
-        # Standard mission from Goal engine
         goal = input_data.goal
         agent_output = input_data.agent_output
 
-        # 2. Evaluation Logic
-        raw_json = await generator.council_of_models([
+        raw_json = await handle_local_sync([
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"Goal: {goal}\n\nOutput to validate: {agent_output}"}
-        ])
+        ], model_type="default")
         
         try:
             content = raw_json.strip()

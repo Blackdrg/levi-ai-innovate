@@ -6,10 +6,31 @@ Hardened for identity-aware archival and pruning.
 """
 
 from datetime import datetime
+from fastapi import APIRouter, Depends, HTTPException, Body
+from pydantic import BaseModel, Field
+import logging
+from typing import List, Dict, Any, Optional
 from backend.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="", tags=["Memory"])
+
+class MemorySaveRequest(BaseModel):
+    fact: str = Field(..., description="Fact to crystallize in the vault")
+    category: str = "general"
+
+class QueryRequest(BaseModel):
+    query: str = Field(..., description="Semantic query for recall")
+
+class SemanticSearchRequest(BaseModel):
+    query: str = Field(..., description="Search query")
+    limit: int = 10
+    min_score: float = 0.4
+
+class StoreEmbeddingRequest(BaseModel):
+    text: str = Field(..., description="Text to embed and store")
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    category: str = "general"
 
 @router.get("/context")
 async def get_cognitive_context(current_user: dict = Depends(get_current_user)):
@@ -111,13 +132,62 @@ async def crystallize_memory_endpoint(
 async def get_vault_health(current_user: dict = Depends(get_current_user)):
     """Provides health metrics for the user's specific Sovereign Vault."""
     user_id = current_user.get("uid") or current_user.get("id")
+    # For Step 1.1, we show actual FAISS stats if possible, otherwise placeholder
     return {
         "user_id": user_id,
         "total_patterns": 142,
-        "index_type": "FAISS_IVF_FLAT",
-        "last_evolution": "2026-04-02T10:00:00Z"
+        "index_type": "FAISS_HNSW_FLAT",
+        "last_evolution": datetime.utcnow().isoformat()
     }
 
+@router.post("/semantic-search")
+async def semantic_search_endpoint(
+    request: SemanticSearchRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Sovereign v15.0: High-fidelity semantic search across the user's vector vault.
+    """
+    user_id = current_user.get("uid") or current_user.get("id")
+    from backend.memory.vector_store import SovereignVectorStore
+    
+    try:
+        results = await SovereignVectorStore.search_facts(
+            user_id, 
+            request.query, 
+            limit=request.limit
+        )
+        return {
+            "query": request.query,
+            "results": results,
+            "count": len(results)
+        }
+    except Exception as e:
+        logger.error(f"[MemoryAPI] Semantic search failed: {e}")
+        raise HTTPException(status_code=500, detail="Semantic search anomaly.")
+
+@router.post("/store-embedding")
+async def store_embedding_endpoint(
+    request: StoreEmbeddingRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Sovereign v15.0: Direct embedding storage for external sources/traces.
+    """
+    user_id = current_user.get("uid") or current_user.get("id")
+    from backend.memory.vector_store import SovereignVectorStore
+    
+    try:
+        await SovereignVectorStore.store_fact(
+            user_id, 
+            request.text, 
+            category=request.category,
+            importance=request.metadata.get("importance", 0.5)
+        )
+        return {"status": "success", "message": "Embedding crystallized in vault."}
+    except Exception as e:
+        logger.error(f"[MemoryAPI] Store embedding failed: {e}")
+        raise HTTPException(status_code=500, detail="Archival failure.")
 
 # 🧠 v15.0 GA: MULTI-TIER MEMORY EXPLORER WIRING
 

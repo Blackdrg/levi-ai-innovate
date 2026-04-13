@@ -10,7 +10,9 @@ from typing import Dict, Any, List
 
 from .intent_classifier import HybridIntentClassifier
 from .orchestrator_types import IntentResult, IntentGraph, IntentNode, IntentEdge
-from backend.memory.manager import MemoryManager
+from backend.auth.models import UserProfile as UserIdentity
+from backend.core.memory_manager import MemoryManager
+from backend.utils.audit import AuditLogger
 from backend.utils.shield import SovereignShield
 
 
@@ -40,7 +42,8 @@ class PerceptionEngine:
         intent_graph = self._compress_intent(safe_input, intent)
         
         # 3. Context Hydration (4-Tier Memory)
-        context = await self.memory.get_combined_context(user_id, session_id, safe_input)
+        # Hydrate with full unified context (Vector + Graph + Interaction Pulse)
+        context = await self.memory.get_unified_context(user_id, session_id, safe_input)
         context.update(kwargs)
         
         return {

@@ -1,43 +1,36 @@
-# LEVI-AI System Manifest (v15.0-GA)
+# LEVI-AI Experimental Prototype Manifest (v15.0-ALPHA)
 
-This manifest summarizes the documented runtime surfaces in the repository as of 2026-04-11 after the **v15.0.0-GA Graduation** hardening.
+This manifest summarizes the actual runtime state of the repository as of April 2026. The system is currently in a **pre-alpha development phase**.
 
-## Designated Workflow
+## Current Workflow
+`Gateway -> Orchestrator -> Planner -> Executor -> Agents -> Basic Persistence`
 
-`Gateway -> Fast-Path -> Orchestrator -> Goal -> Planner -> Reasoning -> Executor -> Agents -> Memory -> Response`
+## Core Component Status
 
-The workflow contract is implemented in `backend/core/workflow_contract.py` and is inspectable at `GET /api/v1/telemetry/workflow`.
-
-## Core Runtime Services
-
-| Service | Path | Current role |
+| Service | Reality | Status |
 | :--- | :--- | :--- |
-| **Rollback Engine** | `backend/api/v8/health.py` | [NEW] GitHub Dispatch trigger for automated cluster reverts. |
-| **Confidence Engine**| `backend/core/reasoning/confidence.py` | [NEW] Bayesian risk-adaptive execution gates. |
-| **Debug Engine** | `backend/api/v8/debug.py` | Trace retrieval and deterministic replay injection. |
-| **Compliance Layer**| `backend/api/compliance.py` | GDPR Hard Deletion and signed audit exports. |
-| **FastPathRouter** | `backend/core/fast_path.py` | Ultra-low latency intent bypass for common mission signatures. |
-| **Consistency Engine** | `backend/core/dcn/consistency.py` | P2P Anti-Entropy and state reconciliation across the DCN. |
-| **Memory Hygiene** | `backend/services/learning/hygiene.py` | Automated 24h resonance-based memory pruning and archiving. |
-| FastAPI gateway | `backend/api/main.py` | Primary HTTP entrypoint with sequential cognitive tier initialization. |
-| Orchestrator | `backend/core/orchestrator.py` | Mission lifecycle coordination + State recovery loop. |
+| **Orchestrator** | Central mission controller and task dispatcher. | [WORKING] |
+| **Planner** | Generates task lists (DAGs) using basic templates/LLM calls. | [PARTIAL] |
+| **Agents** | Python-based wrappers for external tools and APIs. | [PARTIAL] |
+| **Memory** | Basic Redis/Postgres storage. No 5-tier resonance. | [PARTIAL] |
+| **DCN** | Networking logic is non-functional; nodes are isolated. | [EXPERIMENTAL] |
+| **Evolution Engine** | Static API calls for pattern summarization; no self-mutation. | [DISABLED] |
+| **Observability** | Standard logs; no HMAC-chained audit ledger. | [PARTIAL] |
 
-## Runtime Guarantees Added in the v15.0 Graduation Pass
+## Known Gaps & Reality Check (Alpha)
 
-- **Automated Rollback (Fix #4)**: Multi-region cluster revert triggered via health-status Dispatch.
-- **Bayesian Confidence (Fix #5)**: Risk-adaptive mission gates with ENV-tunable thresholds.
-- **State Durability (Fix #3)**: Redis Hash-based mission persistence with 100% boot-recovery RTO.
-- **Cognitive Sync (Fix #1, #2)**: Synchronous Neo4j/Milvus write-paths for global consistency.
-- **Multi-Region HA (v15.0)**: Terraform-managed GKE and Cloud Run with 99.9% resilience.
-- **7-Stage CI/CD**: One-click graduation from code push to multi-region post-deploy audit.
+- **Production Readiness**: [ZERO] - No CI/CD hardening, no security audit, no high-availability.
+- **Sovereignty**: [LOW] - Heavily dependent on external LLM and search APIs.
+- **Resilience**: [BASIC] - No automated rollback or cross-region failover.
+- **Intelligence**: [MINIMAL] - Operates as a rule-based prompt router.
 
-## Verified Status (v15.0.0-GA Graduation)
+## Development Status (v15.0-ALPHA)
 
-The system reached **100% Production Sovereign Maturity** on 2026-04-11. All graduation milestones are finalized:
+The system is approximately **35-40% complete** relative to the "Sovereign OS" vision. All "GA" and "Graduation" claims in previous documentation should be considered aspirational design goals rather than functional realities.
 
-1. **Deployment Graduation**: [VERIFIED] Multi-region GCR/Cloud Run sync operational.
-2. **Resilience Graduation**: [VERIFIED] LIFO best-effort rollbacks and Redis state recovery active.
-3. **Reasoning Graduation**: [VERIFIED] Bayesian confidence engine and Neo4j sync confirmed.
-4. **Health Graduation**: [VERIFIED] Ollama tier monitor and automated rollback dispatcher live.
+1. **Deployment Status**: Local Docker-Compose functional; Cloud deployment untested.
+2. **Resilience Status**: No automated recovery logic for failed missions.
+3. **Reasoning Status**: Basic LLM critique loop; no Bayesian simulation or verification.
+4. **Health Status**: Simple liveness probes; no automated cluster management.
 
-Final v15.0 graduation audit passed with `100% System Integrity & Global Sovereignty`.
+Final Alpha Assessment: **EXPERIMENTAL / PROTOTYPE ONLY.**

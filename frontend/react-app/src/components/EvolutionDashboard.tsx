@@ -82,8 +82,8 @@ const EvolutionDashboard: React.FC = () => {
     <div className="evolution-container">
       <header className="evolution-header">
         <div>
-          <h1>LEVI-AI EVOLUTION</h1>
-          <p className="evo-subtitle">Phase 2: Self-Mutation & Discovery Active</p>
+          <h1>LEVI-AI EVOLUTION (DISABLED)</h1>
+          <p className="evo-subtitle">Phase 2: Self-Mutation & Discovery (NOT IMPLEMENTED)</p>
         </div>
         <div className="impact-badge">SYSTEM STABLE v15.0-EVO</div>
       </header>

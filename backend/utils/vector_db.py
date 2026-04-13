@@ -244,6 +244,21 @@ class VectorDB:
                 self._save()
                 logger.info(f"Marked {len(indices)} records as purged in '{self.collection_name}'.")
 
+    async def update_metadata(self, filter_attr: str, filter_val: Any, updates: Dict[str, Any]):
+        """
+        Updates metadata for records matching the filter.
+        """
+        async with self._lock:
+            updated = False
+            for meta in self.metadata:
+                if meta.get(filter_attr) == filter_val:
+                    for k, v in updates.items():
+                        meta[k] = v
+                    updated = True
+            if updated:
+                self._save()
+            return updated
+
     async def clear(self):
         async with self._lock:
             # Using Inner Product for v14.0 finality

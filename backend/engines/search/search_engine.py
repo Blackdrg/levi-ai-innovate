@@ -19,29 +19,27 @@ class SearchEngine(EngineBase):
 
     async def _run(self, query: str, mode: str = "hybrid", **kwargs) -> Any:
         """
-        Executes a search mission.
+        Executes a search mission. v15.0 GA: Local-First Priority.
         """
         safe_query = SovereignSecurity.mask_pii(query)
         self.logger.info(f"Initiating Search: {safe_query} [{mode}]")
         
-        results = {
-            "local": [],
-            "web": [],
-            "summary": ""
-        }
+        results = {"local": [], "web": [], "summary": ""}
 
-        # Parallelize Local and Web search
-        tasks = []
+        # 1. ALWAYS TRY LOCAL FIRST
         if mode in ["hybrid", "local"]:
-            tasks.append(self._local_search(safe_query))
-        if mode in ["hybrid", "web"]:
-            tasks.append(self._web_search(safe_query))
-            
-        search_data = await asyncio.gather(*tasks)
+            local_data = await self._local_search(safe_query)
+            results["local"] = local_data.get("local", [])
+
+        # 2. STEP 3.3/3.4: CALCULATE CONFIDENCE & DECIDE ON WEB PULSE
+        local_confidence = len(results["local"]) / 5.0 # Simple heuristic
         
-        for data in search_data:
-            if "local" in data: results["local"] = data["local"]
-            if "web" in data: results["web"] = data["web"]
+        if mode in ["hybrid", "web"] and local_confidence < 0.6:
+            self.logger.info(f"[Search] Local hits sparse ({local_confidence:.1f}). Engaging Global Web Pulse...")
+            web_data = await self._web_search(safe_query)
+            results["web"] = web_data.get("web", [])
+        else:
+            self.logger.info(f"🎯 [Search] Local knowledge sufficient ({local_confidence:.1f}). Skipping web dependency.")
 
         results["summary"] = self._synthesize_search_results(results)
         return results

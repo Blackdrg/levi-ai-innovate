@@ -4,7 +4,7 @@ Handles immutable append-only recording of system-critical events.
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 from datetime import datetime, timezone
 from sqlalchemy import select, desc
 from backend.db.models import AuditLog

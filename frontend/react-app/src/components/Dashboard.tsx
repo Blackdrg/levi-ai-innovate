@@ -6,6 +6,7 @@ import { useNeuralContext } from '../contexts/NeuralContext';
 import { MissionCard, Mission } from './MissionCard';
 import { PeeringStatus } from './PeeringStatus';
 import { Zap, Activity, Cpu, Binary } from 'lucide-react';
+import { MissionCreator } from './MissionCreator';
 import EvolutionDashboard from './EvolutionDashboard';
 
 
@@ -38,7 +39,7 @@ export const Dashboard: React.FC = () => {
               onClick={() => setActiveTab('evolution')} 
               className={`nav-btn ${activeTab === 'evolution' ? 'active' : ''}`}
             >
-              Revolution Engine
+              Revolution Engine (DISABLED)
             </button>
           </div>
           <PeeringStatus />
@@ -48,6 +49,7 @@ export const Dashboard: React.FC = () => {
       <main>
         {activeTab === 'missions' ? (
           <>
+            <MissionCreator />
             <section className="mission-grid">
               {activeMissions.length > 0 ? (
                 activeMissions.map((mission: Mission) => (

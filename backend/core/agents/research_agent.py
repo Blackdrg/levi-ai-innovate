@@ -86,12 +86,27 @@ class ResearchAgent(SovereignAgent[ResearchInput, AgentResult]):
             {"role": "user", "content": synthesis_prompt}
         ])
 
+        # Step 5: Autonomous Citational Verification (Sovereign v15.0)
+        # We autonomously spawn a verification mission if research is high-depth
+        if input_data.depth >= 1 and len(all_urls) > 3:
+             self.logger.info(f"🛡️ [Autonomy] Research deep enough. Requesting autonomous citational audit...")
+             audit_objective = f"Verify the citational integrity and source authority for research on: '{topic}'. Sources: {', '.join(all_urls[:5])}"
+             audit_result = await self.request_side_mission(
+                 user_id=input_data.user_id,
+                 session_id=kwargs.get("session_id", "research_sub"),
+                 objective=audit_objective,
+                 metadata={"parent_mission": topic}
+             )
+             if audit_result.success:
+                  final_report += f"\n\n--- [Sovereign Evolution: Citational Audit] ---\n{audit_result.message}"
+
         return {
             "message": final_report,
             "citations": list(set(all_urls)),
             "data": {
                 "depth_reached": len(sub_questions) + 1,
-                "sources_analyzed": len(all_urls)
+                "sources_analyzed": len(all_urls),
+                "autonomy_verification": "active"
             }
         }
 

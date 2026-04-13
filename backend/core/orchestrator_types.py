@@ -195,6 +195,15 @@ class IntentResult(BaseModel):
 # Tool Contracts & Execution Results
 # ---------------------------------------------------------------------------
 
+class AgentState(str, Enum):
+    """v15.0: Agent Personality & Mission Status."""
+    IDLE = "IDLE"
+    PLANNING = "PLANNING"
+    EXECUTING = "EXECUTING"
+    RETRYING = "RETRYING"
+    FAILED = "FAILED"
+    COMPLETE = "COMPLETE"
+
 class ToolResult(BaseModel):
     """
     Ensures every agent/tool returns a predictable structure.
@@ -207,12 +216,14 @@ class ToolResult(BaseModel):
     message: str = ""
     error: Optional[str] = None
     agent: str = "unknown"
+    state: AgentState = AgentState.COMPLETE
     latency_ms: int = 0
     confidence: float = Field(1.0, ge=0.0, le=1.0)
     fidelity_score: float = Field(1.0, ge=0.0, le=1.0)
     cost_score: int = 0
     total_tokens: int = 0
     retryable: bool = True
+    recovered_via: Optional[str] = None # Step 4.3 Self-Healing Trace
 
 
 class PlanStep(BaseModel):

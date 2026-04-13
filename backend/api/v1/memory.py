@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 
 from backend.auth.logic import get_current_user as get_sovereign_identity
 from backend.auth.models import UserProfile as UserIdentity
-from backend.memory.manager import MemoryManager
+from backend.core.memory_manager import MemoryManager
 from backend.utils.audit import AuditLogger
 from backend.db.vector import get_vector_index
 

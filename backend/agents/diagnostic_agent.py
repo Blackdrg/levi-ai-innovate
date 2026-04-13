@@ -9,7 +9,7 @@ import json
 from typing import Dict, Any, Optional, List
 from pydantic import BaseModel
 from backend.agents.base import SovereignAgent, AgentResult
-from backend.engines.chat.generation import SovereignGenerator
+from backend.core.local_engine import handle_local_sync
 from backend.db.redis import r_async as redis_client
 from backend.broadcast_utils import SovereignBroadcaster
 
@@ -58,13 +58,11 @@ class DiagnosticAgent(SovereignAgent[DiagnosticInput, AgentResult]):
             "Provide a concise Root Cause Analysis and recommended Sovereign mitigation if anomalies exist."
         )
         
-        generator = SovereignGenerator()
-        
-        # Synthesize the health report using the Council
-        analysis = await generator.council_of_models([
+        # Synthesize the health report using the local LLM
+        analysis = await handle_local_sync([
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": "Analyze System Pulse."}
-        ])
+        ], model_type="default")
 
         # Phase 10: Sovereign OS Hard Hand (Self-Repair)
         if issues:

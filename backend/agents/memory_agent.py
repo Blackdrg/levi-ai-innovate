@@ -13,7 +13,7 @@ from typing import Any, Dict
 from pydantic import BaseModel, Field
 
 from backend.agents.base import SovereignAgent, AgentResult
-from backend.engines.chat.generation import SovereignGenerator
+from backend.core.local_engine import handle_local_sync
 
 logger = logging.getLogger(__name__)
 
@@ -54,10 +54,12 @@ class MemoryAgent(SovereignAgent[MemoryInput, AgentResult]):
         await self._attempt_replay_pending()
 
         # ── 2. Engage Memory Vault ────────────────────────────────────
-        from backend.memory.manager import MemoryManager
+        from backend.core.memory_manager import MemoryManager
         memory_manager = MemoryManager()
-        history    = await memory_manager.get_context(user_id)
-        memory_data = await memory_manager.get_combined_context(user_id, session_id, query)
+        memory_data = await memory_manager.get_unified_context(user_id, session_id, query)
+        
+        # history for backward compatibility or display
+        history = memory_data.get("history", [])
 
         traits        = memory_data.get("long_term", {}).get("traits", [])
         preferences   = memory_data.get("long_term", {}).get("preferences", [])
@@ -80,11 +82,10 @@ class MemoryAgent(SovereignAgent[MemoryInput, AgentResult]):
             "Use the crystallised context to address the user mission with historical depth.\n"
         )
 
-        generator = SovereignGenerator()
-        final_response = await generator.council_of_models([
+        final_response = await handle_local_sync([
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"Memory Context: {summary_context}\n\nMission: {query}"},
-        ])
+        ], model_type="default")
 
         return {
             "message": final_response,

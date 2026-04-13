@@ -1,5 +1,6 @@
 import copy
 import hashlib
+import json
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -44,7 +45,7 @@ class ReasoningCore:
             strategy = self._select_execution_strategy(graph, critique, simulation, decision)
             strategy["reasoning_skipped"] = True
         else:
-            critique = self._critique_graph(goal, perception, graph)
+            critique = await self._critique_graph(goal, perception, graph)
             simulation = self._simulate_graph(graph)
             confidence = self._score_confidence(graph, critique, simulation, decision)
             
@@ -172,7 +173,7 @@ class ReasoningCore:
         """Legacy compatibility wrapper."""
         return self._compute_complexity_score(perception, decision, TaskGraph())
 
-    def _critique_graph(self, goal: Any, perception: Dict[str, Any], graph: TaskGraph) -> Dict[str, Any]:
+    async def _critique_graph(self, goal: Any, perception: Dict[str, Any], graph: TaskGraph) -> Dict[str, Any]:
         """
         Sovereign v14.2 High-Fidelity Graph Critique.
         Checks for: Structural Integrity, Tool Sufficiency, and Logic Depth.
@@ -216,6 +217,35 @@ class ReasoningCore:
             # Trigger harder penalty if it's very shallow
             if len(objective.split()) > 40:
                 issues.append("Plan is critically shallow for the provided context complexity.")
+
+        # 5. Phase 1: Local LLM Deep Cognitive Critique (Multi-Pass Reasoning)
+        try:
+            from backend.utils.llm_utils import call_lightweight_llm
+            dag_structure = [{"id": n.id, "agent": n.agent, "deps": n.dependencies} for n in graph.nodes]
+            prompt = (
+                "You are the LEVI Reasoning Engine (Phase 1 Local LLM Stack).\n"
+                "Critique the following Directed Acyclic Graph (DAG) plan for logical flaws, missing steps, or inefficiencies.\n"
+                f"Goal: {objective}\nPlan: {json.dumps(dag_structure)}\n"
+                "Output ONLY JSON in the format: {\"issues\": [\"critical flaw\"], \"warnings\": [\"minor inefficiency\"]}"
+            )
+            
+            llm_res = await call_lightweight_llm([{"role": "system", "content": prompt}])
+            
+            if "```json" in llm_res:
+                llm_res = llm_res.split("```json").split("```")[0]
+            elif "```" in llm_res:
+                llm_res = llm_res.split("```")[1].split("```")
+                
+            llm_critique = json.loads(llm_res.strip())
+            
+            if llm_critique.get("issues"):
+                logger.info(f"[ReasoningCore] Local LLM identified issues: {llm_critique['issues']}")
+                issues.extend(llm_critique["issues"])
+            if llm_critique.get("warnings"):
+                warnings.extend(llm_critique["warnings"])
+                
+        except Exception as e:
+            logger.warning(f"[ReasoningCore] Local LLM Multi-Pass Critique fallback: {e}")
 
         return {
             "issues": issues, 

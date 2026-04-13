@@ -11,7 +11,6 @@ from typing import Dict, Any, List
 from pydantic import BaseModel, Field
 
 from .orchestrator_types import IntentResult
-from backend.generation import _async_call_llm_api
 from .local_engine import handle_local_sync, is_locally_handleable
 
 logger = logging.getLogger(__name__)
@@ -101,27 +100,14 @@ async def decompose_goal(user_input: str, intent: IntentResult, context: Dict[st
     model_choice = "llama-3.1-70b-versatile" if intent.complexity >= 6 else "llama-3.1-8b-instant"
 
     try:
-        # ── 🟢 4. Sovereign Local Decomposition (v6 Hardened) ────────────────
-        # Use local LLM for managing its own agent flows if complexity is low.
-        if intent.complexity < 3 and is_locally_handleable("planner", intent.complexity):
+        # ── 🟢 4. Sovereign Local Decomposition (Phase 1 Fully Local) ────────────────
             logger.info("[MetaBrain] Local Decomposition triggered for Complexity L%d", intent.complexity)
             raw_json = await handle_local_sync(
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": f"Decompose this task: {user_input} (Intent: {intent.intent})"}
                 ],
-                temperature=0.1
-            )
-        else:
-            # High-complexity fallback to robust external APIs
-            raw_json = await _async_call_llm_api(
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"Decompose this task: {user_input} (Intent: {intent.intent})"}
-                ],
-                model=model_choice,
-                temperature=0.2,
-                max_tokens=600
+                model_type="default" if intent.complexity >= 6 else "small"
             )
         
         # Parse result

@@ -112,7 +112,8 @@ async def clear_all_memory(current_user: dict = Depends(get_current_user)):
     user_id = current_user.get("uid")
     try:
         from backend.core.memory_manager import MemoryManager
-        cleared_count = await MemoryManager.clear_all_user_data(user_id)
+        memory_manager = MemoryManager()
+        cleared_count = await memory_manager.clear_all_user_data(user_id)
         
         return {
             "status": "success", 

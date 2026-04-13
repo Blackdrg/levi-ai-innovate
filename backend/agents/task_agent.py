@@ -9,7 +9,7 @@ import json
 from typing import Dict, Any
 from pydantic import BaseModel, Field
 from backend.agents.base import SovereignAgent, AgentResult
-from backend.engines.chat.generation import SovereignGenerator
+from backend.core.local_engine import handle_local_sync
 
 logger = logging.getLogger(__name__)
 
@@ -50,13 +50,10 @@ class TaskAgent(SovereignAgent[TaskInput, AgentResult]):
             "}"
         )
         
-        generator = SovereignGenerator()
-        
-        # Engage the Council for complex strategy synthesis
-        raw_json = await generator.council_of_models([
+        raw_json = await handle_local_sync([
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"Decompose following mission: {goal}"}
-        ])
+        ], model_type="default")
         
         try:
             content = raw_json.strip()

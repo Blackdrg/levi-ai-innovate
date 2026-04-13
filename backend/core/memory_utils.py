@@ -43,10 +43,11 @@ async def get_global_memory() -> VectorDB:
 # PUBLIC INTERFACE
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def extract_memory_graph(user_input: str, bot_response: str) -> Dict[str, Any]:
+async def extract_memory_graph(user_input: str, bot_response: str, agent_traces: str = "none") -> Dict[str, Any]:
     """
-    Sovereign v8.6: Hybrid Memory Extraction.
+    Sovereign v15.0: Hybrid Memory Extraction.
     Identifies flat atomic facts for FAISS and Relation Triplets for Neo4j.
+    Now includes agent traces for context.
     """
     from .planner import call_lightweight_llm
     
@@ -55,9 +56,10 @@ async def extract_memory_graph(user_input: str, bot_response: str) -> Dict[str, 
         "1. Atomic Facts: [{\"fact\": \"...\", \"category\": \"preference|trait|history|factual\"}]\n"
         "2. Knowledge Triplets: [{\"subject\": \"...\", \"relation\": \"...\", \"object\": \"...\"}]\n\n"
         "Identify explicit relationships between the user, projects, technologies, and concepts.\n"
+        "Example Triplet: (\"User\", \"interested_in\", \"AI systems\")\n"
         "Output ONLY JSON: {\"facts\": [...], \"triplets\": [...]}"
     )
-    user_prompt = f"User: {user_input}\nLEVI: {bot_response}"
+    user_prompt = f"User: {user_input}\nLEVI: {bot_response}\nAgent Traces: {agent_traces}"
     
     messages = [
         {"role": "system", "content": system_prompt},

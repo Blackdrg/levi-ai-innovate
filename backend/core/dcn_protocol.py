@@ -1,5 +1,5 @@
 """
-Sovereign DCN (Distributed Cognitive Network) Protocol v14.1.0.
+Sovereign DCN (Distributed Cognitive Network) Protocol v15.0-GA [STABLE].
 Hybrid Consensus: 
 - Gossip + LWW for scaling/discovery.
 - Raft-lite for mission truth and state reconciliation.
@@ -37,15 +37,15 @@ class DCNPulse(BaseModel):
     payload: Any
     mode: ConsensusMode = ConsensusMode.GOSSIP
     
-    # Raft Semantics (v14.1)
+    # Raft Semantics (v15.0-GA)
     term: int = 0
     index: int = 0
     prev_log_index: int = 0
     prev_log_term: int = 0
     
-    region: str = "us-east" # Regional awareness (v14.2)
+    region: str = "us-east" # Regional awareness
     
-    trace_parent: Optional[str] = None # W3C Trace Context (v14.2)
+    trace_parent: Optional[str] = None # W3C Trace Context
     
     signature: Optional[str] = None
     timestamp: float = Field(default_factory=time.time)
@@ -54,7 +54,7 @@ from .dcn.gossip import DCNGossip
 
 class DCNProtocol:
     """
-    Sovereign DCN Orchestrator v2.1 (Graduated).
+    Sovereign DCN Orchestrator v15.0-GA (STABLE).
     Manages peering, consensus, and state reconciliation across the cognitive swarm.
     
     Failure Model:
@@ -75,7 +75,7 @@ class DCNProtocol:
         self.commit_index = 0
         self.region = os.getenv("DCN_REGION", "us-east")
         self.peers = set() # Tracked via heartbeats
-        self.hybrid_gossip: Optional[HybridGossip] = None
+        self.hybrid_gossip = None
         self.last_leader_pulse = time.time()
         self.election_timeout = 90 # 3x heartbeat interval
 
@@ -91,7 +91,7 @@ class DCNProtocol:
             self.is_active = False
         else:
             self.is_active = True
-            logger.info(f"[DCN] Protocol v15.0 Active (Hybrid Consensus). Node: {self.node_id}")
+            logger.info(f"🛰️ [DCN] Protocol v15.0-GA STABLE (Hybrid Consensus). Node: {self.node_id}")
             self.gossip = DCNGossip()
             self.hybrid_gossip = HybridGossip(
                 node_id=self.node_id,
@@ -147,14 +147,51 @@ class DCNProtocol:
         return pulse
 
     async def broadcast_mission_truth(self, mission_id: str, outcome: Dict[str, Any]):
-        """Broadcasts definitive mission results using Raft-lite consensus."""
+        """
+        Sovereign v15.0: Hardened Mission Truth (Raft Commit).
+        Broadcasts definitive mission results and WAITS for quorum acknowledgment.
+        """
         if not self.is_active or not self.gossip:
             return
             
         pulse = self.sign_pulse(mission_id, outcome, mode=ConsensusMode.RAFT)
+        pulse.index = self.last_applied_index + 1
+        
+        # 1. Append to local log (v15.0 Log Storage)
+        await self._append_to_local_log(pulse)
+        
+        # 2. Broadcast to swarm
+        logger.info(f"📤 [DCN] Propagating Mission Truth (Raft Index {pulse.index}): {mission_id}")
         await self.gossip.broadcast_pulse(pulse.model_dump())
-        self.last_applied_index = pulse.index
-        logger.info(f"[DCN] Mission Truth Propagated: {mission_id} (Index: {pulse.index})")
+        
+        # 3. Quorum Convergence Loop (Wait for ACKs)
+        # In a real Raft, we'd wait for log replication to succeed on a majority
+        # Here we wait for 'vote_granted' pulses redirected to 'ack_pulse'
+        try:
+            await self._wait_for_quorum(pulse.index)
+            self.commit_index = pulse.index
+            self.last_applied_index = pulse.index
+            logger.info(f"✅ [DCN] Mission Truth COMMITTED: {mission_id} (Index: {pulse.index})")
+        except asyncio.TimeoutError:
+            logger.error(f"❌ [DCN] Consensus Timeout: Failed to reach quorum for index {pulse.index}")
+
+    async def _append_to_local_log(self, pulse: DCNPulse):
+        """Persists a pulse to the local log for recovery and replication."""
+        if not self.gossip: return
+        log_key = f"dcn:log:{self.node_id}"
+        await self.gossip.r.rpush(log_key, pulse.model_dump_json())
+        await self.gossip.r.expire(log_key, 86400) # 24h retention
+
+    async def _wait_for_quorum(self, index: int, timeout: float = 5.0):
+        """Wait for a majority of nodes to acknowledge a specific log index."""
+        ack_key = f"dcn:ack:{index}"
+        start = time.time()
+        while time.time() - start < timeout:
+            acks = await self.gossip.r.scard(ack_key)
+            if self.verify_quorum(acks + 1): # +1 for self
+                 return True
+            await asyncio.sleep(0.5)
+        raise asyncio.TimeoutError()
 
     async def broadcast_gossip(self, mission_id: str, payload: Any, pulse_type: str = "cognitive_gossip"):
         """Gossips a non-critical cognitive pulse using eventual consistency."""
@@ -195,8 +232,11 @@ class DCNProtocol:
                     if self.node_state != "leader":
                         drift = time.time() - self.last_leader_pulse
                         if drift > self.election_timeout:
-                            logger.warning(f"🚨 [DCN] Leader Timeout ({drift:.2s}s). Triggering autonomous election.")
+                            logger.warning(f"🚨 [DCN] Leader Timeout ({drift:.2f}s). Triggering autonomous election.")
                             await self.start_election()
+                    else:
+                        # Leaders broadcast authority heartbeats to prevent elections
+                        await self.broadcast_gossip(mission_id="system", payload={}, pulse_type="authority_heartbeat")
 
                     await asyncio.sleep(interval)
                 except Exception as e:
@@ -206,7 +246,7 @@ class DCNProtocol:
         from backend.utils.runtime_tasks import create_tracked_task
         create_tracked_task(heartbeat_loop(), name="dcn-heartbeat")
 
-    async def start_listener(self, handler: Callable):
+    async def start_listener(self, handler: Optional[Callable] = None):
         """Starts the background consensus listener with HMAC enforcement."""
         if not self.is_active or not self.gossip:
             return
@@ -218,11 +258,8 @@ class DCNProtocol:
                 
                 # Restore Tracing Context (v14.2)
                 if pulse.trace_parent:
-                    token = propagate.extract({"traceparent": pulse.trace_parent})
-                    from opentelemetry.trace import set_span_in_context
-                    # We inject the extracted context into the current thread/task
-                    # This ensures subsequent spans are children of the propagated trace
-                    # Note: propagate.attach is better for background tasks
+                    # propagate.extract is used to get the context from the carrier
+                    from opentelemetry import propagate
                     ctx = propagate.extract({"traceparent": pulse.trace_parent})
                     token = propagate.attach(ctx)
                 
@@ -230,24 +267,29 @@ class DCNProtocol:
                     logger.warning(f"[DCN] Dropping unauthenticated pulse from {pulse.node_id}")
                     return
                 
-                # Consensus Rule Enforcement (Wiring #5)
+                # 1. Raft Replication & Log Sync
                 if pulse.mode == ConsensusMode.RAFT:
                     if pulse.term < self.gossip.current_term:
                         logger.warning(f"[DCN] RAFT: Stale pulse rejected (Term {pulse.term} < {self.gossip.current_term})")
                         return
                     
-                    # 🛡️ Quorum Enforcement (v14.1 Scaling)
-                    quorum_size = (len(self.peers) // 2) + 1
-                    logger.debug(f"[DCN] RAFT: Quorum calculated at {quorum_size} nodes (Total Peers: {len(self.peers)})")
-
-                    # Reconcile local state index if drift detected
-                    if pulse.index > self.last_applied_index:
+                    # Log Check: If index is higher than local, we might need reconciliation
+                    if pulse.index > self.last_applied_index + 1:
+                         logger.warning(f"[DCN] Log Gap detected! Local Index: {self.last_applied_index}, Incoming: {pulse.index}")
                          await self.reconcile_state(pulse.mission_id, pulse.index)
                     
+                    # ACK the pulse (Replication acknowledgment)
+                    ack_key = f"dcn:ack:{pulse.index}"
+                    await self.gossip.r.sadd(ack_key, self.node_id)
+                    await self.gossip.r.expire(ack_key, 60)
+
+                    # Update commit index if leader says so
                     if pulse.index > self.commit_index:
                         self.commit_index = pulse.index
-                        logger.debug(f"[DCN] RAFT: Commit Index updated to {self.commit_index}")
+                        self.last_applied_index = pulse.index
+                        logger.debug(f"[DCN] RAFT: State Machine Updated to index {self.commit_index}")
 
+                # 2. Control Plane Handlers
                 if pulse.payload_type == "authority_heartbeat":
                     self.last_leader_pulse = time.time()
                     if self.node_state == "candidate":
@@ -263,15 +305,18 @@ class DCNProtocol:
                     if self.node_state == "candidate" and pulse.payload.get("vote_for") == self.node_id:
                          self.votes_received += 1
                          if self.verify_quorum(self.votes_received):
-                              await self.become_leader()
+                               await self.become_leader()
 
                 if pulse.payload_type == "node_heartbeat":
                     peer_meta = pulse.payload
                     self.peers.add(pulse.node_id)
                     if peer_meta.get("region") != self.region:
-                         logger.info(f"[DCN] Cross-region peer detected: {pulse.node_id} ({peer_meta.get('region')})")
+                         logger.debug(f"[DCN] Cross-region peer heartbeat: {pulse.node_id}")
 
-                await handler(pulse)
+                # 3. External Handler (for Orchestrator logic)
+                if handler:
+                    await handler(pulse)
+
             except Exception as e:
                 logger.error(f"[DCN] Listener processing failure: {e}")
 
@@ -292,6 +337,7 @@ class DCNProtocol:
             return False
 
         msg_json = pulse.model_dump_json(exclude={"signature"})
+        # Simple string compare for HMAC-SHA256
         expected_sig = hmac.new(self.secret.encode(), msg_json.encode(), hashlib.sha256).hexdigest()
         return hmac.compare_digest(pulse.signature, expected_sig)
 
@@ -299,7 +345,6 @@ class DCNProtocol:
         """
         Sovereign v14.2: Hardened Quorum Verification.
         Checks if a given vote count meets the Raft-lite quorum threshold.
-        If enforce_diversity is True, requires votes from at least 2 distinct regions.
         """
         total_peers = len(self.peers)
         if total_peers <= 1:
@@ -315,21 +360,57 @@ class DCNProtocol:
         distinct_regions = set(regional_diversity) if regional_diversity else set()
         has_diversity = len(distinct_regions) >= 2
         
-        if meets_count and not has_diversity:
-             logger.warning(f"[DCN] Quorum count met ({votes}), but REGIONAL DIVERSITY failed. Required >= 2 regions.")
-             
         return meets_count and has_diversity
 
     async def reconcile_state(self, mission_id: str, remote_index: int):
-        """Forces a state reconciliation if local index drifts from Raft commit index."""
+        """
+        Sovereign v15.0: Deep State Reconciliation.
+        Forces a state synchronization if local index drifts from Raft commit index.
+        """
         if remote_index > self.last_applied_index:
-            logger.warning(f"[DCN] State Drift Detected for {mission_id}. Local: {self.last_applied_index}, Remote: {remote_index}")
-            # In production, we'd pull from the Redis Event Stream to replay logs
-            # For graduates, we trigger the ReplayEngine recovery link.
-            from .replay_engine import ReplayEngine
-            engine = ReplayEngine()
-            await engine.recover_mission_state(mission_id)
+            logger.warning(f"🔄 [DCN] State Drift Detected (L:{self.last_applied_index} -> R:{remote_index}). Initializing log recovery...")
+            
+            # 1. Recovery: Pull missing logs from leader/peers via Redis (Tier-0)
+            if not self.gossip: return
+            
+            # Optimization: Try to pull the missing range
+            log_key = f"dcn:log:mission_truth"
+            for idx in range(self.last_applied_index + 1, remote_index + 1):
+                raw_entry = await self.gossip.r.lindex(log_key, idx)
+                if raw_entry:
+                    pulse_data = json.loads(raw_entry)
+                    pulse = DCNPulse(**pulse_data)
+                    logger.info(f"💾 [DCN-Recovery] Applying missing index {idx} for {pulse.mission_id}")
+                    await self._apply_to_state_machine(pulse)
+            
             self.last_applied_index = remote_index
+            logger.info(f"✅ [DCN] State Reconciled at index {self.last_applied_index}")
+
+    async def _apply_to_state_machine(self, pulse: DCNPulse):
+        """Step 15.1: Apply Raft-committed pulse to the local Sovereign State."""
+        from backend.core.execution_state import CentralExecutionState, MissionState
+        
+        try:
+            # Re-hydrating mission status across the cluster
+            sm = CentralExecutionState(pulse.mission_id)
+            outcome = pulse.payload
+            
+            if isinstance(outcome, dict) and "status" in outcome:
+                new_status = MissionState(outcome["status"])
+                sm.transition(new_status, term=pulse.term)
+                sm.attach_replay_payload({"dcn_consensus_outcome": outcome})
+                
+                logger.info(f"🌐 [DCN] Mission State Applied: {pulse.mission_id} -> {new_status}")
+        except Exception as e:
+            logger.error(f"[DCN] State machine update failure for {pulse.mission_id}: {e}")
+
+    async def _append_to_local_log(self, pulse: DCNPulse):
+        """Persists a pulse to the global mission truth log."""
+        if not self.gossip: return
+        log_key = "dcn:log:mission_truth"
+        # We use a global log for index-based recovery in the cluster
+        await self.gossip.r.rpush(log_key, pulse.model_dump_json())
+        await self.gossip.r.expire(log_key, 86400 * 7) # 7-day mission truth retention
 
     def _get_current_trace_parent(self) -> Optional[str]:
         """Extracts the W3C traceparent from the current opentelemetry context."""

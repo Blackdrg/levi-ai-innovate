@@ -8,7 +8,7 @@ import logging
 from typing import Dict, Any
 from pydantic import BaseModel, Field
 from backend.agents.base import SovereignAgent, AgentResult
-from backend.engines.chat.generation import SovereignGenerator
+from backend.core.local_engine import handle_local_sync
 
 logger = logging.getLogger(__name__)
 
@@ -66,13 +66,11 @@ class DocumentAgent(SovereignAgent[DocumentInput, AgentResult]):
             "- Tone: Professional, insight-driven, and philosophical.\n"
         )
         
-        generator = SovereignGenerator()
-        
-        # Engage the council for rigorous retrieval synthesis
-        final_response = await generator.council_of_models([
+        # Engage the local LLM stack for rigorous retrieval synthesis
+        final_response = await handle_local_sync([
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"Context: {context_text}\n\nQuestion: {query}"}
-        ])
+        ], model_type="default")
 
         return {
             "message": final_response,

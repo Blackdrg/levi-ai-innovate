@@ -96,6 +96,11 @@ class Orchestrator:
         if dcn:
             self.current_term = dcn.current_term
         
+        # 🔌 Phase 8: Start Cognitive Background Loops (Connect All Loops)
+        from backend.core.evolution_engine import EvolutionaryIntelligenceEngine
+        from backend.utils.runtime_tasks import create_tracked_task
+        create_tracked_task(EvolutionaryIntelligenceEngine.start_dreaming_loop(), name="evolution-dreaming-loop")
+
         logger.info("[Orchestrator] Readiness: 100% (State Recovered)")
 
     async def get_graduation_score(self) -> float:
@@ -278,6 +283,69 @@ class Orchestrator:
             "is_isolated": self.dcn_manager.is_isolated
         }
 
+    async def get_user_missions(self, user_id: str) -> List[Dict[str, Any]]:
+        """
+        Sovereign v15.0: Holistic Mission Retrieval.
+        Returns all missions (active and historic) for a specific consciousness.
+        """
+        # 1. Fetch from Redis Active Set
+        redis = get_redis_client()
+        active_ids = []
+        if redis:
+            # redis.smembers returns a set of bytes or strings
+            raw_active = redis.smembers(self.active_missions_key)
+            active_ids = [mid.decode() if isinstance(mid, bytes) else mid for mid in raw_active]
+        
+        missions = []
+        for mid in active_ids:
+            state = CentralExecutionState.get_full_data(mid)
+            if state and state.get("user_id") == user_id:
+                missions.append({
+                    "id": mid,
+                    "objective": state.get("metadata", {}).get("user_input") or state.get("objective", "Unknown Objective"),
+                    "status": state.get("state", "RUNNING"),
+                    "progress": state.get("metadata", {}).get("progress", 50),
+                    "fidelity_score": state.get("metadata", {}).get("fidelity_score", 1.0),
+                    "timestamp": state.get("metadata", {}).get("updated_at", time.time())
+                })
+
+        # 2. Fetch from Permanent Memory (MemoryManager)
+        historic = await self.memory.get_mid_term(user_id, limit=20)
+        for h in historic:
+            # Avoid showing duplicates if already in active list
+            if any(m["id"] == h.get("mission_id") for m in missions):
+                continue
+            missions.append({
+                "id": h.get("mission_id"),
+                "objective": h.get("objective"),
+                "status": h.get("status"),
+                "progress": 100 if h.get("status") == "COMPLETE" else 0,
+                "fidelity_score": 1.0,
+                "timestamp": h.get("updated_at")
+            })
+            
+        return missions
+
+    async def execute_remote_mission(self, request_id: str, payload: Dict[str, Any]):
+        """
+        Sovereign v15.0: DCN Remote Execution Entry Point.
+        Processes missions delegated from peer nodes via the distributed bus.
+        """
+        objective = payload.get("objective")
+        user_id = payload.get("user_id", "remote_user")
+        session_id = payload.get("session_id", f"remote_{request_id}")
+        
+        logger.info(f"📥 [Orchestrator] Received REMOTE mission request: {request_id}")
+        
+        # Execute locally but mark as remote to avoid circular offloading
+        return await self.handle_mission(
+            user_input=objective,
+            user_id=user_id,
+            session_id=session_id,
+            request_id=request_id,
+            remote_request=True
+        )
+
     def _get_context_hash(self, user_id: str, user_input: str) -> str:
         """
         Sovereign v15.0: Generates a stable hash for the current cognitive context.
@@ -399,6 +467,7 @@ class Orchestrator:
         session_id: str, 
         streaming: bool = False,
         goal_id: Optional[str] = None,
+        is_side_mission: bool = False,
         **kwargs
     ) -> Any:
         """
@@ -541,7 +610,9 @@ class Orchestrator:
             CognitiveTracer.add_step(request_id, "executing", {})
             # --- v15.0 Regional DCN Offloading ---
             pressure = await self.check_vram_pressure()
-            if pressure > 0.8: # High pressure trigger
+            is_remote_request = kwargs.get("remote_request", False)
+            
+            if pressure > 0.8 and not is_remote_request: # High pressure trigger
                 from backend.core.dcn.resource_manager import ResourceManager
                 rm = ResourceManager()
                 optimal_node = await rm.find_optimal_node(
@@ -549,7 +620,7 @@ class Orchestrator:
                     required_capability="llm"
                 )
                 
-                if optimal_node and optimal_node != self.dcn_manager.node_id:
+                if optimal_node and optimal_node != self.node_id:
                     logger.info(f"[Orchestrator] OFF-LOADING mission {request_id} to node {optimal_node} due to pressure {pressure:.2f}")
                     SovereignBroadcaster.publish("MISSION_OFFLOADED", {
                         "request_id": request_id, 
@@ -558,12 +629,17 @@ class Orchestrator:
                     }, user_id=user_id)
                     
                     # Implementation of remote dispatch...
-                    # For now, we delegate to the DCN Protocol's remote execution path
                     from backend.core.dcn_protocol import DCNProtocol
                     dcn = DCNProtocol()
-                    result = await dcn.broadcast_gossip(
+                    await dcn.broadcast_gossip(
                         mission_id=request_id,
-                        payload={"objective": user_input, "user_id": user_id, "session_id": session_id},
+                        payload={
+                            "objective": user_input, 
+                            "user_id": user_id, 
+                            "session_id": session_id,
+                            "target_node": optimal_node,
+                            "metadata": kwargs.get("metadata", {})
+                        },
                         pulse_type="remote_execution_request"
                     )
                     
@@ -575,10 +651,22 @@ class Orchestrator:
                         "status": "delegated",
                         "target_node": optimal_node
                     }
+
+
+            # --- START COGNITIVE PIPELINE ---
             
             # --- v14.2 High-Availability Cloud Fallback (Legacy) ---
             if pressure > 0.95 and CLOUD_FALLBACK_ENABLED:
-            
+                logger.warning(f"[Orchestrator] CRITICAL PRESSURE ({pressure:.2f}): Triggering Cloud Fallback for {request_id}")
+                fallback_result = await CloudFallbackProxy.execute(user_input, user_id, session_id)
+                if fallback_result:
+                    sm.transition(MissionState.COMPLETE, term=term)
+                    return {
+                        "response": fallback_result,
+                        "request_id": request_id,
+                        "status": "success",
+                        "route": "cloud_fallback"
+                    }
             # --- START COGNITIVE PIPELINE ---
             MetricsHub.mission_started()
                       # 1. PERCEPTION
@@ -619,6 +707,9 @@ class Orchestrator:
                                      self._perform_shadow_audit(request_id, user_input, evolved_rule["rule_id"]), 
                                      name=f"shadow-audit-{request_id}"
                                  )
+                             
+                             # 🔌 Phase 8: Ensure Fast-Path bypass still updates Tier 1 Memory Context
+                             await self.memory.store(user_id, session_id, user_input, evolved_rule["result_data"]["solution"], perception, [], fidelity=evolved_rule["fidelity"], policy=None)
                              
                              return {
                                  "response": evolved_rule["result_data"]["solution"],
@@ -692,6 +783,21 @@ class Orchestrator:
                     logger.critical(f"[Orchestrator] REJECTING mission {request_id} due to low confidence ({reasoning['confidence']} < {min_conf}) after refinement.")
                     sm.transition(MissionState.FAILED, term=term)
                     SovereignBroadcaster.publish("MISSION_FAILED", {"request_id": request_id, "reason": "low_confidence"}, user_id=user_id)
+                    
+                    # 🔌 Phase 8: Kill Dead Ends (Feed planning failures back to Evolution)
+                    from backend.core.evolution_engine import EvolutionaryIntelligenceEngine
+                    from backend.utils.runtime_tasks import create_tracked_task
+                    create_tracked_task(
+                        EvolutionaryIntelligenceEngine.record_outcome(
+                            user_id=user_id,
+                            query=user_input,
+                            response="ABORTED: Low Confidence Planning Failure",
+                            fidelity=reasoning['confidence'],
+                            domain=perception.get("intent").intent_type if perception.get("intent") else "chat"
+                        ),
+                        name=f"evolution-fail-{request_id}"
+                    )
+                    
                     return {
                         "response": f"The mission risk is {risk_level.upper()} and the plan fidelity ({reasoning['confidence']}) is below the required safety threshold ({min_conf}). Aborting.",
                         "status": "failed",
@@ -733,8 +839,18 @@ class Orchestrator:
             
             # 7. MEMORY SYNC
             try:
+                # Calculate fidelity from audit if available, else use a default
+                fidelity = audit.get("quality_score", 0.9) if 'audit' in locals() else 0.85
                 async with traced_span("orchestrator.memory", request_id=request_id):
-                    memory_event = await self.memory.store(user_id, session_id, user_input, final_response, perception, results, policy=decision.memory_policy)
+                    memory_event = await self.memory.store(
+                        user_id=user_id, 
+                        session_id=session_id, 
+                        user_input=user_input, 
+                        response=final_response, 
+                        perception=perception, 
+                        results=results, 
+                        fidelity=fidelity
+                    )
             except Exception as mem_err:
                 logger.error(f"[Orchestrator] Memory Sync Error: {mem_err}")
                 MetricsHub.record_alert("memory_mismatch", severity="critical")
@@ -784,10 +900,26 @@ class Orchestrator:
                         "user_id": user_id,
                         "intent_type": intent.intent_type if intent else "chat",
                         "graph_signature": sm.get_full_data(request_id).get("metadata", {}).get("graph_signature"),
+                        "graph_template": task_graph.metadata.get("graph_template"),
+                        "agent_sequence": [res.agent for res in results],
+                        "latency_ms": latency,
                         "reasoning_strategy": reasoning.get("strategy") if isinstance(reasoning, dict) else {}
                     }
                 ),
                 name=f"learning-capture-{request_id}"
+            )
+            
+            # 🛡️ Phase 8 Wiring: Ensure global evolution tracking receives the outcome
+            from backend.core.evolution_engine import EvolutionaryIntelligenceEngine
+            create_tracked_task(
+                EvolutionaryIntelligenceEngine.record_outcome(
+                    user_id=user_id,
+                    query=user_input,
+                    response=final_response,
+                    fidelity=audit.get("quality_score", audit.get("fidelity", 0.0)) if 'audit' in locals() else 0.85,
+                    domain=intent.intent_type if intent else "chat"
+                ),
+                name=f"evolution-fragility-{request_id}"
             )
 
             from backend.utils.audit_helper import SovereignAuditHelper
@@ -831,6 +963,20 @@ class Orchestrator:
                     metadata={"error": str(e)}
                 )
             except: pass
+
+            # 🔌 Phase 8: Kill Dead Ends (Record systemic anomaly in Evolution Engine)
+            from backend.core.evolution_engine import EvolutionaryIntelligenceEngine
+            from backend.utils.runtime_tasks import create_tracked_task
+            create_tracked_task(
+                EvolutionaryIntelligenceEngine.record_outcome(
+                    user_id=user_id,
+                    query=user_input,
+                    response=f"SYSTEM_ANOMALY: {str(e)}",
+                    fidelity=0.0,
+                    domain="system_failure"
+                ),
+                name=f"evolution-anomaly-{request_id}"
+            )
 
             # P0 Hardening: Idempotency recovery on detected failure (Graduation #10)
             if 'idempotency_key' in locals() or 'idempotency_key' in kwargs:

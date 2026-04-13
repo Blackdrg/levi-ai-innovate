@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from fastapi.responses import StreamingResponse
 
 from backend.auth import get_current_user
-from backend.main import orchestrator
+
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/telemetry", tags=["Sovereign Telemetry"])
@@ -17,6 +17,7 @@ async def stream_mission(mission_id: str, current_user = Depends(get_current_use
     SSE stream for mission telemetry.
     Sovereign v14.2: Diverted to per-user channel with client-side filtering.
     """
+    from backend.main import orchestrator
     if not orchestrator:
         raise HTTPException(status_code=503, detail="Orchestrator offline")
 
@@ -32,6 +33,7 @@ async def global_telemetry_stream(current_user = Depends(get_current_user)):
     Global system-wide SSE stream for cognitive pulse.
     Includes VRAM pressure, DCN health, and active mission count.
     """
+    from backend.main import orchestrator
     if not orchestrator:
         raise HTTPException(status_code=503, detail="Orchestrator offline")
 
@@ -98,6 +100,7 @@ async def get_workflow_trace(mission_id: str, current_user = Depends(get_current
     Detailed workflow trace for a completed or in-flight mission.
     Returns the full DAG execution log.
     """
+    from backend.main import orchestrator
     trace = await orchestrator.get_mission_trace(mission_id)
     if not trace:
         raise HTTPException(status_code=404, detail="Workflow trace not found.")
