@@ -1,3 +1,13 @@
+## [16.1.0-GA Graduation] - 2026-04-14
+### **Cognitive Sovereignty & Decentralized Audit Graduation**
+- `[COGNITION]` **Unified Memory Consistency (MCM)**: Harmonized v14.2 and v15.1 consistency layers into a single high-fidelity service. Fixed sync lag for real-time Neo4j triplet streaming.
+- `[COGNITION]` **World Model (E8) v16.0**: Upgraded to a full Causal Reasoning Engine with structural DAG audits (cycle detection, orphan analysis) to prevent mission-critical graph failures.
+- `[PERCEPTION]` **Multimodal Vision (LLaVA-1.5)**: Integrated local vision capabilities into the VisualArchitect (ImageAgent). System can now analyze local images for grounded synthesis.
+- `[RESILIENCE]` **Disaster Recovery Engine**: Implemented automated health audits, self-healing triggers, and cognitive state snapshotting with Arweave offloading.
+- `[AUDIT]` **Decentralized Audit Offloading**: Anchored MCM snapshots and mission outcomes to Arweave permaweb for forensic-level immutable history.
+- `[SRE]` **24/7 Runbooks**: Created production-grade runbooks for P0-P2 incident response.
+- `[CORE]` **v16.0.0-GA Baseline**: Standardized versioning and graduation baseline across the 14-agent swarm.
+
 ## [14.1.0-Autonomous-SOVEREIGN Graduation] - 2026-04-10
 ### **Production Hardening Graduation: 100% Stability**
 - `[SECURITY]` **RS256 JWT Authentication**: Upgraded from HS256 to asymmetric cryptographic verification for distributed identity safety.

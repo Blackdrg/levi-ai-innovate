@@ -58,15 +58,18 @@ async def call_ollama_llm(
     base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        # Check if any messages contain images (Multimodal Support)
+        payload = {
+            "model": model,
+            "messages": messages,
+            "stream": False,
+            "options": {"temperature": temperature}
+        }
+        
+        async with httpx.AsyncClient(timeout=90.0) as client:
             response = await client.post(
                 f"{base_url}/api/chat",
-                json={
-                    "model": model,
-                    "messages": messages,
-                    "stream": False,
-                    "options": {"temperature": temperature}
-                }
+                json=payload
             )
             response.raise_for_status()
             data = response.json()

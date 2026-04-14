@@ -25,6 +25,23 @@ class DCNGossipServiceServicer:
     def __init__(self, dcn_protocol: Any):
         self.dcn = dcn_protocol
 
+    async def PulseStream(self, request_iterator, context):
+        """Bidirectional stream for continuous pulse propagation."""
+        logger.info(f"🛰️ [gRPC] Bidirectional PulseStream opened (Phase 2.3)")
+        async for request in request_iterator:
+            try:
+                pulse_data = json.loads(request.payload)
+                await self.dcn.handle_remote_pulse(pulse_data)
+                
+                if dcn_pb2:
+                    yield dcn_pb2.PulseResponse(success=True)
+                else:
+                    yield {"success": True}
+                    
+            except Exception as e:
+                logger.error(f"[gRPC-Stream] Processing error: {e}")
+                continue
+
     async def PublishPulse(self, request, context):
         """Standard unary call for P2P gossip pulses."""
         try:

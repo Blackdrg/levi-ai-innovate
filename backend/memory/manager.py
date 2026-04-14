@@ -21,7 +21,7 @@ from backend.db.models import UserProfile
 from sqlalchemy import select
 
 from backend.services.learning.logic import UserPreferenceModel
-from .consistency import MemoryConsistencyManager as MCM
+from backend.services.mcm import mcm_service as MCM
 from ..utils.kafka import SovereignKafka
 import os
 
@@ -209,8 +209,7 @@ class MemoryManager:
         
         logger.info("[MemoryManager] Storing interaction: %s", session_id)
         
-        event = MCM.register_event(user_id, {
-            "type": "interaction",
+        event = await MCM.emit_event("interaction", user_id, session_id, {
             "origin_task": perception.get("request_id"),
             "derived_from": [r.agent for r in results] if results else [],
             "content_hash": MCM.compute_content_hash({"user_input": user_input, "response": response}),
@@ -266,8 +265,7 @@ class MemoryManager:
             if triplets and (not policy or policy.neo4j):
                 for t in triplets:
                     try:
-                        MCM.register_event(user_id, {"type": "triplet", "payload": t})
-                        MCM.register_event(user_id, {"type": "triplet", "payload": t})
+                        await MCM.emit_event("triplet", user_id, "background_extraction", t)
                         from backend.utils.runtime_tasks import create_tracked_task
                         create_tracked_task(self.graph.upsert_triplet(
                             user_id, t["subject"], t["relation"], t["object"],

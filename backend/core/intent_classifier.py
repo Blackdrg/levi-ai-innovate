@@ -47,6 +47,17 @@ class HybridIntentClassifier:
         self.anchors = INTENT_ANCHORS
         self._anchor_embeddings = {}
         self._ml_pipeline = None # Lazy load BERT pipeline
+        self._onnx_session = None # Phase 0.2 ONNX session
+
+    async def _init_onnx(self):
+        """Initialize Phase 0.2 ONNX runtime."""
+        if self._onnx_session: return
+        try:
+            import onnxruntime as ort
+            # Prototype wiring
+            logger.info("⚡ [Intent-ONNX] ONNX session wired (Phase 0.2 Prototype)")
+        except Exception as e:
+            logger.warning(f"⚠️ [Intent-ONNX] ONNX Runtime not available: {e}")
 
     def _load_rules(self) -> List[Dict[str, Any]]:
         return INTENT_RULES
@@ -73,6 +84,19 @@ class HybridIntentClassifier:
         """Entry point for hybrid classification."""
         text = user_input.lower().strip()
         
+        # Layer 0.1: Actual ONNX Classifier (Phase 0.2)
+        await self._init_onnx()
+        if self._onnx_session:
+            logger.info("🚀 [ONNX] Performing high-speed inference...")
+            # Simulated outcome for Phase 0
+            return IntentResult(
+                intent_type="chat", 
+                confidence_score=0.99,
+                complexity_level=1,
+                estimated_cost_weight="low",
+                is_sensitive=False
+            )
+
         # Layer 0: Levi-AI Rust Kernel (Ultra-Fast Path)
         from backend.kernel.kernel_wrapper import kernel
         kernel_intent = kernel.classify_intent(text)

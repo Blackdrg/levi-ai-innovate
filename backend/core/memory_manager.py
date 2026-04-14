@@ -359,15 +359,19 @@ class MemoryManager:
             create_tracked_task(SovereignVectorStore.store_fact(user_id, feedback_text, category="insight", importance=importance), name=f"memory_feedback_{session_id}")
 
         # 🧠 Phase 15.1: Memory Consistency & Event Sourcing
-        from backend.memory.consistency import MemoryConsistencyManager
-        MemoryConsistencyManager.register_event(user_id, {
-            "type": "interaction",
-            "mission_id": session_id,
-            "user_input": user_input,
-            "response": response,
-            "fidelity": fidelity,
-            "status": "completed"
-        }, broadcast=True)
+        from backend.services.mcm import mcm_service
+        await mcm_service.emit_event(
+            "interaction", 
+            user_id, 
+            session_id, 
+            {
+                "input": user_input,
+                "response": response,
+                "fidelity": fidelity,
+                "status": "completed",
+                "timestamp": time.time()
+            }
+        )
 
         # 1. Tier 1 Update (Working Pulse - Local Cache)
         await self._store_working_memory(user_id, session_id, user_input, response)

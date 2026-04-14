@@ -117,7 +117,27 @@ async def lifespan(app: FastAPI):
         if recovered_missions:
             logger.info(f"[Sovereign] Successfully loaded {len(recovered_missions)} missions for potential recovery.")
             
-        logger.info("[Sovereign] System marked as 100% PRODUCTION GRADUATED (v15.0.0-GA).")
+        # D. Unified MCM Pulse (v16.0-GA)
+        from backend.services.mcm import mcm_service
+        await mcm_service.start()
+        
+        async def mcm_reconciliation_pulse():
+            while not is_shutting_down():
+                await mcm_service.run_reconciliation()
+                await asyncio.sleep(60) # 1 minute consistency pulse
+        
+        create_tracked_task(mcm_reconciliation_pulse(), name="mcm-reconciliation-pulse")
+        
+        # E. Periodic Disaster Recovery Audit (Phase 3)
+        from backend.scripts.disaster_recovery import DisasterRecoveryEngine
+        async def disaster_recovery_pulse():
+            while not is_shutting_down():
+                await DisasterRecoveryEngine.run_audit()
+                await asyncio.sleep(300) # 5 minute health audit
+        
+        create_tracked_task(disaster_recovery_pulse(), name="disaster-recovery-pulse")
+
+        logger.info("[Sovereign] System marked as 100% PRODUCTION GRADUATED (v16.0.0-GA).")
 
     except Exception as e:
         logger.error(f"[DCN] Failed to initialize resilience loops: {e}")

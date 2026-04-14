@@ -4,11 +4,15 @@ Evaluates and enhances reasoning quality through a critic-correction loop.
 Based on LeviBrain v8 Critic v2.
 """
 
+import logging
 from typing import Dict, Any, List
 from .agent_registry import AgentRegistry
 from .orchestrator_types import ToolResult
 from .goal_engine import Goal
+from .tool_registry import call_tool
 from backend.pipelines.learning import learning_system
+
+logger = logging.getLogger(__name__)
 
 
 class ReflectionEngine:
@@ -54,7 +58,8 @@ class ReflectionEngine:
         if evaluation["is_satisfactory"]:
             return response
             
-        logger.info("[ReflectionEngine] Low fidelity mission (%.2f). Correcting...", evaluation["score"])
+        fidelity = evaluation.get("score", 0.0)
+        logger.info("[ReflectionEngine] Low fidelity mission (%.2f). Correcting...", fidelity)
         
         context = perception.get("context", {})
         correction_raw = await call_tool("chat_agent", {

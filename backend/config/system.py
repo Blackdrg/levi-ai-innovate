@@ -2,8 +2,8 @@
 """Centralized configuration for LEVI-AI Sovereign OS v14.0.0 Graduation."""
 import os
 
-SOVEREIGN_VERSION = os.getenv("SOVEREIGN_VERSION", "v14.1.0-Autonomous-SOVEREIGN")
-STABILITY_BASELINE_TAG = os.getenv("STABILITY_BASELINE_TAG", "v14.1.0-STABLE-BASELINE")
+SOVEREIGN_VERSION = os.getenv("SOVEREIGN_VERSION", "v16.0.0-GA")
+STABILITY_BASELINE_TAG = os.getenv("STABILITY_BASELINE_TAG", "v16.0.0-STABLE-PRODUCTION")
 ARCHITECTURE_FREEZE = {
     "agent_registry": "frozen",
     "dag_structure_format": "frozen",
@@ -15,6 +15,7 @@ ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 # When True, the system enters 'Dark Mode': Blocks all external search/LLM egress 
 # and enforces 100% local cognitive processing via Ollama/llama-cpp and internal RAG.
 SOVEREIGN_MODE = os.getenv("SOVEREIGN_MODE", "true").lower() == "true"
+TIERS = {
     "guest": {
         "daily_limit": 0, 
         "priority": 0, 

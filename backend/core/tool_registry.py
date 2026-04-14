@@ -19,6 +19,10 @@ from backend.core.v8.agents.consensus import ConsensusAgentV8
 from backend.core.v8.agents.relation_agent import RelationAgentV8
 from backend.core.v8.agents.critic import CriticAgentV8
 from backend.core.v8.agents.mental_compressor import MentalCompressorAgent
+from backend.core.v8.agents.analyst import AnalystAgentV8
+from backend.core.v8.agents.scout import ScoutAgentV8
+from backend.core.v8.agents.alignment import AlignmentAgentV8
+from backend.core.v8.agents.image import ImageAgentV8
 
 # Legacy / Non-reasoning agents
 from backend.agents.image_agent import ImageAgent
@@ -36,7 +40,7 @@ from backend.engines.deterministic_engine import DeterministicEngine
 # Registry of tool instances (V8 Synchronized)
 _TOOL_INSTANCES: Dict[str, Any] = {
     "chat_agent":   ChatAgentV8(),
-    "image_agent":  ImageAgent(),
+    "image_agent":  ImageAgentV8(),
     "code_agent":   CodeAgentV8(),
     "search_agent": ResearchAgentV8(), # V8 Research agent handles search missions
     "local_agent":  LocalAgent(),
@@ -52,6 +56,9 @@ _TOOL_INSTANCES: Dict[str, Any] = {
     "consensus_agent": ConsensusAgentV8(),
     "relation_agent": RelationAgentV8(),
     "mental_compressor": MentalCompressorAgent(),
+    "analyst": AnalystAgentV8(),
+    "scout": ScoutAgentV8(),
+    "alignment_agent": AlignmentAgentV8(),
     "deterministic_engine": DeterministicEngine(),
 }
 

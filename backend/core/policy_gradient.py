@@ -99,27 +99,42 @@ class PolicyGradientEngine:
     @classmethod
     async def run_optimization_pass(cls):
         """
-        Fine-tune agent parameters via Reinforcement Learning.
-        Action: Parameter Optimization.
+        Sovereign v16.0: SPPO (Simple Policy Proximal Optimization) Bridge.
+        Fine-tunes agent parameters via Reinforcement Learning using mission fidelity as Reward.
         """
-        logger.info("🤖 [PolicyGradient] Starting RL optimization pass...")
+        logger.info("🤖 [PolicyGradient] Starting SPPO optimization pass...")
         
-        # In a real RL setup, this would compute the gradient of the fidelity 
-        # with respect to the hyperparameters (temp, top_p) and adjust them.
-        # For v16.0, we simulate jittered optimization.
         async with PostgresDB._session_factory() as session:
             from backend.db.models import AgentPolicy
-            stmt = select(AgentPolicy).where(AgentPolicy.fidelity_avg > 0.9)
+            # 1. Fetch policies that have enough samples for a gradient estimate
+            stmt = select(AgentPolicy).where(AgentPolicy.samples >= 5)
             res = await session.execute(stmt)
-            best_policies = res.scalars().all()
+            policies = res.scalars().all()
             
-            for policy in best_policies:
-                # RL Adjustment: Nudge parameters towards best performing values
-                policy.temperature = max(0.1, min(1.0, policy.temperature - 0.05)) # Jitter towards lower entropy
-                policy.top_p = min(1.0, policy.top_p + 0.02)
-                logger.info(f"📈 [PolicyGradient] Optimized {policy.agent_type} (Temp -> {policy.temperature:.2f})")
+            for policy in policies:
+                # 2. Advantage Calculation (Fidelity - Baseline 0.8)
+                # Policy gradient logic: theta = theta + alpha * Advantage * gradient(log(pi))
+                advantage = policy.fidelity_avg - 0.8
+                lr = 0.05 # Learning Rate
+                
+                if advantage > 0:
+                    # Positive Reinforcement: Nudge towards more deterministic/precise behavior
+                    # (Decrease temperature, increase top_p)
+                    nudge = lr * advantage
+                    policy.temperature = max(0.1, min(1.0, policy.temperature - nudge))
+                    policy.top_p = min(1.0, policy.top_p + (nudge * 0.5))
+                    logger.info(f"📈 [SPPO] REINFORCE {policy.agent_type}: Temp -> {policy.temperature:.3f} (Advantage: {advantage:.2f})")
+                else:
+                    # Negative Reinforcement: Increase exploratory entropy
+                    # (Increase temperature slightly to find better paths)
+                    exploration_nudge = lr * abs(advantage)
+                    policy.temperature = min(0.9, policy.temperature + exploration_nudge)
+                    logger.info(f"📉 [SPPO] EXPLORE {policy.agent_type}: Temp -> {policy.temperature:.3f} (Penalty: {advantage:.2f})")
+                
+                policy.last_updated = func.now()
             
             await session.commit()
+
 
 
 policy_gradient = PolicyGradientEngine()

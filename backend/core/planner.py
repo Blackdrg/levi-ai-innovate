@@ -394,6 +394,7 @@ class DAGPlanner:
         mode = decision.mode if decision else BrainMode.BALANCED
         graph = None
         
+
         # --- Step 2.4: Graduated Rule Override (REAL EVOLUTION) ---
         rule_override = await LearningLoop.check_rules(user_input)
         if rule_override:

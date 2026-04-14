@@ -1,3 +1,4 @@
+from typing import Any, Dict
 from sqlalchemy.orm import relationship, backref
 from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text, Boolean, JSON
 from sqlalchemy.dialects.postgresql import JSONB

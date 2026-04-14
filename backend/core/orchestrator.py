@@ -208,6 +208,92 @@ class Orchestrator:
         except Exception:
             return 0.985 # Baseline production lock
 
+    async def run_mission(self, user_input: str, user_id: str, session_id: str, **kwargs) -> Dict[str, Any]:
+        """
+        Phase 0.1: Implementation of core cognitive flow (Stabilization).
+        Flow: perception → planner → executor → memory
+        """
+        import json
+        mission_id = f"mission_{uuid.uuid4().hex[:12]}"
+        start_time = time.time()
+        
+        # Phase 0.8: Structured Logging (JSON)
+        def log_step(step: str, status: str = "ok", extra: dict = None):
+            entry = {
+                "mission_id": mission_id,
+                "user_id": user_id,
+                "step": step,
+                "status": status,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+            if extra: entry.update(extra)
+            logger.info(f"MISSION_PULSE: {json.dumps(entry)}")
+
+        log_step("init", extra={"objective": user_input[:100]})
+
+        max_retries = kwargs.get("max_retries", 1)
+        attempt = 0
+        
+        while attempt <= max_retries:
+            try:
+                # 1. PERCEPTION
+                log_step("perception")
+                perception = await self.perception.perceive(user_input, user_id, session_id, **kwargs)
+
+                # 2. PLANNER
+                log_step("planner")
+                decision = await self.planner.generate_decision(user_input, perception)
+                goal = await self.planner.create_goal(perception, decision)
+                dag = await self.planner.build_task_graph(goal, perception, decision)
+
+                # 3. EXECUTOR
+                log_step("executor")
+                results = await self.executor.execute(dag, perception, user_id=user_id, policy=decision.execution_policy)
+
+                # 4. MEMORY
+                log_step("memory")
+                # Aggregate results
+                final_response = "\n".join([r.message for r in results if r.success])
+                if not final_response:
+                    final_response = "Mission completed with no output."
+
+                # Committal to T2 (Postgres/Episodic) and T1 (Redis/Working)
+                await self.memory.store(
+                    user_id=user_id,
+                    session_id=session_id,
+                    user_input=user_input,
+                    response=final_response,
+                    perception=perception,
+                    results=results,
+                    fidelity=1.0
+                )
+
+                latency = time.time() - start_time
+                log_step("complete", extra={"latency": latency})
+
+                return {
+                    "mission_id": mission_id,
+                    "response": final_response,
+                    "status": "success",
+                    "latency": latency,
+                    "results": [r.dict() if hasattr(r, 'dict') else str(r) for r in results]
+                }
+
+            except Exception as e:
+                attempt += 1
+                log_step("error", status="retry" if attempt <= max_retries else "failed", extra={"error": str(e), "attempt": attempt})
+                
+                if attempt > max_retries:
+                    return {
+                        "mission_id": mission_id,
+                        "status": "failed",
+                        "error": str(e),
+                        "latency": time.time() - start_time
+                    }
+                
+                # Phase 0.7: Retry logic with backoff
+                await asyncio.sleep(1.5 ** attempt)
+
     async def create_mission(self, user_id: str, objective: str, mode: str = "AUTONOMOUS") -> Dict[str, Any]:
         """Maps gateway mission requests to the cognitive handle_mission pipeline."""
         session_id = f"session_{uuid.uuid4().hex[:12]}"

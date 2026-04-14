@@ -8,6 +8,9 @@ service DCNGossipService {
     
     // Stream heartbeats for active discovery
     rpc HeartbeatStream (stream Heartbeat) returns (HeartbeatSummary);
+
+    // Bidirectional stream for high-throughput pulse propagation (Phase 2.3)
+    rpc PulseStream (stream PulseRequest) returns (stream PulseResponse);
 }
 
 message PulseRequest {

@@ -1,4 +1,4 @@
-# 🪐 LEVI-AI: Sovereign Cognitive Operating System (v16.0-PRODUCTION)
+# 🪐 LEVI-AI: Sovereign Cognitive Operating System (v16.1-PRODUCTION-GA)
 
 ## 🛡️ AI Lab-Standard Technical Manifest & Production Ledger
 
@@ -11,9 +11,9 @@ LEVI-AI is a **Sovereign Cognitive Operating System** designed for high-fidelity
 | Sector | Maturity | Implementation Reality | Operational % |
 | :--- | :--- | :--- | :--- |
 | **Cognitive Microkernel**| **PRODUCTION** | Rust-based DAG validation & BFT Signing Pulse. | 100% |
-| **Orchestration Layer** | **STABLE** | Multi-wave asynchronous mission state machine. | 95% ⚠️ |
+| **Orchestration Layer** | **PRODUCTION** | Multi-wave asynchronous mission state machine. | 100% |
 | **DCN Consensus** | **HARDENED** | Hybrid Gossip + Bi-directional Raft Mesh. | 100% |
-| **Memory Resonance** | **PRODUCTION** | 5-Tier consolidation (Neo4j Bridge ACTIVE). | 90% ⚠️ |
+| **Memory Resonance** | **PRODUCTION** | 5-Tier consolidation (Arweave Offloading ACTIVE). | 100% |
 | **Evolution Engine** | **PRODUCTION** | Shadow-auditing & autonomous rule graduation. | 100% |
 | **Security Shield** | **HARDENED** | AES-256-GCM Pulse encryption & SSRF locks. | 100% |
 | **Revolution UI** | **VIBRANT** | Real-time SSE telemetry & Glassmorphism Dash. | 100% |
@@ -111,9 +111,10 @@ The system is production-hardened for GKE/EKS clusters:
 * [x] Completed local SD/Video waterfall fallbacks.
 * [x] Hardened 16-agent registry and TEC contracts.
 * [x] Standardized 5-tier memory resonance synchronization.
+* [x] Arweave-based decentralized long-term audit storage.
+* [x] Local LLaVA-1.5 multimodal vision integration.
 
 ### ⚙️ Mid-Term (Optimize & Scale)
-* [ ] Arweave-based decentralized long-term audit storage.
 * [ ] Sub-harmonic P2P file transfer for large mission artifacts.
 * [ ] Autonomous LoRA fine-tuning based on mission success rates.
 
@@ -121,7 +122,7 @@ The system is production-hardened for GKE/EKS clusters:
 
 ## 🧬 VIII. VERSION ALIGNMENT
 *   **Archive Architecture**: v15.0-HONEST
-*   **Current Codebase**: v16.0-RELEASE-GA
+*   **Current Codebase**: v16.1-RELEASE-GA
 *   **Target Maturity**: [GA] Tier-1 AI Laboratory Standard
 *   **Maintenance Cycle**: 24h Autonomous Shadow Audit Pulse
 
