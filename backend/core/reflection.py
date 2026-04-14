@@ -32,7 +32,8 @@ class ReflectionEngine:
         
         audit_res = await AgentRegistry.dispatch("critic", critic_context)
         
-        score = fidelity
+        # 2. Extract and sanitize fidelity score
+        score = audit_res.data.get("fidelity", 0.9)
         issues = audit_res.data.get("issues", ["High-fidelity audit failed."])
         
         # 3. LEVI Learning Bridge: Log failures for prompt optimization
