@@ -2,7 +2,7 @@ import logging
 import asyncio
 from datetime import datetime, timezone
 from backend.celery_app import celery_app
-from backend.api.v8.telemetry import broadcast_mission_event
+from backend.api.telemetry import broadcast_mission_event
 from backend.core.learning_loop import LearningLoop
 
 logger = logging.getLogger(__name__)
@@ -27,9 +27,13 @@ def run_autonomous_evolution():
         # 2. Trigger Rule Engine Graduation 
         # (analyze_traces already calls distill_graduated_rules internally)
         
-        # 3. Telemetry Update
+        # 3. Trigger Evolutionary Dreaming (Engine 7)
+        from backend.core.evolution_engine import EvolutionaryIntelligenceEngine
+        await EvolutionaryIntelligenceEngine.run_dreaming_session()
+
+        # 4. Telemetry Update
         broadcast_mission_event("system", "evolution_complete", {
-            "message": "Daily learning cycle complete. Graduated rules synchronized.",
+            "message": "Daily learning cycle complete. Swarm algorithms optimized.",
             "timestamp": datetime.now(timezone.utc).isoformat()
         })
         

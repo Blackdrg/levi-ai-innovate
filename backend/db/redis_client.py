@@ -12,28 +12,43 @@ load_dotenv()
 from backend.db.firestore_db import db as firestore_db # type: ignore
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+REDIS_SENTINELS = os.getenv("REDIS_SENTINELS") # Format: "host1:port,host2:port"
+REDIS_MASTER_NAME = os.getenv("REDIS_MASTER_NAME", "mymaster")
+REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
 
 HAS_REDIS = False
 _memory_cache = {}
 
-try:
-    r = redis.from_url(REDIS_URL, socket_timeout=5, socket_connect_timeout=5)
+def get_redis_connection():
+    """
+    Sovereign v15.0: Standard-HA Connection Factory.
+    Supports standalone Redis and Redis Sentinel for automatic failover.
+    """
+    global HAS_REDIS
     try:
-        r.ping()
+        if REDIS_SENTINELS:
+            from redis.sentinel import Sentinel
+            sentinels = [tuple(s.split(":")) for s in REDIS_SENTINELS.split(",")]
+            sentinel = Sentinel(sentinels, socket_timeout=0.5, password=REDIS_PASSWORD)
+            client = sentinel.master_for(REDIS_MASTER_NAME, socket_timeout=0.5)
+            logger.info(f"[Redis] Connected via Sentinel to master: {REDIS_MASTER_NAME}")
+        else:
+            client = redis.from_url(REDIS_URL, password=REDIS_PASSWORD, socket_timeout=5, socket_connect_timeout=5)
+            logger.info(f"[Redis] Connected to standalone Redis: {REDIS_URL.split('@')[-1] if '@' in REDIS_URL else REDIS_URL}")
+            
+        client.ping()
         HAS_REDIS = True
-        print(f"[Redis] Successfully connected to {REDIS_URL.split('@')[-1] if '@' in REDIS_URL else REDIS_URL}")
-    except Exception as ping_err:
+        return client
+    except Exception as e:
         HAS_REDIS = False
-        print(f"[Redis] Initial pulse check failed (timeout/offline): {ping_err}")
-except Exception as e:
-    HAS_REDIS = False
-    is_prod = os.getenv("ENVIRONMENT") == "production"
-    error_msg = f"[Redis] Critical: Connection to Redis failed ({e})."
-    
-    if is_prod:
-        print(f"CRITICAL: {error_msg} Starting in DEGRADED mode.")
-    else:
-        print(f"{error_msg} Falling back to in-memory cache (Local Dev).")
+        is_prod = os.getenv("ENVIRONMENT") == "production"
+        if is_prod:
+            logger.critical(f"[Redis] HA Connection Failed: {e}. Starting in DEGRADED mode.")
+        else:
+            logger.warning(f"[Redis] Connection to {REDIS_URL} failed ({e}). Falling back to memory.")
+        return None
+
+r = get_redis_connection()
 
 def _get(key):
     if HAS_REDIS:

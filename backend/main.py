@@ -10,13 +10,14 @@ import asyncio
 
 from backend.core.orchestrator import Orchestrator
 from backend.core.memory_manager import MemoryManager
-from backend.auth.middleware import SovereignShieldMiddleware
+from backend.api.middleware.sovereign_shield import SovereignShield
 from backend.api.middleware.ssrf import SSRFMiddleware
 from backend.api.middleware.rate_limiter import RateLimitMiddleware
 from backend.api.middleware.prometheus import PrometheusMiddleware
 from backend.utils.tracing import setup_tracing
 from backend.auth import get_current_user
 from backend.api.v1.voice import router as voice_router
+from backend.api.v1.evolution import router as evolution_router
 from backend.api.v8.telemetry import router as telemetry_v8_router
 from datetime import datetime, timezone
 from fastapi.responses import JSONResponse
@@ -42,54 +43,34 @@ async def lifespan(app: FastAPI):
     # Startup
     global orchestrator, memory_manager, dcn_gossip, audio_processor
     
-    logger.info("🚀 LEVI-AI Sovereign OS v15.0.0-GA starting...")
+    logger.info("🚀 LEVI-AI Sovereign OS v16.0.0-GA starting...")
     
-    # Initialize core services
-    orchestrator = Orchestrator()
+    # 1. Initialize core services
+    from backend.core.orchestrator import _orchestrator as orchestrator_instance
+    orchestrator = orchestrator_instance
     memory_manager = MemoryManager()
     
     await orchestrator.initialize()
     await memory_manager.initialize()
+
+    # 3. Cognitive Kernel Initialization (v15.1)
+    from backend.kernel.kernel_wrapper import kernel
+    if kernel.rust_kernel:
+        logger.info("⚡ [Kernel] Cognitive & Microkernel Hybrid: [ONLINE]")
+    else:
+        logger.warning("⚠️ [Kernel] Rust Binary Not Found. Running in [FALLBACK] mode.")
     
     # Link Orchestrator to GoalEngine
     goal_engine.orchestrator = orchestrator
     
     # 4. Initialize DCN Gossip Hub & Protocol
-    from backend.core.dcn_protocol import DCNProtocol
-    dcn_protocol = DCNProtocol()
+    from backend.core.dcn_protocol import get_dcn_protocol
+    dcn_protocol = get_dcn_protocol()
     if dcn_protocol.is_active:
         await dcn_protocol.start_heartbeat(interval=30)
-        # We also need a listener to handle incoming gossip
-        async def dcn_handler(pulse):
-            # 🛡️ Graduation #9: Global Abort Propagation
-            if pulse.payload_type == "mission_aborted":
-                from backend.utils.mission import MissionControl
-                mission_id = pulse.mission_id
-                reason = pulse.payload.get("reason", "Distributed abort pulse received.")
-                logger.info(f"🚨 [DCN-Abort] Received global abort signal for {mission_id}. Reason: {reason}")
-                MissionControl.cancel_mission(mission_id)
-            
-            # 🚀 Step 5.3: Task Distribution (Remote Execution)
-            elif pulse.payload_type == "remote_execution_request":
-                # Check if this node is the intended target
-                target_node = pulse.payload.get("target_node")
-                local_node_id = dcn_protocol.node_id
-                
-                if target_node == local_node_id:
-                    if orchestrator:
-                        # Execute in background to avoid blocking the gossip listener
-                        from backend.utils.runtime_tasks import create_tracked_task
-                        create_tracked_task(
-                            orchestrator.execute_remote_mission(pulse.mission_id, pulse.payload),
-                            name=f"remote-exec-{pulse.mission_id}"
-                        )
-                    else:
-                        logger.warning(f"⚠️ [DCN] Remote task rejected: Orchestrator uninitialized on {local_node_id}")
-                else:
-                    logger.debug(f"[DCN] Remote task for {target_node} ignored by {local_node_id}")
-        dcn_gossip = dcn_protocol.gossip
-        await dcn_protocol.start_listener(dcn_handler)
-    
+        # 🔗 [Wire] Consensus Listener handles BFT/Raft pulses
+        await dcn_protocol.start_consensus_listener()
+        
     # 5. Starting DCN Global Bridge
     from backend.utils.global_gossip import global_swarm_bridge
     from backend.memory.vector_store import SovereignVectorStore
@@ -117,7 +98,37 @@ async def lifespan(app: FastAPI):
             await asyncio.sleep(60) # 1 minute pulse
     create_tracked_task(mcm_reconciliation_pulse(), name="mcm-reconciliation")
     
-    # 9. Start Audio Pulse Recon (Phase 5)
+    # 9. Start Evolution dreaming loop (v15.0 GA Fulfillment)
+    from backend.core.evolution_engine import EvolutionaryIntelligenceEngine
+    create_tracked_task(EvolutionaryIntelligenceEngine.start_dreaming_loop(interval=3600), name="evolution-dreaming")
+    
+    # 🧬 [Engine 7] Evolution Shadow Audit Loop (Every 2 Hour)
+    async def run_shadow_audit_loop():
+        await asyncio.sleep(60) # Initial stabilization
+        while True:
+            try:
+                from backend.core.evolution_engine import EvolutionaryIntelligenceEngine
+                engine = EvolutionaryIntelligenceEngine()
+                await engine.run_shadow_audit()
+            except Exception as e:
+                logger.error(f"[Evolution-Shadow] Pulse failure: {e}")
+            await asyncio.sleep(7200) # 2 Hours
+    create_tracked_task(run_shadow_audit_loop(), name="evolution-shadow-audit")
+    
+    # ⚙️ [Engine 12] Optimizer & Self-Healing Loop (Every 6 Hours)
+    async def run_system_optimizer_loop():
+        await asyncio.sleep(120) # Delay start
+        while True:
+            try:
+                from backend.evolution.optimizer import SystemOptimizer
+                optimizer = SystemOptimizer()
+                await optimizer.optimize_all()
+            except Exception as e:
+                logger.error(f"[SystemOptimizer] Loop drift: {e}")
+            await asyncio.sleep(21600) # 6 Hours
+    create_tracked_task(run_system_optimizer_loop(), name="system-optimizer")
+    
+    # 10. Start Audio Pulse Recon (Phase 5)
     audio_processor = AudioPulseProcessor(user_id="system_recon")
     create_tracked_task(audio_processor.start(), name="audio-pulse-recon")
     
@@ -168,7 +179,7 @@ async def lifespan(app: FastAPI):
 # Create FastAPI app
 app = FastAPI(
     title="LEVI-AI Sovereign OS",
-    version="15.0.0-GA",
+    version="16.0.0-GA",
     lifespan=lifespan
 )
 
@@ -180,7 +191,7 @@ setup_tracing(app)
 app.add_middleware(PrometheusMiddleware)
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(SSRFMiddleware)
-app.add_middleware(SovereignShieldMiddleware)
+app.add_middleware(SovereignShield)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["https://yourdomain.com"],

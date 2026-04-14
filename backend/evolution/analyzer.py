@@ -1,6 +1,9 @@
 from typing import Dict, Any, List, Optional
 import json
+import logging
 from datetime import datetime, timezone
+ 
+logger = logging.getLogger(__name__)
 
 class FailureAnalyzer:
     """
@@ -91,6 +94,46 @@ class FailureAnalyzer:
     def is_critical(self, failure_type: str) -> bool:
         """Determine if system-wide action is needed."""
         return failure_type in ["resource_exhaustion", "external_api_rate_limit"]
+
+    async def cluster_success_paths(self) -> List[Dict[str, Any]]:
+        """
+        Cluster successful mission paths to identify optimal coordination strategies.
+        Action: Success Path Clustering.
+        """
+        from backend.db.redis import r as redis
+        if not redis: return []
+        
+        # Pull patterns from monitor's registry
+        keys = await redis.keys("evolution:patterns:*")
+        clusters = []
+        for key in keys:
+            pattern = await redis.hgetall(key)
+            if int(pattern.get(b"count", 0)) > 10: # Significance threshold
+                clusters.append({
+                    "signature": key.split(":")[-1],
+                    "hits": int(pattern.get(b"count", 0)),
+                    "avg_latency": float(pattern.get(b"avg_latency", 0)),
+                    "avg_fidelity": float(pattern.get(b"avg_fidelity", 0)),
+                    "dag": json.loads(pattern.get(b"dag", "{}"))
+                })
+        
+        logger.info(f"🧩 [Analyzer] Identified {len(clusters)} success clusters.")
+        return clusters
+
+    async def compute_divergence(self, mission_trace: List[str], cluster_pattern: List[str]) -> float:
+        """
+        Compute divergence between a current mission path and an optimal cluster pattern.
+        """
+        # Simple Levenshtein or overlap distance
+        set_a = set(mission_trace)
+        set_b = set(cluster_pattern)
+        intersection = set_a.intersection(set_b)
+        union = set_a.union(set_b)
+        
+        if not union: return 0.0
+        divergence = 1.0 - (len(intersection) / len(union))
+        return divergence
+
 
 # Global singleton
 analyzer = FailureAnalyzer()

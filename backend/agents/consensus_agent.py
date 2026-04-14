@@ -74,15 +74,31 @@ class ConsensusAgentV14(SovereignAgent[ConsensusInput, AgentResult]):
 
     async def _run(self, input_data: ConsensusInput, lang: str = "en", **kwargs) -> Dict[str, Any]:
         """
-        Consensus Protocol v14.0.0:
+        Consensus Protocol v15.0 [HARDENED]:
         1. Objective Rubric Aggregation.
-        2. Swarm appraisal via Council of Models.
-        3. Deterministic Winner Selection.
+        2. Cognitive Friction Check (Ambiguity Detection).
+        3. Swarm Appraisal / Debate Mode.
+        4. Deterministic Winner Selection.
         """
         if not input_data.candidates:
             return {"message": "No candidates provided for consensus.", "success": False}
 
-        self.logger.info(f"[Consensus-v13.1] Adjudicating {len(input_data.candidates)} candidates.")
+        self.logger.info(f"[Consensus] Adjudicating {len(input_data.candidates)} candidates.")
+        
+        # Calculate variability (Friction)
+        if len(input_data.candidates) > 1:
+            scores = [c.confidence for c in input_data.candidates]
+            friction = max(scores) - min(scores)
+            avg_score = sum(scores) / len(scores)
+            
+            # 🔥 ENGINE 10: DEBATE MODE TRIGGER
+            # If friction is high (>0.4) or average is low (<0.7), enter debate.
+            if friction > 0.4 or avg_score < 0.7:
+                self.logger.warning(f"⚖️ [Consensus] Cognitive Friction High ({friction:.2f}). Entering DEBATE MODE.")
+                return await self._run_debate(input_data)
+
+        # ... (Rest of existing logic for standard adjudication)
+        # (I'll keep the existing logic as the "Standard" path)
 
         # 1. Prepare Deterministic Analysis
         intent = input_data.context.get("intent", "general")
@@ -159,6 +175,40 @@ class ConsensusAgentV14(SovereignAgent[ConsensusInput, AgentResult]):
                 "data": input_data.candidates[0].dict(),
                 "score": fallback_score
             }
+
+    async def _run_debate(self, input_data: ConsensusInput) -> Dict[str, Any]:
+        """
+        Recursive Debate Protocol [Engine 10].
+        Agents review each other's outputs to discover the most robust synthesis.
+        """
+        candidate_block = "\n\n".join([
+            f"Candidate [{i}] (Agent: {c.agent}):\n{c.message}"
+            for i, c in enumerate(input_data.candidates)
+        ])
+        
+        system_prompt = (
+            "You are the LEVI Sovereign Debate Moderator. "
+            "Internal agents have provided conflicting solutions. "
+            "Your goal is to perform a recursive critique: find the logical flaws in each and synthesize a single, gold-standard response.\n"
+            "Rules:\n1. Maintain architectural rigor.\n2. Favor local-first sovereignty.\n3. Resolve all factual contradictions."
+        )
+        
+        debate_result = await handle_local_sync([
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Conflicting Candidates:\n{candidate_block}\n\nObjective: {input_data.goal}"}
+        ], model_type="default")
+        
+        return {
+            "message": debate_result.strip(),
+            "success": True,
+            "data": {
+                "winner": {"agent": "ConsensusDebate", "message": debate_result},
+                "fidelity_score": 0.95,
+                "justification": "Debate synthesized from multi-agent conflict.",
+                "status": "debate_resolved_v15"
+            },
+            "score": 0.95
+        }
 
 # Graduation Alias for the Sovereign OS (v14.0.0)
 ConsensusAgentV13 = ConsensusAgentV14

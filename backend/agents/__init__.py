@@ -30,7 +30,7 @@ from .python_repl_agent import PythonReplAgent as Coder
 from .research_agent import ResearchAgent as Researcher
 from .document_agent import DocumentAgent as Analyst
 from .task_agent import TaskAgent as HardRule
-from .consensus_agent import ConsensusAgentV11 as SwarmCtrl
+from .consensus_agent import ConsensusAgentV14 as SwarmCtrl
 from .optimizer_agent import OptimizerAgent as Optimizer
 from .memory_agent import MemoryAgent as Memory
 from .diagnostic_agent import DiagnosticAgent as Diagnostic

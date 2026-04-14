@@ -1,0 +1,49 @@
+name: LEVI-AI Production Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    - name: Install Dependencies
+      run: |
+        pip install -r backend/requirements.txt
+        pip install pytest pytest-asyncio locust
+    - name: Run Unit Tests
+      run: pytest tests/unit/
+    - name: Run Integration Tests
+      run: pytest tests/integration/
+    - name: Run DCN Convergence Test
+      run: pytest tests/integration/test_dcn.py
+    - name: Run Memory Sync Test
+      run: pytest tests/integration/test_5tier_memory.py
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build Docker Container
+      run: docker build -t levi-ai-backend:latest ./backend
+    # Additional steps for Auth and Registry Push would go here
+    
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+    - name: Deploy to GKE
+      run: |
+        echo "Deploying to production cluster..."
+        # kubectl commands would go here

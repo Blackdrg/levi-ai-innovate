@@ -1,8 +1,6 @@
 """
-Sovereign Memory Agent v9.
-Adds Neo4j fallback path:
-  - On Neo4j failure → write triplets to Redis key mem:pending:triplets
-  - On Neo4j recovery → replay pending queue via replay_pending_triplets()
+Sovereign Memory Agent v15.0-GA.
+The primary cognitive bridge between ephemeral execution and persistent Relational/Semantic memory.
 """
 
 import json

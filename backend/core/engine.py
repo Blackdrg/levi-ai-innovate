@@ -88,30 +88,40 @@ async def synthesize_response(
     """
     # ... logic delegated to v13 internal synthesis ...
     # This remains as a bridge for legacy v1 orchestrator calls
-    from backend.core.local_engine import handle_local_sync
+    # --- Sovereign v15.0 GA: High-Fidelity Mind Synthesis ---
+    from backend.core.fusion_engine import FusionEngine
     
-    # 1. v13 SQL Profile Sync
-    user_id = context.get("user_id", "guest")
-    pref_model = UserPreferenceModel()
-    profile = await pref_model.get_profile(user_id)
+    intent = context.get("perception", {}).get("intent", {})
+    intent_type = intent.intent_type if hasattr(intent, "intent_type") else str(intent)
     
-    style_hint = profile.get("style", "philosophical")
-    
-    synth_prompt = (
-        f"You are LEVI, the Sovereign OS (v14.0.0). "
-        f"Synthesize the following fragments into your unified voice.\n"
-        f"User Style: {style_hint}\n"
-        f"Input: {context.get('input', '')}\n\n"
-        "Constraint: Speak with sovereign finality."
-    )
-
     try:
+        fused = await FusionEngine.fuse_results(
+            query=context.get("input", ""),
+            results=results,
+            lang=context.get("lang", "en"),
+            mood=context.get("mood", "philosophical"),
+            fast_mode=False
+        )
+        
+        # --- Sovereign v15.0 GA: Soul Elevation Polish ---
+        if context.get("soul_polish", True):
+            from backend.agents.optimizer_agent import OptimizerAgent, OptimizerInput
+            polisher = OptimizerAgent()
+            polished_res = await polisher._run(OptimizerInput(
+                original_input=context.get("input", ""),
+                draft_response=fused,
+                user_context=context
+            ))
+            return polished_res.get("message", fused)
+            
+        return fused
+    except Exception as e:
+        logger.error(f"[Synthesis] Fusion failed: {e}")
+        from backend.core.local_engine import handle_local_sync
         return await handle_local_sync(
-            messages=[{"role": "system", "content": synth_prompt}],
+            messages=[{"role": "system", "content": f"Synthesize: {str(results)}"}],
             model_type="default"
         )
-    except Exception:
-        return "I have crystallized the mission requirements. Synthesis complete."
 async def synthesize_streaming_response(
     results: List[ToolResult],
     context: Dict[str, Any],

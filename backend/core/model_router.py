@@ -21,7 +21,7 @@ class ModelRouter:
     }
 
     @classmethod
-    def get_model_for_tier(cls, tier: str, session_id: str = None, complexity: float = 1.0) -> str:
+    async def get_model_for_tier(cls, tier: str, session_id: str = None, complexity: float = 1.0) -> str:
         """
         Sovereign v15.0: Phase 7 Infra Load Shift.
         Dynamically routes to local vs. cloud fallback based on live node pressure.
@@ -53,6 +53,14 @@ class ModelRouter:
 
         base_model = cls.TIER_MAP.get(tier, cls.TIER_MAP["L2"])
         
+        # 🧪 ENGINE 9: Policy Gradient Model Override
+        # If an optimized model is found for this task's domain, we override the base tier.
+        from .policy_gradient import policy_gradient
+        opt_params = await policy_gradient.get_optimal_params("agent", domain=tier) # Tier acts as default domain here
+        if opt_params and opt_params.get("model") != "default":
+            logger.info(f"📊 [PolicyGradient] Overriding {tier} with optimized model: {opt_params['model']}")
+            base_model = opt_params["model"]
+            
         # 1. Shadow Deployment Logic (A/B Testing)
         if cls.SHADOW_MODE and tier in ["L3", "L4"] and session_id:
             # Deterministic hash of session_id to ensure sticky routing

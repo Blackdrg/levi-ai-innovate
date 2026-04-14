@@ -1,8 +1,7 @@
 """
-LEVI-AI Evolution Module.
+LEVI-AI Evolution Module (Engine 7) [ACTIVE].
 Framework for Self-Monitoring, Continuous Learning, and Autonomous Self-Mutation.
-[DISABLED] - Replaced by Phase 2 Learning Loop (backend/core/learning_loop.py).
-Implemented for future weeks 17-40 research.
+Integrated with the Phase 2 Learning Loop (backend/core/learning_loop.py).
 """
 
 from .monitor import monitor as self_monitor
@@ -11,6 +10,7 @@ from .learning import learner as success_learner
 from .optimizer import optimizer as parameter_optimizer
 from .mutator import algorithm_mutator, strategy_mutator
 from .discovery import discovery_engine
+from .gating import SafetyGating
 
 __all__ = [
     "self_monitor",
@@ -19,5 +19,6 @@ __all__ = [
     "parameter_optimizer",
     "algorithm_mutator",
     "strategy_mutator",
-    "discovery_engine"
+    "discovery_engine",
+    "SafetyGating"
 ]

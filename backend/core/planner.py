@@ -188,7 +188,7 @@ class PolicyEngine:
         if mode == BrainMode.RESEARCH: policy.max_retries = 3
         return policy
 
-    def define_llm_policy(self, mode: BrainMode, risk_level: float) -> LLMPolicy:
+    async def define_llm_policy(self, mode: BrainMode, risk_level: float, intent_type: str = "chat") -> LLMPolicy:
         # v14.1 Latency-Aware Depth Budgeting
         from .executor.guardrails import capture_resource_pressure
         pressure = capture_resource_pressure()
@@ -197,7 +197,18 @@ class PolicyEngine:
             max_depth = 3
             logger.warning("[Policy] Resource pressure high: Capping DAG depth to 3.")
             
-        policy = LLMPolicy(local_only=True, cloud_fallback=False)
+        # 📊 [Engine 9] Policy Gradient: Fetch Optimized Parameters
+        from .policy_gradient import policy_gradient
+        opt_params = await policy_gradient.get_optimal_params("planner", domain=intent_type)
+            
+        policy = LLMPolicy(
+            local_only=True, 
+            cloud_fallback=False,
+            temperature=opt_params.get("temperature", 0.7),
+            top_p=opt_params.get("top_p", 0.9),
+            model=opt_params.get("model", "default"),
+            max_tokens=opt_params.get("max_tokens", 1024)
+        )
         policy.max_dag_depth = max_depth
         if mode == BrainMode.DEEP and risk_level < 0.5: policy.cloud_fallback = True
         if mode == BrainMode.SECURE:
@@ -344,7 +355,7 @@ class DAGPlanner:
         enable_agents = self.policy_engine.allocate_agents(mode, intent, complexity)
         memory_policy = self.policy_engine.allocate_memory(mode, intent)
         execution_policy = self.policy_engine.define_execution_policy(mode, complexity)
-        llm_policy = self.policy_engine.define_llm_policy(mode, risk_level)
+        llm_policy = await self.policy_engine.define_llm_policy(mode, risk_level, intent_type=intent.intent_type if intent else "chat")
         
         return BrainDecision(
             mode=mode,
@@ -381,13 +392,13 @@ class DAGPlanner:
         intent_type = intent.intent_type if intent else "chat"
         user_input = perception.get("input", "")
         mode = decision.mode if decision else BrainMode.BALANCED
+        graph = None
         
         # --- Step 2.4: Graduated Rule Override (REAL EVOLUTION) ---
         rule_override = await LearningLoop.check_rules(user_input)
         if rule_override:
             logger.info(f"🎯 [RuleEngine] Applying graduated override for '{user_input[:30]}...'")
             agents = rule_override.get("agent_sequence", [])
-            # Convert sequence to tasks
             template = []
             prev_id = None
             for i, agent in enumerate(agents):
@@ -401,40 +412,83 @@ class DAGPlanner:
             graph = self._build_from_static_template(template, user_input, perception, decision)
             if graph:
                 graph.metadata["origin"] = "graduated_rule"
-                return graph
 
         # 1. High Complexity / DEEP Mode: Dynamic LLM Decomposition
-        if (intent and intent.complexity_level >= 3) or mode == BrainMode.DEEP:
+        if not graph and ((intent and intent.complexity_level >= 3) or mode == BrainMode.DEEP):
             logger.info("[Planner] Elevating to Neural Decomposition...")
             graph = await LlmDecomposer.decompose(goal.objective, user_input, perception)
-            if graph and graph.nodes:
-                graph.validate_dag(max_depth=8)
-                graph.metadata["cost_estimate"] = graph.estimate_cost()
-                return graph
 
         # 2. Template Escalation
-        if intent_type in HARD_TEMPLATES:
+        if not graph and (intent_type in HARD_TEMPLATES):
             logger.info(f"[Planner] Using hardcoded template for intent: {intent_type}")
             graph = self._build_from_static_template(HARD_TEMPLATES[intent_type], user_input, perception, decision)
-            if graph:
-                max_depth = decision.llm_policy.max_dag_depth if decision else 5
-                graph.validate_dag(max_depth=max_depth)
-                graph.metadata["cost_estimate"] = graph.estimate_cost()
-                return graph
 
-        # Default fallback creation logic
-        graph = TaskGraph()
-        node_id = "t_core"
-        graph.add_node(TaskNode(
-            id=node_id,
-            agent="chat_agent",
-            description=f"Primary {mode.value} reasoning pass",
-            inputs={"input": user_input},
-            contract=self._generate_contract(node_id, "chat_agent")
-        ))
+        # 3. Default Fallback
+        if not graph or not graph.nodes:
+            logger.warning("[Planner] Fallback: Creating single-node DAG.")
+            graph = TaskGraph()
+            node_id = "t_core"
+            graph.add_node(TaskNode(
+                id=node_id,
+                agent="chat_agent",
+                description=f"Primary {mode.value} reasoning pass",
+                inputs={"input": user_input},
+                contract=self._generate_contract(node_id, "chat_agent")
+            ))
+
+        # 4. Final Structural Audit Pass (Hardened v15.0)
+        self._structural_audit_pass(graph)
         
         graph.metadata["cost_estimate"] = graph.estimate_cost()
         return graph
+
+    def _structural_audit_pass(self, graph: TaskGraph):
+        """
+        Sovereign v15.0: Structural Audit Pass.
+        Ensures DAG integrity, agent validity, and resource safety.
+        """
+        if not graph.nodes:
+            logger.warning("[Planner-Audit] EMPTY graph detected.")
+            return
+
+        # 1. Cycle Detection (Already in validate_dag but reinforced)
+        try:
+            graph.validate_dag(max_depth=12)
+        except Exception as e:
+            logger.error(f"❌ [Planner-Audit] DAG Cycle Detected: {e}")
+            raise ValueError(f"Invalid Graph Topology: {e}")
+
+        # 2. Agent Validation (14-Agent Swarm Check)
+        VALID_AGENTS = {
+            "search_agent", "browser_agent", "code_agent", "python_repl_agent", 
+            "document_agent", "image_agent", "video_agent", "critic_agent", 
+            "consensus_agent", "scout", "artisan", "librarian", "analyst", "chat_agent"
+        }
+        for node in graph.nodes:
+            if node.agent not in VALID_AGENTS:
+                logger.warning(f"⚠️ [Planner-Audit] Unknown agent '{node.agent}' in node {node.id}. Mapping to chat_agent fallback.")
+                node.agent = "chat_agent"
+
+        # 3. Connection Audit (Orphan Detection)
+        if len(graph.nodes) > 1:
+            all_ids = {n.id for n in graph.nodes}
+            all_deps = set()
+            for n in graph.nodes:
+                all_deps.update(n.dependencies)
+            
+            # Nodes with no dependencies (Roots)
+            roots = [n.id for n in graph.nodes if not n.dependencies]
+            # Nodes that aren't dependencies (Leaves)
+            leaves = [n.id for n in graph.nodes if n.id not in all_deps]
+            
+            if not roots:
+                logger.error("❌ [Planner-Audit] Graph has NO entry point!")
+                raise ValueError("Graph has no root nodes.")
+            if not leaves:
+                logger.error("❌ [Planner-Audit] Graph has NO exit point (All nodes are dependencies)!")
+                raise ValueError("Graph has no terminal nodes.")
+
+        logger.info(f"✅ [Planner-Audit] Graph '{graph.metadata.get('origin', 'dynamic')}' verified: {len(graph.nodes)} nodes.")
 
     def _build_from_static_template(self, template: List[Dict[str, Any]], user_input: str, perception: Dict[str, Any], decision: Optional[BrainDecision]) -> TaskGraph:
         """
@@ -473,14 +527,51 @@ class DAGPlanner:
         graph.validate_dag(max_depth=max_depth)
 
     async def refine_plan(self, task_graph: TaskGraph, reflection: Dict[str, Any], goal: Any, perception: Dict[str, Any]) -> TaskGraph:
-        """Plan Refinement (Following v14.0 Failure Policy)."""
+        """
+        Sovereign v15.0: Neural Re-planning (Self-Healing).
+        Analyzes plan deficiencies and synthesizes a recovery sub-graph.
+        """
+        issues = reflection.get("issues", [])
+        strategy = reflection.get("fix", "No specific strategy provided.")
+        
+        logger.warning(f"🔧 [Planner] Initiating Neural Re-planning for mission. Issues: {len(issues)}")
+        
+        # Determine if we need a deep recovery or just a refinement node
+        if reflection.get("severity") == "high" or len(issues) > 1:
+            logger.info("🧠 [Planner] Synthesis pass for recovery sub-graph...")
+            
+            # Use Decomposer to build a recovery branch
+            recovery_prompt = f"RECOVERY MISSION: The following issues were found in the current plan: {issues}. Strategy: {strategy}"
+            recovery_graph = await LlmDecomposer.decompose(recovery_prompt, perception.get("input", ""), perception)
+            
+            if recovery_graph and recovery_graph.nodes:
+                # 1. Identify leaf nodes of current (failed) graph to link to
+                leaf_ids = [n.id for n in task_graph.nodes if not any(n.id in other.dependencies for other in task_graph.nodes)]
+                
+                # 2. Merge recovery nodes into task_graph
+                # We prefix recovery IDs to avoid collision
+                for node in recovery_graph.nodes:
+                    original_id = node.id
+                    node.id = f"recovery_{node.id}"
+                    # Link recovery roots to current leaves
+                    if not node.dependencies:
+                        node.dependencies = leaf_ids
+                    else:
+                        node.dependencies = [f"recovery_{d}" for d in node.dependencies]
+                    
+                    task_graph.add_node(node)
+                
+                logger.info(f"✅ [Planner] Merged {len(recovery_graph.nodes)} recovery nodes into mission graph.")
+                return task_graph
+
+        # Fallback: Default Refinement Node
         leaf_ids = [n.id for n in task_graph.nodes if not any(n.id in other.dependencies for other in task_graph.nodes)]
         node_id = f"t_refine_{len(task_graph.nodes)}"
         task_graph.add_node(TaskNode(
             id=node_id,
             agent="chat_agent",
-            description="Cognitive refinement pass",
-            inputs={"input": perception.get("input"), "issues": reflection.get("issues", []), "strategy": reflection.get("fix", "")},
+            description="Cognitive refinement pass (Recovery)",
+            inputs={"input": perception.get("input"), "issues": issues, "strategy": strategy},
             dependencies=leaf_ids,
             critical=True,
             contract=self._generate_contract(node_id, "chat_agent"),

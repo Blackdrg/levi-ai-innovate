@@ -140,9 +140,15 @@ class BrainService:
         logger.info(f"[BrainService] Policy generated: {policy.policy_id} Mode: {policy.mode}")
         return policy
 
-    async def call_local_llm(self, prompt: str, model: str = "llama3.1:8b") -> str:
-        """Sovereign v14.1: Direct local LLM interface."""
+    async def call_local_llm(self, prompt: str, model_type: str = "default", domain: str = "default") -> str:
+        """Sovereign v14.1: Direct local LLM interface with optimized policy gradient params."""
         from backend.utils.internal_client import internal_client
+        from backend.core.policy_gradient import policy_gradient
+        
+        # 🧪 [Engine 9] Policy Gradient: Fetch Optimized Parameters
+        params = await policy_gradient.get_optimal_params(agent_type="inference", domain=domain)
+        model = params.get("model", "llama3.1:8b")
+        
         ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
         
         try:
@@ -152,7 +158,12 @@ class BrainService:
                 json_data={
                     "model": model,
                     "prompt": prompt,
-                    "stream": False
+                    "stream": False,
+                    "options": {
+                        "temperature": params.get("temperature", 0.7),
+                        "top_p": params.get("top_p", 0.9),
+                        "num_predict": params.get("max_tokens", 1024)
+                    }
                 }
             )
             response.raise_for_status()

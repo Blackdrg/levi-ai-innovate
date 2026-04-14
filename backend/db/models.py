@@ -161,20 +161,67 @@ class AuditLog(Base):
     @classmethod
     def calculate_checksum(cls, prev_hash: str, row_data: dict) -> str:
         """
-        Sovereign v15.0: Hash-Chained Integrity Ledger.
-        Formula: hash_n = SHA256(data_n + hash_{n-1})
+        Sovereign v15.0: HMAC-Chained Integrity Ledger.
+        Formula: hash_n = HMAC_SHA256(secret, data_n + hash_{n-1})
         """
+        import hmac
         import hashlib
         import json
+        
+        secret = os.getenv("AUDIT_CHAIN_SECRET", "levi_ai_genesis_key_v15")
         
         # Consistent serialization of row data
         data_str = json.dumps(row_data, sort_keys=True)
         
-        # Combine data with previous hash as per user formula
-        # We include a separator to prevent ambiguity
+        # Combine data with previous hash
         combined = f"{data_str}|{prev_hash}".encode()
         
-        return hashlib.sha256(combined).hexdigest()
+        return hmac.new(secret.encode(), combined, hashlib.sha256).hexdigest()
+
+    @classmethod
+    async def verify_chain(cls, session: Any, limit: int = 100) -> Dict[str, Any]:
+        """
+        Sovereign v15.0: Cryptographic Chain Verification.
+        Traverses the ledger and verifies the HMAC chain integrity.
+        """
+        from sqlalchemy import select
+        query = select(cls).order_by(cls.created_at.desc()).limit(limit)
+        result = await session.execute(query)
+        logs = result.scalars().all()
+        
+        if not logs:
+            return {"status": "empty", "valid": True}
+        
+        # We verify in chronological order
+        logs_asc = logs[::-1]
+        prev_hash = "GENESIS" # In production, this would be fetched from the last verified block
+        
+        violations = []
+        for log in logs_asc:
+            row_data = {
+                "event_type": log.event_type,
+                "user_id": log.user_id,
+                "resource_id": log.resource_id,
+                "action": log.action,
+                "status": log.status,
+                "metadata": log.metadata_json
+            }
+            expected_hash = cls.calculate_checksum(prev_hash, row_data)
+            if expected_hash != log.checksum:
+                violations.append({
+                    "id": log.id,
+                    "expected": expected_hash,
+                    "actual": log.checksum,
+                    "timestamp": log.created_at.isoformat()
+                })
+            prev_hash = log.checksum
+            
+        return {
+            "status": "verified" if not violations else "compromised",
+            "valid": len(violations) == 0,
+            "violations": violations,
+            "record_count": len(logs)
+        }
 
 class MissionSchedule(Base):
     """
@@ -542,3 +589,24 @@ class DiscoveredCapability(Base):
     use_cases = Column(JSON)
     first_detected_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
+class AgentPolicy(Base):
+    """
+    Sovereign v15.0 Policy Gradient Ledger.
+    Stores optimized hyper-parameters (Temp, Top_P, Model) for agents.
+    """
+    __tablename__ = "agent_policies"
+
+    id = Column(Integer, primary_key=True)
+    agent_type = Column(String, index=True) # planner, critic, search, creator
+    domain = Column(String, index=True, default="default")
+    
+    # Hyper-parameters
+    temperature = Column(Float, default=0.7)
+    top_p = Column(Float, default=0.9)
+    model = Column(String, default="default")
+    max_tokens = Column(Integer, default=1024)
+    
+    # Metadata
+    fidelity_avg = Column(Float, default=0.0)
+    samples = Column(Integer, default=0)
+    last_updated = Column(DateTime, default=lambda: datetime.now(timezone.utc))

@@ -29,7 +29,7 @@ class LearningLoop:
     ENABLED = True
 
     @classmethod
-    async def capture_outcome(
+    async def crystallize_pattern(
         cls,
         mission_id: str,
         query: str,
@@ -37,7 +37,7 @@ class LearningLoop:
         fidelity: float,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
-        """Step 2.1: Capture Execution Traces."""
+        """Step 2.1: Crystallize Execution Traces for Evolution."""
         if not cls.ENABLED: return
         
         metadata = metadata or {}
@@ -77,6 +77,10 @@ class LearningLoop:
                         await session.execute(stmt)
 
                 await session.commit()
+            
+            # --- [Engine 9] Policy Gradient: Update Policy Weights ---
+            from .policy_gradient import policy_gradient
+            await policy_gradient.update_policy(mission_id, fidelity)
 
             # 3. Check for Evolution Trigger
             await cls._check_evolution_trigger()
@@ -151,6 +155,11 @@ class LearningLoop:
                      # Implement Failure Tracking logic
                      pass
 
+                # 🚀 Step 2.4: Sovereign Emergence (Discovery)
+                from backend.evolution.discovery import discovery_engine
+                interactions = [{"query": m.metadata_json.get("query"), "agents": m.metadata_json.get("agents_used")} for m in metrics]
+                await discovery_engine.identify_emergence(interactions)
+
                 await session.commit()
                 
             # 3. Step 2.3: Rule Engine Graduation
@@ -171,8 +180,10 @@ class LearningLoop:
                     SuccessPattern.fidelity_avg >= 0.98
                 )
                 
-                patterns = await session.execute(stmt)
-                for p in patterns.scalars().all():
+                patterns_raw = await session.execute(stmt)
+                patterns_list = patterns_raw.scalars().all()
+                
+                for p in patterns_list:
                     logger.info(f"[LearningLoop] Promoting pattern to GRADUATED RULE: {p.objective_pattern[:50]}...")
                     
                     grad_rule = insert(GraduatedRule).values(
@@ -194,6 +205,19 @@ class LearningLoop:
                     await session.execute(grad_rule)
 
                 await session.commit()
+                
+                # --- [Engine 13] Distributed Learning: Cross-Region Weight Sync ---
+                try:
+                    from backend.main import dcn_protocol
+                    if dcn_protocol and dcn_protocol.is_active:
+                         for p in patterns_list:
+                              await dcn_protocol.sync_evolution_weights(p.objective_pattern, {
+                                  "agent_sequence": p.agent_sequence,
+                                  "fidelity": p.fidelity_avg
+                              })
+                except Exception as sync_err:
+                     logger.error(f"[LearningLoop] Distributed Learning Sync Failure: {sync_err}")
+
         except Exception as e:
             logger.error(f"[LearningLoop] Rule distillation failure: {e}")
 

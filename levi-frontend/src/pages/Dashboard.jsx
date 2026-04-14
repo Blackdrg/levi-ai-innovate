@@ -1,10 +1,12 @@
 import { Routes, Route, Link, useLocation } from 'react-router-dom'
-import { LayoutDashboard, Database, Activity, ShieldCircle, LogOut, Shield } from 'lucide-react'
+import { LayoutDashboard, Database, Activity, ShieldCircle, LogOut, Shield, Brain } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
 import MissionPanel from '../components/MissionPanel'
 import { MemoryExplorer } from './MemoryExplorer'
 import { AgentGrid } from '../components/AgentGrid'
 import { SecurityPanel } from './SecurityPanel'
+import { RevolutionPanel } from './RevolutionPanel'
+import { MetricsDashboard } from './MetricsDashboard'
 
 export default function Dashboard() {
   const { user, logout } = useAuthStore()
@@ -12,8 +14,10 @@ export default function Dashboard() {
 
   const navItems = [
     { name: 'Missions', path: '/', icon: <LayoutDashboard size={20} /> },
+    { name: 'Revolution', path: '/evolution', icon: <Brain size={20} className="text-purple-500" /> },
     { name: 'Memory',   path: '/memory', icon: <Database size={20} /> },
     { name: 'Agents',   path: '/agents', icon: <Activity size={20} /> },
+    { name: 'Telemetry', path: '/telemetry', icon: <Activity size={20} /> },
     { name: 'Security', path: '/settings', icon: <ShieldCircle size={20} /> },
   ]
 
@@ -80,8 +84,10 @@ export default function Dashboard() {
         
         <Routes>
           <Route path="/"        element={<MissionPanel />} />
+          <Route path="/evolution" element={<RevolutionPanel />} />
           <Route path="/memory"  element={<MemoryExplorer />} />
           <Route path="/agents"  element={<AgentGrid />} />
+          <Route path="/telemetry" element={<MetricsDashboard />} />
           <Route path="/settings" element={<SecurityPanel />} />
         </Routes>
       </main>

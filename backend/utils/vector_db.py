@@ -24,6 +24,9 @@ class VectorDB:
         from backend.embeddings import MODEL_PATH
         self.model_name = MODEL_PATH
         
+        # v15.1 Distributed Logic
+        self.remote_url = os.getenv("FAISS_REMOTE_URL") # e.g. http://faiss-cluster-service
+        
         # Production: Mount point for GCS FUSE
         self.base_path = os.getenv("VECTOR_DB_PATH", "backend/data/vector_db")
         
@@ -199,6 +202,9 @@ class VectorDB:
             logger.error(f"Persistence error for {self.collection_name}: {e}")
 
     async def search(self, query: str, limit: int = 5, min_score: float = 0.4, tenant_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        if self.remote_url:
+            return await self._search_remote(query, limit, min_score, tenant_id)
+            
         from backend.db.vector_store import embed_text
         query_emb = await asyncio.to_thread(embed_text, query)
         # L2-normalization for Inner Product (Cosine)
@@ -226,12 +232,107 @@ class VectorDB:
                     if len(results) >= limit: break
         return results
 
+    async def _search_remote(self, query: str, limit: int, min_score: float, tenant_id: Optional[str]) -> List[Dict[str, Any]]:
+        """Sovereign v15.1: High-Performance Remote Cluster Retrieval."""
+        import httpx
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                res = await client.post(
+                    f"{self.remote_url}/search",
+                    json={
+                        "query": query,
+                        "limit": limit,
+                        "min_score": min_score,
+                        "tenant_id": tenant_id or self.user_id,
+                        "collection": self.collection_name
+                    }
+                )
+                res.raise_for_status()
+                return res.json().get("results", [])
+        except Exception as e:
+            logger.error(f"[VectorDB-Remote] Search failed for {self.collection_name}: {e}")
+            return []
+
+    async def add(self, texts: List[str], metadatas: List[Dict[str, Any]]):
+        if not texts: return
+        
+        if self.remote_url:
+            await self._add_remote(texts, metadatas)
+            # We don't return here because we also want local cache to be updated if it exists
+        
+        if self._is_rebuilding:
+            logger.info(f"[VectorDB] Rebuild in progress for {self.collection_name}. Queuing write...")
+            self._write_queue.append((texts, metadatas))
+            return
+        
+        embeddings = []
+        from backend.db.vector_store import embed_text
+        for text in texts:
+            emb = await asyncio.to_thread(embed_text, text)
+            # L2-normalization for Inner Product (Cosine)
+            norm_emb = emb / np.linalg.norm(emb)
+            embeddings.append(norm_emb)
+        
+        emb_np = np.array(embeddings).astype('float32')
+        
+        async with self._lock:
+            if self.index:
+                self.index.add(emb_np)
+            # Store the text along with metadata
+            for i, text in enumerate(texts):
+                meta = metadatas[i].copy()
+                meta["text"] = text
+                self.metadata.append(meta)
+            self._save()
+
+    async def _add_remote(self, texts: List[str], metadatas: List[Dict[str, Any]]):
+        """Broadcasts vectors to the distributed Tier 3 cluster."""
+        import httpx
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                await client.post(
+                    f"{self.remote_url}/add",
+                    json={
+                        "texts": texts,
+                        "metadatas": metadatas,
+                        "collection": self.collection_name,
+                        "user_id": self.user_id
+                    }
+                )
+        except Exception as e:
+            logger.error(f"[VectorDB-Remote] Insertion failed for {self.collection_name}: {e}")
+
     async def remove_indices(self, indices: List[int], hard_delete: bool = False):
         """
         Sovereign v14.1.0: GDPR Compliance Pass.
         Marks vectors as deleted or triggers a hard-rebuild for immediate removal.
         """
         if not indices: return
+        
+        if self.remote_url:
+            # Propagate deletion to cluster
+            await self._remove_remote(indices)
+
+    async def _remove_remote(self, indices: List[int]):
+        """Sovereign v15.2: Propagates deletion indices to the distributed cluster."""
+        import httpx
+        try:
+            # We map indices to stable IDs (fact_id) if possible for better remote consistency
+            ids = [self.metadata[i]["fact_id"] for i in indices if i < len(self.metadata) and "fact_id" in self.metadata[i]]
+            if not ids: return
+
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                await client.post(
+                    f"{self.remote_url}/remove",
+                    json={
+                        "fact_ids": ids,
+                        "collection": self.collection_name,
+                        "user_id": self.user_id
+                    }
+                )
+        except Exception as e:
+            logger.error(f"[VectorDB-Remote] Deletion propagation failed for {self.collection_name}: {e}")
+
         async with self._lock:
             for idx in indices:
                 if 0 <= idx < len(self.metadata):

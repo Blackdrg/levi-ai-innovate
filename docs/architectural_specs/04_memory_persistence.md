@@ -18,36 +18,36 @@ graph TD
     
     Recon --> T1["T1: Redis KV (Episodic)"]
     Recon --> T2["T2: Postgres (Factual)"]
-    Recon --> T3["T3: Neo4j (Relational)"]
-    Recon --> T4["T4: FAISS (Semantic)"]
+    Recon --> T3["T3: Neo4j (Planned - Phase 3)"]
+    Recon --> T4["T4: FAISS (Planned - Phase 3)"]
 ```
 
 ---
 
-## 2. Tier Specifications (v14.1 Hardened)
+## 2. Tier Specifications (v15.0 Stabilization)
 
-### Tier 0 — Single Event Log (Source of Truth)
+### Tier 0 — Single Event Log (Source of Truth) [ACTIVE]
 - **Implementation**: Redis Stream (`memory:event_log`).
 - **Purpose**: Immutable ledger of all cognitive arrivals, interaction results, and profile changes.
 - **Integrity**: HMAC-SHA256 checksums per event.
 - **Retention**: 10,000 events (sliding window); archived to cold Postgres storage.
 
-### Tier 1 — Redis KV (Episodic Context)
+### Tier 1 — Redis KV (Episodic Context) [ACTIVE]
 - **Purpose**: Low-latency session history retrieval for real-time inference.
 - **Sync**: Derived from Tier 0.
 - **Durability**: AOF every-second.
 
-### Tier 2 — Postgres (Factual History)
+### Tier 2 — Postgres (Factual History) [ACTIVE]
 - **Purpose**: ACID-compliant long-term history and audit trails.
 - **Sync**: Derived from Tier 0 via background reconciliation.
 
-### Tier 3 — Neo4j (Relational Knowledge)
+### Tier 3 — Neo4j (Relational Knowledge) [ROADMAP - PHASE 3]
 - **Purpose**: Semantic entity-relationship mapping for knowledge graphing.
-- **Sync**: Derived from Tier 0 via extraction pipelines.
+- **Status**: Environment provisioning in progress.
 
-### Tier 4 — FAISS (Semantic Memory)
+### Tier 4 — FAISS (Semantic Memory) [ROADMAP - PHASE 3]
 - **Purpose**: Vector indices for similarity-based recall (RAG).
-- **Sync**: Derived from Tier 0 via embedding pipelines.
+- **Status**: Indexing pipeline in development.
 
 ---
 

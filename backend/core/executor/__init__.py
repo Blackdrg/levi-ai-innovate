@@ -18,7 +18,8 @@ from backend.broadcast_utils import SovereignBroadcaster, PULSE_NODE_COMPLETED
 from ...utils.network import ai_service_breaker
 from ...celery_app import celery_app
 from backend.core.agent_registry import AgentRegistry
-from ...agents.consensus_agent import ConsensusAgentV11
+from ..agent_config import AgentConfig
+from ...agents.consensus_agent import ConsensusAgentV14, ConsensusInput
 from ..agent_client import agent_client
 from ...utils.rate_limit import check_agent_limit
 from ...utils.sanitizer import ResultSanitizer
@@ -68,11 +69,13 @@ class GraphExecutor:
     - MAX_WAVES: 8
     - WARNING_THRESHOLD: 8
     """
-    MAX_MISSION_NODES = 15
-    MAX_WAVES = 8
-    WARNING_THRESHOLD = 8
-
-    def __init__(self, max_concurrent_nodes: int = 4):
+    MAX_MISSION_NODES = 25
+    def __init__(self, max_concurrent_nodes: int = None):
+        from backend.config.system import MAX_WAVES, MAX_CONCURRENT_NODES_PER_MISSION
+        self.MAX_WAVES = MAX_WAVES
+        if max_concurrent_nodes is None:
+            max_concurrent_nodes = MAX_CONCURRENT_NODES_PER_MISSION
+            
         self._node_breakers: Dict[str, Dict[str, float]] = {}
         self._wave_lock = asyncio.Lock()
         self._shutdown_event = asyncio.Event()
@@ -116,6 +119,23 @@ class GraphExecutor:
                         timeout=current_timeout
                     )
                     if result.success:
+                        # --- Engine 9: Record Success for Parameter Optimization ---
+                        await parameter_optimizer.record_mission_success(
+                            user_id=user_id,
+                            intent_type=perception.get("intent", {}).get("intent_type", "unknown"),
+                            parameters=merged_params,
+                            score=getattr(result, "fidelity", 1.0)
+                        )
+                        # --- Engine 7: Collect Evolution Metrics ---
+                        await self_monitor.collect_metrics(
+                            mission_id=mission_id,
+                            results={"user_id": user_id, "status": "success"},
+                            performance={
+                                "accuracy": getattr(result, "fidelity", 1.0),
+                                "latency": result.latency_ms,
+                                "tokens": getattr(result, "total_tokens", 0)
+                            }
+                        )
                         return result
                     raise Exception(result.error or "Agent execution reported failure.")
                 except asyncio.TimeoutError:
@@ -158,134 +178,171 @@ class GraphExecutor:
                             logger.error(f"❌ [Self-Healing] Replanning failed: {replan_err}")
                             return ToolResult(success=False, error=f"Agent failed and replan failed: {replan_err}", agent=original_agent)
         
+        # --- Engine 7: Final Failure Analysis ---
+        await failure_analyzer.analyze_failure(
+            mission_id=mission_id, 
+            error_trace=last_error, 
+            context={"failed_agent": node.agent, "node_id": node.id, "attempts": attempts}
+        )
         return ToolResult(success=False, error="Node execution failed after all self-healing attempts.", agent=original_agent)
 
     async def execute(self, graph: Any, perception: Dict[str, Any], user_id: str = "global", policy: Optional[Any] = None, safe_mode: bool = True) -> List[ToolResult]:
-
-
-        logger.info("[V13.1 Executor] Executing Task Graph...")
-        if hasattr(graph, "validate_dag"):
-            max_depth = getattr(getattr(policy, "budget", None), "max_dag_depth", None)
-            graph.validate_dag(max_depth=max_depth)
-            if hasattr(graph, "max_depth"):
-                MetricsHub.observe_dag_depth(graph.max_depth())
-        results: Dict[str, ToolResult] = {}
-        completed_ids: Set[str] = set()
-        
-        mission_id = perception.get("request_id") or "global"
-        blackboard = MissionBlackboard(mission_id)
-        
-        remaining_nodes = list(graph.nodes)
-        wave_count = 0
-        total_nodes_executed = 0
-        mission_sm = CentralExecutionState(mission_id)
-        compensation_coordinator = CompensationCoordinator(mission_id)
-        budget = getattr(policy, "budget", None)
-        budget_tracker = ExecutionBudgetTracker(
-            token_limit=getattr(budget, "token_limit", 200000),
-            tool_call_limit=getattr(budget, "tool_call_limit", 20),
-        )
-
-        
-        running_tasks: Dict[asyncio.Task, Any] = {}
-        
-        # 2. Identify and Schedule Executable Waves (Phase 2 Hardening)
-        waves = []
-        if hasattr(graph, "get_execution_waves"):
-            waves = graph.get_execution_waves()
-            logger.info(f"[Executor] Wave-Partitioning Success: {len(waves)} waves identified.")
-        
-        for wave_idx, wave_nodes in enumerate(waves):
-            # 1. Mission Cancellation / Abort Check
-            from backend.utils.mission import MissionControl
-            if MissionControl.is_cancelled(mission_id) or self._shutdown_event.is_set():
-                logger.warning(f"[Executor] Mission {mission_id} aborted before wave {wave_idx}.")
-                break
-
-            wave_count = wave_idx
-            wave_tasks = {}
+        async with traced_span("executor.execute", user_id=user_id, mission_id=perception.get("request_id")):
+            logger.info("[V13.1 Executor] Executing Task Graph...")
+            if hasattr(graph, "validate_dag"):
+                max_depth = getattr(getattr(policy, "budget", None), "max_dag_depth", None)
+                graph.validate_dag(max_depth=max_depth)
+                if hasattr(graph, "max_depth"):
+                    MetricsHub.observe_dag_depth(graph.max_depth())
+            results: Dict[str, ToolResult] = {}
+            completed_ids: Set[str] = set()
             
-            logger.info(f"[Executor] 🌊 Processing Wave {wave_idx} ({len(wave_nodes)} nodes)")
+            mission_id = perception.get("request_id") or "global"
+            mission_sm = CentralExecutionState(mission_id)
             
-            for node in wave_nodes:
-                pressure = capture_resource_pressure(len(running_tasks))
+            # --- 🛡️ Phase 8 Resilience: Recover Previous Wave Results ---
+            current_state = mission_sm.get_state()
+            if current_state and "nodes" in current_state:
+                for nid, nstate in current_state["nodes"].items():
+                    if nstate.get("status") == "completed":
+                        logger.info(f"♻️ [Executor] Recovering result for already completed node: {nid}")
+                        completed_ids.add(nid)
+                        # Reconstruct ToolResult from state
+                        last_event = next((e for e in nstate.get("events", []) if e.get("status") == "completed"), {})
+                        results[nid] = ToolResult(
+                            success=True, 
+                            message=last_event.get("info", {}).get("message", "Recovered"),
+                            agent=last_event.get("info", {}).get("agent", "unknown"),
+                            data=last_event.get("info", {}).get("data", {})
+                        )
+
+            blackboard = MissionBlackboard(mission_id)
+            
+            remaining_nodes = list(graph.nodes)
+            wave_count = 0
+            total_nodes_executed = 0
+            compensation_coordinator = CompensationCoordinator(mission_id)
+            budget = getattr(policy, "budget", None)
+            budget_tracker = ExecutionBudgetTracker(
+                token_limit=getattr(budget, "token_limit", 200000),
+                tool_call_limit=getattr(budget, "tool_call_limit", 20),
+            )
+
+            
+            running_tasks: Dict[asyncio.Task, Any] = {}
+            
+            # 2. Kernel-Driven DAG Validation & Pre-Computation (v15.1)
+            from backend.kernel.kernel_wrapper import kernel
+            if not kernel.validate_dag(mission_id):
+                logger.error(f"❌ [Executor] DAG Cycle Detected or Validation Failed (Kernel) for {mission_id}")
+                return []
+
+            # 3. Identify and Schedule Executable Waves (Phase 2 Hardening)
+            waves = []
+            if hasattr(graph, "get_execution_waves"):
+                waves = graph.get_execution_waves()
+                logger.info(f"[Executor] Wave-Partitioning Success: {len(waves)} waves identified (Kernel Validated).")
+            
+            for wave_idx, wave_nodes in enumerate(waves):
+                # 1. Mission Cancellation / Abort Check
+                from backend.utils.mission import MissionControl
+                if MissionControl.is_cancelled(mission_id) or self._shutdown_event.is_set():
+                    logger.warning(f"[Executor] Mission {mission_id} aborted before wave {wave_idx}.")
+                    break
+
+                wave_count = wave_idx
+                wave_tasks = {}
                 
-                # --- v14.2 Resource-Aware Admission Control ---
-                if pressure.ram_percent >= 90.0 or pressure.cpu_percent >= 90.0 or pressure.vram_pressure:
-                    logger.warning(f"[Shield] Resource Exhaustion Near. Waiting for wave to stabilize...")
-                    await asyncio.sleep(2.0)
+                logger.info(f"🌊 [Executor] Processing Wave {wave_idx} | Nodes: {len(wave_nodes)} | Resource Pressure: {capture_resource_pressure(len(running_tasks)).cpu_percent}%")
+                
+                for node in wave_nodes:
+                    if node.id in completed_ids:
+                        logger.info(f"⏭️ [Executor] Skipping completed node: {node.id}")
+                        continue
 
-                # formal lifecycle: SCHEDULED
-                node.state = NodeState.SCHEDULED
-                task = asyncio.create_task(
-                    self._execute_node_resilient(
-                        node, results, perception, blackboard=blackboard, 
-                        user_id=user_id, wave_count=wave_count, policy=policy, 
-                        mission_sm=mission_sm
+                    pressure = capture_resource_pressure(len(running_tasks))
+                    
+                    # --- v14.2 Resource-Aware Admission Control ---
+                    if pressure.ram_percent >= 90.0 or pressure.cpu_percent >= 90.0 or pressure.vram_pressure:
+                        logger.warning(f"[Shield] Resource Exhaustion Near. Waiting for wave to stabilize...")
+                        await asyncio.sleep(2.0)
+
+                    # formal lifecycle: SCHEDULED
+                    node.state = NodeState.SCHEDULED
+                    logger.info(f"🚀 [Executor] Dispatching agent: {node.agent} (Node: {node.id})")
+                    task = asyncio.create_task(
+                        self._execute_node_resilient(
+                            node, results, perception, blackboard=blackboard, 
+                            user_id=user_id, wave_count=wave_count, policy=policy, 
+                            mission_sm=mission_sm
+                        )
                     )
-                )
-                running_tasks[task] = node
-                wave_tasks[task] = node
-                budget_tracker.reserve_tool_calls(1)
-                total_nodes_executed += 1
-                logger.debug(f"[Executor] Scheduled wave-node {node.id}")
+                    running_tasks[task] = node
+                    wave_tasks[task] = node
+                    budget_tracker.reserve_tool_calls(1)
+                    total_nodes_executed += 1
 
-            # 3. Wait for current wave to finish before moving to the next
-            if wave_tasks:
-                done, _ = await asyncio.wait(wave_tasks.keys(), return_when=asyncio.ALL_COMPLETED)
-                
-                for task in done:
-                    node = running_tasks.pop(task)
-                    try:
-                        res = await task
-                        results[node.id] = res
-                        completed_ids.add(node.id)
-                        
-                        # Resilience & Billing logic
-                        if not res.success and node.critical:
-                            failure_type = await self._categorize_failure(res.error or "Unknown")
-                            if failure_type == "F-3": 
-                                 await billing_service.add_credits(user_id, amount=4.0)
+                # 3. Wait for current wave to finish before moving to the next
+                if wave_tasks:
+                    logger.debug(f"[Executor] Waiting for wave {wave_idx} quorum acknowledgment...")
+                    done, _ = await asyncio.wait(wave_tasks.keys(), return_when=asyncio.ALL_COMPLETED)
+                    
+                    for task in done:
+                        node = running_tasks.pop(task)
+                        try:
+                            res = await task
+                            results[node.id] = res
+                            completed_ids.add(node.id)
                             
-                            logger.error(f"[Resilience] Critical failure in wave {wave_idx} on {node.id}. Aborting.")
-                            await compensation_coordinator.compensate()
-                            return list(results.values())
-                        
-                        budget_tracker.add_tokens(node.agent, getattr(res, "total_tokens", 0))
-                    except Exception as e:
-                        logger.error(f"[Executor] Wave task crash: {e}")
-                        results[node.id] = ToolResult(success=False, error=str(e), agent=node.agent)
+                            # Resilience & Billing logic
+                            MetricsHub.observe_node(node.agent, node.id, res.latency_ms)
+                            if not res.success and node.critical:
+                                MetricsHub.record_alert("critical_node_failure", severity="critical")
+                                failure_type = await self._categorize_failure(res.error or "Unknown")
+                                if failure_type == "F-3": 
+                                     await billing_service.add_credits(user_id, amount=4.0)
+                                
+                                logger.error(f"[Resilience] Critical failure in wave {wave_idx} on {node.id}. Aborting.")
+                                await compensation_coordinator.compensate()
+                                return list(results.values())
+                            
+                            budget_tracker.add_tokens(node.agent, getattr(res, "total_tokens", 0))
+                            MetricsHub.record_token_usage(node.agent, getattr(res, "total_tokens", 0))
+                        except Exception as e:
+                            MetricsHub.record_alert("node_execution_crash", severity="critical")
+                            logger.error(f"[Executor] Wave task crash: {e}")
+                            results[node.id] = ToolResult(success=False, error=str(e), agent=node.agent)
 
-            if total_nodes_executed > self.MAX_MISSION_NODES:
-                logger.error(f"[Shield] Node limit reached. Aborting.")
-                break
+                if total_nodes_executed > self.MAX_MISSION_NODES:
+                    logger.error(f"[Shield] Node limit reached. Aborting.")
+                    break
+                    
+                # 4. Critical Path Failure Check
+                critical_failure = False
+                for n in wave_nodes:
+                    res = results.get(n.id)
+                    if not res: continue
+                    if not res.success and n.critical:
+                        critical_failure = True
+                        logger.warning("[V8 Executor] Critical task failure: %s", n.id)
+                        break
                 
-            # 4. Critical Path Failure Check
-            critical_failure = False
-            for n in wave_nodes:
-                res = results.get(n.id)
-                if not res: continue
-                if not res.success and n.critical:
-                    critical_failure = True
-                    logger.warning("[V8 Executor] Critical task failure: %s", n.id)
-                    break
-            
-            if critical_failure:
-                if safe_mode:
-                    break
-                safe_mode = True
-        # 5. DCN Synchrony (Audit Point 12)
-        if all(r.success for r in results.values()):
-            dcn = DCNProtocol()
-            if dcn.is_active:
-                # v14.1 Graduation: Use Raft-lite Mission Truth for confirmed outcomes
-                from backend.utils.runtime_tasks import create_tracked_task
-                create_tracked_task(
-                    dcn.broadcast_mission_truth(mission_id, {k: v.message for k, v in results.items()}), 
-                    name=f"dcn-truth-{mission_id}"
-                )
+                if critical_failure:
+                    if safe_mode:
+                        break
+                    safe_mode = True
+            # 5. DCN Synchrony (Audit Point 12)
+            if all(r.success for r in results.values()):
+                dcn = DCNProtocol()
+                if dcn.is_active:
+                    # v14.1 Graduation: Use Raft-lite Mission Truth for confirmed outcomes
+                    from backend.utils.runtime_tasks import create_tracked_task
+                    create_tracked_task(
+                        dcn.broadcast_mission_truth(mission_id, {k: v.message for k, v in results.items()}), 
+                        name=f"dcn-truth-{mission_id}"
+                    )
 
-        return list(results.values())
+            return list(results.values())
 
     async def _execute_node(self, node: Any, previous_results: Dict[str, ToolResult], perception: Dict[str, Any], blackboard: MissionBlackboard = None, user_id: str = "global", wave_count: int = 0, policy: Optional[Any] = None, mission_sm: Optional[CentralExecutionState] = None) -> ToolResult:
         """Executes a single node with template-resolved inputs, retries and fallbacks."""
@@ -312,12 +369,18 @@ class GraphExecutor:
         # 1. Input Resolution ({{task_id.result}})
         resolved_inputs = self._resolve_inputs(node.inputs, previous_results)
         
+        # --- Engine 9: Apply Optimal Parameters ---
+        optimized_params = await parameter_optimizer.get_optimal_parameters(
+            user_id=user_id,
+            intent_type=perception.get("intent", {}).get("intent_type", "unknown")
+        )
         # 2. Parameter Synthesis
         merged_params = {
             **perception.get("context", {}), 
             **resolved_inputs, 
+            **optimized_params,
             "input": perception.get("input"),
-            "__blackboard__": blackboard.serialize() if blackboard else "" # Injected compressed swarm state
+            "__blackboard__": blackboard.serialize() if blackboard else ""
         }
         strict_schema = bool(
             getattr(node, "strict_schema", True)
@@ -428,12 +491,6 @@ class GraphExecutor:
                     # --- v14.2 Sub-DAG Caching ---
                     # (Cache logic remains...)
 
-                    is_fragile = getattr(node, "is_fragile", False) or getattr(node, "high_friction", False)
-                    # (Consensus logic remains...)
-
-                    timeout = 15
-                    # (Timeout logic remains...)
-
                     # 3. Agent Dispatch Selection (v15.0 registry-aware)
                     agent_config = AgentRegistry.get_agent(agent_name)
                     
@@ -476,6 +533,22 @@ class GraphExecutor:
 
                         # Wrap execution with Circuit Breaker
                         result = await breaker.call(_do_call)
+
+                    # ⚖️ ENGINE 10: SWARM ADJUDICATION (Self-Verification for Fragile Nodes)
+                    is_fragile = getattr(node, "is_fragile", False) or getattr(node, "high_friction", False)
+                    if result.success and is_fragile:
+                        logger.info(f"⚖️ [Consensus] Triggering Swarm Adjudication for fragile node: {node.id}")
+                        from backend.agents.consensus_agent import ConsensusAgentV14
+                        consensus_agent = ConsensusAgentV14()
+                        # Verify the single result against HardRules and factual grounding
+                        consensus_res = await consensus_agent._run(ConsensusInput(
+                            goal=node.description,
+                            candidates=[result],
+                            context=perception
+                        ))
+                        result.confidence = consensus_res.get("score", result.confidence)
+                        result.message = consensus_res.get("message", result.message)
+                        result.data["consensus_audit"] = consensus_res.get("data")
 
                     if result.success:
                         # --- Step 6.1: Observability & Security Scrubbing ---

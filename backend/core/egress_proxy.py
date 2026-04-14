@@ -7,9 +7,14 @@ import logging
 import httpx
 from urllib.parse import urlparse
 
+import os
+
 logger = logging.getLogger(__name__)
 
-ALLOWED_EGRESS_DOMAINS = {
+# v15.1: Dynamic Sovereign Egress Control
+SOVEREIGN_MODE = os.getenv("SOVEREIGN_MODE", "true").lower() == "true"
+
+ALLOWED_EGRESS_DOMAINS = set() if SOVEREIGN_MODE else {
     "api.tavily.com",       # Search API
     "serpapi.com",          # Alt search
     # Everything else is BLOCKED by default

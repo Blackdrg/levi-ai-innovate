@@ -39,9 +39,51 @@ class SovereignShield:
         return masked_text
 
     @staticmethod
-    def demask_pii(text: str, original_map: Dict[str, str]) -> str:
+    def encrypt_pulse(payload: dict, secret: str, aad: str = "") -> str:
         """
-        Optional: Restores original values (for internal history/persistence).
+        Sovereign v15.0 GA: AES-256-GCM Pulse Encryption with AAD.
+        Ensures inter-node mission data is private and bound to its metadata.
         """
-        # Logic for maintaining a local demasking map if needed in Phase 8
-        return text
+        import json
+        import base64
+        import hashlib
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+        import os
+
+        # Derive a 32-byte key from the DCN secret
+        key = hashlib.sha256(secret.encode()).digest()
+        aesgcm = AESGCM(key)
+        nonce = os.urandom(12)
+        
+        data = json.dumps(payload).encode()
+        # Bind the AAD to the ciphertext
+        ciphertext = aesgcm.encrypt(nonce, data, aad.encode() if aad else None)
+        
+        # Format: base64(nonce + ciphertext)
+        return base64.b64encode(nonce + ciphertext).decode()
+
+    @staticmethod
+    def decrypt_pulse(encrypted_data: str, secret: str, aad: str = "") -> dict:
+        """
+        Sovereign v15.0 GA: AES-256-GCM Pulse Decryption with AAD verification.
+        """
+        import json
+        import base64
+        import hashlib
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+        try:
+            key = hashlib.sha256(secret.encode()).digest()
+            aesgcm = AESGCM(key)
+            raw = base64.b64decode(encrypted_data)
+            
+            nonce = raw[:12]
+            ciphertext = raw[12:]
+            
+            decrypted = aesgcm.decrypt(nonce, ciphertext, aad.encode() if aad else None)
+            return json.loads(decrypted.decode())
+        except Exception as e:
+            logger.error(f"[Shield] Decryption failure: {e}")
+            return {}
+
+import hashlib

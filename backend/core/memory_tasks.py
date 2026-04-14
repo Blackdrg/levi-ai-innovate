@@ -127,24 +127,36 @@ def distill_user_memories(self, user_id: str):
 )
 def dream_all_users(self):
     """
-    Discovery loop for users ready for dreaming.
+    Discovery loop for users ready for dreaming (Distillation).
+    Now fallback to Postgres activity if Redis flags are missing.
     """
     redis_client, has_redis = _get_redis()
-    if not has_redis or redis_client is None: return {"scheduled": 0}
-
     scheduled = 0
+
     try:
-        cursor = 0
-        while True:
-            cursor, keys = redis_client.scan(cursor, match="user:*:dream_ready", count=100)
-            for key in keys:
-                key_str = key.decode() if isinstance(key, bytes) else key
-                parts = key_str.split(":")
-                if len(parts) >= 2:
-                    uid = parts[1]
-                    distill_user_memories.delay(uid)
-                    scheduled += 1
-            if cursor == 0: break
+        import asyncio
+        async def fetch_uids():
+            if has_redis and redis_client:
+                cursor = 0
+                keys = []
+                while True:
+                    cursor, batch = redis_client.scan(cursor, match="user:*:dream_ready", count=100)
+                    for k in batch: keys.append(k)
+                    if cursor == 0: break
+                if keys:
+                    return [k.decode().split(":")[1] for k in keys if isinstance(k, bytes)]
+
+            # Fallback to recent mission activity
+            async with PostgresDB._session_factory() as session:
+                from sqlalchemy import select
+                stmt = select(Mission.user_id).distinct().limit(50)
+                res = await session.execute(stmt)
+                return res.scalars().all()
+
+        uids = asyncio.run(fetch_uids())
+        for uid in uids:
+            distill_user_memories.delay(uid)
+            scheduled += 1
                 
         return {"scheduled": scheduled}
     except Exception as e:
@@ -174,4 +186,48 @@ def run_global_maintenance(self):
         return {"scheduled": len(uids)}
     except Exception as e:
         logger.error(f"[Maintenance] Sweep drift: {e}")
+        return {"error": str(e)}
+
+@celery_app.task(
+    name="backend.core.memory_tasks.run_survival_hygiene",
+    bind=True,
+)
+def run_survival_hygiene(self):
+    """
+    Sovereign v15: Resonance Survival Hygiene.
+    Prunes low-resonance noise using the non-linear decay engine.
+    """
+    import asyncio
+    from backend.memory.resonance import MemoryResonance
+    
+    async def process_hygiene():
+        from sqlalchemy import select
+        from backend.db.postgres_db import get_read_session
+        async with get_read_session() as session:
+            stmt = select(UserFact.user_id).distinct().limit(200)
+            res = await session.execute(stmt)
+            uids = res.scalars().all()
+            
+        for uid in uids:
+            try:
+                # 1. Fetch current facts
+                facts = await SovereignVectorStore.get_all_facts(uid)
+                if not facts: continue
+                
+                # 2. Apply Decay (Resonance Filter)
+                filtered = MemoryResonance.apply_decay(facts)
+                
+                # 3. If pruning occurred, update Vector Store
+                if len(filtered) < len(facts):
+                    logger.info(f"✨ [Resonance] Pruned {len(facts) - len(filtered)} faded memories for {uid}")
+                    await SovereignVectorStore.sync_from_facts(uid, filtered)
+                    
+            except Exception as e:
+                logger.error(f"[Resonance] Hygiene failure for {uid}: {e}")
+
+    try:
+        asyncio.run(process_hygiene())
+        return {"status": "hygiene_complete"}
+    except Exception as e:
+        logger.error(f"[Maintenance] Resonance sweep failed: {e}")
         return {"error": str(e)}

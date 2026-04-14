@@ -6,7 +6,12 @@ metadata:
     app: levi-api
     tier: brain
 spec:
-  replicas: 2
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app: levi-api
@@ -17,7 +22,7 @@ spec:
     spec:
       containers:
       - name: api
-        image: gcr.io/levi-sovereign/api:v14.1.0
+        image: gcr.io/levi-sovereign/api:v16.0.0-GA
         ports:
         - containerPort: 8000
         envFrom:
@@ -25,23 +30,23 @@ spec:
             name: levi-secrets
         resources:
           requests:
-            cpu: "500m"
-            memory: "1Gi"
+            cpu: "1000m"
+            memory: "2Gi"
           limits:
-            cpu: "2000m"
-            memory: "4Gi"
+            cpu: "4000m"
+            memory: "8Gi"
         livenessProbe:
           httpGet:
             path: /healthz
             port: 8000
-          initialDelaySeconds: 30
-          periodSeconds: 15
+          initialDelaySeconds: 45
+          periodSeconds: 20
         readinessProbe:
           httpGet:
-            path: /api/v1/orchestrator/health/readiness
+            path: /readyz
             port: 8000
-          initialDelaySeconds: 10
-          periodSeconds: 10
+          initialDelaySeconds: 15
+          periodSeconds: 15
 
 ---
 apiVersion: autoscaling/v2
@@ -50,26 +55,38 @@ metadata:
   name: levi-api-hpa
 spec:
   scaleTargetRef:
-    apiUint: apps/v1
+    apiVersion: apps/v1
     kind: Deployment
     name: levi-api
-  minReplicas: 2
-  maxReplicas: 10
+  minReplicas: 3
+  maxReplicas: 50
   metrics:
   - type: Resource
     resource:
       name: cpu
       target:
         type: Utilization
-        averageUtilization: 70
+        averageUtilization: 65
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 75
 
 ---
-apiVersion: policy/v1
-kind: PodDisruptionBudget
+apiVersion: v1
+kind: Service
 metadata:
-  name: levi-api-pdb
+  name: levi-api-lb
+  annotations:
+    networking.gke.io/load-balancer-type: "External"
+    cloud.google.com/l4-rbs: "enabled" # Enable Global Load Balancing
 spec:
-  minAvailable: 1
+  type: LoadBalancer
   selector:
-    matchLabels:
-      app: levi-api
+    app: levi-api
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8000

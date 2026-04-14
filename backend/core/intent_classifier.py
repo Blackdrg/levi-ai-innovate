@@ -5,6 +5,7 @@ Combines rule-based, embedding-based, and ML-based models for >95% accuracy.
 
 import logging
 import re
+import asyncio
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 
@@ -72,6 +73,20 @@ class HybridIntentClassifier:
         """Entry point for hybrid classification."""
         text = user_input.lower().strip()
         
+        # Layer 0: Levi-AI Rust Kernel (Ultra-Fast Path)
+        from backend.kernel.kernel_wrapper import kernel
+        kernel_intent = kernel.classify_intent(text)
+        if kernel_intent:
+            logger.info(f"🚀 [Kernel] Intent classified: {kernel_intent}")
+            # Mocking IntentResult based on kernel output
+            return IntentResult(
+                intent_type=kernel_intent,
+                complexity_level=1, # Default for fast-path
+                estimated_cost_weight="low",
+                confidence_score=0.99,
+                is_sensitive=False
+            )
+
         # Layer 1: Rule-based (Fast Path)
         rule_match = self._match_rules(text)
         if rule_match:

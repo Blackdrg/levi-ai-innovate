@@ -52,10 +52,16 @@ class DiagnosticAgent(SovereignAgent[DiagnosticInput, AgentResult]):
 
         status = health.get("status", "unknown")
         
+        # Engagement: Metrics Analysis (v15.0 Hardening)
+        from backend.utils.analyzer import analyze_execution_metrics
+        metrics = await analyze_execution_metrics()
+        
         system_prompt = (
-            "You are the LEVI Sovereign Diagnostic Agent. Analyze the health pulse of the AI OS.\n"
-            f"Current Metrics: {json.dumps(health)}\n"
-            "Provide a concise Root Cause Analysis and recommended Sovereign mitigation if anomalies exist."
+            "You are the LEVI Sovereign Diagnostic Agent. Analyze the health pulse and cognitive efficiency of the AI OS.\n"
+            f"Health Pulse: {json.dumps(health)}\n"
+            f"Cognitive Metrics: {json.dumps(metrics)}\n\n"
+            "Provide a concise Root Cause Analysis and recommended Sovereign mitigation if anomalies exist.\n"
+            "If the LLM Rate is high (>40%), prioritize 'Self-Mutation' of fragile engines."
         )
         
         # Synthesize the health report using the local LLM
@@ -72,6 +78,7 @@ class DiagnosticAgent(SovereignAgent[DiagnosticInput, AgentResult]):
             "message": f"Neural Link Health: {status.upper()}.\n\n{analysis}",
             "data": {
                 "health": health,
+                "metrics": metrics,
                 "critical_anomalies": issues,
                 "healing_status": "engaged" if issues else "nominal",
                 "repairs_attempted": issues

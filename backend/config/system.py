@@ -11,7 +11,10 @@ ARCHITECTURE_FREEZE = {
 }
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 
-TIERS = {
+# 🛡️ Graduation #29: Sovereign Operational Mode
+# When True, the system enters 'Dark Mode': Blocks all external search/LLM egress 
+# and enforces 100% local cognitive processing via Ollama/llama-cpp and internal RAG.
+SOVEREIGN_MODE = os.getenv("SOVEREIGN_MODE", "true").lower() == "true"
     "guest": {
         "daily_limit": 0, 
         "priority": 0, 
@@ -57,6 +60,9 @@ REDIS_APPENDFSYNC = "everysec"
 FAILURE_THRESHOLD = 5
 RETRY_DELAY = 2.0
 CLOUD_FALLBACK_ENABLED = os.getenv("CLOUD_FALLBACK_ENABLED", "false").lower() == "true"
+MAX_CONCURRENT_MISSIONS = int(os.getenv("MAX_CONCURRENT_MISSIONS", "5000"))
+MAX_WAVES = int(os.getenv("MAX_WAVES", "12"))
+MAX_CONCURRENT_NODES_PER_MISSION = int(os.getenv("MAX_CONCURRENT_NODES_PER_MISSION", "8"))
 
 # Cognitive Safety Gates
 # Calibrated via 'calibrate_cu.py' script. 

@@ -4,8 +4,8 @@ import { StatusBar } from 'expo-status-bar';
 import { Brain, Send, Activity, ShieldCheck } from 'lucide-react-native';
 import axios from 'axios';
 
-// Sovereign API Endpoint (Default local dev)
-const API_URL = "http://localhost:8000/api/v13/orchestrator/mission";
+// Sovereign API Endpoint (v15.2 Hardened)
+const API_URL = "http://localhost:8000/api/v1/orchestrator/mission";
 
 export default function App() {
   const [input, setInput] = useState('');

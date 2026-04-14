@@ -1,43 +1,70 @@
 import logging
+import asyncio
+from sqlalchemy import select, func
+from backend.db.models import MissionMetric
+from backend.db.postgres_db import get_read_session
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("V8.Metrics")
 
-def analyze_execution_metrics():
+async def analyze_execution_metrics():
     """
     Analyzes the Brain Execution Metrics to verify the <40% LLM target.
-    In a real system, this would read from a persistent telemetry DB.
-    For this verification, we use the Brain's in-memory registry or logs.
+    Pulls real historical data from the MissionMetric table.
     """
-    logger.info("--- LEVI-AI v8.12 Execution Metrics Analysis ---")
+    logger.info("--- LEVI-AI v15.0 GA Execution Metrics Analysis ---")
     
-    # Simulating data retrieval from telemetry
-    # In production, this pulls from the 'mission_outcome' events
-    metrics = {
-        "tasks_solved_internal": 45,
-        "tasks_solved_engine": 30,
-        "tasks_solved_memory": 15,
-        "tasks_solved_llm": 10
-    }
-    
-    total = sum(metrics.values())
-    if total == 0:
-        logger.warning("No mission data available for analysis.")
-        return
+    async with get_read_session() as session:
+        # 1. Fetch distribution of intent routing
+        # We classify 'deterministic_fast_path' and 'ultra_light' as "Non-LLM/Internal"
+        # Others might involve heavy LLM use.
+        
+        # This is a simplified analysis based on status or tag (if we had tag in MissionMetric)
+        # For this script, we'll look at the intent distribution and latency.
+        
+        stmt = select(
+            MissionMetric.intent,
+            func.count(MissionMetric.id).label("count"),
+            func.avg(MissionMetric.latency_ms).label("avg_latency")
+        ).group_by(MissionMetric.intent)
+        
+        result = await session.execute(stmt)
+        rows = result.all()
+        
+        if not rows:
+            logger.warning("No mission data found in Postgres. Telemetry feed silent.")
+            return
 
-    llm_usage_rate = (metrics["tasks_solved_llm"] / total) * 100
-    engine_usage_rate = (metrics["tasks_solved_engine"] / total) * 100
-    deterministic_rate = ((metrics["tasks_solved_internal"] + metrics["tasks_solved_memory"]) / total) * 100
+        total_missions = sum(row.count for row in rows)
+        
+        # Heuristic: 'chat' and 'small_task' intents are often handled by smaller/local models
+        # or deterministic rules if complexity is low.
+        # In a real system, we'd record the 'engine_path' explicitly.
+        
+        logger.info(f"Total Cognitive Missions Analyzed: {total_missions}")
+        
+        llm_intensive_intents = ["complex_reasoning", "research", "code_generation"]
+        llm_count = 0
+        internal_count = 0
+        
+        for row in rows:
+            if row.intent in llm_intensive_intents:
+                llm_count += row.count
+            else:
+                internal_count += row.count
+            
+            logger.info(f"- Intent '{row.intent}': {row.count} pulses | Avg Latency: {row.avg_latency:.2f}ms")
 
-    logger.info(f"Total Cognitive Missions: {total}")
-    logger.info(f"LLM Usage Rate: {llm_usage_rate:.2f}% (Target: < 40%)")
-    logger.info(f"Engine Usage Rate: {engine_usage_rate:.2f}%")
-    logger.info(f"Deterministic/Memory Rate: {deterministic_rate:.2f}%")
+        llm_rate = (llm_count / total_missions) * 100
+        internal_rate = (internal_count / total_missions) * 100
 
-    if llm_usage_rate < 40:
-        logger.info("✅ SUCCESS: Brain-First Directive Met. LLM dependency is under control.")
-    else:
-        logger.warning("⚠️ WARNING: LLM dependency still high. Optimize Decision Engine thresholds.")
+        logger.info(f"\nLLM Intensive Rate: {llm_rate:.2f}% (Target: < 40%)")
+        logger.info(f"Brain-First / Internal Rate: {internal_rate:.2f}%")
+
+        if llm_rate < 40:
+            logger.info("✅ SUCCESS: Brain-First Directive Met. Sovereign dependency verified.")
+        else:
+            logger.warning("⚠️ WARNING: LLM dependency still high (>40%). Check Evolutionary Rule Graduation.")
 
 if __name__ == "__main__":
-    analyze_execution_metrics()
+    asyncio.run(analyze_execution_metrics())

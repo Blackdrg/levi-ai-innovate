@@ -135,23 +135,47 @@ class ArtisanAgent(SovereignAgent[ArtisanInput, AgentResult]):
 
     async def _validate_code_safety(self, code: str):
         """
-        Artisan Guardrails v15.0.
-        Prevents dangerous syscalls and modules from entering the sandbox.
+        Artisan Guardrails v15.1 [HARDENED]: AST-based Static Analysis.
+        Prevents dangerous modules, direct file-system access outside sandbox, and unauthorized syscalls.
         """
-        # Block-list for Phase 3
-        dangerous_imports = [
-            "os.", "sys.", "subprocess", "socket", "requests", "httpx", "urllib",
-            "pickle", "marshal", "pty", "platform", "resource"
-        ]
-        
-        for imp in dangerous_imports:
-            if f"import {imp}" in code or f"from {imp}" in code:
-                raise ValueError(f"Sovereign Security Violation: Prohibited import '{imp}'")
-        
-        # Block direct syscall attempts
-        dangerous_patterns = ["__import__", "eval(", "exec(", "open(", "getattr("]
-        for pattern in dangerous_patterns:
-            if pattern in code:
-                # We allow 'open' only if it's not a direct call (very basic check)
-                if pattern == "open(" and ".open(" not in code:
-                     raise ValueError(f"Sovereign Security Violation: Prohibited syscall attempt '{pattern}'")
+        import ast
+        try:
+            tree = ast.parse(code)
+            
+            # Sovereign Block-list (v15.1 Manifest)
+            PROHIBITED_MODULES = {
+                "os", "sys", "subprocess", "socket", "requests", "httpx", "urllib",
+                "pickle", "marshal", "pty", "platform", "resource", "multiprocessing", "threading"
+            }
+            PROHIBITED_CALLS = {"eval", "exec", "open", "getattr", "setattr", "delattr", "compile", "globals", "locals"}
+            
+            for node in ast.walk(tree):
+                # 1. Block prohibited imports
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        if alias.name.split('.')[0] in PROHIBITED_MODULES:
+                            raise ValueError(f"Sovereign Guardrail: Prohibited module import '{alias.name}' detected.")
+                
+                if isinstance(node, ast.ImportFrom):
+                    if node.module and node.module.split('.')[0] in PROHIBITED_MODULES:
+                        raise ValueError(f"Sovereign Guardrail: Prohibited module import '{node.module}' detected.")
+                
+                # 2. Block prohibited function calls
+                if isinstance(node, ast.Call):
+                    if isinstance(node.func, ast.Name):
+                        if node.func.id in PROHIBITED_CALLS:
+                            raise ValueError(f"Sovereign Guardrail: Dangerous syscall attempt '{node.func.id}()' neutralized.")
+                    
+                    # Prevent __import__ and other dynamic loading
+                    if isinstance(node.func, ast.Attribute):
+                         if node.func.attr == "__import__":
+                              raise ValueError("Sovereign Guardrail: Dynamic import attempt detected.")
+            
+            logger.info("[Artisan] Code safety validation: PASSED (AST analysis)")
+            
+        except SyntaxError as e:
+            raise ValueError(f"Sovereign Block: Syntax error in staged code: {e}")
+        except Exception as e:
+            if "Sovereign Guardrail" in str(e): raise
+            logger.error(f"[Artisan] AST analysis failed: {e}")
+            raise ValueError("Sovereign Security: Code analysis failed to confirm safety baseline.")

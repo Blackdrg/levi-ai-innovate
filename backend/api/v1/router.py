@@ -14,6 +14,7 @@ from backend.api.marketplace import router as marketplace_router
 from backend.api.v1.voice import router as voice_router
 from backend.api.telemetry import router as telemetry_router
 from backend.api.v1.evolution import router as evolution_router
+from backend.api.v1.perception import router as perception_router
 
 
 router = APIRouter()
@@ -30,5 +31,6 @@ router.include_router(monitor_router, prefix="/monitor")
 router.include_router(studio_router, prefix="/studio")
 router.include_router(marketplace_router, prefix="/marketplace")
 router.include_router(telemetry_router, prefix="/telemetry")
-router.include_router(evolution_router, prefix="/evolution")
+# router.include_router(evolution_router, prefix="/evolution") # Disabled in Phase 0
+router.include_router(perception_router, prefix="/perception")
 

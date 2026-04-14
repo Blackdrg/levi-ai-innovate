@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package dcn;
+
+service DCNGossipService {
+    // Standard unary call for P2P gossip pulses
+    rpc PublishPulse (PulseRequest) returns (PulseResponse);
+    
+    // Stream heartbeats for active discovery
+    rpc HeartbeatStream (stream Heartbeat) returns (HeartbeatSummary);
+}
+
+message PulseRequest {
+    string payload = 1; // JSON serialized DCNPulse
+    string signature = 2; // HMAC-SHA256 signature
+}
+
+message PulseResponse {
+    bool success = 1;
+    string message = 2;
+}
+
+message Heartbeat {
+    string node_id = 1;
+    string region = 2;
+    double timestamp = 3;
+    uint32 term = 4;
+}
+
+message HeartbeatSummary {
+    uint32 active_peers = 1;
+}

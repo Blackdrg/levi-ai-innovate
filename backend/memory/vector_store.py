@@ -266,6 +266,45 @@ class SovereignVectorStore:
                 logger.info(f"[VectorStore] Fact {fact_id} marked for deletion in {user_id}'s memory.")
         except Exception as e:
     @staticmethod
+    async def get_all_facts(user_id: str) -> List[Dict[str, Any]]:
+        """
+        Sovereign v15.1: Full semantic retrieval for resonance hygiene.
+        Directly pulls the metadata array for the user's local FAISS index.
+        """
+        user_memory = await SovereignVectorStore.get_user_memory(user_id)
+        if not user_memory.metadata:
+            return []
+        
+        # We return deep copies to prevent side-effects during decay processing
+        import copy
+        return [copy.deepcopy(m) for m in user_memory.metadata if not m.get("deleted")]
+
+    @staticmethod
+    async def sync_from_facts(user_id: str, facts: List[Dict[str, Any]]):
+        """
+        Sovereign v15.1: Atomic Semantic Hard-Sync.
+        Used by the hygiene engine to commit pruned resonance patterns.
+        """
+        logger.info(f"🔄 [VectorStore] Hard-syncing resonance truth for {user_id} ({len(facts)} atoms)...")
+        user_memory = await SovereignVectorStore.get_user_memory(user_id)
+        
+        texts = []
+        metadatas = []
+        for f in facts:
+            # We need the raw text to rebuild the index
+            text = f.get("text")
+            if text:
+                texts.append(text)
+                metadatas.append(f)
+        
+        # Perform atomic hard-rebuild
+        await user_memory.clear()
+        if texts:
+            await user_memory.add(texts, metadatas)
+        
+        logger.info(f"✨ [VectorStore] Resonance hygiene complete for {user_id}.")
+
+    @staticmethod
     async def clear_user_memory(user_id: str):
         """Absolute wipe of a user's semantic local cache."""
         try:

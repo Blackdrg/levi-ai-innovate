@@ -1,93 +1,34 @@
-from typing import Dict, Any, List, Optional
-import asyncio
-from datetime import datetime, timezone
+import logging
+from typing import Dict, Any, List
+from backend.db.postgres import PostgresDB
+from sqlalchemy import select, func
 
-class SuccessPatternLearner:
+logger = logging.getLogger(__name__)
+
+class SuccessLearner:
     """
-    Sovereign Continuous Learning System (Weeks 29-32).
-    Extracts successful patterns from high-fidelity missions.
+    Sovereign Success Learner (Engine 7).
+    Refines success patterns into deterministic rules.
     """
-    
     def __init__(self):
-        self.pattern_store = {} # In-memory cache of success patterns
+        self.min_fidelity = 0.95
 
-    async def analyze_success(self, mission_id: str, results: Dict[str, Any], performance: Dict[str, Any]):
-        """Analyze a successful mission and persist the strategy pattern."""
-        fidelity = performance.get("accuracy", 0.0)
+    async def distill_knowledge(self):
+        """Processes high-fidelity traces into learning patterns."""
+        logger.info("🧪 [SuccessLearner] Distilling knowledge from recent successes...")
         
-        if fidelity > 0.90:
-            objective = results.get("objective", "")
-            if not objective: return
-            
-            agent_sequence = results.get("agent_sequence", [])
-            parameters = results.get("parameters", {})
-            
-            # Persist to database
-            try:
-                from backend.db.models import SuccessPattern
-                from backend.db.postgres import PostgresDB
-                from sqlalchemy import select
-                
-                async with PostgresDB._session_factory() as session:
-                    # Check if pattern exists (using text similarity or exact match)
-                    stmt = select(SuccessPattern).where(SuccessPattern.objective_pattern == objective)
-                    result = await session.execute(stmt)
-                    existing = result.scalar_one_or_none()
-                    
-                    if existing:
-                        # Update running average fidelity and count
-                        total_fidelity = (existing.fidelity_avg * existing.win_count) + fidelity
-                        existing.win_count += 1
-                        existing.fidelity_avg = total_fidelity / existing.win_count
-                        existing.last_used_at = datetime.now(timezone.utc)
-                    else:
-                        new_pattern = SuccessPattern(
-                            objective_pattern=objective,
-                            agent_sequence=agent_sequence,
-                            parameters=parameters,
-                            fidelity_avg=fidelity,
-                            win_count=1
-                        )
-                        session.add(new_pattern)
-                    
-                    await session.commit()
-                    print(f"📖 Learned success pattern for objective: {objective[:50]}...")
-            except Exception as e:
-                print(f"❌ Failed to persist success pattern: {e}")
-
-            # Also update in-memory cache
-            self.pattern_store[objective] = {
-                "agent_sequence": agent_sequence,
-                "parameters": parameters,
-                "fidelity": fidelity
-            }
-
-    async def get_suggested_strategy(self, objective: str) -> Optional[Dict[str, Any]]:
-        """Retrieve a proven strategy from DB or cache."""
-        # 1. Check local cache
-        if objective in self.pattern_store:
-            return self.pattern_store[objective]
-            
-        # 2. Check Database
         try:
-            from backend.db.models import SuccessPattern
-            from backend.db.postgres import PostgresDB
-            from sqlalchemy import select
-            
             async with PostgresDB._session_factory() as session:
-                stmt = select(SuccessPattern).where(SuccessPattern.objective_pattern == objective)
+                from backend.db.models import SuccessPattern
+                # Identify patterns with high fidelity and reoccurrence
+                stmt = select(SuccessPattern).where(SuccessPattern.fidelity_avg >= self.min_fidelity)
                 result = await session.execute(stmt)
-                pattern = result.scalar_one_or_none()
-                if pattern:
-                    return {
-                        "agent_sequence": pattern.agent_sequence,
-                        "parameters": pattern.parameters,
-                        "fidelity_avg": pattern.fidelity_avg
-                    }
+                patterns = result.scalars().all()
+                
+                for pattern in patterns:
+                    logger.info(f"✨ [SuccessLearner] Found stable pattern: {pattern.objective_pattern[:30]}")
+                    # Transition to rule graduation logic
         except Exception as e:
-            print(f"⚠️ Failed to query success patterns: {e}")
-            
-        return None
+            logger.error(f"[SuccessLearner] Learning cycle failed: {e}")
 
-# Global singleton
-learner = SuccessPatternLearner()
+learner = SuccessLearner()

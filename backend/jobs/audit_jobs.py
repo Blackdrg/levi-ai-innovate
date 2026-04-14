@@ -43,7 +43,36 @@ async def enforce_audit_retention():
         
         logger.info(f"[AuditJobs] Pruned {pruned_count} expired audit records.")
         
+async def shadow_audit_graduated_rules():
+    """
+    Nightly Proactive Audit (v15.0 GA).
+    Selects successful graduated rules and audits them against fresh LLM reasoning.
+    Ensures that "fast-path" logic remains consistent with the latest cognitive standards.
+    """
+    logger.info("[AuditJobs] Initiating proactive Shadow Audit sweep...")
+    from backend.db.models import GraduatedRule
+    from backend.db.postgres_db import get_read_session
+    from backend.core.orchestrator import _orchestrator
+    from sqlalchemy import select
+    
+    async with get_read_session() as session:
+        # Audit top 5 most recently used rules
+        stmt = select(GraduatedRule).order_by(GraduatedRule.last_used_at.desc()).limit(5)
+        rules = (await session.execute(stmt)).scalars().all()
+        
+        for rule in rules:
+            logger.info(f"[AuditJobs] Proactively auditing Rule ID: {rule.id}")
+            # Mocking a characteristic input if none stored, or use actual historical input
+            # In a full impl, we'd pull from mission_metrics.
+            # Here we follow the logic in orchestrator._perform_shadow_audit
+            await _orchestrator._perform_shadow_audit(
+                request_id=f"audit_{rule.id}",
+                user_input=rule.task_pattern, # Pattern as input for verification
+                rule_id=rule.id
+            )
+
 async def run_daily_compliance_sweep():
     """Entry point for Celery scheduler."""
     await nightly_audit_integrity_check()
     await enforce_audit_retention()
+    await shadow_audit_graduated_rules()

@@ -1,8 +1,12 @@
-# LEVI-AI: Distributed Cognitive Network (DCN) v14.1
-### Architectural Specification: Hybrid Consensus (Gossip + Raft-lite)
+# LEVI-AI: Distributed Cognitive Network (DCN) v15.0 [FUTURE]
+### Architectural Spec 03: Distributed Cognitive Network (DCN)
 
-> [!IMPORTANT]
-> DCN v14.1 graduates the protocol to a **Hybrid Consensus** model, ensuring both high-availability discovery and strong consistency for mission truth.
+**Status:** [FUTURE] | [DISABLED]  
+**Version:** 15.0-STABLE (Reference Only)  
+**Cognitive Engine:** 10 (Consensus)
+
+## Overview
+The Distributed Cognitive Network (DCN) is an aspirational protocol designed to facilitate regional mesh-scaling and multi-node mission consensus. In the current Phase 0/1 stabilization phase, **DCN is intentionally disabled** to focus on single-node core reliability.
 
 ---
 

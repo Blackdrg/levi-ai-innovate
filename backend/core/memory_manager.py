@@ -20,6 +20,7 @@ import logging
 import asyncio
 import json
 from typing import Dict, Any, List, Optional
+import time
 from datetime import datetime, timezone
 from backend.utils.runtime_tasks import create_tracked_task
 
@@ -60,6 +61,60 @@ class MemoryManager:
         
         # Start background maintenance tasks
         create_tracked_task(self._background_reindexing_loop(), name="memory-reindexing-loop")
+
+    async def check_cognitive_integrity(self) -> Dict[str, Any]:
+        """
+        Sovereign v15.0 GA: Memory Integrity Auditor.
+        Verifies connectivity and data consistency across all 4 cognitive tiers.
+        """
+        results = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "tiers": {
+                "tier_1_redis": "offline",
+                "tier_2_postgres": "offline",
+                "tier_3_vector": "offline",
+                "tier_4_graph": "offline"
+            },
+            "overall_fidelity": 0.0
+        }
+        
+        # 1. Tier 1: Redis
+        if HAS_REDIS:
+            try:
+                await redis_client.ping()
+                results["tiers"]["tier_1_redis"] = "online"
+            except Exception: pass
+            
+        # 2. Tier 2: Postgres
+        try:
+            from sqlalchemy import text
+            from backend.db.connection import PostgresSessionManager
+            async with await PostgresSessionManager.get_scoped_session() as session:
+                await session.execute(text("SELECT 1"))
+                results["tiers"]["tier_2_postgres"] = "online"
+        except Exception: pass
+        
+        # 3. Tier 3: Vector (FAISS)
+        try:
+            from backend.memory.vector_store import SovereignVectorStore
+            collection = await SovereignVectorStore.get_global_memory()
+            if collection:
+                results["tiers"]["tier_3_vector"] = "online"
+        except Exception: pass
+        
+        # 4. Tier 4: Graph (Neo4j)
+        try:
+            if hasattr(self, 'graph'):
+                # Simple resonance check
+                resonance = await self.graph.get_resonance("system_health")
+                results["tiers"]["tier_4_graph"] = "online"
+        except Exception: pass
+        
+        # Calculate Fidelity
+        online_count = sum(1 for v in results["tiers"].values() if v == "online")
+        results["overall_fidelity"] = online_count / 4.0
+        
+        return results
 
     async def shutdown(self) -> None:
         """Graceful teardown of memory tiers."""
@@ -303,16 +358,19 @@ class MemoryManager:
                 
             create_tracked_task(SovereignVectorStore.store_fact(user_id, feedback_text, category="insight", importance=importance), name=f"memory_feedback_{session_id}")
 
-        # 2. Emit Consistency Event (Redis Stream)
-        from backend.services.mcm import mcm_service
-        await mcm_service.emit_event("interaction", user_id, session_id, {
-            "input": user_input,
+        # 🧠 Phase 15.1: Memory Consistency & Event Sourcing
+        from backend.memory.consistency import MemoryConsistencyManager
+        MemoryConsistencyManager.register_event(user_id, {
+            "type": "interaction",
+            "mission_id": session_id,
+            "user_input": user_input,
             "response": response,
-            "fidelity": fidelity
-        })
+            "fidelity": fidelity,
+            "status": "completed"
+        }, broadcast=True)
 
-        
-        # 2. Tier 3/4 Extraction (Semantic & Evolution)
+        # 1. Tier 1 Update (Working Pulse - Local Cache)
+        await self._store_working_memory(user_id, session_id, user_input, response)
         if user_id and not str(user_id).startswith("guest:"):
             if len(user_input.split()) > 4 or len(results) > 0:
                 create_tracked_task(
@@ -369,26 +427,38 @@ class MemoryManager:
             raw_scores = await call_lightweight_llm([{"role": "system", "content": scoring_prompt}])
             
             content = raw_scores.strip()
-            if "```json" in content: content = content.split("```json").split("```")[0]
-            elif "```" in content: content = content.split("```")[1].split("```")
+            if "```json" in content: content = content.split("```json")[1].split("```")[0]
+            elif "```" in content: content = content.split("```")[1].split("```")[0]
             try:
                 scores = json.loads(content.strip()).get("scores", [0.5] * len(new_facts))
             except Exception as parse_err:
                 logger.warning(f"[MemoryV15] JSON parse error for importance scores: {parse_err}")
                 scores = [0.5] * len(new_facts)
 
-            # 3. Synchronous Vector Storage
+            # 3. Synchronous Vector Storage & Kernel-Driven Crystallization
+            facts_to_crystallize = []
             for i, fact in enumerate(new_facts):
                 importance = scores[i] if i < len(scores) else 0.5
-                # Step 1.4: Initialize scores
+                fact_data = {
+                    "id": f"{user_id}_{int(time.time())}_{i}",
+                    "content": fact["fact"],
+                    "metadata": json.dumps({"category": fact["category"], "importance": importance})
+                }
+                facts_to_crystallize.append(fact_data)
+                
+                # Legacy fallback
                 await SovereignVectorStore.store_fact(
                     user_id, 
                     fact["fact"], 
                     category=fact["category"], 
                     importance=importance,
-                    usage_score=1.0, # Initial usage
-                    recency_score=1.0 # Newest
+                    usage_score=1.0,
+                    recency_score=1.0
                 )
+
+            # High-performance kernel sync
+            from backend.kernel.kernel_wrapper import kernel
+            kernel.sync_memory_batch(facts_to_crystallize)
 
             # 4. Trigger Autonomous Evolution (Fact -> Trait)
             await self._trigger_evolution(user_id)

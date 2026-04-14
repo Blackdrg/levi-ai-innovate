@@ -82,32 +82,70 @@ class PromptSanitizer:
                 shielded_messages.append(msg)
         return shielded_messages
 
-    @classmethod
-    def mask_pii(cls, text: str, user_id: str = "global") -> str:
+    @staticmethod
+    def sorensen_dice_similarity(s1: str, s2: str) -> float:
         """
-        Sovereign Shield v14.0.0-Autonomous-SOVEREIGN: Hardened PII Encryption.
+        Sovereign v15.0: Fuzzy PII Detection.
+        Calculates Sörensen-Dice coefficient for two strings.
+        """
+        if not s1 or not s2:
+            return 0.0
+        if s1 == s2:
+            return 1.0
+        
+        # Bi-gram approach
+        def get_bigrams(s):
+            return set(s[i:i+2] for i in range(len(s)-1))
+        
+        set1 = get_bigrams(s1.lower())
+        set2 = get_bigrams(s2.lower())
+        
+        if not set1 or not set2:
+            return 0.0
+            
+        intersection = len(set1.intersection(set2))
+        return 2.0 * intersection / (len(set1) + len(set2))
+
+    @classmethod
+    def mask_pii(cls, text: str, user_id: str = "global", context_pii: List[str] = None) -> str:
+        """
+        Sovereign Shield v15.0: Hardened PII Encryption.
         Encrypts sensitive vectors using AES-256 GCM before model handoff.
+        Includes fuzzy Sörensen-Dice check for context-aware redaction.
         """
         from backend.utils.kms import SovereignKMS
         if not text: return ""
         
         email_pattern = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
-        phone_pattern = r"\b\d{3}[-.]?\d{3}[-.]?\d{4}\b"
+        phone_pattern = r"\b(?:\+?\d{1,3}[- ]?)?\(?\d{3}\)?[- ]?\d{3}[- ]?\d{4}\b"
         
         masked = text
-        # Process Emails
+        # 1. Regex Pass (Emails)
         for match in reversed(list(re.finditer(email_pattern, masked))):
             val = match.group()
             cipher = SovereignKMS.encrypt(f"{user_id}:{val}")
             placeholder = f"[EMAIL_KMS_{cipher}]"
             masked = masked[:match.start()] + placeholder + masked[match.end():]
             
-        # Process Phones
+        # 2. Regex Pass (Phones)
         for match in reversed(list(re.finditer(phone_pattern, masked))):
             val = match.group()
             cipher = SovereignKMS.encrypt(f"{user_id}:{val}")
             placeholder = f"[PHONE_KMS_{cipher}]"
             masked = masked[:match.start()] + placeholder + masked[match.end():]
+            
+        # 3. Fuzzy Pass (Sörensen-Dice)
+        # Redacts words that are too similar to provided context PII (e.g. real names)
+        if context_pii:
+            words = re.findall(r"\b\w+\b", masked)
+            for word in words:
+                if len(word) < 4: continue # Skip short words to avoid false positives
+                for target in context_pii:
+                    if cls.sorensen_dice_similarity(word, target) > 0.85:
+                        cipher = SovereignKMS.encrypt(f"{user_id}:{word}")
+                        placeholder = f"[PII_KMS_{cipher}]"
+                        masked = masked.replace(word, placeholder)
+                        logger.info(f"[Shield] Fuzzy PII Redacted: '{word}' matched '{target}' via Dice coefficient.")
             
         return masked
 

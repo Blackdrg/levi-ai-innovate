@@ -85,7 +85,15 @@ class MetricsHub:
         try:
             CPU_USAGE.set(psutil.cpu_percent())
             RAM_USAGE.set(psutil.virtual_memory().used)
-            VRAM_AVAILABLE.set(8.0 * 1024**3)
+            
+            # 🛡️ Real-time GPU Telemetry Integration
+            from backend.utils.hardware import gpu_monitor
+            vram_info = gpu_monitor.get_vram_usage()
+            if vram_info.get("active"):
+                VRAM_AVAILABLE.set(vram_info["available"] * 1024**3)
+            else:
+                 # Fallback to a safe estimate if GPU is missing but configured
+                 VRAM_AVAILABLE.set(0.0)
         except Exception as exc:
             logger.error("Metrics: telemetry capture drift - %s", exc)
 

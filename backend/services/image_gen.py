@@ -109,12 +109,12 @@ class VisualSynthesisService:
 
     @staticmethod
     async def _dispatch_engines(prompt: str, ar: str) -> Tuple[Optional[BytesIO], str]:
-        """Parallel engine dispatcher with fallback logic."""
+        """Parallel engine dispatcher with waterfall fallback: Together -> Local SD."""
         import aiohttp
         
+        # 1. Cloud Tier: Together AI (FLUX)
         if TOGETHER_API_KEY:
             try:
-                # Ar to size
                 size_map = {"1:1": (1024, 1024), "16:9": (1280, 720), "9:16": (720, 1280)}
                 w, h = size_map.get(ar, (1024, 1024))
                 
@@ -128,12 +128,26 @@ class VisualSynthesisService:
                         if resp.status == 200:
                             data = await resp.json()
                             img_b64 = data["data"][0]["b64_json"]
+                            logger.info("[VisualService] Cloud Synthesis: SUCCESS (Together)")
                             return BytesIO(base64.b64decode(img_b64)), "together_flux"
             except Exception as e:
                 logger.warning(f"Together engine failed: {e}")
 
-        # Final Fallback: Placeholder Gradient (Simulated for this script)
-        return None, "none"
+        # 2. Local Tier: Sovereign Image Agent (Stable Diffusion)
+        try:
+            logger.info("[VisualService] Initializing Local Synthesis Waterfall...")
+            from backend.agents.image_agent import ImageAgent, ImageInput
+            agent = ImageAgent()
+            result = await agent._run(ImageInput(prompt=prompt, aspect_ratio=ar))
+            
+            if result.get("success") and "image_b64" in result.get("data", {}):
+                img_bytes = base64.b64decode(result["data"]["image_b64"])
+                logger.info("[VisualService] Local Synthesis: SUCCESS (Ollama/SD)")
+                return BytesIO(img_bytes), "local_stable_diffusion"
+        except Exception as e:
+            logger.error(f"Local visual engine failed: {e}")
+
+        return None, "fail"
 
     @staticmethod
     async def _post_process(buffer: BytesIO) -> BytesIO:

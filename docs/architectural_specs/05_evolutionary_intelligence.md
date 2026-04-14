@@ -1,8 +1,11 @@
-# LEVI-AI: Evolutionary Intelligence Engine (v14.1)
-### Architectural Specification: Self-Optimizing Cognitive Logic
+# Architectural Spec 05: Evolutionary Intelligence (Engine 7)
 
-> [!IMPORTANT]
-> Spec v14.1 formalizes the **Tiered Critic Logic** and **Fragility-Aware Planning**, enabling LEVI-AI to autonomously improve its reasoning paths and graduate successful strategies into deterministic rules.
+**Status:** [FUTURE] | [DISABLED]  
+**Version:** 15.0-STABLE (Reference Only)  
+**Cognitive Engine:** 7 (Learning & Adaptation)
+
+## Overview
+Evolutionary Intelligence (Engine 7) is the proposed learning layer for LEVI-AI, intended to handle sub-node weight optimization and autonomous rule graduation. **This engine is currently disabled** to ensure system stability during the Phase 0/1 hardening cycle. It remains in the roadmap as a Phase 5 development goal.
 
 ---
 

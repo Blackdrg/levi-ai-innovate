@@ -1,11 +1,15 @@
 # backend/services/mcm.py
 import logging
 import asyncio
+from datetime import datetime, timezone
 import json
 import os
 from typing import Dict, Any, Optional
-from backend.redis_client import r as redis_client, HAS_REDIS
+from backend.db.redis import r as redis_client, HAS_REDIS
+from backend.db.postgres_db import get_write_session
+from backend.db.models import Message, Mission, UserFact, UserTrait
 from backend.utils.runtime_tasks import create_tracked_task
+
 from backend.db.milvus_client import MilvusClient
 from backend.db.vector_store import embed_text
 
@@ -187,9 +191,59 @@ class MemoryConsistencyManager:
             except Exception as e:
                 logger.error(f"[MCM] Global Relay Failed: {e}")
 
-        # Implementation core (Hardened v14.2)
-            try: 
-                # Sync to Graph (v14.2 Hardened Sync)
+        # Implementation core (Hardened v15.0)
+        try: 
+            # 1. Tier 2 Sync (Postgres - Factual Persistent)
+            async with get_write_session() as session:
+                if event_type == "interaction":
+                    # Store Interaction Message
+                    msg = Message(
+                        mission_id=session_id,
+                        role="user",
+                        content=payload.get("input", ""),
+                        timestamp=datetime.now(timezone.utc)
+                    )
+                    session.add(msg)
+                    
+                    # Update/Create Mission
+                    mission = await session.get(Mission, session_id)
+                    if not mission:
+                        mission = Mission(
+                            mission_id=session_id,
+                            user_id=user_id,
+                            objective=payload.get("input", "Synchronized Interaction")[:200],
+                            intent_type=payload.get("intent", "generic"),
+                            status="completed"
+                        )
+                        session.add(mission)
+                    else:
+                        mission.status = "completed"
+                        mission.updated_at = datetime.now(timezone.utc)
+
+                elif event_type == "fact_extracted":
+                    facts = payload.get("facts", [])
+                    for f in facts:
+                        fact_obj = UserFact(
+                            user_id=user_id,
+                            fact=f["fact"],
+                            category=f.get("category", "general"),
+                            importance=f.get("importance", 0.5)
+                        )
+                        session.add(fact_obj)
+
+                elif event_type == "trait_distilled":
+                    trait = payload.get("trait", "")
+                    if trait:
+                        trait_obj = UserTrait(
+                            user_id=user_id,
+                            trait=trait,
+                            weight=payload.get("weight", 0.8)
+                        )
+                        session.add(trait_obj)
+
+            # 2. Tier 3 Sync (Neo4j - Relational Knowledge)
+            from backend.db.neo4j_client import Neo4jClient
+            try:
                 await Neo4jClient.add_interaction(
                     user_id=user_id, 
                     query=payload.get("input", ""), 
@@ -197,48 +251,70 @@ class MemoryConsistencyManager:
                     intent=payload.get("intent", "generic_sync"),
                     sync=True
                 )
-                # Sync to Vector Pulse
-                await SovereignVectorStore.store_fact(user_id, f"Interaction recorded in {source_region}: {payload.get('input')[:50]}...", category="interaction")
-                
-                # Global Milvus Archive Relay
-                interaction_text = f"Input: {payload.get('input')} | Response: {payload.get('response')}"
-                vector = await asyncio.to_thread(embed_text, interaction_text)
-                await MilvusClient.store_global_fact(user_id, vector, {"input": payload.get("input"), "response": payload.get("response"), "category": "interaction", "source_region": source_region})
-                
-            except Exception as e: 
-                logger.error(f"[MCM] Interaction sync failed: {e}")
-
-            try:
-                facts = payload.get("facts", [])
-                for f in facts:
-                    await SovereignVectorStore.store_fact(user_id, f["fact"], category=f.get("category", "semantic"), importance=f.get("importance", 0.5))
-                    
-                    # Global Milvus Archive Relay
-                    vector = await asyncio.to_thread(embed_text, f["fact"])
-                    await MilvusClient.store_global_fact(user_id, vector, {"fact": f["fact"], "category": f.get("category", "semantic"), "source_region": source_region})
-                    
-                logger.info(f"[MCM] Synchronized {len(facts)} extracted facts for {user_id}")
             except Exception as e:
-                logger.error(f"[MCM] Fact sync failed: {e}")
+                logger.error(f"[MCM] Neo4j Sync Failure: {e}")
 
-            try: 
-                trait = payload.get("trait", "")
-                await SovereignVectorStore.store_fact(user_id, trait, category="trait", importance=0.95)
-                logger.info(f"[MCM] Integrated distilled trait for {user_id} (Source: {source_region})")
+            # 3. Tier 4 Sync (Vector Stores - Semantic)
+            from backend.db.vector_store import SovereignVectorStore
+            try:
+                if event_type == "interaction":
+                    await SovereignVectorStore.store_fact(user_id, f"Interaction: {payload.get('input')[:50]}...", category="interaction")
+                    
+                    # Global Milvus Relay
+                    interaction_text = f"Input: {payload.get('input')} | Response: {payload.get('response')}"
+                    vector = await asyncio.to_thread(embed_text, interaction_text)
+                    await MilvusClient.store_global_fact(user_id, vector, {
+                        "input": payload.get("input"), 
+                        "response": payload.get("response"), 
+                        "category": "interaction", 
+                        "source_region": source_region
+                    })
                 
-                # Global Milvus Archive Relay
-                if trait:
-                    vector = await asyncio.to_thread(embed_text, trait)
-                    await MilvusClient.store_global_fact(user_id, vector, {"fact": trait, "category": "trait", "source_region": source_region})
-            except Exception as e: 
-                logger.error(f"[MCM] Trait sync failed: {e}")
+                elif event_type == "fact_extracted":
+                    facts = payload.get("facts", [])
+                    for f in facts:
+                        await SovereignVectorStore.store_fact(user_id, f["fact"], category=f.get("category", "semantic"), importance=f.get("importance", 0.5))
+                        vector = await asyncio.to_thread(embed_text, f["fact"])
+                        await MilvusClient.store_global_fact(user_id, vector, {"fact": f["fact"], "category": "semantic", "source_region": source_region})
+            except Exception as e:
+                logger.error(f"[MCM] Vector Sync Failure: {e}")
 
-        elif event_type == "PURGE_USER":
-            if source_region != self.region:
-                logger.warning(f"[MCM] GLOBAL PURGE TRIGGERED for {user_id} from {source_region}")
-                from backend.core.memory_manager import MemoryManager
-                mm = MemoryManager()
-                await mm.clear_all_user_data(user_id)
+        except Exception as e: 
+            logger.error(f"[MCM] Tier 2 Persistence Failure: {e}")
+
+    async def run_reconciliation(self):
+        """
+        Sovereign v15.0: Memory Reconciliation Pulse.
+        Automated verification between Tier-0 (Redis) and Tier-2 (Postgres).
+        Detects drift and heals the distributed state.
+        """
+        if not HAS_REDIS: return
+        
+        logger.info("[MCM] Initiating memory reconciliation pulse...")
+        try:
+            # 1. Fetch 'Active' missions from Redis
+            active_redis = redis_client.hgetall("orchestrator:missions")
+            
+            # 2. Cross-reference with SQL truth for any missing or mismatching states
+            from backend.db.postgres import PostgresDB
+            from backend.db.models import Mission
+            from sqlalchemy import select
+            
+            async with PostgresDB._session_factory() as session:
+                for mid_bytes, data_bytes in active_redis.items():
+                    mid = mid_bytes.decode()
+                    data = json.loads(data_bytes.decode())
+                    
+                    if data.get("state") in ["COMPLETE", "FAILED"]:
+                        # Verify it exists in SQL
+                        stmt = select(Mission).where(Mission.mission_id == mid)
+                        res = await session.execute(stmt)
+                        if not res.scalar_one_or_none():
+                            logger.warning(f"[MCM] Drift detected: Complete mission {mid} missing from SQL. Syncing...")
+                            await self._process_event("interaction", data["user_id"], mid, data.get("replay", {}), self.region)
+
+        except Exception as e:
+            logger.error(f"[MCM] Reconciliation anomaly: {e}")
 
 mcm_service = MemoryConsistencyManager()
 

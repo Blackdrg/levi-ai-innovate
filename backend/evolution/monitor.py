@@ -1,8 +1,13 @@
+import logging
+import hashlib
+import json
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import pydantic
 from backend.db.models import MissionMetric
 from backend.db.postgres import PostgresDB
+
+logger = logging.getLogger(__name__)
 
 class EvolutionMetric(pydantic.BaseModel):
     mission_id: str
@@ -69,6 +74,34 @@ class SelfMonitor:
             await self.handle_degradation(metric_data)
             
         return metric_data
+
+    async def record_success(self, mission_id: str, dag: Any, latency: float, fidelity: float, trace: List[Dict[str, Any]]):
+        """
+        Hook mission traces and identify successful coordination patterns.
+        v16.0: Pattern discovery for graduated rules.
+        """
+        logger.info(f"📊 [Monitor] Recording success for mission {mission_id} (Fidelity: {fidelity:.2f})")
+        
+        # Identify successful orchestration patterns
+        pattern = {
+            "dag": dag,
+            "latency": latency,
+            "fidelity": fidelity,
+            "steps": [t.get("agent") for t in trace if t.get("agent")]
+        }
+        
+        # Persist to pattern registry (Redis or Postgres)
+        from backend.db.redis import r as redis
+        if redis:
+            pattern_hash = hashlib.sha256(json.dumps(pattern["steps"]).encode()).hexdigest()
+            await redis.hset(f"evolution:patterns:{pattern_hash}", mapping={
+                "count": await redis.hincrby(f"evolution:patterns:{pattern_hash}", "count", 1),
+                "avg_latency": latency, # Should be a running average in production
+                "avg_fidelity": fidelity,
+                "dag": json.dumps(dag)
+            })
+            logger.info(f"🧬 [Monitor] Pattern {pattern_hash[:8]} tracked. Hits: {await redis.hget(f'evolution:patterns:{pattern_hash}', 'count')}")
+
 
     async def handle_degradation(self, metric: EvolutionMetric):
         """Action to take when performance drops."""

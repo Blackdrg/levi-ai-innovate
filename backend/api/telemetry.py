@@ -9,7 +9,7 @@ from backend.auth import get_current_user
 
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/telemetry", tags=["Sovereign Telemetry"])
+router = APIRouter(tags=["Sovereign Telemetry"])
 
 @router.get("/stream/{mission_id}")
 async def stream_mission(mission_id: str, current_user = Depends(get_current_user)):

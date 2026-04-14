@@ -8,6 +8,7 @@ import { PeeringStatus } from './PeeringStatus';
 import { Zap, Activity, Cpu, Binary } from 'lucide-react';
 import { MissionCreator } from './MissionCreator';
 import EvolutionDashboard from './EvolutionDashboard';
+import { KernelHealth } from './KernelHealth';
 
 
 export const Dashboard: React.FC = () => {
@@ -28,6 +29,7 @@ export const Dashboard: React.FC = () => {
             <span className="metric-value">{activeMissions.length}</span>
             <span className="metric-label"><Zap size={14} /> Active Missions</span>
           </div>
+          <KernelHealth />
           <div className="nav-tabs">
             <button 
               onClick={() => setActiveTab('missions')} 
@@ -39,7 +41,7 @@ export const Dashboard: React.FC = () => {
               onClick={() => setActiveTab('evolution')} 
               className={`nav-btn ${activeTab === 'evolution' ? 'active' : ''}`}
             >
-              Revolution Engine (DISABLED)
+              Revolution Engine
             </button>
           </div>
           <PeeringStatus />

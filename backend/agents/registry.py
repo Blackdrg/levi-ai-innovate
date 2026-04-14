@@ -87,4 +87,16 @@ AGENT_REGISTRY = {
         mtls_endpoint=os.getenv("AGENT_POLICY_MTLS_ENDPOINT", "https://localhost:5015"),
         capabilities=["real_time_alignment", "boundary_enforcement"]
     ),
+    "ConsensusAgent": AgentConfig(
+        name="Consensus Agent",
+        type="consensus",
+        mtls_endpoint=os.getenv("AGENT_CONSENSUS_MTLS_ENDPOINT", "https://localhost:5016"),
+        capabilities=["distributed_agreement", "region_awareness"]
+    ),
+    "EchoAgent": AgentConfig(
+        name="Echo Agent",
+        type="voice",
+        mtls_endpoint=os.getenv("AGENT_ECHO_MTLS_ENDPOINT", "https://localhost:5017"),
+        capabilities=["text_to_speech", "audio_recon"]
+    ),
 }

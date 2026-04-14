@@ -52,7 +52,7 @@ class LocalLLM:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt}
             ]
-            model = ModelRouter.get_model_for_tier(model_tier)
+            model = await ModelRouter.get_model_for_tier(model_tier)
             return await call_ollama_llm(messages, model=model)
 
         # 2. Fallback to llama-cpp

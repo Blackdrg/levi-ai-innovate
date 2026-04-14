@@ -34,6 +34,10 @@ jobs:
           mypy backend/
       - name: Run T0-T3 Tests
         run: pytest tests/unit tests/integration
+      - name: Verify 14-Agent Swarm Integrity
+        run: python backend/scripts/verify_agent_swarm.py
+      - name: Conduct High-Fidelity Load Test
+        run: python backend/scripts/mission_load_test.py
 
   # --- STAGE 4: Security & Red-Teaming ---
   security-gate:

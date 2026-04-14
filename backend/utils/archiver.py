@@ -7,7 +7,8 @@ Supports AWS S3, Google Cloud Storage, or Local Encrypted File System.
 import os
 import json
 import logging
-from datetime import datetime
+import hashlib
+from datetime import datetime, timezone
 from typing import Dict, Any, List
 
 logger = logging.getLogger(__name__)
@@ -31,8 +32,8 @@ class SovereignArchiver:
     @classmethod
     async def archive_memories(cls, user_id: str, memories: List[Dict[str, Any]]) -> bool:
         """
-        Archives a batch of memories to encrypted storage.
-        Logic: Serialize -> Encrypt -> Dispatch to Cold Storage.
+        v15.0-GA [HARDENED]: Secure Memory Archival.
+        Encrypts and persists memories to the configured cold storage tier.
         """
         from backend.utils.concurrency import CircuitBreaker
         if CircuitBreaker.is_open():
@@ -50,23 +51,31 @@ class SovereignArchiver:
             # 1. Serialization
             payload = {
                 "user_id": user_id,
-                "archived_at": datetime.utcnow().isoformat(),
-                "memories": memories
+                "archived_at": datetime.now(timezone.utc).isoformat(),
+                "memories": memories,
+                "version": "v15.0-Sovereign"
             }
+            json_payload = json.dumps(payload)
             
-            # 2. Simulated Encryption (AES-256 placeholder)
-            # In production, we would use cryptography.fernet or AWS KMS/GCP KMS
-            encrypted_data = json.dumps(payload).encode('utf-8') 
+            # 2. Production Encryption (Sovereign v15.0 Standard)
+            from cryptography.fernet import Fernet
+            import base64
+            # Derive a stable Fernet key from the ARCHIVE_KEY (needs 32 url-safe base64 bytes)
+            key_bytes = hashlib.sha256(cls.ENCRYPTION_KEY.encode()).digest()
+            fernet_key = base64.urlsafe_b64encode(key_bytes)
+            f = Fernet(fernet_key)
             
-            # 3. Persistence (Dispatch to S3/GCS or Local)
-            with open(archive_file, "wb") as f:
-                f.write(encrypted_data)
+            encrypted_data = f.encrypt(json_payload.encode())
+            
+            # 3. Persistence
+            with open(archive_file, "wb") as f_out:
+                f_out.write(encrypted_data)
                 
-            logger.info(f"[Archiver] Successfully displaced {len(memories)} memories for {user_id} to cold storage.")
+            logger.info(f"🔒 [Archiver] Displaced {len(memories)} memories for {user_id} to ENCRYPTED cold storage.")
             return True
             
         except Exception as e:
-            logger.error(f"[Archiver] Archival breach: {e}")
+            logger.error(f"[Archiver] Archival encryption failure: {e}")
             return False
 
 # Global Accessor

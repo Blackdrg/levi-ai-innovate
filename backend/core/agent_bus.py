@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import json
 from typing import Dict, Any, List, Callable, Awaitable
 from collections import defaultdict
 
@@ -29,6 +30,12 @@ class AgentBus:
         }
         
         logger.debug(f"🚌 [Bus] Pulse from {sender} on channel '{channel}'")
+        
+        # 🛡️ Microkernel Trust Layer (v15.1)
+        # Send to kernel for resource/mission validation
+        from backend.kernel.kernel_wrapper import kernel
+        kernel.send_mission_request(sender, json.dumps(payload) if isinstance(payload, dict) else str(payload))
+        
         self.history.append(pulse)
         if len(self.history) > 100: self.history.pop(0)
 

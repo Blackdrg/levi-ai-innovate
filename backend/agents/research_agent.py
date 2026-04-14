@@ -118,8 +118,15 @@ class ResearchAgent(SovereignAgent[ResearchInput, AgentResult]):
             "topic": topic,
         })
 
-        if not self.tavily_key:
-            self.logger.warning("Tavily Pulse offline. Escalating to Internal RAG Knowledge Base.")
+        # 🛡️ Graduation #20: Sovereign-First Intelligence
+        # If SOVEREIGN_MODE=True, we block external egress regardless of API key availability.
+        sovereign_mode = os.getenv("SOVEREIGN_MODE", "true").lower() == "true"
+        
+        if sovereign_mode or not self.tavily_key:
+            if sovereign_mode:
+                self.logger.info("🛡️ [Sovereign-First] External egress suppressed. Utilizing Internal RAG Knowledge Base.")
+            else:
+                self.logger.warning("Tavily Pulse offline. Escalating to Internal RAG Knowledge Base.")
             return await self._internal_rag_fallback(topic, session_id, lang)
 
         # ── 1. Discovery pass ─────────────────────────────────────────
@@ -242,15 +249,21 @@ class ResearchAgent(SovereignAgent[ResearchInput, AgentResult]):
 
     async def search(self, query: str, depth: str = "basic", session_id: str = "v13") -> List[Dict[str, Any]]:
         SovereignBroadcaster.broadcast({"type": "AGENT_SEARCH_RESULT", "agent": self.name, "query": query})
-        import aiohttp
+        from backend.utils.network import async_safe_request
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post("https://api.tavily.com/search", json={
-                    "api_key": self.tavily_key, "query": query, "search_depth": depth
-                }) as resp:
-                    data = await resp.json()
-                    return data.get("results", [])
-        except Exception:
+            resp = await async_safe_request(
+                "POST", 
+                "https://api.tavily.com/search", 
+                json={
+                    "api_key": self.tavily_key, 
+                    "query": query, 
+                    "search_depth": depth
+                }
+            )
+            data = resp.json()
+            return data.get("results", [])
+        except Exception as e:
+            self.logger.error(f"[ResearchAgent] Search pulse failed: {e}")
             return []
 
     async def _persist_insight(self, session_id: str, topic: str, data: Dict[str, Any]):

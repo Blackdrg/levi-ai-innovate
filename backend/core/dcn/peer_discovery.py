@@ -78,15 +78,34 @@ class HybridGossip:
     async def _send_direct_pulse(self, peer: DCNPeer, pulse: Dict[str, Any]):
         """Transmits a pulse directly to a peer via HTTP/gRPC."""
         try:
-            # In production, this would use a gRPC stub or authenticated HTTP request
-            # For v15.0 software baseline, we log the intent and update the peer status
-            logger.debug(f"[DCN] Sending P2P pulse to {peer.node_id} at {peer.host}:{peer.port}")
-            # Simulation of network success
-            peer.last_heartbeat = pulse["timestamp"]
-            peer.status = "ALIVE"
+            import grpc
+            from backend.dcn import dcn_pb2, dcn_pb2_grpc
+            
+            if not dcn_pb2_grpc:
+                raise ImportError("DCN Protos not available for P2P.")
+
+            async with grpc.aio.insecure_channel(f"{peer.host}:{peer.port}") as channel:
+                stub = dcn_pb2_grpc.DCNGossipServiceStub(channel)
+                
+                # Wrap pulse in request
+                request = dcn_pb2.PulseRequest(
+                    payload=json.dumps(pulse),
+                    signature=pulse.get("signature", "")
+                )
+                
+                # Unary call with 2s timeout
+                response = await stub.PublishPulse(request, timeout=2.0)
+                
+                if response.success:
+                    peer.last_heartbeat = pulse["timestamp"]
+                    peer.status = "ALIVE"
+                    logger.debug(f"[DCN] P2P pulse delivered to {peer.node_id}")
+                else:
+                    logger.warning(f"[DCN] P2P pulse rejected by {peer.node_id}: {response.message}")
+
         except Exception as e:
             peer.status = "UNREACHABLE"
-            logger.error(f"[DCN] Failed to pulse {peer.node_id}: {e}")
+            logger.debug(f"[DCN] P2P route to {peer.node_id} failed: {e}")
 
     def _sign_pulse(self, pulse: Dict[str, Any]) -> str:
         """HMAC-SHA256 signs the pulse metadata."""

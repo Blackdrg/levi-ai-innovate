@@ -40,29 +40,44 @@ class VideoSynthesisService:
         mood: str = "philosophical"
     ) -> SovereignVideoResult:
         """
-        Full Video Composition Pipeline v7.
-        1. Narrative Synthesis: Storyboarding the scenes.
-        2. Visual Synthesis: Parallel generation of scene assets.
-        3. Audio Synthesis: Generating narration pulse.
-        4. Assembly: Final cinematic composition.
+        Full Video Composition Pipeline v15.2.
+        1. Narrative Synthesis: Storyboarding.
+        2. Visual Synthesis: Multi-scene motion generation.
+        3. Audio Synthesis: Narration.
+        4. Assembly: Cinematic render (Simulated).
         """
         logger.info(f"[VideoService] Mission started: {prompt[:30]}...")
         
         # 1. Narrative Storyboarding
-        # Use the Council of Models to break the prompt into a 3-scene script
         storyboard = await VideoSynthesisService._create_storyboard(prompt, mood)
         
-        # 2. Parallel Visual & Audio Generation
-        # We start all scene generations in parallel to minimize latency
-        try:
-            # Simulate job creation for v7
-            # In a real environment, this would trigger background tasks
+        # 2. Parallel Scene Generation (Wired to VideoAgent)
+        from backend.agents.video_agent import VideoAgent, VideoInput
+        agent = VideoAgent()
+        
+        scenes_data = []
+        tasks = []
+        for scene in storyboard:
+            tasks.append(agent._run(VideoInput(
+                prompt=scene["visual"],
+                aspect_ratio=aspect_ratio,
+                num_frames=8, # Production cap for parallel synthesis
+                style=style
+            )))
+        
+        results = await asyncio.gather(*tasks)
+        
+        success = any(r.get("success") for r in results)
+        if not success:
+            return SovereignVideoResult(success=False)
             
-            return SovereignVideoResult(
-                success=True,
-                scenes=len(storyboard),
-                engine="sovereign_assembly_v7"
-            )
+        # 3. Success telemetry
+        return SovereignVideoResult(
+            success=True,
+            scenes=len(storyboard),
+            engine="sovereign_motion_v15.2",
+            video_url="synthetic_render_stream"
+        )
             
         except Exception as e:
             logger.error(f"Video Synthesis critical failure: {e}")

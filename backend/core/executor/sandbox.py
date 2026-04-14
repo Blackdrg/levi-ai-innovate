@@ -153,4 +153,8 @@ def get_sandbox(agent_config: Any = None) -> Any:
     memory = getattr(agent_config, "memory_limit_mb", 512)
     cpu = getattr(agent_config, "cpu_cores", 1.0)
     
-    return DockerSandbox(image=image, memory_mb=memory, cpu_quota=cpu)
+    use_gvisor = os.getenv("ENABLE_GVISOR", "false").lower() == "true"
+    if use_gvisor:
+        logger.info("[Sandbox] GVISOR (runsc) requested for mission-critical isolation.")
+    
+    return DockerSandbox(image=image, memory_mb=memory, cpu_quota=cpu, use_gvisor=use_gvisor)

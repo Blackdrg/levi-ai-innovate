@@ -123,3 +123,26 @@ class AgentHealthCheck:
             "agents_healthy": sum(1 for r in results.values() if r["status"] == "healthy"),
             "details": results
         }
+async def check_brain_health() -> Dict[str, Any]:
+    """
+    Sovereign v15.0: Cognitive Bridge Health Audit.
+    Aggregates lower-level probes into a semantic health report.
+    """
+    probes = await probe_dependencies()
+    agent_pulse = await AgentHealthCheck.global_pulse()
+    
+    # Calculate a composite health score
+    checks = probes.get("checks", {})
+    agents = agent_pulse.get("details", {})
+    
+    status = "healthy"
+    if probes.get("status") == "degraded" or agent_pulse.get("status") == "degraded":
+        status = "degraded"
+    
+    return {
+        "status": status,
+        "infrastructure": probes,
+        "swarm": agent_pulse,
+        "timestamp": time.time(),
+        "verdict": "Neural synchronization nominal" if status == "healthy" else "Structural anomalies detected in cognitive fabric"
+    }

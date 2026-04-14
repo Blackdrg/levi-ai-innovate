@@ -87,6 +87,12 @@ class LLMPolicy(BaseModel):
     """LLM routing constraints."""
     local_only: bool = True
     cloud_fallback: bool = False
+    
+    # v15.0 Optimized Parameters (Engine 9: Policy Gradient)
+    temperature: float = 0.7
+    top_p: float = 0.9
+    model: str = "default"
+    max_tokens: int = 1024
 
 
 class IntentNode(BaseModel):

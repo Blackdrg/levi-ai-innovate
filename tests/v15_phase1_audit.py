@@ -77,6 +77,41 @@ async def test_hybrid_hydration():
             assert "SQL_MISSION" in active
             assert active["SQL_MISSION"]["state"] == MissionState.EXECUTING.value
 
+@pytest.mark.asyncio
+async def test_evolution_graduation():
+    """Verify Rule graduation after 3 shadow matches."""
+    from backend.core.evolution_engine import EvolutionaryIntelligenceEngine
+    from backend.db.models import GraduatedRule
+    
+    with patch("backend.db.postgres.PostgresDB._session_factory") as mock_session:
+        mock_rule = GraduatedRule(id=1, is_quarantined=True, result_data={"shadow_history": [{"ts": 1, "match": True}, {"ts": 2, "match": True}]})
+        
+        async_mock_session = MagicMock()
+        async_mock_session.get.return_value = mock_rule
+        mock_session.return_value.__aenter__.return_value = async_mock_session
+        
+        # Third match should trigger graduation
+        await EvolutionaryIntelligenceEngine.record_shadow_outcome(1, True)
+        assert mock_rule.is_quarantined is False
+        assert mock_rule.is_stable is True
+
+@pytest.mark.asyncio
+async def test_evolution_drift_quarantine():
+    """Verify Rule re-quarantine on shadow drift."""
+    from backend.core.evolution_engine import EvolutionaryIntelligenceEngine
+    from backend.db.models import GraduatedRule
+    
+    with patch("backend.db.postgres.PostgresDB._session_factory") as mock_session:
+        mock_rule = GraduatedRule(id=2, is_quarantined=False, fidelity_score=0.91, result_data={"shadow_history": []})
+        
+        async_mock_session = MagicMock()
+        async_mock_session.get.return_value = mock_rule
+        mock_session.return_value.__aenter__.return_value = async_mock_session
+        
+        # Drift should trigger quarantine
+        await EvolutionaryIntelligenceEngine.record_shadow_outcome(2, False)
+        assert mock_rule.is_quarantined is True
+        assert mock_rule.fidelity_score < 0.90 # Penalized
+
 if __name__ == "__main__":
-    # This script is intended to be run via pytest
     pass

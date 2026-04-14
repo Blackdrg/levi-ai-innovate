@@ -25,19 +25,53 @@ class SovereignLocalTTS:
         logger.info(f"🔊 [LocalTTS] Initialized sovereign voice synthesizer: {self.model_path}")
         
     async def synthesize_and_play(self, text: str):
-        """Synthesizes text to speech entirely on-device and plays it."""
-        if not self._engine_ready: return
+        """
+        Synthesizes text to speech entirely on-device and plays it.
+        Uses Piper (Fast, local ONNX-based TTS).
+        """
+        if not self._engine_ready or not text: return
         
         logger.info(f"🔊 [LocalTTS] Synthesizing: '{text[:40]}...'")
-        # Note: In a full deployment, Piper/Coqui inference occurs here.
-        # Example: 
-        # voice = piper.PiperVoice.load(self.model_path)
-        # audio_bytes = voice.synthesize(text)
         
-        # Simulated dummy buffer to represent synthesized audio bytes
-        audio_bytes = b'\x00' * 2048 
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_file:
+            output_path = tmp_file.name
         
-        await self.speaker.play_audio(audio_bytes)
+        try:
+            # 1. Piper Inference via Subprocess (Optimized for low overhead)
+            # Command: echo "$TEXT" | piper --model $MODEL --output_file $WAV
+            import subprocess
+            
+            # Check for piper in PATH
+            piper_cmd = os.getenv("PIPER_PATH", "piper")
+            
+            process = await asyncio.create_subprocess_exec(
+                piper_cmd,
+                "--model", self.model_path,
+                "--output_file", output_path,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            
+            stdout, stderr = await process.communicate(input=text.encode())
+            
+            if process.returncode != 0:
+                logger.error(f"[LocalTTS] Piper synthesis failed: {stderr.decode()}")
+                return
+
+            # 2. Play the synthesized waveform
+            if os.path.exists(output_path):
+                # Read WAV bytes
+                with open(output_path, "rb") as f:
+                    audio_bytes = f.read()
+                
+                await self.speaker.play_audio(audio_bytes)
+                
+        except Exception as e:
+            logger.error(f"[LocalTTS] Synthesis failure: {e}")
+        finally:
+            if os.path.exists(output_path):
+                os.remove(output_path)
 
 class AudioPulseProcessor:
     """
@@ -94,4 +128,48 @@ class AudioPulseProcessor:
         self.is_active = False
         logger.info("[AudioPulse] Disconnecting hardware reconnaissance.")
 
-import os
+class VoiceProcessor:
+    """
+    Sovereign v15.0 GA: Unified Voice Command Hub.
+    Bridges the Voice API with local STT/TTS engines.
+    """
+    def __init__(self):
+        self.stt = SovereignSTT(model_size="small")
+        self.tts = SovereignLocalTTS()
+        logger.info("🎙️ [VoiceProcessor] Unified Hub Active.")
+
+    async def process_voice_command(self, audio_bytes: bytes, user_id: str, orchestrator_ref: Any) -> Dict[str, Any]:
+        """Processes an uploaded audio command, transcribes it, and dispatches a mission."""
+        with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp:
+            tmp.write(audio_bytes)
+            audio_path = tmp.name
+
+        try:
+            # 1. Transcribe
+            result = await self.stt.transcribe(audio_path)
+            text = result.get("text", "").strip()
+            
+            if not text:
+                return {"status": "error", "message": "No speech detected."}
+
+            logger.info(f"🎙️ [VoiceProcessor] Transcribed command: '{text}' (Conf: {result.get('confidence', 0):.2f})")
+
+            # 2. Dispatch Mission if orchestrator is provided
+            if orchestrator_ref:
+                mission_id = await orchestrator_ref.dispatch_mission(user_id, text)
+                return {
+                    "status": "success",
+                    "transcription": text,
+                    "confidence": result.get("confidence", 0.9),
+                    "mission_id": mission_id
+                }
+            
+            return {
+                "status": "success",
+                "transcription": text,
+                "confidence": result.get("confidence", 0.9)
+            }
+
+        finally:
+            if os.path.exists(audio_path):
+                os.remove(audio_path)

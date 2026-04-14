@@ -53,10 +53,10 @@ class CodeAgent(SovereignAgent[CodeInput, AgentResult]):
         # 2. Generate Code
         code = await self.generate_code(task, input_data.lang_preference, blackboard_context)
         
-        # 2. Execute & Verify (if Python)
+        # 3. Execute & Verify (if Python)
         execution_output = "Execution skipped (non-python or disabled)."
         if input_data.lang_preference.lower() == "python":
-            execution_output = await self.execute_code(code)
+            execution_output = await self.execute_code(code, input_data.session_id or "adhoc")
         
         return {
             "message": f"### Implementation\n\n```python\n{code}\n```\n\n### Execution Results\n```\n{execution_output}\n```",
@@ -80,10 +80,24 @@ class CodeAgent(SovereignAgent[CodeInput, AgentResult]):
                 code = code.split("```")[-1].split("```")[0].strip()
         return code
 
-    async def execute_code(self, code: str) -> str:
-        """Sovereign Sandbox v13: Executes code via Docker for absolute isolation."""
-        from backend.utils.sandbox import DockerSandbox
-        import asyncio
+    async def execute_code(self, code: str, mission_id: str) -> str:
+        """Sovereign Sandbox v15.1: Delegates to Artisan for hardened isolation."""
+        self.logger.info(f"💾 [Architect] Delegating execution verification to Artisan (Sandbox)")
         
-        result = await asyncio.to_thread(DockerSandbox.execute, code)
-        return result["message"] if result["success"] else f"Error: {result['message']}"
+        from .artisan_agent import ArtisanInput
+        artisan_input = ArtisanInput(
+            objective="Verify generated code snippet",
+            code=code,
+            session_id=mission_id
+        )
+        
+        result = await self.request_side_mission(
+            user_id="system", 
+            session_id=mission_id, 
+            objective="Execute and verify code integrity",
+            payload=artisan_input
+        )
+        
+        if result.success:
+            return result.data.get("stdout", "Executed successfully (no output).")
+        return f"Error: {result.message}\n{result.data.get('stderr', '')}"

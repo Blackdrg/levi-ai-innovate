@@ -30,7 +30,12 @@ class ONNXEmbedder:
                             BERT_MODEL_PATH,
                             providers=["CUDAExecutionProvider", "CPUExecutionProvider"]
                         )
-                        cls._tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+                        
+                        sovereign = os.getenv("SOVEREIGN_MODE", "true").lower() == "true"
+                        cls._tokenizer = AutoTokenizer.from_pretrained(
+                            "bert-base-uncased",
+                            local_files_only=sovereign
+                        )
                     except Exception as e:
                         logger.error(f"[Embedder] Failed to load ONNX: {e}")
                         return None
@@ -86,7 +91,16 @@ async def embed(text: Union[str, List[str]]) -> Union[List[float], List[List[flo
         from sentence_transformers import SentenceTransformer
         # We'll use a local instance for simple fallback
         model_name = "nomic-ai/nomic-embed-text-v1.5"
-        model = await asyncio.to_thread(lambda: SentenceTransformer(model_name, trust_remote_code=True))
+        
+        # v15.2: Sovereign Hardening
+        sovereign = os.getenv("SOVEREIGN_MODE", "true").lower() == "true"
+        model = await asyncio.to_thread(
+            lambda: SentenceTransformer(
+                model_name, 
+                trust_remote_code=not sovereign, 
+                local_files_only=sovereign
+            )
+        )
         
         embeddings = await asyncio.to_thread(
             lambda: model.encode(text, normalize_embeddings=True)

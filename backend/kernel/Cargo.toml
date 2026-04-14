@@ -1,0 +1,25 @@
+[package]
+name = "levi_kernel"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "levi_kernel"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pyo3 = { version = "0.20.0", features = ["extension-module", "abi3-py310"] }
+tokio = { version = "1.0", features = ["full"] }
+futures = "0.3"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+hashbrown = "0.14"
+onnxruntime = "0.0.14"
+log = "0.4"
+env_logger = "0.10"
+uuid = { version = "1.0", features = ["v4"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

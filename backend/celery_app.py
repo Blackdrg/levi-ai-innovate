@@ -27,6 +27,8 @@ celery_app = Celery(
         "backend.core.learning_tasks",
         "backend.core.fine_tune_tasks",
         "backend.core.critic_tasks",
+        "backend.jobs.audit_jobs",
+        "backend.jobs.maintenance",
     ]
 )
 
@@ -143,6 +145,14 @@ celery_app.conf.beat_schedule = {
     "trigger-scheduled-missions-60s": {
         "task": "backend.services.scheduling.trigger_scheduled_missions",
         "schedule": 60.0,
+    },
+    "daily-compliance-sweep": {
+        "task": "backend.jobs.audit_jobs.run_daily_compliance_sweep",
+        "schedule": crontab(hour=2, minute=0), # 2 AM Daily
+    },
+    "nightly-maintenance-suite": {
+        "task": "backend.jobs.maintenance.run_full_maintenance_suite",
+        "schedule": crontab(hour=3, minute=0), # 3 AM Daily
     }
 }
 

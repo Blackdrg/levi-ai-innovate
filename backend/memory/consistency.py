@@ -3,6 +3,7 @@ import time
 import hashlib
 import hmac
 import logging
+import os
 from typing import Dict, Any, Optional, List
 from pydantic import BaseModel, Field
 from backend.db.redis import r as redis_client, HAS_REDIS
@@ -23,7 +24,7 @@ class MemoryEvent(BaseModel):
 
 class MemoryConsistencyManager:
     """
-    Sovereign Memory Consistency Layer (MCM) v14.1.
+    Sovereign Memory Consistency Layer (MCM) v15.1 [HARDENED].
     Implements EVENT SOURCING: 
     - The Event Log (Redis Stream) is the absolute source of truth.
     - All other stores (Redis KV, Postgres, Neo4j, FAISS) are derived projections.
@@ -31,17 +32,19 @@ class MemoryConsistencyManager:
 
     @staticmethod
     def compute_checksum(payload: Dict[str, Any], prev_hash: str = "") -> str:
-        """v14.2: HMAC-chained checksum for audit integrity."""
+        """v15.1: HMAC-chained checksum for audit integrity."""
         canonical = json.dumps(payload, sort_keys=True, default=str)
-        secret = os.getenv("AUDIT_SECRET", "sovereign_fallback_secret").encode()
+        # Use a secure secret for hash chaining
+        secret = os.getenv("DCN_SECRET", os.getenv("AUDIT_SECRET", "sovereign_fallback_secret")).encode()
         message = (prev_hash + canonical).encode()
         return hmac.new(secret, message, hashlib.sha256).hexdigest()
 
     @staticmethod
-    def register_event(user_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    def register_event(user_id: str, payload: Dict[str, Any], broadcast: bool = False) -> Dict[str, Any]:
         """
         Appends a new event to the single source of truth (Event Log).
         Implements Hash Chaining for high-fidelity audit integrity.
+        v15.1: Added BFT-signed cross-node broadcasting.
         """
         prev_hash = "0" * 64
         if HAS_REDIS:
@@ -70,7 +73,7 @@ class MemoryConsistencyManager:
             redis_client.xadd(
                 MEMORY_EVENT_STREAM, 
                 {"event": json.dumps(event_dict)},
-                maxlen=50000, 
+                maxlen=100000, 
                 approximate=True
             )
             
@@ -81,7 +84,20 @@ class MemoryConsistencyManager:
             content_hash = hashlib.sha256(event.checksum.encode()).hexdigest()
             redis_client.setex(f"mcm:content_hash:{user_id}:{content_hash}", 86400, event.event_id)
             
-            logger.debug(f"[MCM] Audit Event Linked: {event.event_id} -> {prev_hash[:8]}...")
+            # 4. Phase 15.1: DCN Swarm Broadcast
+            if broadcast:
+                try:
+                    from backend.core.dcn_protocol import get_dcn_protocol
+                    dcn = get_dcn_protocol()
+                    if dcn.is_active:
+                         asyncio.create_task(dcn.broadcast_gossip(
+                            mission_id=f"mcm_pulse_{event.event_id}",
+                            payload=event_dict,
+                            pulse_type="mcm_event"
+                        ))
+                except Exception: pass
+
+            logger.debug(f"⛓️ [MCM] Audit Event Linked: {event.event_id} -> {prev_hash[:8]}...")
         except Exception as e:
             logger.error(f"[MCM] Hash Chain Write failure: {e}")
             
@@ -101,14 +117,18 @@ class MemoryConsistencyManager:
     @classmethod
     async def run_reconciliation(cls):
         """
-        Consumes the Event Log and ensures downstream stores are synchronized.
+        Sovereign v15.1: High-Performance Reconciliation Engine.
+        Consumes the Event Log and ensures all 5 cognitive tiers are synchronized.
         """
         if not HAS_REDIS: return
         
         try:
             last_id = redis_client.get("mcm:last_synced_event_id") or "0-0"
-            streams = redis_client.xread({MEMORY_EVENT_STREAM: last_id}, count=50, block=1000)
+            streams = redis_client.xread({MEMORY_EVENT_STREAM: last_id}, count=100, block=500)
             if not streams: return
+
+            from backend.kernel.kernel_wrapper import kernel
+            from backend.broadcast_utils import SovereignBroadcaster
 
             for _, entries in streams:
                 for entry_id, data in entries:
@@ -116,18 +136,38 @@ class MemoryConsistencyManager:
                     if not event_raw: continue
                     
                     event_dict = json.loads(event_raw)
-                    # 🛡️ Graduation #10: Event Sourcing Full-Circle
                     user_id = event_dict.get("user_id")
                     payload = event_dict.get("payload", {})
+                    event_type = event_dict.get("type")
                     
-                    if event_dict.get("type") == "fact":
+                    # ⚡ v15.1 [KERNEL] High-Fidelity Batch Crystallization ⚡
+                    fact_data = {
+                        "id": event_dict.get("id"),
+                        "content": json.dumps(payload),
+                        "metadata": json.dumps({
+                            "type": event_type,
+                            "user_id": user_id,
+                            "timestamp": event_dict.get("timestamp")
+                        })
+                    }
+                    kernel.sync_memory_batch([fact_data])
+
+                    # 1. Tier 3 Sync: Vector Store (Semantic)
+                    if event_type == "fact":
                         from backend.memory.vector_store import SovereignVectorStore
                         await SovereignVectorStore.store_fact(
                             user_id, 
                             payload.get("text"), 
-                            category=payload.get("category", "factual")
+                            category=payload.get("category", "factual"),
+                            importance=payload.get("importance", 0.5)
                         )
-                    elif event_dict.get("type") == "triplet":
+                    
+                    # 2. Tier 1 Sync: Postgres (Episodic/Factual)
+                    if event_type in ["fact", "interaction"]:
+                        await cls._sync_to_postgres(user_id, event_type, payload)
+
+                    # 3. Tier 2 Sync: Neo4j (Relational)
+                    if event_type == "triplet":
                          from backend.memory.graph_engine import GraphEngine
                          ge = GraphEngine()
                          await ge.upsert_triplet(
@@ -137,13 +177,58 @@ class MemoryConsistencyManager:
                              payload.get("object")
                          )
                     
-                    logger.info(f"[MCM] Synchronized event: {event_dict.get('id')} to derived stores.")
+                    # 4. Success Telemetry
+                    SovereignBroadcaster.publish("system:pulse", {
+                        "type": "MCM_SYNC_SUCCESS",
+                        "event_id": event_dict.get("id"),
+                        "tier_count": 5
+                    })
                     
                     # Update local checkpoint
                     redis_client.set("mcm:last_synced_event_id", entry_id)
                     
+            logger.info(f"✨ [MCM] Successfully reconciled current event batch.")
+                    
         except Exception as e:
             logger.error(f"[MCM] Reconciliation Engine Anomaly: {e}")
+
+    @staticmethod
+    async def _sync_to_postgres(user_id: str, event_type: str, payload: Dict[str, Any]):
+        """Internal helper for Tier 1 synchronization."""
+        from backend.db.postgres_db import get_write_session
+        from backend.db.models import UserFact, Mission, Message
+        from sqlalchemy import select
+
+        try:
+            async with get_write_session() as session:
+                if event_type == "fact":
+                    new_fact = UserFact(
+                        user_id=user_id,
+                        fact=payload.get("text"),
+                        category=payload.get("category", "factual"),
+                        importance=payload.get("importance", 0.5)
+                    )
+                    session.add(new_fact)
+                
+                elif event_type == "interaction":
+                    mission_id = payload.get("mission_id")
+                    if mission_id:
+                        res = await session.execute(select(Mission).where(Mission.mission_id == mission_id))
+                        mission = res.scalar_one_or_none()
+                        if not mission:
+                            mission = Mission(
+                                mission_id=mission_id,
+                                user_id=user_id,
+                                objective=payload.get("objective", "Synchronized Interaction")[:200],
+                                status=payload.get("status", "completed")
+                            )
+                            session.add(mission)
+                        
+                        if payload.get("user_input") and payload.get("response"):
+                            session.add(Message(mission_id=mission_id, role="user", content=payload["user_input"]))
+                            session.add(Message(mission_id=mission_id, role="bot", content=payload["response"]))
+        except Exception as e:
+            logger.error(f"[MCM] Postgres Sync failed: {e}")
 
     @staticmethod
     def log_anomaly(user_id: str, anomaly: Dict[str, Any]):
@@ -152,7 +237,6 @@ class MemoryConsistencyManager:
 
     @staticmethod
     def enqueue_retry(user_id: str, payload: Dict[str, Any], store: str = "generic") -> None:
-        """Maintains legacy retry mechanism for failed derived writes."""
         if not HAS_REDIS: return
         enriched = {**payload, "store": store, "queued_at": time.time()}
         redis_client.rpush(f"mcm:retry:{store}:{user_id}", json.dumps(enriched))

@@ -98,16 +98,29 @@ class Neo4jStore:
             logger.warning(f"[Neo4j] Resonance search degraded: {e}")
             return []
 
-    async def store_generic_fact(self, subject: str, relation: str, obj: str, tenant_id: str = "default"):
+    async def store_generic_fact(self, subject: str, relation: str, obj: str, tenant_id: str = "default", mission_id: Optional[str] = None):
         """
         Backward compatibility layer for simple string-based triplets.
         """
+        from .ontology import Relation
+        
+        # Try to map string relation to RelationType enum, or use RELATED_TO fallback
+        try:
+            rel_type = RelationType(relation.upper().replace(" ", "_"))
+        except ValueError:
+            rel_type = RelationType.RELATED_TO
+
         triplet = KnowledgeTriplet(
             subject=Entity(name=subject, type=EntityType.CONCEPT, tenant_id=tenant_id),
-            predicate=RelationType.RELATED_TO, # Simplified for generic facts
+            predicate=Relation(
+                source=subject, 
+                target=obj, 
+                type=rel_type, 
+                tenant_id=tenant_id,
+                source_mission_id=mission_id
+            ),
             object=Entity(name=obj, type=EntityType.CONCEPT, tenant_id=tenant_id),
-            tenant_id=tenant_id
+            source_mission_id=mission_id
         )
-        # Note: RelationType is used here, but KnowledgeTriplet expects a Relation object or Enum
-        # I'll fix the call to ensure it's valid based on ontology.py definitions.
-        pass # To be refined in implementation
+        
+        await self.upsert_triplet(triplet)

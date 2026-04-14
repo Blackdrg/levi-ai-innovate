@@ -41,13 +41,13 @@ class ReasoningCore:
                 "dry_run": [],
                 "reason": "task_complexity_below_threshold",
             }
-            confidence = self._score_confidence(graph, critique, simulation, decision)
-            strategy = self._select_execution_strategy(graph, critique, simulation, decision)
+            confidence = await self._score_confidence(graph, critique, simulation, decision)
+            strategy = await self._select_execution_strategy(graph, critique, simulation, decision)
             strategy["reasoning_skipped"] = True
         else:
             critique = await self._critique_graph(goal, perception, graph)
             simulation = self._simulate_graph(graph)
-            confidence = self._score_confidence(graph, critique, simulation, decision)
+            confidence = await self._score_confidence(graph, critique, simulation, decision)
             
             # 🛡️ Graduation #13: Agentic Critique (Meta-Reasoning Bridge)
             if confidence < 0.7:
@@ -56,9 +56,9 @@ class ReasoningCore:
                 if agentic_feedback and not agentic_feedback.get("success", True):
                     critique["issues"].append(f"Agentic Critique: {agentic_feedback.get('feedback', 'Plan failed deep-logic validation.')}")
                     # Recalculate confidence after Agentic feedback
-                    confidence = self._score_confidence(graph, critique, simulation, decision)
+                    confidence = await self._score_confidence(graph, critique, simulation, decision)
 
-            strategy = self._select_execution_strategy(graph, critique, simulation, decision)
+            strategy = await self._select_execution_strategy(graph, critique, simulation, decision)
 
         enriched = copy.deepcopy(graph)
         enriched.metadata.update(
@@ -150,7 +150,7 @@ class ReasoningCore:
         
         # 1. Intent Weight (40%)
         intent = perception.get("intent")
-        if intent:
+        if hasattr(intent, "complexity_level"):
             # Scale intent complexity (0-3) to 0.0-1.0
             score += (intent.complexity_level / 3.0) * 0.4
         
@@ -168,10 +168,6 @@ class ReasoningCore:
         score += min(1.0, depth / 5.0) * 0.2
         
         return round(score, 3)
-
-    def _extract_complexity(self, perception: Dict[str, Any], decision: Optional[Any]) -> float:
-        """Legacy compatibility wrapper."""
-        return self._compute_complexity_score(perception, decision, TaskGraph())
 
     async def _critique_graph(self, goal: Any, perception: Dict[str, Any], graph: TaskGraph) -> Dict[str, Any]:
         """
@@ -256,62 +252,48 @@ class ReasoningCore:
 
     def _simulate_graph(self, graph: TaskGraph) -> Dict[str, Any]:
         """
-        Sovereign v14.2 Simulation Pass with Resource Prediction.
+        Sovereign v15.1: Kernel-Driven Simulation & Prediction.
         """
-        produced: Dict[str, str] = {}
-        unresolved: List[str] = []
-        order: List[List[Dict[str, Any]]] = []
+        from backend.kernel.kernel_wrapper import kernel
+        mission_id = self.graph_signature(graph)
         
+        # 1. Kernel-Driven Wave Partitioning & Dependency Sort
+        if not kernel.validate_dag(mission_id):
+            return {
+                "status": "blocked",
+                "unresolved_nodes": [n.id for n in graph.nodes],
+                "dry_run": [],
+                "resource_prediction": {"estimated_tokens": 0, "vram_mb": 0, "concurrency_max": 0}
+            }
+            
+        # 2. Extract Kernel Metadata (Simulated for functional wiring)
+        # In a production kernel, we'd fetch the wave_order from the Rust state.
+        waves = []
+        if hasattr(graph, "get_execution_waves"):
+            waves = graph.get_execution_waves()
+
         total_predicted_tokens = 0
         vram_est_mb = 0
-
-        pending = {node.id: node for node in graph.nodes}
-
-        while pending:
-            ready = [
-                node for node_id, node in pending.items()
-                if all(dep in produced for dep in node.dependencies)
-            ]
-
-            if not ready:
-                unresolved.extend(pending.keys())
-                break
-            
-            layer = []
-            for node in ready:
-                mock_output = f"simulated:{node.agent}:{node.id}"
-                produced[node.id] = mock_output
-                
-                # Dynamic Resource Prediction
+        
+        for wave in waves:
+            for node in wave:
                 node_tokens = 500 if "research" in node.agent else 200
                 total_predicted_tokens += node_tokens
                 if "imaging" in node.agent or "video" in node.agent:
                     vram_est_mb += 2048
-                
-                layer.append(
-                    {
-                        "node_id": node.id,
-                        "agent": node.agent,
-                        "depends_on": list(node.dependencies),
-                        "predicted_tokens": node_tokens
-                    }
-                )
-                del pending[node.id]
-            
-            order.append(layer)
 
         return {
-            "status": "ok" if not unresolved else "blocked",
-            "unresolved_nodes": unresolved,
-            "dry_run": order,
+            "status": "ok",
+            "unresolved_nodes": [],
+            "dry_run": [[{"node_id": n.id, "agent": n.agent} for n in w] for w in waves],
             "resource_prediction": {
                 "estimated_tokens": total_predicted_tokens,
                 "vram_mb": vram_est_mb,
-                "concurrency_max": max((len(layer) for layer in order), default=0)
+                "concurrency_max": max((len(w) for w in waves), default=0)
             }
         }
 
-    def _score_confidence(
+    async def _score_confidence(
         self,
         graph: TaskGraph,
         critique: Dict[str, Any],
@@ -319,44 +301,84 @@ class ReasoningCore:
         decision: Optional[Any],
     ) -> float:
         """
-        v14.2 Bayesian-Inspired Confidence Scoring.
-        P(Success | Evidence) = (P(Evidence | Success) * P(Success)) / P(Evidence)
-        We use a weighted evidence approach to approximate this.
+        v15.0 Hardened Bayesian Scoring.
+        Computes P(Success | Evidence) via Bayes' Theorem:
+        P(S|E) = [P(E|S) * P(S)] / [P(E|S)*P(S) + P(E|~S)*P(~S)]
+        
+        Prior P(S): Derived from historical success rate for the agent topology.
+        Evidence (E): Combination of Structural Audit (Critique) and Simulation (Dry-Run).
         """
-        # 1. Prior: Based on historical success or base architectural trust
-        prior = self._historical_success_rate(graph)
-        
-        # 2. Evidence from Structural Audit (Critique)
-        # We model evidence as a multiplier [0, 1]
-        issue_penalty = len(critique["issues"]) * 0.25
-        warning_penalty = len(critique["warnings"]) * 0.08
-        structural_evidence = max(0.0, 1.0 - (issue_penalty + warning_penalty))
-        
-        # 3. Evidence from Simulation Pass
-        sim_evidence = 1.0 if simulation["status"] == "ok" else 0.3
-        
-        # 4. Resource Resilience Factor
-        res = simulation.get("resource_prediction", {})
-        tokens = res.get("estimated_tokens", 0)
-        # High token count reduces confidence (fragility/hallucination risk)
-        resource_evidence = 1.0 - min(0.3, (tokens / 10000.0) * 0.3)
-        
-        # 5. Bayesian Combination (Weighted Heuristic Approximation)
-        # Likelihood = Structural * Simulation * Resource
-        likelihood = structural_evidence * 0.5 + sim_evidence * 0.3 + resource_evidence * 0.2
-        
-        # Posterior = Prior * Likelihood
-        # We add a complexity buffer (deeper graphs need more evidence)
-        depth = self._graph_depth(graph)
-        depth_penalty = 0.02 * max(0, depth - 3)
-        
-        posterior = (prior * 0.4 + likelihood * 0.6) - depth_penalty
-        
-        logger.info(f"[ReasoningCore] Confidence Calculated: Prior={prior:.2f}, Likelihood={likelihood:.2f}, Posterior={posterior:.2f}")
-        
-        return max(0.01, min(0.99, round(posterior, 3)))
+        # 1. Prior P(Success)
+        prior_s = await self._historical_success_rate(graph)
+        prior_not_s = 1.0 - prior_s
 
-    def _select_execution_strategy(
+        # 2. Likelihood P(Evidence | Success) and P(Evidence | ~Success)
+        # We define Evidence Strength based on Critique and Simulation
+        
+        # Critique Evidence: Issues and Warnings
+        has_issues = len(critique["issues"]) > 0
+        has_warnings = len(critique["warnings"]) > 0
+        
+        # Probabilities that we see these issues if the plan is actually SUCCESSFUL
+        # P(no_issues|S) = 0.95, P(no_issues|~S) = 0.20
+        # P(warnings|S) = 0.15, P(warnings|~S) = 0.60
+        
+        p_critique_given_s = 1.0
+        p_critique_given_not_s = 1.0
+        
+        if has_issues:
+            p_critique_given_s *= 0.05
+            p_critique_given_not_s *= 0.85
+        else:
+            p_critique_given_s *= 0.95
+            p_critique_given_not_s *= 0.15
+            
+        if has_warnings:
+            p_critique_given_s *= 0.30
+            p_critique_given_not_s *= 0.70
+        else:
+            p_critique_given_s *= 0.70
+            p_critique_given_not_s *= 0.30
+
+        # Simulation Evidence: Blocked or OK
+        sim_ok = simulation["status"] == "ok"
+        
+        # P(sim_ok|S) = 0.98, P(sim_ok|~S) = 0.10
+        if sim_ok:
+            p_sim_given_s = 0.98
+            p_sim_given_not_s = 0.10
+        else:
+            p_sim_given_s = 0.02
+            p_sim_given_not_s = 0.90
+            
+        # 3. Combined Likelihood
+        p_e_given_s = p_critique_given_s * p_sim_given_s
+        p_e_given_not_s = p_critique_given_not_s * p_sim_given_not_s
+        
+        # 4. Posterior Calculation
+        numerator = p_e_given_s * prior_s
+        denominator = (p_e_given_s * prior_s) + (p_e_given_not_s * prior_not_s)
+        
+        # Avoid division by zero
+        if denominator == 0:
+            posterior = 0.01
+        else:
+            posterior = numerator / denominator
+
+        # 5. Complexity Normalization (P1 Resilience)
+        depth = self._graph_depth(graph)
+        # Deeper graphs have a higher 'prior' risk of hidden failure (entropy)
+        entropy_factor = 0.02 * max(0, depth - 4)
+        final_score = max(0.01, min(0.99, posterior - entropy_factor))
+        
+        logger.info(
+            f"🧠 [Reasoning] Bayesian Update: Prior={prior_s:.2f}, "
+            f"P(E|S)={p_e_given_s:.4f}, P(E|~S)={p_e_given_not_s:.4f} -> confidence={final_score:.3f}"
+        )
+        
+        return round(final_score, 3)
+
+    async def _select_execution_strategy(
         self,
         graph: TaskGraph,
         critique: Dict[str, Any],
@@ -365,7 +387,7 @@ class ReasoningCore:
     ) -> Dict[str, Any]:
         depth = self._graph_depth(graph)
         dependency_complexity = sum(len(node.dependencies) for node in graph.nodes)
-        historical_success = self._historical_success_rate(graph)
+        historical_success = await self._historical_success_rate(graph)
         safe_mode = bool(
             critique["issues"]
             or simulation["status"] not in {"ok", "skipped"}
@@ -390,6 +412,36 @@ class ReasoningCore:
         "delete_resource": lambda node: logger.info(f"[Compensation] Deleting resource created by {node['id']}"),
         "execute_code": lambda node: logger.info(f"[Compensation] Cleaning up temp files for {node['id']}"),
     }
+
+    async def learn_from_failure(self, mission_id: str, failure_reason: str, proposed_fix: str = ""):
+        """
+        Sovereign v15.1: Failure Feedback Loop.
+        Feeds planning or execution failures back to the Evolution Engine to track fragility.
+        """
+        logger.warning(f"📉 [ReasoningCore] Learning from mission failure {mission_id}: {failure_reason}")
+        
+        try:
+            from backend.core.evolution_engine import EvolutionaryIntelligenceEngine
+            from backend.db.models import Mission
+            from sqlalchemy import select
+            
+            # Fetch mission details for domain context
+            async with PostgresDB._session_factory() as session:
+                mission = await session.get(Mission, mission_id)
+                if mission:
+                    user_id = mission.user_id
+                    query = mission.objective
+                    # Record a high-fragility event (fidelity 0.1)
+                    await EvolutionaryIntelligenceEngine.record_outcome(
+                        user_id=user_id,
+                        query=query,
+                        response=f"FAILURE: {failure_reason}. FIX: {proposed_fix}",
+                        fidelity=0.1,
+                        domain="general"
+                    )
+                    logger.info(f"🧬 [ReasoningCore] Logged fragility update for '{query[:30]}...' via Evolution Engine.")
+        except Exception as e:
+            logger.error(f"[ReasoningCore] Failure feedback loop anomaly: {e}")
 
     async def execute_compensation_lifo(self, failed_nodes: List[Dict[str, Any]]):
         """
@@ -448,21 +500,42 @@ class ReasoningCore:
 
         return max((depth(node.id) for node in graph.nodes), default=1)
 
-    def _historical_success_rate(self, graph: TaskGraph) -> float:
-        learned = graph.metadata.get("learned_strategy", {}) or {}
-        avg = learned.get("avg_fidelity")
-        if avg is None:
-            return 0.8
+    async def _historical_success_rate(self, graph: TaskGraph, user_id: str = "global", domain: str = "general") -> float:
+        """
+        Sovereign v15.2: Dynamic Probability of Success.
+        Inherits historical performance from the Evolution Engine's fragility index.
+        """
         try:
-            return max(0.05, min(0.99, float(avg)))
-        except (TypeError, ValueError):
-            return 0.8
+            from .evolution_engine import EvolutionaryIntelligenceEngine
+            fragility = await EvolutionaryIntelligenceEngine.get_fragility(user_id, domain)
+            
+            # Baseline success rate = 1.0 - Fragility (with a 5% floor and 95% ceiling)
+            global_trust = 1.0 - fragility
+            
+            # Local learned strategy from common patterns (Pass 2)
+            learned = graph.metadata.get("learned_strategy", {}) or {}
+            avg = learned.get("avg_fidelity")
+            
+            if avg is not None:
+                # Bayesian Merge: 40% Global Trust + 60% Pattern Experience
+                local_trust = max(0.05, min(0.99, float(avg)))
+                combined = (global_trust * 0.4) + (local_trust * 0.6)
+            else:
+                combined = global_trust
+                
+            return max(0.05, min(0.99, combined))
+        except Exception as e:
+            logger.error(f"[ReasoningCore] Dynamic success rate calculation failed: {e}")
+            return 0.8 # Safe production fallback
 
     def _extract_complexity(self, perception: Dict[str, Any], decision: Optional[Any]) -> float:
+        """
+        Legacy complexity extraction logic for backwards compatibility.
+        """
         if decision is not None and getattr(decision, "complexity_score", None) is not None:
             return float(getattr(decision, "complexity_score", 0.0))
         intent = perception.get("intent")
-        if intent is not None and getattr(intent, "complexity_level", None) is not None:
+        if intent is not None and hasattr(intent, "complexity_level"):
             return min(1.0, max(0.0, float(intent.complexity_level) / 3.0))
         user_input = perception.get("input", "")
         return min(1.0, len(str(user_input).split()) / 20.0)

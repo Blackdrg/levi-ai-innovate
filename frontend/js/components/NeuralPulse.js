@@ -58,7 +58,7 @@ class NeuralPulse {
      */
     connectToSovereignPulse() {
         const token = localStorage.getItem("sovereign_token");
-        const eventSource = new EventSource(`/api/v1/pulse?token=${token}`);
+        const eventSource = new EventSource(`/api/v1/telemetry/pulse?token=${token}`);
 
         const historyContainer = document.getElementById("pulse-history");
         const statusDot = document.getElementById("pulse-status");

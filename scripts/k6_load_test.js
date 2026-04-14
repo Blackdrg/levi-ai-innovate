@@ -13,25 +13,27 @@ export const options = {
 };
 
 export default function () {
-  const url = 'http://localhost:8000/api/v14';
+  const url = 'http://localhost:8000/api/v1/orchestrator/mission';
   const payload = JSON.stringify({
-    message: 'Hello FAST mode, what is the current protocol status?',
-    session_id: `k6-session-${__VU}-${__ITER}`
+    input: 'Autonomous mission: Stress-test the cognitive resonance of the swarm.',
+    user_id: `k6-vu-${__VU}`,
+    settings: { mode: "FAST" }
   });
 
   const params = {
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': 'Bearer test-token',
+      'X-Sovereign-Request': 'true'
     },
   };
 
   const res = http.post(url, payload, params);
 
   check(res, {
-    'is status 200': (r) => r.status === 200,
-    'has strategy': (r) => r.json('strategy') !== undefined,
+    'mission accepted (200)': (r) => r.status === 200,
+    'has confidence score': (r) => r.json('confidence') !== undefined,
+    'latency < 4s': (r) => r.timings.duration < 4000,
   });
 
-  sleep(1);
+  sleep(0.5); // 500ms between cognitive waves
 }

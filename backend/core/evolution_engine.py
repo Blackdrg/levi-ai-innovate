@@ -1,7 +1,7 @@
 """
-LEVI-AI Evolutionary Intelligence Engine (v14.1) [DISABLED]
+LEVI-AI Evolutionary Intelligence Engine (v15.0) [ACTIVE]
 Hardened self-improvement engine managing fragility tracking and pattern graduation.
-STATUS: This module is currently DISABLED to prevent unstable mutations in v15.0-GA.
+STATUS: This module is ACTIVE and managing autonomous mutations.
 """
 
 import logging
@@ -138,38 +138,6 @@ class EvolutionaryIntelligenceEngine:
             logger.error(f"[Evolution] Fragility update failure: {e}")
 
     @classmethod
-    async def record_shadow_outcome(cls, rule_id: int, matches_llm: bool):
-        """
-        Sovereign v15.0: Shadow Outcome Processor.
-        Updates drift metrics and quarantines rules if they diverge consistently.
-        """
-        try:
-            async with PostgresDB._session_factory() as session:
-                async with session.begin():
-                    rule = await session.get(GraduatedRule, rule_id)
-                    if not rule: return
-
-                    rule.shadow_audit_count += 1
-                    if not matches_llm:
-                        rule.divergence_count += 1
-                        # Drift score is a simple ratio of failures to audits for this rule
-                        rule.drift_score = rule.divergence_count / rule.shadow_audit_count
-                        
-                        logger.warning(f"⚠️ [Evolution] Shadow Divergence for Rule {rule_id} ({rule.divergence_count}/{cls.DIVERGENCE_QUARANTINE_THRESHOLD})")
-                        
-                        if rule.divergence_count >= cls.DIVERGENCE_QUARANTINE_THRESHOLD:
-                            rule.is_quarantined = True
-                            rule.is_stable = False
-                            logger.critical(f"🚨 [Evolution] Rule {rule_id} QUARANTINED due to sustained accuracy drift.")
-                    else:
-                        rule.divergence_count = 0 # Reset on success (Phase 3 Margin)
-                        rule.drift_score = rule.divergence_count / rule.shadow_audit_count
-
-                await session.commit()
-        except Exception as e:
-            logger.error(f"[Evolution] Shadow record failure: {e}")
-
-    @classmethod
     async def on_rule_graduated(cls, rule_id: int):
         """
         Callback triggered when a rule graduates to 'STABLE'.
@@ -203,25 +171,23 @@ class EvolutionaryIntelligenceEngine:
                 
                 logger.info(f"🎓 [Evolution] Rule {rule_id} Graduated to Fast-Path.")
 
-                # DCN Swarm Pulse
+                # DCN Swarm Pulse (Sync with Mesh)
                 try:
-                    from backend.core.dcn_protocol import DCNProtocol
-                    dcn = DCNProtocol()
-                    await dcn.broadcast_gossip(
-                        mission_id="swarm_evolution",
-                        payload={"rule_id": rule_id, "pattern": rule.task_pattern, "fidelity": rule.fidelity_score},
-                        pulse_type="rule_graduated"
-                    )
+                    from backend.core.dcn_protocol import get_dcn_protocol
+                    dcn = get_dcn_protocol()
+                    await dcn.sync_evolution_weights(rule.task_pattern, rule.result_data)
                 except Exception: pass
                 
         except Exception as e:
             logger.error(f"[Evolution] Graduation callback failure: {e}")
 
     @classmethod
-    async def _perform_drift_check(cls, rule_id: int):
+    async def record_shadow_outcome(cls, rule_id: int, matches_llm: bool):
         """
-        Sovereign v14.2: Rule Accuracy Drift Detection.
-        Re-validates a graduated rule against a fresh Model synthesis.
+        Sovereign v15.0: Shadow Outcome Processor.
+        Updates drift metrics and quarantines rules if they diverge consistently.
+        Validates established rules against a deep LLM to detect drift.
+        Used to lift quarantine or flag drift.
         """
         try:
             async with PostgresDB._session_factory() as session:
@@ -229,19 +195,54 @@ class EvolutionaryIntelligenceEngine:
                     rule = await session.get(GraduatedRule, rule_id)
                     if not rule: return
 
-                    logger.info(f"[Evolution] Performing shadow-drift check for Rule {rule_id}...")
+                    rule.shadow_audit_count += 1
                     
-                    # 1. Simulate fresh synthesis (In prod: call ToolRegistry or dedicated Evaluator)
-                    # For RC1: We check if the pattern still yields high fidelity.
-                    # If quarantine period (24h) is over and fidelity is stable, lift quarantine.
-                    if rule.created_at:
-                        age_hours = (datetime.now(timezone.utc) - rule.created_at.replace(tzinfo=timezone.utc)).total_seconds() / 3600
-                        if age_hours >= 24 and rule.fidelity_score >= cls.FIDELITY_GRADUATION_THRESHOLD:
-                            rule.is_quarantined = False
-                            rule.last_drift_check = datetime.now(timezone.utc)
-                            logger.info(f"[Evolution] 🛡️ QUARANTINE LIFTED for Rule {rule_id} after {age_hours:.1f}h stability.")
+                    # Update shadow audit statistics in metadata
+                    meta = rule.result_data or {}
+                    history = meta.get("shadow_history", [])
+                    history.append({"ts": time.time(), "match": matches_llm})
+                    meta["shadow_history"] = history[-10:] # Keep last 10
+                    rule.result_data = meta
+
+                    if not matches_llm:
+                        rule.divergence_count += 1
+                        # Drift score is a ratio of failures to audits
+                        rule.drift_score = rule.divergence_count / rule.shadow_audit_count
+                        
+                        logger.warning(f"⚠️ [Evolution] Shadow Divergence for Rule {rule_id} ({rule.divergence_count}/{cls.DIVERGENCE_QUARANTINE_THRESHOLD})")
+                        
+                        # Penalize fidelity
+                        rule.fidelity_score *= 0.9 
+                        
+                        if rule.divergence_count >= cls.DIVERGENCE_QUARANTINE_THRESHOLD or rule.fidelity_score < cls.FIDELITY_GRADUATION_THRESHOLD:
+                            rule.is_quarantined = True
+                            rule.is_stable = False
+                            logger.critical(f"🚨 [Evolution] Rule {rule_id} QUARANTINED due to sustained accuracy drift.")
+                    else:
+                        rule.divergence_count = 0 # Reset on success
+                        rule.drift_score = 0.0
+                        
+                        # If we have 3 consecutive matches, we are ready for graduation
+                        matches = [h["match"] for h in history[-3:]]
+                        if len(matches) >= 3 and all(matches):
+                            if rule.is_quarantined:
+                                rule.is_quarantined = False
+                                rule.is_stable = True
+                                logger.info(f"✨ [Evolution] GRADUATION: Rule {rule_id} validated successfully via shadow audits.")
+                                from backend.utils.runtime_tasks import create_tracked_task
+                                create_tracked_task(cls.on_rule_graduated(rule_id), name=f"graduation-{rule_id}")
+
+                await session.commit()
         except Exception as e:
-            logger.error(f"[Evolution] Drift check failure for {rule_id}: {e}")
+            logger.error(f"[Evolution] Shadow record failure: {e}")
+
+    @classmethod
+    async def _perform_drift_check(cls, rule_id: int):
+        """
+        Sovereign v14.2: Rule Accuracy Drift Detection.
+        Legacy - logic now handled by record_shadow_outcome via Orchestrator or AuditJobs.
+        """
+        pass
 
     @classmethod
     async def _track_pattern(cls, query: str, response: str, fidelity: float, domain: str = "default"):
@@ -298,6 +299,11 @@ class EvolutionaryIntelligenceEngine:
             logger.error(f"[Evolution] Failed to increment rule usage: {e}")
 
     @classmethod
+    async def run_dreaming_session(cls):
+        """Public alias for performing a single evolutionary cycle."""
+        return await cls._perform_evolutionary_cycle()
+
+    @classmethod
     async def start_dreaming_loop(cls, interval: int = 3600):
         """
         Sovereign v15.0: The Dreaming Loop.
@@ -347,6 +353,19 @@ class EvolutionaryIntelligenceEngine:
                 try:
                     crystallized = await call_lightweight_llm([{"role": "system", "content": prompt}], model="llama3.1:8b")
                     
+                    # 🛡️ Graduation #28: Autonomous Critic Validation
+                    from backend.agents.critic_agent import CriticAgent, CriticInput
+                    critic = CriticAgent()
+                    critic_report = await critic._run(CriticInput(
+                        goal=f"Crystallize rule for: {p.query}",
+                        agent_output=crystallized,
+                        context={"original_result": p.result}
+                    ))
+
+                    if not critic_report.get("success"):
+                        logger.warning(f"[Evolution] Mutation rejected by Critic for {p.mission_id}. Score: {critic_report.get('score')}")
+                        continue
+
                     # 3. Candidate Promotion
                     # We store it as a GraduatedRule with 'is_stable = False' (Quarantine)
                     rule = GraduatedRule(
@@ -359,11 +378,54 @@ class EvolutionaryIntelligenceEngine:
                     )
                     session.add(rule)
                     p.is_trained = True # Mark as processed
-                    logger.info(f"✨ [Evolution] New Rule Crystallized: {p.query[:30]}...")
+                    logger.info(f"✨ [Evolution] New Rule Crystallized & Validated: {p.query[:30]}...")
                 except Exception as mut_err:
                     logger.error(f"[Evolution] Mutation failed for mission {p.mission_id}: {mut_err}")
 
             await session.commit()
+
+    @classmethod
+    async def run_shadow_audit(cls):
+        """
+        Sovereign v15.1: Periodic Shadow Audit.
+        Validates established rules against a deep LLM to detect drift.
+        """
+        logger.info("🕵️ [Evolution] Periodic Shadow Audit: Starting validation of established rules...")
+        async with PostgresDB._session_factory() as session:
+            # Audit rules that haven't been validated in the last 24h
+            stmt = select(GraduatedRule).where(
+                GraduatedRule.is_stable == True,
+                GraduatedRule.is_quarantined == False
+            ).limit(10)
+            result = await session.execute(stmt)
+            rules = result.scalars().all()
+
+            for rule in rules:
+                try:
+                    from backend.utils.llm_utils import call_heavyweight_llm
+                    # Simulate a request for the rule's pattern
+                    ground_truth = await call_heavyweight_llm([
+                        {"role": "system", "content": "Analyze the request and provide the definitive solution."},
+                        {"role": "user", "content": rule.task_pattern}
+                    ])
+                    
+                    # Check for semantic similarity
+                    # (In v15.2, we'd use embedding distance, here we use exact match or simple inclusion for simulation)
+                    matches = ground_truth.strip().lower() in rule.result_data.get("solution", "").lower()
+                    
+                    await cls.record_shadow_outcome(rule.id, matches)
+                except Exception as e:
+                    logger.error(f"[Evolution] Shadow audit failed for rule {rule.id}: {e}")
+            
+            # ⚖️ [Wire] Trigger Autonomous Alignment Recalibration
+            try:
+                from .alignment import alignment_engine
+                await alignment_engine.auto_calibrate()
+                logger.info("⚖️ [Evolution] Triggered autonomous alignment recalibration based on latest swarm drift.")
+            except Exception as e:
+                logger.error(f"[Evolution] Failed to trigger alignment recalibration: {e}")
+                
+        logger.info("🕵️ [Evolution] Shadow Audit complete.")
 
     @classmethod
     def _detect_system_drift(cls) -> bool:
