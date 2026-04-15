@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: levi-brain-dcn
+  namespace: sovereign
+  labels:
+    app: levi-brain
+    component: dcn-node
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: levi-brain
+  template:
+    metadata:
+      labels:
+        app: levi-brain
+    spec:
+      containers:
+      - name: levi-brain
+        image: gcr.io/levi-ai/brain:v16.1-GA
+        ports:
+        - containerPort: 8000
+        - containerPort: 9000 # DCN gRPC
+        env:
+        - name: DCN_NODE_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: DCN_REGION
+          value: "us-east1" # Parameterized per cluster
+        - name: CERT_PATH
+          value: "/etc/levi/certs"
+        volumeMounts:
+        - name: certs
+          mountPath: "/etc/levi/certs"
+          readOnly: true
+      volumes:
+      - name: certs
+        secret:
+          secretName: levi-dcn-certs
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: levi-dcn-lb
+  namespace: sovereign
+  annotations:
+    cloud.google.com/load-balancer-type: "Internal"
+spec:
+  type: LoadBalancer
+  selector:
+    app: levi-brain
+  ports:
+  - name: grpc
+    port: 9000
+    targetPort: 9000

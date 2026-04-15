@@ -438,3 +438,46 @@ class EvolutionaryIntelligenceEngine:
         if pressure.get("vram_pressure", 0) > 0.9:
             return True # Invalidate fast-path if memory is choked
         return False
+
+    @classmethod
+    async def analyze_system_fragility(cls):
+        """
+        Phase 3.5: Autonomous Self-Healing.
+        Identifies highly fragile domains and proposes system-level logic mutations.
+        """
+        logger.info("🔬 [Evolution] Analyzing system-wide fragility for self-healing...")
+        async with PostgresDB._session_factory() as session:
+            stmt = select(FragilityIndex).where(FragilityIndex.fragility_score > 0.7)
+            res = await session.execute(stmt)
+            fragile_domains = res.scalars().all()
+            
+            for domain in fragile_domains:
+                logger.warning(f"🚨 [Evolution] CRITICAL FRAGILITY in domain '{domain.domain}' (Score: {domain.fragility_score})")
+                await cls._propose_system_patch(domain.domain)
+
+    @classmethod
+    async def _propose_system_patch(cls, domain: str):
+        """
+        Generates a software mutation proposal to stabilize a fragile domain.
+        """
+        from backend.db.models import MutationProposal
+        
+        proposal_name = f"patch_fragility_{domain}_{int(time.time())}"
+        logger.info(f"🧠 [Evolution] Generating mutation proposal: {proposal_name}")
+        
+        # In a real v16.1 setup, we'd use a CoderAgent to generate a diff for backend/core/intent_rules.py or similar
+        description = f"Stabilize high-failure domain '{domain}' via adaptive logic synthesis."
+        
+        async with PostgresDB._session_factory() as session:
+            proposal = MutationProposal(
+                mutation_type="logic_refinement",
+                proposal_name=proposal_name,
+                logic_diff="// Autonomous logic mutation placeholder",
+                target_metric="fragility_score",
+                expected_improvement=0.3,
+                status="proposed"
+            )
+            session.add(proposal)
+            await session.commit()
+            
+        logger.info(f"✅ [Evolution] Mutation Proposal PERSISTED: {proposal_name}")

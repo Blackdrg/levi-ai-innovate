@@ -59,7 +59,6 @@ async def dispatch_mission_v15(
         logger.error(f"[Orchestrator-v15] Mission Dispatch Anomaly: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-    return state
 
 @router.get("/mission/{mission_id}")
 async def get_mission_status(

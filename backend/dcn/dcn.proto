@@ -11,6 +11,22 @@ service DCNGossipService {
 
     // Bidirectional stream for high-throughput pulse propagation (Phase 2.3)
     rpc PulseStream (stream PulseRequest) returns (stream PulseResponse);
+
+    // Phase 2.3: Chunked Artifact Transfer
+    rpc PullArtifact (ArtifactRequest) returns (stream ArtifactChunk);
+}
+
+message ArtifactRequest {
+    string artifact_id = 1;
+    string mission_id = 2;
+    uint32 start_offset = 3;
+}
+
+message ArtifactChunk {
+    bytes data = 1;
+    uint32 chunk_index = 2;
+    bool is_final = 3;
+    string checksum = 4;
 }
 
 message PulseRequest {

@@ -5,9 +5,36 @@ Decides the Brain's recovery action based on specific failure types.
 
 import logging
 from typing import Dict, Any, List, Optional
+import json
+from datetime import datetime, timezone
 from .orchestrator_types import FailureType, FailureAction, BrainDecision
+from backend.db.redis import r as redis_client
 
 logger = logging.getLogger(__name__)
+
+def handle_celery_failure(self, exc, task_id, args, kwargs, einfo):
+    """
+    Sovereign v14.1.0: Celery Failure Bridge.
+    Moves failed tasks into the 'sovereign:failure_queue' for the Self-Healing Critic.
+    """
+    logger.error(f"❌ [CeleryFailure] Task {task_id} failed: {exc}")
+    
+    failure_payload = {
+        "task_id": task_id,
+        "task_name": self.name,
+        "exception": str(exc),
+        "args": [str(a) for a in args],
+        "kwargs": {k: str(v) for k, v in kwargs.items()},
+        "traceback": str(einfo.traceback) if einfo else None,
+        "timestamp": datetime.now(timezone.utc).timestamp()
+    }
+    
+    try:
+        redis_client.rpush("sovereign:failure_queue", json.dumps(failure_payload))
+        logger.info(f"📤 [CeleryFailure] Pushed task {task_id} to self-healing queue.")
+    except Exception as e:
+        logger.error(f"⚠️ [CeleryFailure] Failed to push to Redis: {e}")
+
 
 class FailurePolicyEngine:
     """

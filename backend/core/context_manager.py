@@ -75,15 +75,37 @@ class ContextManager:
 
     async def hydrate_context(self, raw_context: Dict[str, Any], budget: TokenBudget) -> Dict[str, Any]:
         """
-        Prunes and prioritizes context based on the allocated budget.
-        (Draft implementation: Basic pruning logic)
+        Phase 3.7: Self-Optimized Context Hydration.
+        Prunes and prioritizes context, using LLM-based distillation for history if budget is exceeded.
         """
         hydrated = raw_context.copy()
-        
-        # Example of pruning history if it exceeds its limit
         history = hydrated.get("history", [])
-        if len(str(history)) > budget.history_limit: # Very crude estimation
-            # Keep only the last few turns
-            hydrated["history"] = history[-5:]
+        
+        # 1. Distillation Check (Phase 3.7)
+        history_str = json.dumps(history)
+        if len(history_str.split()) > budget.history_limit: # Token-ish count
+            logger.info(f"🧠 [Context] History exceeds budget ({len(history_str.split())} tokens). Triggering distillation...")
+            hydrated["history"] = await self.distill_history(history)
+        
+        # 2. Prune examples
+        examples = hydrated.get("examples", [])
+        if len(json.dumps(examples).split()) > budget.example_limit:
+            hydrated["examples"] = examples[:3] # Keep only top 3
             
         return hydrated
+
+    async def distill_history(self, history: List[Dict[str, str]]) -> List[Dict[str, str]]:
+        """
+        Uses a lightweight model to distill history into a dense summary.
+        """
+        from backend.services.brain_service import brain_service
+        
+        history_text = "\n".join([f"{m.get('role')}: {m.get('content')}" for m in history])
+        prompt = f"Distill the following conversation into a dense, context-heavy summary (max 300 words):\n\n{history_text}"
+        
+        try:
+            summary = await brain_service.call_local_llm(prompt, model="llama3.1:8b")
+            return [{"role": "system", "content": f"PREVIOUS CONTEXT SUMMARY: {summary}"}]
+        except Exception as e:
+            logger.error(f"[Context] Distillation failed: {e}")
+            return history[-2:] # Panic fallback: last 2 messages

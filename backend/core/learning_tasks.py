@@ -30,6 +30,13 @@ def run_autonomous_evolution():
         # 3. Trigger Evolutionary Dreaming (Engine 7)
         from backend.core.evolution_engine import EvolutionaryIntelligenceEngine
         await EvolutionaryIntelligenceEngine.run_dreaming_session()
+        
+        # 4. Trigger Self-Healing Analysis (Phase 3.5)
+        await EvolutionaryIntelligenceEngine.analyze_system_fragility()
+
+        # 5. Trigger Policy Gradient RL Optimization (Phase 3.6)
+        from backend.core.policy_gradient import policy_gradient
+        await policy_gradient.run_optimization_pass()
 
         # 4. Telemetry Update
         broadcast_mission_event("system", "evolution_complete", {
@@ -73,10 +80,45 @@ def prune_expired_data():
 def unbound_training_cycle():
     """
     Sovereign v15.0-GA: Unbound Wisdom Capture.
-    (Placeholder for weekly high-fidelity corpus export)
+    Captures weekly high-fidelity data and triggers autonomous fine-tuning (LoRA).
     """
     async def _run():
         logger.info("[Unbound] Exporting weekly high-fidelity corpus...")
         await LearningLoop.export_for_finetuning("backend/data/weekly_corpus.jsonl", limit=1000)
+        
+        # --- Phase 3.8: Autonomous LoRA fine-tuning ---
+        from backend.services.evolution.lora_trainer import lora_trainer
+        await lora_trainer.run_maintenance_cycle()
+        
+    asyncio.run(_run())
+
+
+@celery_app.task(name="backend.services.orchestrator.learning_tasks.run_shadow_audit_task")
+def run_shadow_audit_task():
+    """
+    Phase 3.2: Automated Shadow Audit Loop.
+    Validates graduated rules against deep LLMs to detect cognitive drift.
+    """
+    from backend.core.evolution_engine import EvolutionaryIntelligenceEngine
     
+    async def _run():
+        logger.info("[ShadowAudit] Starting periodic validation of graduated rules...")
+        await EvolutionaryIntelligenceEngine.run_shadow_audit()
+        logger.info("[ShadowAudit] Shadow audit cycle complete.")
+
+    asyncio.run(_run())
+
+@celery_app.task(name="backend.services.orchestrator.learning_tasks.crystallize_patterns_task")
+def crystallize_patterns_task():
+    """
+    Phase 3.3: Autonomous Pattern Crystallization.
+    Transforms high-fidelity mission results into hard-coded fast-path rules.
+    """
+    from backend.core.evolution_engine import EvolutionaryIntelligenceEngine
+
+    async def _run():
+        logger.info("[Evolution] Awakening the Dreaming Loop for pattern crystallization...")
+        await EvolutionaryIntelligenceEngine.run_dreaming_session()
+        logger.info("[Evolution] Crystallization dreaming complete.")
+
     asyncio.run(_run())

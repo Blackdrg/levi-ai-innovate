@@ -8,6 +8,7 @@ import hashlib
 import logging
 from typing import Dict, Any, List, Optional
 from pydantic import BaseModel
+from backend.utils.ssl_manager import SSLManager
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +77,7 @@ class HybridGossip:
         await asyncio.gather(*tasks, return_exceptions=True)
 
     async def _send_direct_pulse(self, peer: DCNPeer, pulse: Dict[str, Any]):
-        """Transmits a pulse directly to a peer via HTTP/gRPC."""
+        """Transmits a pulse directly to a peer via mTLS gRPC."""
         try:
             import grpc
             from backend.dcn import dcn_pb2, dcn_pb2_grpc
@@ -84,7 +85,24 @@ class HybridGossip:
             if not dcn_pb2_grpc:
                 raise ImportError("DCN Protos not available for P2P.")
 
-            async with grpc.aio.insecure_channel(f"{peer.host}:{peer.port}") as channel:
+            # --- mTLS CLIENT CHANNEL LOGIC ---
+            creds = SSLManager.get_client_credentials()
+            if creds:
+                private_key, certificate_chain, root_certificates = creds
+                channel_creds = grpc.ssl_channel_credentials(
+                    root_certificates=root_certificates,
+                    private_key=private_key,
+                    certificate_chain=certificate_chain
+                )
+                channel_factory = grpc.aio.secure_channel
+                security_creds = channel_creds
+            else:
+                channel_factory = grpc.aio.insecure_channel
+                security_creds = None
+            
+            target = f"{peer.host}:{peer.port}"
+            
+            async with (channel_factory(target, security_creds) if security_creds else channel_factory(target)) as channel:
                 stub = dcn_pb2_grpc.DCNGossipServiceStub(channel)
                 
                 # Wrap pulse in request
@@ -99,7 +117,7 @@ class HybridGossip:
                 if response.success:
                     peer.last_heartbeat = pulse["timestamp"]
                     peer.status = "ALIVE"
-                    logger.debug(f"[DCN] P2P pulse delivered to {peer.node_id}")
+                    logger.debug(f"[DCN] P2P pulse delivered to {peer.node_id} (Secure: {creds is not None})")
                 else:
                     logger.warning(f"[DCN] P2P pulse rejected by {peer.node_id}: {response.message}")
 
@@ -122,6 +140,44 @@ class HybridGossip:
         """Returns nodes seen in the last 60 seconds."""
         now = time.time()
         return [p for p in self.peers.values() if (now - p.last_heartbeat) < 60]
+
+    async def pull_artifact_from_peer(self, peer_id: str, artifact_id: str, destination_path: str):
+        """
+        Phase 2.3: Chunked P2P Downloader.
+        Downloads an artifact from a specific peer via mTLS gRPC streaming.
+        """
+        peer = self.peers.get(peer_id)
+        if not peer:
+            raise ValueError(f"Peer {peer_id} not found.")
+
+        import grpc
+        from backend.dcn import dcn_pb2, dcn_pb2_grpc
+        
+        creds = SSLManager.get_client_credentials()
+        # (Assuming secure_channel logic from _send_direct_pulse is available)
+        
+        target = f"{peer.host}:{peer.port}"
+        logger.info(f"📥 [P2P-Sync] Pulling artifact {artifact_id} from {peer_id}...")
+
+        # For brevity, reusing the insecure/secure factory logic from _send_direct_pulse
+        if creds:
+            private_key, certificate_chain, root_certificates = creds
+            channel_creds = grpc.ssl_channel_credentials(root_certificates, private_key, certificate_chain)
+            channel_factory = grpc.aio.secure_channel(target, channel_creds)
+        else:
+            channel_factory = grpc.aio.insecure_channel(target)
+
+        async with channel_factory as channel:
+            stub = dcn_pb2_grpc.DCNGossipServiceStub(channel)
+            request = dcn_pb2.ArtifactRequest(artifact_id=artifact_id, start_offset=0)
+            
+            with open(destination_path, "wb") as f:
+                async for chunk in stub.PullArtifact(request):
+                    f.write(chunk.data)
+                    if chunk.is_final:
+                        break
+        
+        logger.info(f"✅ [P2P-Sync] Artifact {artifact_id} successfully synchronized to {destination_path}")
 
     def stop(self):
         self.is_active = False

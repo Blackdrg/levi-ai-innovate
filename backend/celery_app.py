@@ -4,7 +4,9 @@ from celery.signals import setup_logging, task_prerun, task_postrun # type: igno
 import logging
 import os
 import sys
+import time
 from pythonjsonlogger.json import JsonFormatter # type: ignore
+from prometheus_client import Counter, Histogram, REGISTRY # type: ignore
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 IS_DEV = os.getenv("ENVIRONMENT", "development") == "development"
@@ -31,6 +33,20 @@ celery_app = Celery(
         "backend.jobs.maintenance",
     ]
 )
+
+# ── Phase 16.1: API Worker Observability ──
+TASK_COUNT = Counter(
+    "leiva_worker_task_total", 
+    "Total number of Celery tasks processed", 
+    ["task_name", "status"]
+)
+
+TASK_LATENCY = Histogram(
+    "leiva_worker_task_latency_seconds", 
+    "Celery task latency in seconds", 
+    ["task_name"]
+)
+
 
 celery_app.conf.update(
     task_serializer="json",
@@ -153,6 +169,14 @@ celery_app.conf.beat_schedule = {
     "nightly-maintenance-suite": {
         "task": "backend.jobs.maintenance.run_full_maintenance_suite",
         "schedule": crontab(hour=3, minute=0), # 3 AM Daily
+    },
+    "sovereign-shadow-audit-6h": {
+        "task": "backend.services.orchestrator.learning_tasks.run_shadow_audit_task",
+        "schedule": 21600.0, # Every 6 hours
+    },
+    "pattern-crystallization-4h": {
+        "task": "backend.services.orchestrator.learning_tasks.crystallize_patterns_task",
+        "schedule": 14400.0, # Every 4 hours
     }
 }
 
@@ -165,9 +189,23 @@ def set_task_context(task_id=None, task=None, **kwargs):
     """Inject task_id into thread-local so WorkerJsonFormatter can access it."""
     _task_context.task_id = task_id or "none"
     _task_context.task_name = task.name if task else "unknown"
+    _task_context.start_time = time.time()
+
+@task_postrun.connect
+def stop_task_timer(task_id=None, task=None, state=None, **kwargs):
+    """Update Prometheus metrics after task completes."""
+    if hasattr(_task_context, 'start_time'):
+        latency = time.time() - _task_context.start_time
+        TASK_LATENCY.labels(task_name=task.name if task else "unknown").observe(latency)
+    
+    TASK_COUNT.labels(
+        task_name=task.name if task else "unknown",
+        status=state or "UNKNOWN"
+    ).inc()
 
 @task_postrun.connect
 def clear_task_context(**kwargs):
+
     """Clear task context after task completes."""
     _task_context.task_id = "none"
     _task_context.task_name = "unknown"

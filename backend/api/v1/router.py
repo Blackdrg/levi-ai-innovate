@@ -31,6 +31,6 @@ router.include_router(monitor_router, prefix="/monitor")
 router.include_router(studio_router, prefix="/studio")
 router.include_router(marketplace_router, prefix="/marketplace")
 router.include_router(telemetry_router, prefix="/telemetry")
-# router.include_router(evolution_router, prefix="/evolution") # Disabled in Phase 0
+router.include_router(evolution_router, prefix="/evolution")
 router.include_router(perception_router, prefix="/perception")
 

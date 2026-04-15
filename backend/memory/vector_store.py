@@ -10,7 +10,8 @@ import asyncio
 from datetime import datetime, timezone
 from typing import List, Dict, Any
 
-from backend.db.vector_store import VectorDB, SovereignVault
+from backend.db.vector_store import VectorDB
+from backend.core.security.user_kms import user_kms
 from backend.db.postgres import PostgresDB
 from backend.db.models import UserFact
 
@@ -52,7 +53,7 @@ class SovereignVectorStore:
 
             # 3. Create Record & Encrypt for Cloud
             fact_id = hashlib.md5(fact_text.encode()).hexdigest()
-            encrypted_fact = SovereignVault.encrypt(fact_text)
+            encrypted_fact = await user_kms.encrypt_for_user(user_id, fact_text)
             
             doc_data = {
                 "user_id": user_id,
@@ -116,7 +117,7 @@ class SovereignVectorStore:
                     elif cat == "trait": weight = 1.3
                     
                     # Decrypt fact for synthesis
-                    raw_fact = SovereignVault.decrypt(res.get("fact", ""))
+                    raw_fact = await user_kms.decrypt_for_user(user_id, res.get("fact", ""))
                     res["fact"] = raw_fact
                     
                     # Final Score: importance * usage * recency * base_score
@@ -170,7 +171,7 @@ class SovereignVectorStore:
             for fact_obj in facts_to_index:
                 try:
                     # Decrypt and prepare texts and metadatas
-                    raw_fact = SovereignVault.decrypt(fact_obj.fact)
+                    raw_fact = await user_kms.decrypt_for_user(user_id, fact_obj.fact)
                     if raw_fact:
                         texts.append(raw_fact)
                         metadatas.append({

@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 # Tier 1: Local ONNX (v15.0 Hardened)
 BERT_MODEL_PATH = os.getenv("BERT_MODEL_PATH", "models/bert-base-uncased-quantized.onnx")
+SOVEREIGN_MODE = os.getenv("SOVEREIGN_MODE", "true").lower() == "true"
 
 class ONNXEmbedder:
     _session = None
@@ -34,7 +35,7 @@ class ONNXEmbedder:
                         sovereign = os.getenv("SOVEREIGN_MODE", "true").lower() == "true"
                         cls._tokenizer = AutoTokenizer.from_pretrained(
                             "bert-base-uncased",
-                            local_files_only=sovereign
+                            local_files_only=SOVEREIGN_MODE
                         )
                     except Exception as e:
                         logger.error(f"[Embedder] Failed to load ONNX: {e}")

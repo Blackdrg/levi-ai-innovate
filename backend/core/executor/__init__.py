@@ -269,14 +269,26 @@ class GraphExecutor:
 
                     # formal lifecycle: SCHEDULED
                     node.state = NodeState.SCHEDULED
-                    logger.info(f"🚀 [Executor] Dispatching agent: {node.agent} (Node: {node.id})")
-                    task = asyncio.create_task(
-                        self._execute_node_resilient(
-                            node, results, perception, blackboard=blackboard, 
-                            user_id=user_id, wave_count=wave_count, policy=policy, 
-                            mission_sm=mission_sm
+                    
+                    # --- Phase 2.8: Swarm Distribution logic ---
+                    self_node_id = os.getenv("DCN_NODE_ID", "node_alpha")
+                    target_node = getattr(node, "target_node", None)
+                    
+                    if target_node and target_node != self_node_id:
+                        logger.info(f"🌐 [Executor] Offloading task {node.id} to remote node: {target_node}")
+                        task = asyncio.create_task(
+                            self._execute_remote_node(node, target_node, perception)
                         )
-                    )
+                    else:
+                        logger.info(f"🚀 [Executor] Dispatching agent: {node.agent} (Node: {node.id})")
+                        task = asyncio.create_task(
+                            self._execute_node_resilient(
+                                node, results, perception, blackboard=blackboard, 
+                                user_id=user_id, wave_count=wave_count, policy=policy, 
+                                mission_sm=mission_sm
+                            )
+                        )
+                    
                     running_tasks[task] = node
                     wave_tasks[task] = node
                     budget_tracker.reserve_tool_calls(1)

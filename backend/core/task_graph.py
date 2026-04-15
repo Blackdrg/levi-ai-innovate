@@ -28,6 +28,8 @@ class TaskNode(BaseModel):
     condition: Optional[str] = None # Lambda-like string to evaluate before running
     tier: str = "L2" # L1, L2, L3, L4 (Tiers for resource/model mapping)
     result: Optional[Any] = None # Added for active state tracking
+    target_node: Optional[str] = None # Direct node ID targeting (DCN)
+    target_region: Optional[str] = None # Regional targeting
     contract: Optional[TaskExecutionContract] = None
     circuit_breaker: Dict[str, Any] = Field(
         default_factory=lambda: {"fail_threshold": 3, "cooldown_ms": 10000}

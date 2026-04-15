@@ -38,12 +38,10 @@ from backend.broadcast_utils import (
 )
 from backend.db.redis import (
     get_redis_client, 
-    check_exact_match, 
-    store_exact_match, 
-    check_semantic_match,
     r as redis_sync,
     HAS_REDIS as HAS_REDIS_SYNC
 )
+from backend.services.cache_manager import CacheManager
 from .execution_state import CentralExecutionState, MissionState
 from .dcn.registry import dcn_registry
 from backend.evaluation.tracing import CognitiveTracer
@@ -668,19 +666,21 @@ class Orchestrator:
             f"{user_id}:{session_id}:{user_input.strip().lower()}".encode("utf-8")
         ).hexdigest()
         request_id = kwargs.get("request_id") or f"mission_{idempotency_key[:16]}"
-        # 1. Fast Cache Layer (Exact & Semantic)
+        # 1. Advanced Cache Layer (Tier 1: Redis, Tier 2: FAISS Semantic)
         if not kwargs.get("bypass_cache", False):
-            cached = check_exact_match(user_id, user_input, kwargs.get("mood", "philosophical"))
+            # Try Exact Match
+            cached = await CacheManager.get_response(user_input)
             if not cached:
-                cached = check_semantic_match(user_id, user_input, kwargs.get("mood", "philosophical"), threshold=0.95)
+                # Try Semantic Match
+                cached = await CacheManager.get_semantic_response(user_input)
             
             if cached:
-                logger.info("[Orchestrator] Cache Hit. Mission skipped.")
-                # Return immediately without initialization overhead
+                logger.info(f"[Orchestrator] Cache HIT (Route: {cached.get('route', 'unknown')})")
                 return {
-                    "response": cached,
+                    "response": cached.get("response", ""),
                     "request_id": request_id,
-                    "route": "cache"
+                    "status": "success",
+                    "route": "cache_v16"
                 }
 
         try:
@@ -880,6 +880,7 @@ class Orchestrator:
                 res = await brain_service.call_local_llm(user_input)
                 final_response = res
                 await self.memory.store(user_id, session_id, user_input, final_response, perception, [], policy=None)
+                await CacheManager.set_response(user_input, {"response": final_response, "route": "simplicity"})
                 sm.transition(MissionState.COMPLETE, term=term)
                 SovereignBroadcaster.publish("MISSION_COMPLETE", {"request_id": request_id, "route": "simplicity"}, user_id=user_id)
                 MetricsHub.mission_finished(success=True, stage="ultra_light")
@@ -1049,7 +1050,7 @@ class Orchestrator:
             final_response = SovereignShield.mask_pii(aligned_response)
             memory_event = None
             
-            # 7. MEMORY SYNC
+            # 7. MEMORY & EVOLUTION SYNC
             try:
                 # Calculate fidelity from audit if available, else use a default
                 fidelity = audit.get("quality_score", 0.9) if 'audit' in locals() else 0.85
@@ -1063,8 +1064,18 @@ class Orchestrator:
                         results=results, 
                         fidelity=fidelity
                     )
+                
+                # --- Engine 10: Evolutionary Mutation Pulse ---
+                from backend.core.evolution_engine import EvolutionaryIntelligenceEngine
+                await EvolutionaryIntelligenceEngine.record_outcome(
+                    user_id=user_id,
+                    query=user_input,
+                    response=final_response,
+                    fidelity=fidelity,
+                    domain=perception.get("intent", {}).get("intent_type", "default")
+                )
             except Exception as mem_err:
-                logger.error(f"[Orchestrator] Memory Sync Error: {mem_err}")
+                logger.error(f"[Orchestrator] Memory/Evolution Sync Error: {mem_err}")
                 MetricsHub.record_alert("memory_mismatch", severity="critical")
 
             # 8. AUDITING
@@ -1087,7 +1098,7 @@ class Orchestrator:
             
             # Post-Mission: Cache the successful result
             if final_response:
-                store_exact_match(user_id, user_input, kwargs.get("mood", "philosophical"), final_response)
+                await CacheManager.set_response(user_input, {"response": final_response, "route": "main_pipeline"})
             
             sm.transition(MissionState.VALIDATING, term=term)
             sm.transition(MissionState.PERSISTED, term=term)

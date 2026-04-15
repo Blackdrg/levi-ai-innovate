@@ -16,9 +16,13 @@ class DCNLoadBalancer:
         self.redis = get_redis_client()
         self.node_registry_key = "dcn:nodes:registry"
 
-    async def get_optimal_node(self, required_capabilities: List[str] = None) -> Optional[str]:
+    async def get_optimal_node(self, required_capabilities: List[str] = None, target_region: str = "us-east") -> Optional[str]:
         """
-        Calculates the least-utilized node based on CPU and memory metrics reported via DCN Protocol.
+        Calculates the optimal node based on load and regional proximity.
+        Priority:
+        1. Correct Capabilities
+        2. Proximity (Same Region)
+        3. Least Utilization Score
         """
         if not HAS_REDIS or not self.redis:
             return None
@@ -30,23 +34,34 @@ class DCNLoadBalancer:
 
             best_node = None
             lowest_load_score = float('inf')
+            
+            # Regional context (Prefer current region unless overloaded)
+            current_region = target_region or "us-east"
 
             for node_id_bytes, metric_bytes in nodes_data.items():
                 node_id = node_id_bytes.decode('utf-8')
                 try:
                     metrics = json.loads(metric_bytes.decode('utf-8'))
                     
-                    # Check capabilities
+                    # 1. Capability Check
                     if required_capabilities:
                         caps = metrics.get("capabilities", [])
                         if not all(c in caps for c in required_capabilities):
                             continue
 
-                    # Predictive Load Score = (CPU * 0.6) + (Mem * 0.4) 
-                    # Can factor in VRAM if LLM is required
+                    # 2. Regional Logic: Add a weight penalty for cross-region routing
+                    node_region = metrics.get("region", "us-east")
+                    region_penalty = 50.0 if node_region != current_region else 0.0
+
+                    # 3. Load Score Calculation
                     cpu = metrics.get("cpu_percent", 100.0)
                     mem = metrics.get("memory_percent", 100.0)
-                    score = (cpu * 0.6) + (mem * 0.4)
+                    vram_free = metrics.get("vram_free_mb", 0)
+                    
+                    # Backpressure if VRAM < 1GB
+                    vram_penalty = 100.0 if vram_free < 1024 else 0.0
+
+                    score = (cpu * 0.4) + (mem * 0.4) + region_penalty + vram_penalty
 
                     if score < lowest_load_score:
                         lowest_load_score = score
@@ -56,7 +71,7 @@ class DCNLoadBalancer:
                     continue
 
             if best_node:
-                logger.info(f"[LoadBalancer] Selected optimal DCN node: {best_node} (Score: {lowest_load_score:.2f})")
+                logger.debug(f"[LoadBalancer] Selected node {best_node} in {current_region} (Score: {lowest_load_score:.2f})")
             return best_node
 
         except Exception as e:

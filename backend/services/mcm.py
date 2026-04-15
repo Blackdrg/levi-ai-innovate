@@ -194,10 +194,28 @@ class MemoryConsistencyManager:
                 for mid_bytes, data_bytes in active_redis.items():
                     mid = mid_bytes.decode()
                     data = json.loads(data_bytes.decode())
+                    
+                    # 🛡️ [T0 Validation] Check if mission exists in T1/T2
+                    res = await session.execute(select(Mission).where(Mission.mission_id == mid))
+                    mission_db = res.scalar_one_or_none()
+                    
                     if data.get("state") in ["COMPLETE", "FAILED"]:
-                        res = await session.execute(select(Mission).where(Mission.mission_id == mid))
-                        if not res.scalar_one_or_none():
+                        if not mission_db:
+                            logger.warning(f"⚠️ [MCM-T0] Consistency Anomaly: Mission {mid} is {data.get('state')} in T0 but missing in SQL. Syncing...")
                             await self._process_event("interaction", data["user_id"], mid, data.get("replay", {}), self.region)
+                        else:
+                            # If mission exists but state differs, T1 wins (Factual Ledger)
+                            if mission_db.status != data.get("state").lower():
+                                logger.info(f"🔄 [MCM-T0] Aligning T0 state for {mid} to factual ledger ({mission_db.status})")
+                                data["state"] = mission_db.status.upper()
+                                redis_client.hset("orchestrator:missions", mid, json.dumps(data))
+                    elif not mission_db and data.get("state") == "RUNNING":
+                        # Detect ghost missions (running in Redis but never materialized in SQL)
+                        started_at = float(data.get("timestamp", 0))
+                        if (datetime.now(timezone.utc).timestamp() - started_at) > 3600:
+                            logger.error(f"👻 [MCM-T0] Ghost Mission Detected: {mid}. Pruning T0.")
+                            redis_client.hdel("orchestrator:missions", mid)
+
                 
                 # 🌐 Phase 16.1: Decentralized Snapshot Offloading
                 snapshot_id = f"mcm_snap_{int(datetime.now(timezone.utc).timestamp())}"
