@@ -315,7 +315,10 @@ graph LR
         C --- A
     end
     subgraph "Communication Layer"
-        P2P[Gossip v15]
+        P2P[Gossip v16.1]
+    end
+```
+
 | Component | Status | Reality | Proof |
 | :--- | :--- | :--- | :--- |
 | **MCM (Memory)** | ✅ PRODUCTION | 5-tier resonance layer fully wired | `backend/core/memory_manager.py` |
