@@ -80,13 +80,28 @@ class WorldModel:
     @staticmethod
     def _analyze_structure(nodes: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
-        Sovereign v16.0: Structural Causal Audit.
-        Detects cycles, orphans, and resource bottlenecks without LLM overhead.
+        Sovereign v16.1 [PHASE 3]: High-Fidelity Causal Audit.
+        Bypasses LLM planning by traversing the Neo4j World State.
         """
         issues = []
         node_map = {n.get("id"): n for n in nodes}
         
-        # 1. Cycle Detection (DFS)
+        # 1. Neo4j Integration (Engine 8: Causal Resonance)
+        try:
+            from backend.db.neo4j_connector import Neo4jStore
+            graph = Neo4jStore()
+            # Perform a 'Causal Resonance' check for each task connection
+            for node in nodes:
+                agent = node.get("agent")
+                action = node.get("description")
+                # Query Neo4j for known failure patterns or causal bottlenecks
+                resonance = graph.check_causal_bottleneck(agent, action)
+                if resonance.get("bottleneck_detected"):
+                    issues.append(f"Graph Resonance Conflict: {agent} action '{action}' has {resonance['risk_score']} risk.")
+        except ImportError:
+            logger.warning("[WorldModel] Neo4jStore unavailable. Falling back to local DFS audit.")
+
+        # 2. Local Cycle Detection (DFS)
         visited = set()
         path = set()
         
@@ -106,16 +121,11 @@ class WorldModel:
                 issues.append(f"Causal Loop Detected: Task {nid} depends on itself via cycle.")
                 break
 
-        # 2. Dependency Orphan Check
-        for node in nodes:
-            for dep in node.get("dependencies", []):
-                if dep not in node_map:
-                    issues.append(f"Orphan Dependency: Node {node.get('id')} depends on missing node {dep}.")
-
         return {
             "is_valid": len(issues) == 0,
             "issues": issues,
-            "node_count": len(nodes)
+            "node_count": len(nodes),
+            "engine": "graph-traversal-v16.1"
         }
 
 

@@ -245,3 +245,12 @@ async def verify_internal_service(request: Request):
     if not hmac.compare_digest(provided_key.encode(), internal_key.encode()):
         raise HTTPException(status_code=401, detail="Invalid Service Token")
     return True
+
+async def verify_admin(user: dict = Depends(get_current_user)):
+    """Dependency that ensures the authenticated user is an administrator."""
+    if user.get("role") != SovereignRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Administrative access required for this resource."
+        )
+    return True

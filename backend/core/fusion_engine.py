@@ -43,20 +43,35 @@ class FusionEngine:
         if not manifest:
             return SovereignI18n.get_prompt("error_fallback", lang)
 
-        # 2. 🧠 Construct Advanced Fusion Prompt
+        # 2. ⚖️ Deterministic Truth Scoring (Sovereign v16.2 Graduation)
+        from backend.core.truth_engine import truth_engine
+        truth_report = await truth_engine.evaluate_claims(results)
+        
+        scored_manifest = []
+        for f in truth_report["truth_ledger"]:
+            scored_manifest.append(f"[{f['source']}] (Truth Score: {f['truth_score']:.2f}): {f['content']}")
+        
+        # 3. 🧠 Construct Advanced Fusion Prompt
         # Integrating I18n and Security logic directly into the synthesis
-        blueprint = SovereignI18n.get_prompt("rag_synthesis", lang, context=chr(10).join(manifest))
+        blueprint = SovereignI18n.get_prompt("rag_synthesis", lang, context=chr(10).join(scored_manifest))
+        
+        # If conflicts exist, we explicitly inform the synthesizer to handle them based on the ledger resolution
+        conflict_note = ""
+        if truth_report["conflicts"]:
+            conflict_note = f"\n[ALERT]: {len(truth_report['conflicts'])} informational contradictions detected. Prioritize the highest truth-scored finding provided above."
+
         fusion_prompt = f"""
             You are the LEVI-AI Sovereign Fusion Engine. 
             Objective: Synthesize findings into a single, high-fidelity response.
             
             USER QUERY: {SovereignSecurity.mask_pii(query)}
             
-            [AGENT FINDINGS]:
+            [TRUTH-SCORED FINDINGS]:
             {blueprint}
+            {conflict_note}
             
             [INSTRUCTIONS]:
-            1. Resolve contradictions (Prioritize DOCUMENT/REASONING over SEARCH).
+            1. Create a unified narrative from the provided truth-scored findings.
             2. Eliminate redundant data.
             3. Maintain a {mood} and sovereign tone.
             4. Cite sources as [AgentName] within the text.

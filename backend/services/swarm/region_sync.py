@@ -67,15 +67,46 @@ class RegionSyncBridge:
         logger.info(f"📥 [RegionSync] Receiving replication data for user {user_id} ({len(missions)} missions)")
         
         async with PostgresDB._session_factory() as session:
-            # 1. Upsert Missions
-            for m_data in missions:
-                # In production, we use ON CONFLICT DO UPDATE
-                # For v16.1, we perform a naive merge
-                logger.debug(f"Syncing mission {m_data['id']}")
-                # (Actual SQLAlchemy merge logic here)
-            
-            # 2. Upsert Facts
-            # (Actual SQLAlchemy merge logic here)
+            async with session.begin():
+                # 1. Upsert Missions
+                for m_data in missions:
+                    # Unique identifier for Mission is mission_id
+                    stmt = select(Mission).where(Mission.mission_id == m_data["id"])
+                    res = await session.execute(stmt)
+                    mission = res.scalar_one_or_none()
+                    
+                    if not mission:
+                        mission = Mission(
+                            mission_id=m_data["id"],
+                            user_id=user_id,
+                            objective=m_data["objective"],
+                            status=m_data["status"]
+                        )
+                        session.add(mission)
+                        logger.info(f"🆕 [RegionSync] New Mission added via sync: {m_data['id']}")
+                    else:
+                        mission.status = m_data["status"] # Consistency update
+                        logger.debug(f"🔄 [RegionSync] Mission {m_data['id']} status updated to {m_data['status']}")
+                
+                # 2. Upsert Facts
+                for f_data in facts:
+                    # Uniqueness: user_id + fact content
+                    stmt_f = select(UserFact).where(
+                        UserFact.user_id == user_id,
+                        UserFact.fact == f_data["fact"]
+                    )
+                    res_f = await session.execute(stmt_f)
+                    fact = res_f.scalar_one_or_none()
+                    
+                    if not fact:
+                        fact = UserFact(
+                            user_id=user_id,
+                            fact=f_data["fact"],
+                            category=f_data.get("category", "general"),
+                            importance=f_data.get("importance", 0.5)
+                        )
+                        session.add(fact)
+                        logger.info(f"🆕 [RegionSync] New UserFact added via sync for {user_id}")
             
             await session.commit()
         

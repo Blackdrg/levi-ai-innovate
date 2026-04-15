@@ -1,57 +1,34 @@
-import json
 import logging
 from typing import Any, Dict, Optional
-from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
-import os
+import asyncio
+from backend.utils.event_bus import sovereign_event_bus
 
 logger = logging.getLogger(__name__)
 
-KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_URL", "localhost:9092")
-
 class LeviKafkaClient:
     """
-    LeviBrain v8: Kafka Event Client
-    Handles event streaming between brain, memory, and agent services.
+    Sovereign v16.2 Internalized Event Client.
+    Redirects legacy Kafka calls to the local SovereignEventBus (Redis Streams).
+    Fulfills Phase 3: 90% Internalization.
     """
-    _producer: Optional[AIOKafkaProducer] = None
-
+    
     @classmethod
-    async def get_producer(cls) -> AIOKafkaProducer:
-        if cls._producer is None:
-            cls._producer = AIOKafkaProducer(
-                bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
-                value_serializer=lambda v: json.dumps(v).encode('utf-8')
-            )
-            await cls._producer.start()
-        return cls._producer
+    async def get_producer(cls) -> Any:
+        # Mocking for backward compatibility
+        return sovereign_event_bus
 
     @classmethod
     async def send_event(cls, topic: str, data: Dict[str, Any]):
-        """Non-blocking event emission."""
-        try:
-            producer = await cls.get_producer()
-            await producer.send_and_wait(topic, data)
-            logger.info(f"[Kafka] Event sent to topic: {topic}")
-        except Exception as e:
-            logger.error(f"[Kafka] Failed to send event to {topic}: {e}")
+        """Internalized non-blocking event emission."""
+        await sovereign_event_bus.emit(topic, data)
 
     @classmethod
     async def consume_events(cls, topic: str, callback: Any):
-        """Consumer loop for service tasks."""
-        consumer = AIOKafkaConsumer(
-            topic,
-            bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
-            group_id="levi_brain_group",
-            value_deserializer=lambda v: json.loads(v.decode('utf-8')),
-            auto_offset_reset='earliest'
-        )
-        await consumer.start()
-        try:
-            async for msg in consumer:
-                logger.info(f"[Kafka] Received event from {topic}")
-                await callback(msg.value)
-        finally:
-            await consumer.stop()
+        """Internalized consumer bridge."""
+        # We derive a group ID from the topic and service name for Redis
+        group_id = f"consumer_group_{topic}"
+        consumer_id = f"consumer_{topic}_{id(callback)}"
+        await sovereign_event_bus.subscribe(topic, group_id, consumer_id, callback)
 
 # Helper for background task emission
 async def emit_brain_event(event_type: str, payload: Dict[str, Any]):

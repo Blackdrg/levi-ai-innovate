@@ -1,15 +1,16 @@
 """
 backend/core/memory_tasks.py
 
-Sovereign Memory Tasks v15.0-GA.
+Sovereign Memory Tasks v16.1-GA [HARDENED].
 Handles asynchronous memory maintenance, distillation, and background re-indexing.
-Utilizes Postgres SQL Fabric for primary persistence.
+FIXED: Uses async_to_sync to prevent event loop deadlocks in Celery workers.
 """
 
 import json
 import logging
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
+from asgiref.sync import async_to_sync
 
 from backend.db.postgres import PostgresDB
 from backend.db.models import UserFact, Mission
@@ -70,8 +71,8 @@ def flush_memory_buffer(self, user_id: str):
                     count += 1
                 await session.commit()
         
-        import asyncio
-        asyncio.run(process_flush())
+        # FIXED: Use async_to_sync to avoid deadlock
+        async_to_sync(process_flush)()
         
         return {"flushed": count, "user_id": user_id}
     except Exception as exc:
@@ -86,9 +87,9 @@ def garbage_collect_memory(self, user_id: str):
     """
     Rebuilds the local FAISS index from Postgres truth.
     """
-    import asyncio
     try:
-        asyncio.run(SovereignVectorStore.reindex_user_memory(user_id))
+        # FIXED: Use async_to_sync
+        async_to_sync(SovereignVectorStore.reindex_user_memory)(user_id)
         return {"status": "reindexed", "user_id": user_id}
     except Exception as e:
         logger.error(f"Memory GC task failed for user {user_id}: {e}")
@@ -104,12 +105,11 @@ def distill_user_memories(self, user_id: str):
     Sovereign v15: Memory Distillation (Dreaming).
     Crystallizes recent episodic/mid-term patterns into permanent traits.
     """
-    import asyncio
-    
     logger.info(f"[Dreaming] Executing v15 distillation for user: {user_id}")
     try:
         manager = MemoryManager()
-        success = asyncio.run(manager.dream(user_id))
+        # FIXED: Use async_to_sync
+        success = async_to_sync(manager.dream)(user_id)
         
         if success:
              redis_client, has_redis = _get_redis()
@@ -128,32 +128,31 @@ def distill_user_memories(self, user_id: str):
 def dream_all_users(self):
     """
     Discovery loop for users ready for dreaming (Distillation).
-    Now fallback to Postgres activity if Redis flags are missing.
     """
     redis_client, has_redis = _get_redis()
     scheduled = 0
 
+    async def fetch_uids():
+        if has_redis and redis_client:
+            cursor = 0
+            keys = []
+            while True:
+                cursor, batch = redis_client.scan(cursor, match="user:*:dream_ready", count=100)
+                for k in batch: keys.append(k)
+                if cursor == 0: break
+            if keys:
+                return [k.decode().split(":")[1] for k in keys if isinstance(k, bytes)]
+
+        # Fallback to recent mission activity
+        async with PostgresDB._session_factory() as session:
+            from sqlalchemy import select
+            stmt = select(Mission.user_id).distinct().limit(50)
+            res = await session.execute(stmt)
+            return res.scalars().all()
+
     try:
-        import asyncio
-        async def fetch_uids():
-            if has_redis and redis_client:
-                cursor = 0
-                keys = []
-                while True:
-                    cursor, batch = redis_client.scan(cursor, match="user:*:dream_ready", count=100)
-                    for k in batch: keys.append(k)
-                    if cursor == 0: break
-                if keys:
-                    return [k.decode().split(":")[1] for k in keys if isinstance(k, bytes)]
-
-            # Fallback to recent mission activity
-            async with PostgresDB._session_factory() as session:
-                from sqlalchemy import select
-                stmt = select(Mission.user_id).distinct().limit(50)
-                res = await session.execute(stmt)
-                return res.scalars().all()
-
-        uids = asyncio.run(fetch_uids())
+        # FIXED: Use async_to_sync
+        uids = async_to_sync(fetch_uids)()
         for uid in uids:
             distill_user_memories.delay(uid)
             scheduled += 1
@@ -171,7 +170,6 @@ def run_global_maintenance(self):
     """
     Sovereign v15: Global Maintenance Sweep.
     """
-    import asyncio
     async def get_active_users():
         from sqlalchemy import select
         async with PostgresDB._session_factory() as session:
@@ -180,7 +178,8 @@ def run_global_maintenance(self):
             return res.scalars().all()
     
     try:
-        uids = asyncio.run(get_active_users())
+        # FIXED: Use async_to_sync
+        uids = async_to_sync(get_active_users)()
         for uid in uids:
             garbage_collect_memory.delay(uid)
         return {"scheduled": len(uids)}
@@ -197,7 +196,6 @@ def run_survival_hygiene(self):
     Sovereign v15: Resonance Survival Hygiene.
     Prunes low-resonance noise using the non-linear decay engine.
     """
-    import asyncio
     from backend.memory.resonance import MemoryResonance
     
     async def process_hygiene():
@@ -226,7 +224,8 @@ def run_survival_hygiene(self):
                 logger.error(f"[Resonance] Hygiene failure for {uid}: {e}")
 
     try:
-        asyncio.run(process_hygiene())
+        # FIXED: Use async_to_sync
+        async_to_sync(process_hygiene)()
         return {"status": "hygiene_complete"}
     except Exception as e:
         logger.error(f"[Maintenance] Resonance sweep failed: {e}")

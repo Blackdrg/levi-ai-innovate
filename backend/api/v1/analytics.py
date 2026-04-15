@@ -14,7 +14,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Request
 from backend.utils.exceptions import LEVIException
 from backend.auth.logic import verify_admin
-from backend.db.firebase import db as firestore_db
+from backend.db.firestore_db import db as firestore_db, update_analytics
 from backend.utils.network import groq_breaker, together_breaker, CircuitBreaker
 from backend.db.redis import r as redis_client, HAS_REDIS
 
@@ -160,7 +160,6 @@ async def get_performance_metrics(is_admin: bool = Depends(verify_admin)):
 @router.post("/track_share")
 async def track_share():
     """ Tracks social sharing events. """
-    from backend.db.firebase import update_analytics
     update_analytics("share_count")
     return {"status": "success"}
 

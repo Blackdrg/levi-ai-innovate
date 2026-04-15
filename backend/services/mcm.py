@@ -12,41 +12,25 @@ from backend.db.models import Message, Mission, UserFact, UserTrait
 from backend.utils.runtime_tasks import create_tracked_task
 from backend.services.arweave_service import arweave_audit
 
-# Global Sync Gate: GCP Pub/Sub
-try:
-    from google.cloud import pubsub_v1
-    HAS_PUBSUB = True
-except ImportError:
-    HAS_PUBSUB = False
+# Memory is Not Truth-Aware Gap Closure
+from backend.utils.event_bus import sovereign_event_bus
 
 logger = logging.getLogger(__name__)
 
 class MemoryConsistencyManager:
     """
-    Sovereign v16.0-GA: Unified Memory Consistency Manager (MCM).
-    Harmonizes v14.2 (Streaming) and v15.1 (Event Sourcing) legacy implementations.
+    Sovereign v16.1: Unified Memory Consistency Manager (MCM).
+    Harmonizes streaming and event sourcing implementations.
     The single source of truth for high-fidelity cognitive synchronization.
+    Internalized: Replaces GCP Pub/Sub with local-first Redis Streams.
     """
-    STREAM_NAME = "sovereign:memory:consistency"
-    GROUP_NAME = "mcm_primary_group"
-    CONSUMER_NAME = "mcm_consumer_1"
+    STREAM_NAME = "memory_consistency" # Consolidated with EventBus topics
     
     def __init__(self):
         self._is_running = False
         self._process_task: Optional[asyncio.Task] = None
         self.region = os.getenv("ENVIRONMENT", "local-node")
         
-        self.publisher = None
-        self.subscriber = None
-        
-        if HAS_PUBSUB and os.getenv("GCP_PROJECT_ID"):
-            try:
-                self.publisher = pubsub_v1.PublisherClient()
-                self.subscriber = pubsub_v1.SubscriberClient()
-                logger.info(f"[MCM] Global Cognitive Pulse bridge initialized.")
-            except Exception as e:
-                logger.warning(f"[MCM] Pub/Sub init failed: {e}. Global sync offline.")
-
     async def start(self):
         """Starts the MCM synchronization loops."""
         if not HAS_REDIS:
@@ -57,16 +41,31 @@ class MemoryConsistencyManager:
             return
 
         self._is_running = True
-        try:
-            redis_client.xgroup_create(self.STREAM_NAME, self.GROUP_NAME, id="0", mkstream=True)
-        except Exception:
-            pass 
+        
+        # 1. Start Internalized Consumer
+        # This replaces the legacy Redis Group loop with the Unified EventBus subscriber
+        await sovereign_event_bus.subscribe(
+            topic=self.STREAM_NAME,
+            group="mcm_primary_group",
+            consumer_id=f"mcm_{self.region}",
+            callback=self._process_event_wrapper
+        )
+        
+        logger.info("[MCM] Unified Memory Consistency Manager active (Internalized).")
 
-        self._process_task = create_tracked_task(self._synchro_loop(), name="mcm-consistency-loop")
-        logger.info("[MCM] Unified Memory Consistency Manager active.")
+    async def _process_event_wrapper(self, data: Dict[str, Any]):
+        """Bridge between EventBus and legacy MCM processing logic."""
+        await self._process_event(
+            event_type=data.get("type"),
+            user_id=data.get("user_id"),
+            session_id=data.get("session_id"),
+            payload=json.loads(data.get("data", "{}")),
+            origin=data.get("origin", "local")
+        )
 
     async def log_anomaly(self, user_id: str, anomaly: Dict[str, Any]):
         if HAS_REDIS:
+             # Keep local anomaly logging in Redis for fast access
             redis_client.rpush(f"mcm:anomalies:{user_id}", json.dumps(anomaly))
 
     @staticmethod
@@ -81,22 +80,17 @@ class MemoryConsistencyManager:
         return bool(redis_client.get(f"mcm:content_hash:{user_id}:{content_hash}"))
 
     async def emit_event(self, event_type: str, user_id: str, session_id: str, payload: Dict[str, Any]):
-        """Emits a cognitive event to the consistency stream (Real-time)."""
-        if not HAS_REDIS:
-            # Fallback to direct processing if Redis is down (Best effort)
-            await self._process_event(event_type, user_id, session_id, payload, "local")
-            return
-
+        """Emits a cognitive event to the internalized consistency stream."""
         event = {
             "type": event_type,
             "user_id": user_id,
             "session_id": session_id,
             "data": json.dumps(payload),
             "timestamp": str(datetime.now(timezone.utc).timestamp()),
-            "id": f"evt_{int(datetime.now(timezone.utc).timestamp()*1000)}"
+            "origin": self.region
         }
         
-        # Add to Content Dedup index
+        # 1. Content Dedup index
         content_hash = self.compute_content_hash(payload)
         redis_client.setex(f"mcm:content_hash:{user_id}:{content_hash}", 86400, event["id"])
         

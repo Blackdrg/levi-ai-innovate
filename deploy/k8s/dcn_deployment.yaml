@@ -18,7 +18,26 @@ spec:
     spec:
       containers:
       - name: levi-brain
-        image: gcr.io/levi-ai/brain:v16.1-GA
+        image: gcr.io/levi-ai/brain:v16.2-PROD
+        resources:
+          limits:
+            cpu: "2"
+            memory: "4Gi"
+          requests:
+            cpu: "1"
+            memory: "2Gi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 10
         ports:
         - containerPort: 8000
         - containerPort: 9000 # DCN gRPC
@@ -28,7 +47,7 @@ spec:
             fieldRef:
               fieldPath: metadata.name
         - name: DCN_REGION
-          value: "us-east1" # Parameterized per cluster
+          value: "us-east1"
         - name: CERT_PATH
           value: "/etc/levi/certs"
         volumeMounts:

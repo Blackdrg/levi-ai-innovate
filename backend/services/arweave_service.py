@@ -108,6 +108,12 @@ class ArweaveAuditService:
             logger.error(f"[Arweave] Artifact checkpoint failed: {e}")
             return f"fail_{artifact_id}"
 
-arweave_audit = ArweaveAuditService()
+    async def anchor_snapshot(self, snapshot_id: str, data: Dict[str, Any]) -> str:
+        """
+        Sovereign v16.2: Decentralized Memory Snapshot Anchor.
+        Snapshots the system-wide consistency state to the permaweb.
+        """
+        logger.info(f"💾 [Arweave] Anchoring memory snapshot {snapshot_id}...")
+        return await self.anchor_mission(snapshot_id, {"event_type": "SNAPSHOT", "data": data})
 
 arweave_audit = ArweaveAuditService()

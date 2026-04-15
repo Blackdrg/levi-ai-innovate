@@ -66,7 +66,10 @@ async def lifespan(app: FastAPI):
     # 4. Initialize DCN Gossip Hub & Protocol
     from backend.core.dcn_protocol import get_dcn_protocol
     dcn_protocol = get_dcn_protocol()
+    dcn_gossip = dcn_protocol.gossip
+    
     if dcn_protocol.is_active:
+        logger.info(f"🛰️ [Main] DCN Active. Node: {dcn_protocol.node_id}")
         await dcn_protocol.start_heartbeat(interval=30)
         # 🔗 [Wire] Consensus Listener handles BFT/Raft pulses
         await dcn_protocol.start_consensus_listener()
@@ -74,8 +77,12 @@ async def lifespan(app: FastAPI):
     # 5. Starting DCN Global Bridge
     from backend.utils.global_gossip import global_swarm_bridge
     from backend.memory.vector_store import SovereignVectorStore
-    await global_swarm_bridge.initialize()
-    await global_swarm_bridge.start()
+    try:
+        await global_swarm_bridge.initialize()
+        await global_swarm_bridge.start()
+        logger.info("🌐 [Main] Global Swarm Bridge [ONLINE]")
+    except Exception as e:
+        logger.warning(f"⚠️ [Main] Swarm Bridge degraded: {e}")
     
     # 6. Background Memory Sync (v14.2 Hardened)
     from backend.utils.runtime_tasks import create_tracked_task

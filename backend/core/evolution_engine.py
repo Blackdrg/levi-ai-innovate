@@ -12,6 +12,10 @@ from typing import Dict, Any, Optional, List
 from sqlalchemy import select, update, insert
 from backend.db.postgres import PostgresDB
 from backend.db.models import GraduatedRule, FragilityIndex, Mission, TrainingPattern
+import subprocess
+import os
+from .replay_buffer import global_replay_buffer
+from backend.services.evolution.lora_trainer import lora_trainer
 
 logger = logging.getLogger(__name__)
 
@@ -27,10 +31,56 @@ class EvolutionaryIntelligenceEngine:
     DOMAIN_THRESHOLDS = {"default": 5, "chat": 3, "code": 5, "research": 5}
 
     @classmethod
-    async def record_outcome(cls, user_id: str, query: str, response: str, fidelity: float, domain: str = "default"):
+    async def record_outcome(cls, user_id: str, query: str, response: str, fidelity: float, domain: str = "default", mission_context: Dict[str, Any] = None):
+        """
+        Sovereign v16.2: Hardened Outcome Recording.
+        Uses a validation gate to ensure only high-quality data enters the learning pipeline.
+        """
         if cls.DISABLED: return
+        
+        # 🛡️ Graduation #29: High-Fidelity Validation Gate
+        is_valid = await cls._validate_before_learning(query, response, fidelity, mission_context)
+        if not is_valid:
+            logger.warning(f"🚫 [Evolution] Outcome REJECTED for learning due to low fidelity or critic veto. ({query[:30]}...)")
+            return
+
+        # 🔄 Replay Buffer Integration
+        global_replay_buffer.add(
+            state={"query": query, "domain": domain},
+            action={"response": response},
+            reward=fidelity,
+            next_state={"fidelity": fidelity}
+        )
+
         await cls._update_fragility(user_id, domain, fidelity)
         await cls._track_pattern(query, response, fidelity, domain)
+
+    @classmethod
+    async def _validate_before_learning(cls, query: str, response: str, fidelity: float, context: Optional[Dict[str, Any]] = None) -> bool:
+        """
+        Performs a multi-pass validation check before allowing an outcome to influence the system.
+        """
+        # 1. Base Fidelity Threshold
+        if fidelity < cls.FIDELITY_GRADUATION_THRESHOLD:
+            return False
+            
+        # 2. Critic Agent Audit
+        try:
+            from backend.agents.critic_agent import CriticAgent, CriticInput
+            critic = CriticAgent()
+            audit = await critic._run(CriticInput(
+                goal=f"Validate learning outcome for: {query[:50]}",
+                agent_output=response,
+                context=context or {}
+            ))
+            
+            if not audit.get("success", True) or audit.get("score", 1.0) < 0.8:
+                return False
+        except Exception as e:
+            logger.error(f"[Evolution] Critic validation failed: {e}")
+            return False
+            
+        return True
 
     @classmethod
     async def get_fragility(cls, user_id: str, domain: str) -> float:
@@ -301,7 +351,29 @@ class EvolutionaryIntelligenceEngine:
     @classmethod
     async def run_dreaming_session(cls):
         """Public alias for performing a single evolutionary cycle."""
-        return await cls._perform_evolutionary_cycle()
+        await cls._perform_evolutionary_cycle()
+        # 🪐 Sovereign v16.2: Check if we should trigger a LoRA tuning session
+        if len(global_replay_buffer) >= 100:
+             await cls.trigger_autonomous_lora_tuning()
+
+    @classmethod
+    async def trigger_autonomous_lora_tuning(cls):
+        """
+        Sovereign v16.2: Autonomous LoRA Fine-tuning.
+        Crystallizes high-fidelity experiences into local model weight adapters.
+        """
+        logger.info("🚀 [Evolution] Initiating Autonomous Evolution Cycle...")
+        
+        # 1. Gather high-fidelity training data via the dedicated trainer service
+        # This combines ReplayBuffer stats with validated Mission history
+        try:
+            await lora_trainer.run_maintenance_cycle()
+            
+            # 2. Clear replay buffer after successful cycle trigger
+            global_replay_buffer.clear()
+            logger.info("✅ [Evolution] Evolution cycle successfully bridged to LoRA Trainer.")
+        except Exception as e:
+            logger.error(f"❌ [Evolution] Failed to trigger LoRA training cycle: {e}")
 
     @classmethod
     async def start_dreaming_loop(cls, interval: int = 3600):
@@ -459,25 +531,37 @@ class EvolutionaryIntelligenceEngine:
     async def _propose_system_patch(cls, domain: str):
         """
         Generates a software mutation proposal to stabilize a fragile domain.
+        v16.2: Logic Synthesis pass.
         """
         from backend.db.models import MutationProposal
+        from backend.utils.llm_utils import call_lightweight_llm
         
         proposal_name = f"patch_fragility_{domain}_{int(time.time())}"
-        logger.info(f"🧠 [Evolution] Generating mutation proposal: {proposal_name}")
+        logger.info(f"🧠 [Evolution] Synthesizing mutation proposal: {proposal_name}")
         
-        # In a real v16.1 setup, we'd use a CoderAgent to generate a diff for backend/core/intent_rules.py or similar
-        description = f"Stabilize high-failure domain '{domain}' via adaptive logic synthesis."
+        # 1. Synthesize the patch logic
+        prompt = f"""
+        Domain: {domain}
+        Issue: Sustained high-fragility and failure rate.
+        Objective: Propose a logic refinement for backend/core/intent_rules.py to handle this better.
         
-        async with PostgresDB._session_factory() as session:
-            proposal = MutationProposal(
-                mutation_type="logic_refinement",
-                proposal_name=proposal_name,
-                logic_diff="// Autonomous logic mutation placeholder",
-                target_metric="fragility_score",
-                expected_improvement=0.3,
-                status="proposed"
-            )
-            session.add(proposal)
-            await session.commit()
+        Return ONLY the logic diff or rule change.
+        """
+        try:
+            patch_logic = await call_lightweight_llm([{"role": "system", "content": prompt}])
             
-        logger.info(f"✅ [Evolution] Mutation Proposal PERSISTED: {proposal_name}")
+            async with PostgresDB._session_factory() as session:
+                proposal = MutationProposal(
+                    mutation_type="logic_refinement",
+                    proposal_name=proposal_name,
+                    logic_diff=patch_logic,
+                    target_metric="fragility_score",
+                    expected_improvement=0.3,
+                    status="proposed"
+                )
+                session.add(proposal)
+                await session.commit()
+                
+            logger.info(f"✅ [Evolution] Mutation Proposal PERSISTED: {proposal_name}")
+        except Exception as e:
+            logger.error(f"[Evolution] Patch synthesis failed: {e}")

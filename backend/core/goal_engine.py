@@ -10,6 +10,8 @@ from backend.db.postgres import PostgresDB
 from backend.services.brain_service import brain_service
 from backend.core.model_router import ModelRouter
 from backend.core.execution_state import MissionState
+from .identity import identity_system
+import random
 from sqlalchemy import select, update, insert
 
 logger = logging.getLogger(__name__)
@@ -142,13 +144,85 @@ class GoalEngine:
         """
         Autonomous Spawner Loop.
         Finds 'pending' missions attached to active goals and dispatches them to the Orchestrator.
+        Also triggers autonomous goal generation.
         """
         while self._is_running:
             try:
+                # 1. Recalibrate Priorities
+                await self._prioritize_goals()
+
+                # 2. Spawn Missions
                 await self._spawn_pending_missions()
+                
+                # 3. Sovereign v16.2: Autonomous Goal Generation
+                await self._generate_autonomous_goals()
+                
             except Exception as e:
                 logger.error(f"[GoalEngine] AutoSpawner error: {e}")
             await asyncio.sleep(60) # Pulse every minute
+
+    async def _generate_autonomous_goals(self):
+        """
+        Sovereign v16.2: Autonomous Goal Spawner.
+        Generates NEW goals based on system identity, beliefs, and current state.
+        Uses Personality Bias for 'Thinking' goals.
+        """
+        identity = await identity_system.get_identity()
+        personality = identity["personality"]
+        
+        # Determine if we should generate a new goal based on 'Openness'
+        if random.random() > (1.1 - personality.get("trait_openness", 0.5)):
+            logger.info("🧠 [GoalEngine] Identity-driven Goal Generation Triggered.")
+            
+            # Using with_identity=True to inject the stable self into the goal generation
+            prompt = """
+            Strategic Reflection: Based on our core beliefs and traits, what should be our next major long-term objective?
+            Focus on system hardening, knowledge expansion, or user assistance.
+            
+            Output JSON: {"objective": "...", "priority": 0.0 to 2.0, "reasoning": "..."}
+            """
+            
+            try:
+                res = await brain_service.call_local_llm(prompt, with_identity=True)
+                data = json.loads(res.strip())
+                
+                await self.create_persistent_goal(
+                    user_id="SYSTEM_AUTONOMOUS",
+                    objective=data["objective"],
+                    priority=data.get("priority", 1.0)
+                )
+                logger.info(f"✨ [GoalEngine] AUTONOMOUS STRATEGIC GOAL CREATED: {data['objective']}")
+            except Exception as e:
+                logger.error(f"[GoalEngine] Autonomous goal generation failed: {e}")
+
+    async def _prioritize_goals(self):
+        """
+        Sovereign v16.2: Autonomous Priority Management.
+        Adjusts priorities of active goals based on environmental urgency and identity traits.
+        Formula: priority = base_priority * (1 + log(age_in_hours + 1)) * (importance_weight)
+        """
+        async with await PostgresDB.get_session() as session:
+            stmt = select(Goal).where(Goal.status == "active")
+            res = await session.execute(stmt)
+            goals = res.scalars().all()
+            
+            now = datetime.now(timezone.utc)
+            for goal in goals:
+                age_hours = (now - goal.created_at).total_seconds() / 3600
+                
+                # Time-based urgency boost (Logarithmic to avoid runaway priority)
+                import math
+                urgency_factor = 1.0 + math.log10(age_hours + 1)
+                
+                # Identity Bias (Personality determines how much we 'care' about older goals)
+                identity = await identity_system.get_identity()
+                conscientiousness = identity["personality"].get("trait_conscientiousness", 0.5)
+                
+                new_priority = goal.priority * urgency_factor * (0.8 + conscientiousness * 0.4)
+                goal.priority = min(10.0, round(new_priority, 2))
+                
+            await session.commit()
+            logger.info(f"📊 [GoalEngine] priorities recalibrated for {len(goals)} active objectives.")
 
     async def _spawn_pending_missions(self):
         """Dispatches pending missions to the Orchestrator."""
@@ -198,7 +272,7 @@ class GoalEngine:
             total = len(missions) + len(subgoals)
             if total == 0: return
             
-            completed = len([m for m in missions if m.status == "complete"])
+            completed = len([m for m in missions if m.status.lower() in ["complete", "completed"]])
             completed += sum([sg.progress for sg in subgoals])
             
             progress = completed / total

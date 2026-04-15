@@ -48,7 +48,10 @@ class LoRATrainer:
         dataset = []
         for m in missions:
             # Extract instruction/response from mission payload
-            response = str(mission.payload.get("output", "")) if isinstance(mission.payload, dict) else ""
+            response = ""
+            if isinstance(m.payload, dict):
+                response = str(m.payload.get("output", ""))
+            
             if response:
                 dataset.append({
                     "instruction": m.objective,
@@ -71,44 +74,50 @@ class LoRATrainer:
 
     async def trigger_training_pulse(self, dataset_path: str):
         """
-        Executes a local training pulse.
-        Uses a lightweight wrapper around HuggingFace PEFT or Unsloth.
+        Executes a local training pulse using the Sovereign LoRA Trainer.
+        Ensures local-first model crystallization on Drive D.
         """
         logger.info(f"🔥 [LoRA] Triggering training pulse with dataset: {dataset_path}")
         
-        # Command construction for local H100/A100 hardware
-        # In Sovereign v16.1, we use an optimized entrypoint from the model-server.
-        cmd = [
-            "python", "-m", "backend.scripts.train_lora",
-            "--base_model", self.MODEL_BASE,
-            "--data_path", dataset_path,
-            "--output_dir", f"models/adaptors/adapter_{datetime.now().strftime('%m%d')}",
-            "--epochs", "3",
-            "--batch_size", "4",
-            "--learning_rate", "2e-4"
-        ]
+        # Path resolution in v16.2
+        backend_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        training_script = os.path.join(backend_root, "backend", "scripts", "train_lora.py")
         
-        try:
-            # Simulate high-fidelity pulse execution
-            # Real implementation would use asyncio.create_subprocess_exec
-            logger.info(f"Pulse Command: {' '.join(cmd)}")
-            await asyncio.sleep(5) # Simulating GPU activity
+        if not os.path.exists(training_script):
+            logger.error(f"❌ [LoRA] Training script missing: {training_script}")
+            return
+
+        async def run_training():
+            cmd = [
+                "python", training_script,
+                "--dataset", dataset_path,
+                "--output", f"artifacts/weights/lora/adapter_{datetime.now().strftime('%Y%m%d')}"
+            ]
             
-            # --- Phase 3.9: Decentralized Checkpoint ---
-            adapter_path = f"models/adaptors/adapter_{datetime.now().strftime('%m%d')}/adapter_model.bin"
-            # (In simulation, we assume path exists)
-            os.makedirs(os.path.dirname(adapter_path), exist_ok=True)
-            with open(adapter_path, "w") as f: f.write("LORA_ADAPTER_BLOB")
-            
-            from backend.services.arweave_service import arweave_audit
-            await arweave_audit.checkpoint_artifact(f"lora_{datetime.now().strftime('%m%d')}", adapter_path)
-            
-            logger.info("✅ [LoRA] Training pulse recorded. New adapter ready for graduation check.")
-        except Exception as e:
-            logger.error(f"[LoRA] Training pulse failed: {e}")
+            try:
+                logger.info(f"🚀 [LoRA] Launching local trainer: {' '.join(cmd)}")
+                process = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                
+                stdout, stderr = await process.communicate()
+                
+                if process.returncode == 0:
+                    logger.info("✅ [LoRA] Training pulse SUCCESS. Model crystallized.")
+                else:
+                    logger.error(f"❌ [LoRA] Training pulse FAILED (Code {process.returncode}): {stderr.decode()}")
+                    
+            except Exception as e:
+                logger.error(f"❌ [LoRA] Execution crash: {e}")
+
+        # 🛡️ Graduation #30: Tracked Background Task
+        from backend.utils.runtime_tasks import create_tracked_task
+        create_tracked_task(run_training(), name=f"lora-pulse-{datetime.now().strftime('%H%M%S')}")
 
     async def run_maintenance_cycle(self):
-        """Standard Celery-driven maintenance loop."""
+        """Standard maintenance loop for LoRA fine-tuning."""
         samples = await self.collect_training_samples()
         if len(samples) >= self.MIN_SAMPLES:
             path = await self.prepare_dataset(samples)

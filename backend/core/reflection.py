@@ -1,56 +1,61 @@
 """
-Sovereign Reflection Engine v8.
-Evaluates and enhances reasoning quality through a critic-correction loop.
-Based on LeviBrain v8 Critic v2.
+Sovereign Reflection Engine v16.1 [HARDENED].
+Evaluates and enhances reasoning quality through a forensic critic-correction loop.
 """
 
 import logging
-from typing import Dict, Any, List
-from .agent_registry import AgentRegistry
+from typing import Dict, Any, List, Optional
+
+from backend.agents.critic_agent import CriticAgent, CriticInput
 from .orchestrator_types import ToolResult
 from .goal_engine import Goal
-from .tool_registry import call_tool
-from backend.pipelines.learning import learning_system
 
 logger = logging.getLogger(__name__)
 
-
 class ReflectionEngine:
     """
-    LeviBrain v8: Reflection Engine (Critic v2).
-    Multi-dimensional fidelity audit with self-correction and automated reporting.
+    Sovereign Reflection Engine v16.1.
+    Utilizes a Critic Agent to assess mission fidelity and alignment.
     """
 
-    async def evaluate(self, response: str, goal: Goal, perception: Dict[str, Any], results: List[ToolResult]) -> Dict[str, Any]:
-        """Runs a high-fidelity mission audit using the v8 CriticAgent (Multi-Agent Debate)."""
-        user_input = perception.get("input", "")
-        
-        # 1. Dispatch to v8 Critic Agent
-        critic_context = {
-            "goal": goal.objective,
-            "success_criteria": goal.success_criteria,
-            "response": response,
-            "user_input": user_input,
-            "tool_results": [r.dict() for r in results]
-        }
-        
-        audit_res = await AgentRegistry.dispatch("critic", critic_context)
-        
-        # 2. Extract and sanitize fidelity score
-        score = audit_res.data.get("fidelity", 0.9)
-        issues = audit_res.data.get("issues", ["High-fidelity audit failed."])
-        
-        # 3. LEVI Learning Bridge: Log failures for prompt optimization
-        if score < 0.6:
-            from backend.utils.runtime_tasks import create_tracked_task
-            create_tracked_task(learning_system.log_failure(user_input, response, score, issues), name="learning-failure-log")
+    def __init__(self):
+        self.critic = CriticAgent()
+        logger.info("[Reflection] Sovereign v16.1 Forensic Engine Active.")
 
+    async def evaluate(self, response: str, goal: Any, perception: Dict[str, Any], results: List[Any]) -> Dict[str, Any]:
+        """
+        Sovereign v15.0: High-Fidelity Reflection.
+        Dispatches to a Critic Agent to grade the mission outcome.
+        """
+        logger.info(f"🔍 [Reflection] Grading mission response: {response[:50]}...")
+        
+        # 1. Prepare Critic Input
+        critic_input = CriticInput(
+            objective=goal.objective,
+            draft=response,
+            context={
+                "intent": perception.get("intent"),
+                "results_count": len(results),
+                "has_context": bool(perception.get("context"))
+            }
+        )
+        
+        # 2. Execute Critic Loop
+        critic_result = await self.critic._run(critic_input)
+        
+        # 3. Extract Fidelity (v16.1 Fix: Extract from result dict)
+        res_data = critic_result.get("data", {}) if isinstance(critic_result, dict) else getattr(critic_result, "data", {})
+        fidelity = res_data.get("fidelity_score", 0.0) if isinstance(res_data, dict) else 0.0
+        
+        is_satisfactory = fidelity >= 0.8
+        logger.info(f"📊 [Reflection] Fidelity: {fidelity:.2f} | Satisfactory: {is_satisfactory}")
+        
         return {
-            "score": score,
-            "issues": issues,
-            "is_satisfactory": audit_res.get("success", False) and score >= 0.8,
-            "raw_eval": audit_res.data,
-            "fix": audit_res.data.get("fix", "No fix identified.")
+            "is_satisfactory": is_satisfactory,
+            "fidelity": fidelity,
+            "critique": res_data.get("critique", "Forensic analysis unavailable."),
+            "suggestions": res_data.get("suggestions", []),
+            "alignment_gap": res_data.get("alignment_gap", 0.0)
         }
 
     async def self_correct(self, response: str, evaluation: Dict[str, Any], goal: Goal, perception: Dict[str, Any]) -> str:
@@ -58,13 +63,47 @@ class ReflectionEngine:
         if evaluation["is_satisfactory"]:
             return response
             
-        fidelity = evaluation.get("score", 0.0)
+        fidelity = evaluation.get("fidelity", 0.0)
         logger.info("[ReflectionEngine] Low fidelity mission (%.2f). Correcting...", fidelity)
         
-        context = perception.get("context", {})
-        correction_raw = await call_tool("chat_agent", {
-            "input": f"Original Vision: {perception['input']}\n\nDraft: {response}\n\nCritic Analysis: {evaluation['issues'][0]}\n\nObjective: {goal.objective}",
-            "mood": "precise"
-        }, context)
+        # In v16.1, we use a specialized refinement tool
+        from .planner import call_lightweight_llm
+        prompt = (
+            f"Objective: {goal.objective}\n"
+            f"Draft: {response}\n"
+            f"Critique: {evaluation['critique']}\n"
+            "Produce an improved version that resolves the identified issues."
+        )
+        correction = await call_lightweight_llm([{"role": "user", "content": prompt}])
+        return correction
+
+    async def assess_mission_failure(self, mission_id: str, results: List[Any]):
+        """
+        Sovereign v16.1: Forensic Failure Assessment (SAGA Trigger).
+        Analyzes why a mission failed and initiates compensation/rollback if required.
+        """
+        logger.warning(f"🚨 [Reflection] Commencing Forensic Audit for FAILED mission: {mission_id}")
         
-        return correction_raw.message if isinstance(correction_raw, ToolResult) else correction_raw.get("message", response)
+        # 1. Identify failure bottlenecks
+        anomalies = []
+        for res in results:
+            success = getattr(res, "success", True) if not isinstance(res, dict) else res.get("success", True)
+            if not success:
+                anomalies.append({
+                    "agent": getattr(res, "agent", "unknown") if not isinstance(res, dict) else res.get("agent", "unknown"),
+                    "output": str(getattr(res, "output", ""))[:500] if not isinstance(res, dict) else str(res.get("output", ""))[:500],
+                    "error": str(getattr(res, "error", "Unknown anomaly")) if not isinstance(res, dict) else str(res.get("error", "Unknown anomaly"))
+                })
+        
+        # 2. Log Forensic Evidence
+        logger.info(f"[Forensics] Detected {len(anomalies)} anomalies in mission {mission_id}.")
+        
+        # 3. Trigger SAGA Compensation (Simplified)
+        if anomalies:
+            try:
+                from backend.core.saga_manager import saga_manager
+                await saga_manager.compensate(mission_id, anomalies)
+            except ImportError:
+                logger.error("[Forensics] SagaManager unavailable. Rollback skipped.")
+            
+        logger.info(f"✅ [Reflection] Forensic failure assessment complete for {mission_id}.")

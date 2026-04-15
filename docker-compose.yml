@@ -73,14 +73,10 @@ services:
       - ENVIRONMENT=development
       - MAX_CONCURRENT_MISSIONS=10
     depends_on:
-      redis:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-      neo4j:
-        condition: service_healthy
-      mongodb:
-        condition: service_healthy
+      - redis
+      - postgres
+      - neo4j
+      - mongodb
     ports:
       - "8001:8000"
       - "9001:9000"
@@ -100,12 +96,9 @@ services:
       - DCN_SECRET=super_secret_dcn_token_32_chars_long_12345
       - ENVIRONMENT=development
     depends_on:
-      redis:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-      neo4j:
-        condition: service_healthy
+      - redis
+      - postgres
+      - neo4j
     ports:
       - "8002:8000"
       - "9002:9000"

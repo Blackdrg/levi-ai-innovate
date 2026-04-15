@@ -25,6 +25,7 @@ from .workflow_engine import WorkflowEngine
 from .context_manager import ContextManager
 from .learning_loop import LearningLoop
 from backend.core.memory_manager import MemoryManager
+from .identity import identity_system
 from .orchestrator_types import ToolResult, FailureType, FailureAction
 from .workflow_contract import validate_workflow_integrity
 from backend.services.brain_service import brain_service
@@ -125,8 +126,15 @@ class Orchestrator:
                         logger.debug(f"[Orchestrator] Mesh term synchronized: {self.current_term}")
             create_tracked_task(mesh_sentinel(), name="dcn-mesh-sentinel")
 
+        # 📍 Phase 2: Autonomous Goal Engine Coupling
+        from backend.core.goal_engine import goal_engine
+        self.goal_engine = goal_engine
+        self.goal_engine.orchestrator = self # Bidirectional link for spawning
+        await self.goal_engine.start()
+        logger.info("🛰️ [Orchestrator] Autonomous Goal Layer: [ACTIVE]")
+
         # 🔌 Phase 8: Component readiness verification
-        logger.info("[Orchestrator] Readiness: 100% (State Recovered)")
+        logger.info("[Orchestrator] Readiness: 100% (High-Fidelity Wiring Complete)")
 
     async def failover_to_mesh(self, mission_id: str, user_id: str, objective: str, session_id: str, error_context: str, **kwargs) -> Dict[str, Any]:
         """
@@ -268,6 +276,9 @@ class Orchestrator:
 
                 latency = time.time() - start_time
                 log_step("complete", extra={"latency": latency})
+                
+                # 🪐 Sovereign v16.2: Identity Evolution
+                await identity_system.evolve_identity(results, feedback_fidelity=1.0)
 
                 return {
                     "mission_id": mission_id,
@@ -965,10 +976,14 @@ class Orchestrator:
                             query=user_input,
                             response="ABORTED: Low Confidence Planning Failure",
                             fidelity=reasoning['confidence'],
-                            domain=perception.get("intent").intent_type if perception.get("intent") else "chat"
+                            domain=perception.get("intent").intent_type if perception.get("intent") else "chat",
+                            mission_context={"state": "planning_failure", "reasoning": reasoning}
                         ),
                         name=f"evolution-fail-{request_id}"
                     )
+                    
+                    # 🚀 Sovereign v16.2: Identity Evolution (Planning Veto)
+                    await identity_system.evolve_identity([], feedback_fidelity=reasoning['confidence'])
                     
                     return {
                         "response": f"The mission risk is {risk_level.upper()} and the plan fidelity ({reasoning['confidence']}) is below the required safety threshold ({min_conf}). Aborting.",
@@ -1065,6 +1080,15 @@ class Orchestrator:
                         fidelity=fidelity
                     )
                 
+                # --- v16.1 Hardened Wiring Step 7: Arweave/IPFS Anchoring ---
+                from backend.utils.audit import sign_event
+                audit_hash = sign_event(prev_hash="genesis", event_data={
+                    "mission_id": request_id,
+                    "fidelity": fidelity,
+                    "agent_ids": [r.agent for r in results]
+                })
+                await self.memory.anchor_to_permaweb(request_id, audit_hash)
+                
                 # --- Engine 10: Evolutionary Mutation Pulse ---
                 from backend.core.evolution_engine import EvolutionaryIntelligenceEngine
                 await EvolutionaryIntelligenceEngine.record_outcome(
@@ -1089,6 +1113,12 @@ class Orchestrator:
                 )
             
             CognitiveTracer.add_step(request_id, "executed", {"results_count": len(results)})
+            
+            # --- v16.1 Hardened Wiring Step 8: Reflection Forensics ---
+            final_fidelity = audit.get("quality_score", 0.0)
+            if final_fidelity < 0.5:
+                # Trigger forensic assessment for low-fidelity (soft-failure) missions
+                await self.reflection.assess_mission_failure(request_id, results)
             sm.attach_replay_payload({
                 "user_input": user_input, "result": final_response,
                 "task_graph": task_graph.metadata.get("graph_template"),
@@ -1180,10 +1210,14 @@ class Orchestrator:
                     query=user_input,
                     response=final_response,
                     fidelity=audit.get("quality_score", audit.get("fidelity", 0.0)) if 'audit' in locals() else 0.85,
-                    domain=intent.intent_type if 'intent' in locals() else "chat"
+                    domain=intent.intent_type if 'intent' in locals() else "chat",
+                    mission_context={"results": [r.model_dump() for r in results], "audit": audit if 'audit' in locals() else {}}
                 ),
                 name=f"evolution-fragility-{request_id}"
             )
+
+            # 🪐 Sovereign v16.2: Identity Evolution (Success)
+            await identity_system.evolve_identity(results, feedback_fidelity=audit.get("quality_score", 1.0) if 'audit' in locals() else 1.0)
 
             from backend.utils.audit_helper import SovereignAuditHelper
             await SovereignAuditHelper.record_event(

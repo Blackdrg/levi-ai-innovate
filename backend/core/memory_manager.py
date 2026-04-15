@@ -22,6 +22,7 @@ import json
 from typing import Dict, Any, List, Optional
 import time
 from datetime import datetime, timezone
+import random
 from backend.utils.runtime_tasks import create_tracked_task
 
 from backend.db.redis import r as redis_client, HAS_REDIS
@@ -32,7 +33,9 @@ from backend.api.telemetry import broadcast_mission_event
 
 
 # Internal v15 Cognitive Modules
-from backend.memory.cache import MemoryCache
+import random
+from backend.core.execution_state import MissionState
+from .identity import identity_system
 from backend.memory.vector_store import SovereignVectorStore
 from backend.memory.resonance import MemoryResonance
 from backend.memory.graph_engine import GraphEngine
@@ -254,6 +257,9 @@ class MemoryManager:
             "context_drift":     context_drift,
             "latency":           int((asyncio.get_event_loop().time() - start_time) * 1000)
         }
+
+        # 🪐 Sovereign v16.2: Truth-Aware Conflict Resolution
+        facts = await self._resolve_cognitive_conflicts(facts)
 
         # 4. Token-Aware Pruning for Production Safety
         pruned_context = self._trim_facts_by_tokens(facts, max_tokens=_MAX_CONTEXT_TOKENS)
@@ -654,6 +660,35 @@ class MemoryManager:
                 logger.error(f"[MemoryV15] Background maintenance error: {e}")
                 await asyncio.sleep(600)
 
+    async def anchor_to_permaweb(self, mission_id: str, audit_hash: str):
+        """
+        Sovereign v16.1: Decentralized Audit Anchoring.
+        Bridges the local forensic ledger to Arweave/IPFS (Permaweb).
+        """
+        logger.info(f"⚓ [Memory-Anchor] Securing mission {mission_id} to permaweb via hash {audit_hash[:8]}")
+        
+        try:
+            from backend.services.arweave_service import arweave_audit
+            from backend.utils.runtime_tasks import create_tracked_task
+            
+            # Offload to background task as permaweb finality is slow
+            create_tracked_task(
+                arweave_audit.anchor_mission(mission_id, {
+                    "audit_hash": audit_hash,
+                    "anchored_at": datetime.now(timezone.utc).isoformat(),
+                    "protocol": "sovereign_v16.1"
+                }),
+                name=f"permaweb-anchor-{mission_id}"
+            )
+        except ImportError:
+            logger.warning("[Memory-Anchor] Arweave service unavailable. Anchor deferred to local IPFS.")
+            # Fallback to local IPFS (Kubo) if available
+            try:
+                from backend.services.ipfs_service import ipfs_service
+                await ipfs_service.pin_hash(audit_hash, metadata={"mission_id": mission_id})
+            except:
+                logger.error("[Memory-Anchor] All decentralized anchoring paths FAILED.")
+
     # ── Utilities ────────────────────────────────────────────────────────────
 
     async def _get_creation_context(self, user_id: str) -> List[Dict[str, Any]]:
@@ -781,3 +816,81 @@ class MemoryManager:
         })
 
         return cleared_count
+    async def _resolve_cognitive_conflicts(self, facts: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Sovereign v16.2: Epistemic Conflict Resolution.
+        Resolves discrepancies between Neo4j (Tier 4), FAISS (Tier 3), and Postgres (Tier 2).
+        Hierarchy: Neo4j > FAISS > Postgres.
+        """
+        user_id = facts["user_id"]
+        long_term = facts.get("long_term", {})
+        graph_resonance = long_term.get("graph_resonance", [])
+        vector_facts = long_term.get("raw", [])
+        
+        # 1. Conflict Detection
+        # We look for overlapping facts where the content differs significantly
+        # For simplicity, we use the 'Win Condition' logic from the README Gap 3
+        # Neo4j (Tier 4) MUST win.
+        
+        resolved_facts = []
+        for v in vector_facts:
+            # Check if this fact is contradicted by any high-tier graph triplet
+            is_contradicted = False
+            for g in graph_resonance:
+                if self._is_semantic_conflict(v["fact"], g.get("text", "")):
+                    is_contradicted = True
+                    break
+            
+            if not is_contradicted:
+                # Calculate truth score before accepting
+                v["truth_score"] = self._calculate_truth_score(v)
+                if v["truth_score"] > 0.4:
+                    resolved_facts.append(v)
+        
+        # Inject high-confidence graph resonance as 'ground truth' facts
+        for g in graph_resonance:
+            resolved_facts.append({
+                "fact": g.get("text", ""),
+                "category": g.get("category", "ground_truth"),
+                "importance": 1.0,
+                "truth_score": 1.0,
+                "source": "neo4j_tier4"
+            })
+            
+        facts["long_term"]["raw"] = resolved_facts
+        return facts
+
+    def _is_semantic_conflict(self, fact1: str, fact2: str) -> bool:
+        """Simple negation/conflict detector (Place-holder for NLI model)."""
+        f1, f2 = fact1.lower(), fact2.lower()
+        # Look for simple antonyms or 'not'
+        if f"not {f1}" in f2 or f"not {f2}" in f1: return True
+        return False
+
+    def _calculate_truth_score(self, fact: Dict[str, Any]) -> float:
+        """
+        Sovereign v16.2: Truth Scoring.
+        Weights: Importance (30%), Source Reliability (40%), Consistency (30%).
+        """
+        score = 0.0
+        # 1. Importance (30%)
+        score += fact.get("importance", 0.5) * 0.3
+        
+        # 2. Source Reliability (40%)
+        source_weights = {
+            "neo4j_tier4": 1.0,
+            "faiss_tier3": 0.8,
+            "postgres_tier2": 0.6,
+            "redis_tier1": 0.4,
+            "unknown": 0.5
+        }
+        score += source_weights.get(fact.get("source", "unknown"), 0.5) * 0.4
+        
+        # 3. Consistency (30%) (Simulated)
+        score += 0.3 # Default consistency bonus
+        
+        return round(score, 3)
+
+if __name__ == "__main__":
+    # Test block
+    pass

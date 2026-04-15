@@ -55,3 +55,12 @@ groups:
         annotations:
           summary: "DLQ Depth Spike"
           description: "Dead Letter Queue has more than 10 messages. Manual intervention required."
+
+      - alert: LeviGraduationDrift
+        expr: graduation_score < 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "System Graduation Score Drift"
+          description: "Graduation score has fallen below 0.8. Investigate pipeline fidelity and alignment."

@@ -596,6 +596,8 @@ class AgentPolicy(Base):
     Stores optimized hyper-parameters (Temp, Top_P, Model) for agents.
     """
     __tablename__ = "agent_policies"
+    from sqlalchemy import UniqueConstraint
+    __table_args__ = (UniqueConstraint('agent_type', 'domain', name='_agent_domain_uc'),)
 
     id = Column(Integer, primary_key=True)
     agent_type = Column(String, index=True) # planner, critic, search, creator

@@ -65,40 +65,51 @@ class SovereignAuditHelper:
     @staticmethod
     async def verify_audit_chain() -> bool:
         """
-        Sovereign v15.0: Non-Repudiation Verification.
-        Iterates through the entire audit ledger to verify cryptographic integrity.
+        Sovereign v16.2: Hardened Non-Repudiation Verification.
+        Uses chunked retrieval and robust session management to prevent 'connection_lost' errors.
         """
+        CHUNK_SIZE = 500
         try:
-            async with PostgresDB._session_factory() as session:
-                stmt = select(AuditLog).order_by(AuditLog.created_at.asc(), AuditLog.id.asc())
-                res = await session.execute(stmt)
-                logs = res.scalars().all()
-                
-                if not logs:
-                    return True
-                
-                prev_checksum = "LEVI_GENESIS_v15_CHAIN_START"
-                for index, log in enumerate(logs):
-                    row_data = {
-                        "event_type": log.event_type,
-                        "user_id": str(log.user_id) if log.user_id else None,
-                        "resource_id": str(log.resource_id) if log.resource_id else None,
-                        "action": log.action,
-                        "status": log.status,
-                        "metadata_json": log.metadata_json,
-                        "created_at_fixed": log.created_at.isoformat()
-                    }
+            prev_checksum = "LEVI_GENESIS_v15_CHAIN_START"
+            offset = 0
+            total_verified = 0
+
+            while True:
+                async with PostgresDB._session_factory() as session:
+                    # Fetch logs in chunks to prevent memory saturation and long-running query locks
+                    stmt = select(AuditLog).order_by(AuditLog.created_at.asc(), AuditLog.id.asc()).offset(offset).limit(CHUNK_SIZE)
+                    res = await session.execute(stmt)
+                    logs = res.scalars().all()
                     
-                    calculated = AuditLog.calculate_checksum(prev_checksum, row_data)
-                    if calculated != log.checksum:
-                        logger.critical(f"[Forensics] AUDIT CORRUPTION DETECTED at entry {log.id}! Expected {log.checksum[:8]}, got {calculated[:8]}")
-                        return False
+                    if not logs:
+                        break
                     
-                    prev_checksum = log.checksum
-                
-                logger.info(f"[Forensics] Audit ledger verified. {len(logs)} entries synchronized.")
-                return True
+                    for log in logs:
+                        # Reconstruct row data for verification
+                        row_data = {
+                            "event_type": log.event_type,
+                            "user_id": str(log.user_id) if log.user_id else None,
+                            "resource_id": str(log.resource_id) if log.resource_id else None,
+                            "action": log.action,
+                            "status": log.status,
+                            "metadata_json": log.metadata_json,
+                            "created_at_fixed": log.created_at.isoformat()
+                        }
+                        
+                        calculated = AuditLog.calculate_checksum(prev_checksum, row_data)
+                        if calculated != log.checksum:
+                            logger.critical(f"[Forensics] AUDIT CORRUPTION DETECTED at entry {log.id}! Expected {log.checksum[:8]}, got {calculated[:8]}")
+                            return False
+                        
+                        prev_checksum = log.checksum
+                        total_verified += 1
+                    
+                    offset += CHUNK_SIZE
+                    logger.debug(f"[Forensics] Verified {total_verified} entries...")
+
+            logger.info(f"✅ [Forensics] Audit ledger verified. {total_verified} entries synchronized.")
+            return True
                 
         except Exception as e:
-            logger.error(f"[Forensics] Audit verification failure: {e}")
+            logger.error(f"❌ [Forensics] Audit verification failure: {e}")
             return False

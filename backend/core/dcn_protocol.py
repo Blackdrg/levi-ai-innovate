@@ -571,8 +571,18 @@ class DCNProtocol:
         - BFT (Byzantine Fault Tolerance): (2 * n // 3) + 1
         """
         total_peers = len(self.peers)
+        
+        # FIXED: Explicit mode flag and audit log for single-node bypass
         if total_peers <= 1:
-            return True # Single node swarm always has quorum
+            env = os.getenv("ENVIRONMENT", "development").lower()
+            if env == "production":
+                logger.critical(
+                    f"🚨 [DCN-Quorum] QUORUM BYPASS in PRODUCTION! Node {self.node_id} is operating in isolation. "
+                    "Consensus TRUTH cannot be verified against the swarm."
+                )
+            else:
+                logger.debug(f"ℹ️ [DCN-Quorum] Single-node bypass active (Env: {env}).")
+            return True # Allow bypass for development/sovereign-solo-mode
             
         strict_bft = os.getenv("STRICT_BFT", "false").lower() == "true"
         
@@ -690,11 +700,49 @@ class DCNProtocol:
         Phase 2.4: Shadow Node Polling.
         Redundantly polls active missions to detect failures and trigger shadow execution.
         """
-        # Logic to scan active missions and ensure they are progressing
-        # In v16.1, we check the CentralExecutionState TTL
-        logger.debug("[Shadow] Scanning for orphaned missions...")
-        # Implementation details depend on the mission lifecycle observability
-        pass
+        if not self.gossip or not self.gossip.r: return
+        
+        logger.debug("🕵️ [Shadow] Scanning for orphaned or stalled missions...")
+        
+        try:
+            # 1. Fetch all active mission IDs from the Orchestrator's active set
+            active_ids_raw = await self.gossip.r.smembers("orchestrator:active_missions")
+            now = time.time()
+            timeout = 120 # 2-minute stall timeout
+
+            for mid_bytes in active_ids_raw:
+                mission_id = mid_bytes.decode()
+                # 2. Extract full state data
+                state_raw = await self.gossip.r.hget("orchestrator:missions", mission_id)
+                if not state_raw:
+                    continue
+                
+                state = json.loads(state_raw.decode())
+                last_update = state.get("metadata", {}).get("updated_at", 0)
+                status = state.get("state")
+
+                # 3. Detect Stalls in progress
+                if status in ["EXECUTING", "RUNNING", "PLANNING"] and (now - last_update > timeout):
+                    logger.warning(f"🚨 [Shadow] Detected STALLED mission: {mission_id} (Last updated {now - last_update:.1f}s ago). Initiating Shadow Audit.")
+                    
+                    # Broadcast a Shadow Execution Pulse
+                    # This tells the swarm that this mission might be orphaned
+                    await self.broadcast_gossip(
+                        mission_id=mission_id,
+                        payload={
+                            "reason": "stall_detected",
+                            "last_status": status,
+                            "stale_duration": now - last_update
+                        },
+                        pulse_type="shadow_audit_request"
+                    )
+                    
+                    # Update local state to avoid rapid-fire pulses
+                    state["metadata"]["updated_at"] = now
+                    await self.gossip.r.hset("orchestrator:missions", mission_id, json.dumps(state))
+
+        except Exception as e:
+            logger.error(f"[Shadow] Polling cycle failed: {e}")
 
     async def get_mesh_health(self) -> Dict[str, Any]:
         """

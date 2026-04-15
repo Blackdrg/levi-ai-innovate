@@ -288,7 +288,12 @@ class LlmDecomposer:
                 for r in graph_resonance
             ])
 
+        from backend.core.identity import identity_system
+        bias = await identity_system.get_personality_bias_prompt()
+        
         prompt = f"""
+{bias}
+
 You are the LEVI Sovereign Planner (Phase 3 Context-Aware).
 Decompose this mission into a Directed Acyclic Graph (DAG) of specialized agent tasks.
 
