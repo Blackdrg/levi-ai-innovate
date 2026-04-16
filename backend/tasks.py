@@ -166,3 +166,19 @@ async def execute_mission_from_cloud_task(mission_id: str, perception: dict):
     except Exception as e:
         logger.error(f"❌ [CloudTask] Mission {mission_id} failed: {e}")
         return False
+
+@celery_app.task(name="backend.tasks.monitor_embedding_drift")
+def monitor_embedding_drift(user_id: str):
+    """
+    Sovereign v16.2: Periodic FAISS drift monitoring.
+    Alerts if semantic clusters migrate > 15%.
+    """
+    logger.info(f"[Task] Pulse: Checking embedding drift for {user_id}")
+    from backend.memory.vector_store import SovereignVectorStore
+    try:
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return loop.run_until_complete(SovereignVectorStore.monitor_drift(user_id))
+    except Exception as e:
+        logger.error(f"[Task] Drift monitoring failed: {e}")
+        return {"status": "error", "message": str(e)}

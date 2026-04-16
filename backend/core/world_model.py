@@ -1,167 +1,212 @@
-"""
-LEVI-AI World Model Engine (v15.0) [ACTIVE].
-Strategic simulator for predictive planning and causal reasoning.
-This module performs causal grounding and predictive consequence analysis.
-"""
-
+import asyncio
 import logging
-from typing import Dict, Any, List
-from backend.services.brain_service import brain_service
+import random
+from dataclasses import dataclass
+from typing import Any, Dict, List, Union
+
+from sqlalchemy import case, func, select
+
+from backend.core.task_graph import TaskGraph
+from backend.db.models import CognitiveUsage, Mission
+from backend.db.neo4j_connector import Neo4jStore
+from backend.db.postgres import PostgresDB
 
 logger = logging.getLogger(__name__)
 
+
+@dataclass
+class SimulationState:
+    mission_id: str
+    nodes_executed: int
+    nodes_total: int
+    failures: int
+    estimated_latency_ms: float
+    estimated_success_prob: float
+
+
 class WorldModel:
-    """
-    Sovereign World Model v15.0.
-    Performs causal simulation and predictive consequence analysis for agent task graphs.
-    """
+    """Predictive planner using Monte Carlo simulation plus lightweight grounding."""
 
     def __init__(self):
-        logger.info("[WorldModel] Initializing Causal Resonance engine...")
+        self.tree: Dict[str, Any] = {}
+        self.graph_db = Neo4jStore()
 
-    @classmethod
-    async def simulate_mission(cls, objective: str, plan_nodes: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """
-        Predicts the outcome of a mission plan before execution.
-        v16.0: Active Causal Reasoning (Structural + Semantic simulation).
-        """
-        logger.info(f"🔮 [WorldModel] Simulating causal path for mission: {objective[:50]}...")
-        
-        # 1. Structural Causal Analysis (v16.0 Core)
-        structural_report = cls._analyze_structure(plan_nodes)
-        if not structural_report["is_valid"]:
-            return {
-                "status": "blocked_structural",
-                "fidelity_prediction": 0.0,
-                "risk_assessment": "critical",
-                "issues": structural_report["issues"]
-            }
+    async def ground_plan(self, goal_objective: str, task_graph_data: Dict[str, Any]) -> Dict[str, Any]:
+        issues: List[str] = []
+        objective_lower = goal_objective.lower()
+        if any(token in objective_lower for token in ["delete prod", "drop production", "exfiltrate", "expose secret"]):
+            issues.append("Objective violates world-model safety constraints.")
 
-        # 2. Construct Simulation Prompt (Semantic Pass)
-        nodes_desc = "\n".join([f"- {n.get('id')}: {n.get('description')} (by {n.get('agent')})" for n in plan_nodes])
-        prompt = (
-            "You are the LEVI World Model (Causal Engine v16.0).\n"
-            "Analyze the following execution path for hidden causal contradictions.\n"
-            f"Objective: {objective}\n"
-            f"Execution Graph:\n{nodes_desc}\n"
-            "Return JSON: { \"fidelity_prediction\": float, \"risk_assessment\": \"low|med|high\", \"bottlenecks\": [] }"
-        )
-        
-        try:
-            # 3. Call local LLM for predictive reasoning
-            prediction_raw = await brain_service.call_local_llm(prompt, model_type="reasoning")
-            
-            # 4. Robust JSON Extraction
-            import re
-            import json
-            json_match = re.search(r"\{.*\}", prediction_raw, re.DOTALL)
-            if json_match:
-                parsed = json.loads(json_match.group())
-                return {
-                    "status": "simulated",
-                    "fidelity_prediction": float(parsed.get("fidelity_prediction", 0.92)),
-                    "risk_assessment": parsed.get("risk_assessment", "low"),
-                    "causal_link_verified": parsed.get("risk_assessment") != "high",
-                    "bottlenecks": parsed.get("bottlenecks", []),
-                    "structural_audit": structural_report
-                }
-            
-            return {
-                "status": "simulated_fallback",
-                "fidelity_prediction": 0.85,
-                "risk_assessment": "med",
-                "causal_link_verified": True,
-                "structural_audit": structural_report
-            }
-        except Exception as e:
-            logger.error(f"[WorldModel] Simulation anomaly: {e}")
-            return {"status": "degraded", "fidelity_prediction": 0.5, "risk_assessment": "high", "structural_audit": structural_report}
-
-    @staticmethod
-    def _analyze_structure(nodes: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """
-        Sovereign v16.1 [PHASE 3]: High-Fidelity Causal Audit.
-        Bypasses LLM planning by traversing the Neo4j World State.
-        """
-        issues = []
-        node_map = {n.get("id"): n for n in nodes}
-        
-        # 1. Neo4j Integration (Engine 8: Causal Resonance)
-        try:
-            from backend.db.neo4j_connector import Neo4jStore
-            graph = Neo4jStore()
-            # Perform a 'Causal Resonance' check for each task connection
-            for node in nodes:
-                agent = node.get("agent")
-                action = node.get("description")
-                # Query Neo4j for known failure patterns or causal bottlenecks
-                resonance = graph.check_causal_bottleneck(agent, action)
-                if resonance.get("bottleneck_detected"):
-                    issues.append(f"Graph Resonance Conflict: {agent} action '{action}' has {resonance['risk_score']} risk.")
-        except ImportError:
-            logger.warning("[WorldModel] Neo4jStore unavailable. Falling back to local DFS audit.")
-
-        # 2. Local Cycle Detection (DFS)
-        visited = set()
-        path = set()
-        
-        def has_cycle(node_id):
-            if node_id in path: return True
-            if node_id in visited: return False
-            visited.add(node_id)
-            path.add(node_id)
-            node = node_map.get(node_id, {})
-            for dep in node.get("dependencies", []):
-                if has_cycle(dep): return True
-            path.remove(node_id)
-            return False
-
-        for nid in node_map:
-            if has_cycle(nid):
-                issues.append(f"Causal Loop Detected: Task {nid} depends on itself via cycle.")
-                break
+        entities = [token for token in goal_objective.split() if token[:1].isupper()][:5]
+        if entities:
+            resonance_tasks = [self.graph_db.get_resonance(entity, tenant_id="global") for entity in entities]
+            try:
+                resonance = await asyncio.gather(*resonance_tasks)
+                for entity, hits in zip(entities, resonance):
+                    for hit in hits:
+                        name = str(hit.get("name", "")).upper()
+                        if "BLOCK" in name or "DENY" in name:
+                            issues.append(f"Constraint violation around entity '{entity}'.")
+                            break
+            except Exception as exc:
+                logger.warning("[WorldModel] Grounding resonance degraded: %s", exc)
 
         return {
-            "is_valid": len(issues) == 0,
+            "is_valid": not issues,
             "issues": issues,
-            "node_count": len(nodes),
-            "engine": "graph-traversal-v16.1"
+            "grounding_status": "neo4j_verified" if not issues else "rejected",
+            "simulation_resonance": max(0.0, 1.0 - (0.2 * len(issues))),
         }
 
+    async def simulate_plan(self, plan_dag: Union[TaskGraph, Dict[str, Any]], iterations: int = 100) -> Dict[str, Any]:
+        nodes = self._normalize_nodes(plan_dag)
+        if not nodes:
+            return {
+                "successes": 0,
+                "failures": 1,
+                "failure_modes": {"empty_plan": 1},
+                "avg_latency_ms": 0.0,
+                "success_probability": 0.0,
+                "failure_probability": 1.0,
+            }
 
-    @classmethod
-    async def simulate_outcome(cls, action: str, current_state: Dict[str, Any]) -> Dict[str, Any]:
-        """Performs a single-step causal projection."""
-        return {"projected_state": current_state, "confidence": 0.9}
+        outcomes = {"successes": 0, "failures": 0, "failure_modes": {}, "avg_latency_ms": 0.0}
+        latencies: List[float] = []
+        for _ in range(iterations):
+            result = await self._simulate_single_execution(nodes)
+            if result["success"]:
+                outcomes["successes"] += 1
+            else:
+                outcomes["failures"] += 1
+                failure_mode = result.get("failure_reason", "unknown")
+                outcomes["failure_modes"][failure_mode] = outcomes["failure_modes"].get(failure_mode, 0) + 1
+            latencies.append(result["latency_ms"])
 
-    @classmethod
-    async def simulate_counterfactual(cls, objective: str, plan_nodes: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """
-        Counterfactual simulator: "What if X happens instead of Y?"
-        v16.0: High-risk mission safety loop.
-        """
-        logger.info(f"🔮 [WorldModel] Running COUNTERFACTUAL simulation for: {objective[:50]}")
-        
-        # 1. Identify 'Critical Nodes' in the plan
-        critical_nodes = [n for n in plan_nodes if n.get("agent") in ["ArchitectAgent", "SecurityAuditAgent"]]
-        
-        # 2. Simulate failure for each critical node (Counterfactual Analysis)
-        counterfactuals = []
-        for node in critical_nodes:
-            prompt = (
-                f"What if node '{node.get('id')}' fails during execution of '{objective}'?\n"
-                "Predict the cascading failure and suggest a fallback path."
-            )
-            prediction = await brain_service.call_local_llm(prompt, model_type="reasoning")
-            counterfactuals.append({
-                "source_node": node.get("id"),
-                "failure_prediction": prediction[:500],
-                "risk_index": 0.85 # High impact
-            })
-            
+        total = max(1, iterations)
+        outcomes["success_probability"] = outcomes["successes"] / total
+        outcomes["avg_latency_ms"] = sum(latencies) / len(latencies) if latencies else 0.0
+        outcomes["failure_probability"] = outcomes["failures"] / total
+        return outcomes
+
+    async def simulate_mission(self, objective: str, plan_nodes: List[Dict[str, Any]]) -> Dict[str, Any]:
+        simulation = await self.simulate_plan({"nodes": plan_nodes}, iterations=50)
+        return {
+            "status": "simulated" if simulation["success_probability"] >= 0.75 else "blocked_risk",
+            "fidelity_prediction": simulation["success_probability"],
+            "risk_assessment": "low" if simulation["success_probability"] >= 0.85 else "med" if simulation["success_probability"] >= 0.65 else "high",
+            "causal_link_verified": simulation["success_probability"] >= 0.75,
+            "bottlenecks": list(simulation["failure_modes"].keys()),
+            "failure_modes": simulation["failure_modes"],
+            "avg_latency_ms": simulation["avg_latency_ms"],
+        }
+
+    async def simulate_counterfactual(self, objective: str, plan_nodes: List[Dict[str, Any]]) -> Dict[str, Any]:
+        base = await self.simulate_plan({"nodes": plan_nodes}, iterations=30)
+        reduced = plan_nodes[:-1] if len(plan_nodes) > 1 else plan_nodes
+        counter = await self.simulate_plan({"nodes": reduced}, iterations=30)
         return {
             "status": "counterfactual_complete",
-            "risk_assessment": "high" if any(c["risk_index"] > 0.8 for c in counterfactuals) else "low",
-            "counterfactuals": counterfactuals
+            "risk_assessment": "high" if base["success_probability"] < 0.75 else "low",
+            "counterfactuals": [
+                {
+                    "source_node": plan_nodes[-1].get("id") if plan_nodes else "none",
+                    "base_success_probability": base["success_probability"],
+                    "counterfactual_success_probability": counter["success_probability"],
+                }
+            ],
         }
 
+    async def simulate_outcome(self, action: str, current_state: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "projected_state": dict(current_state),
+            "confidence": 0.9 if "safe" in action.lower() else 0.7,
+        }
+
+    async def _simulate_single_execution(self, nodes: List[Dict[str, Any]]) -> Dict[str, Any]:
+        total_latency = 0.0
+        for node in nodes:
+            task_result = await self._simulate_task(node)
+            total_latency += task_result["latency_ms"]
+            if not task_result["success"]:
+                return {
+                    "success": False,
+                    "failure_reason": task_result.get("reason", "unknown"),
+                    "latency_ms": max(0.0, total_latency),
+                }
+        return {"success": True, "latency_ms": max(0.0, total_latency)}
+
+    async def _simulate_task(self, node: Dict[str, Any]) -> Dict[str, Any]:
+        agent_id = str(node.get("agent") or "unknown")
+        historical = await self._get_historical_performance(agent_id)
+
+        if not historical:
+            success_rate = 0.85
+            avg_latency = 1500.0
+            std_latency = 400.0
+        else:
+            success_rate = historical["success_rate"]
+            avg_latency = historical["avg_latency_ms"]
+            std_latency = historical["std_latency_ms"]
+
+        latency = max(50.0, random.gauss(avg_latency, max(50.0, std_latency)))
+        success = random.random() < success_rate
+        if success:
+            return {"success": True, "latency_ms": latency}
+        return {
+            "success": False,
+            "reason": f"Agent {agent_id} failure (simulated)",
+            "latency_ms": latency,
+        }
+
+    async def _get_historical_performance(self, agent_id: str) -> Dict[str, float]:
+        try:
+            async with PostgresDB.session_scope() as session:
+                success_case = case((Mission.status.in_(["success", "completed", "COMPLETE"]), 1.0), else_=0.0)
+                stmt = (
+                    select(
+                        func.avg(success_case).label("success_rate"),
+                        func.avg(CognitiveUsage.latency_ms).label("avg_latency_ms"),
+                        func.coalesce(func.stddev_pop(CognitiveUsage.latency_ms), 250.0).label("std_latency_ms"),
+                    )
+                    .select_from(CognitiveUsage)
+                    .join(Mission, Mission.mission_id == CognitiveUsage.mission_id, isouter=True)
+                    .where(CognitiveUsage.agent == agent_id)
+                )
+                row = (await session.execute(stmt)).mappings().first()
+                if not row or row["avg_latency_ms"] is None:
+                    return {
+                        "success_rate": 0.90,
+                        "avg_latency_ms": 1500.0,
+                        "std_latency_ms": 500.0,
+                    }
+                return {
+                    "success_rate": float(row["success_rate"] or 0.90),
+                    "avg_latency_ms": float(row["avg_latency_ms"] or 1500.0),
+                    "std_latency_ms": max(50.0, float(row["std_latency_ms"] or 500.0)),
+                }
+        except Exception as exc:
+            logger.warning("[WorldModel] Historical performance lookup degraded for %s: %s", agent_id, exc)
+            return {
+                "success_rate": 0.90,
+                "avg_latency_ms": 1500.0,
+                "std_latency_ms": 500.0,
+            }
+
+    def _normalize_nodes(self, plan_dag: Union[TaskGraph, Dict[str, Any]]) -> List[Dict[str, Any]]:
+        if isinstance(plan_dag, TaskGraph):
+            ordered = []
+            for wave in plan_dag.get_execution_waves():
+                ordered.extend(
+                    {
+                        "id": node.id,
+                        "agent": node.agent,
+                        "description": node.description,
+                        "dependencies": list(node.dependencies),
+                    }
+                    for node in wave
+                )
+            return ordered
+        if isinstance(plan_dag, dict):
+            nodes = plan_dag.get("nodes", [])
+            return [node.model_dump() if hasattr(node, "model_dump") else dict(node) for node in nodes]
+        return []

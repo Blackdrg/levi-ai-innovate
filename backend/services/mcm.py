@@ -24,7 +24,7 @@ class MemoryConsistencyManager:
     The single source of truth for high-fidelity cognitive synchronization.
     Internalized: Replaces GCP Pub/Sub with local-first Redis Streams.
     """
-    STREAM_NAME = "memory_consistency" # Consolidated with EventBus topics
+    STREAM_NAME = "mission_events" 
     
     def __init__(self):
         self._is_running = False
@@ -42,26 +42,44 @@ class MemoryConsistencyManager:
 
         self._is_running = True
         
-        # 1. Start Internalized Consumer
-        # This replaces the legacy Redis Group loop with the Unified EventBus subscriber
+        # 1. Subscribe to Mission Events (Neo4j Sync Gate)
+        from backend.utils.event_bus import sovereign_event_bus
         await sovereign_event_bus.subscribe(
             topic=self.STREAM_NAME,
-            group="mcm_primary_group",
+            group="mcm_sync_group",
             consumer_id=f"mcm_{self.region}",
             callback=self._process_event_wrapper
         )
         
-        logger.info("[MCM] Unified Memory Consistency Manager active (Internalized).")
+        logger.info(f"[MCM] Joined {self.STREAM_NAME} for real-time synchronization.")
 
-    async def _process_event_wrapper(self, data: Dict[str, Any]):
-        """Bridge between EventBus and legacy MCM processing logic."""
-        await self._process_event(
-            event_type=data.get("type"),
-            user_id=data.get("user_id"),
-            session_id=data.get("session_id"),
-            payload=json.loads(data.get("data", "{}")),
-            origin=data.get("origin", "local")
-        )
+    async def _process_event_wrapper(self, event: Dict[str, Any]):
+        """
+        Unpacks EventBus schema and routes to sync logic.
+        Event Schema: {event_type, mission_id, payload, source, validation_hash}
+        """
+        try:
+            event_type = event.get("event_type")
+            mission_id = event.get("mission_id")
+            payload_str = event.get("payload", "{}")
+            payload = json.loads(payload_str)
+            user_id = payload.get("user_id", "system")
+
+            # Trigger Sync
+            await self._process_event(
+                event_type=event_type,
+                user_id=user_id,
+                session_id=mission_id,
+                payload=payload,
+                source=event.get("source", "unknown")
+            )
+        except Exception as e:
+            logger.error(f"❌ [MCM] Event processing failure: {e}")
+            # Emit shadow failure event
+            asyncio.create_task(sovereign_event_bus.emit("system_errors", {
+                "event_type": "MCM_PROCESS_FAILURE",
+                "payload": {"error": str(e), "event_ref": event}
+            }))
 
     async def log_anomaly(self, user_id: str, anomaly: Dict[str, Any]):
         if HAS_REDIS:
@@ -104,74 +122,78 @@ class MemoryConsistencyManager:
             try: await self._process_task
             except asyncio.CancelledError: pass
 
-    async def _synchro_loop(self):
-        """Background loop to consume memory events and sync tiers."""
-        while self._is_running:
-            try:
-                messages = redis_client.xreadgroup(
-                    self.GROUP_NAME, self.CONSUMER_NAME, {self.STREAM_NAME: ">"}, 
-                    count=10, block=1000
-                )
-                if not messages: continue
+    # _synchro_loop is deprecated and replaced by EventBus subscription.
 
-                for stream, msgs in messages:
-                    for msg_id, data in msgs:
-                        event_type = data[b'type'].decode()
-                        user_id = data[b'user_id'].decode()
-                        session_id = data[b'session_id'].decode()
-                        payload = json.loads(data[b'data'].decode())
-                        
-                        await self._process_event(event_type, user_id, session_id, payload, self.region)
-                        redis_client.xack(self.STREAM_NAME, self.GROUP_NAME, msg_id)
-
-            except Exception as e:
-                logger.error(f"[MCM] Consistency Loop Error: {e}")
-                await asyncio.sleep(1)
-
-    async def _process_event(self, event_type: str, user_id: str, session_id: str, payload: Dict[str, Any], source_region: str):
-        """High-Fidelity Tiered Synchronization."""
-        logger.info(f"[MCM] Synchronizing {event_type} for {user_id}")
+    async def _process_event(self, event_type: str, user_id: str, session_id: str, payload: Dict[str, Any], source: str):
+        """
+        High-Fidelity Tiered Synchronization.
+        Triggered by: mission_events stream.
+        """
+        logger.info(f"[MCM] Synchronizing {event_type} for {user_id} (Source: {source})")
 
         try: 
-            # 1. Tier 2 Sync (Postgres)
-            async with get_write_session() as session:
-                if event_type == "interaction":
-                    msg = Message(mission_id=session_id, role="user", content=payload.get("input", ""), timestamp=datetime.now(timezone.utc))
-                    session.add(msg)
-                    mission = await session.get(Mission, session_id)
-                    if not mission:
-                        mission = Mission(mission_id=session_id, user_id=user_id, objective=payload.get("input", "Sync")[:200], status="completed")
-                        session.add(mission)
-
-                elif event_type == "fact_extracted" or event_type == "fact":
-                    facts = payload.get("facts", [payload])
-                    for f in facts:
-                        fact_obj = UserFact(user_id=user_id, fact=f.get("fact") or f.get("text"), category=f.get("category", "general"), importance=f.get("importance", 0.5))
-                        session.add(fact_obj)
-
-            # 2. Tier 3 Sync (Neo4j - Real-time Streaming)
-            if event_type in ["triplet", "interaction"]:
+            # 1. Tier 3 Sync (Neo4j - CRITICAL PATH < 100ms)
+            # This is done FIRST to ensure visual/truth layer parity.
+            if event_type == "MISSION_COMPLETED":
                 from backend.db.neo4j_client import Neo4jClient
                 try:
-                    if event_type == "triplet":
-                         # Real-time triplet write
-                         from backend.memory.graph_engine import GraphEngine
-                         ge = GraphEngine()
-                         await ge.upsert_triplet(user_id, payload.get("subject"), payload.get("relation"), payload.get("object"))
-                    else:
-                        await Neo4jClient.add_interaction(user_id=user_id, query=payload.get("input", ""), response=payload.get("response", ""), sync=True)
+                    # Parallelizing truth sync
+                    await Neo4jClient.add_interaction(
+                        user_id=user_id, 
+                        query=payload.get("objective", ""), 
+                        response=payload.get("response", ""), 
+                        sync=True # Enforce immediate consistency
+                    )
+                    
+                    # 🛡️ [Phase 3/8] Real-Time Truth Reconciliation
+                    from backend.core.reconciliation import reconciliation_worker
+                    asyncio.create_task(reconciliation_worker.run_reconciliation_pulse(user_id))
+                    
                 except Exception as e:
-                    logger.error(f"[MCM] Neo4j Streaming failed: {e}")
+                    logger.error(f"❌ [MCM] Neo4j Critical Sync failed: {e}")
 
-            # 3. Tier 4 Sync (Vector Stores)
-            from backend.db.vector_store import SovereignVectorStore
-            try:
-                if event_type == "interaction":
-                    await SovereignVectorStore.store_fact(user_id, f"Interaction: {payload.get('input')[:50]}...", category="interaction")
-                elif event_type == "fact_extracted" or event_type == "fact":
+            # 2. Tier 2 Sync (Postgres - Episodic Storage)
+            async with get_write_session() as session:
+                if event_type == "MISSION_COMPLETED":
+                    mission = await session.get(Mission, session_id)
+                    if not mission:
+                        mission = Mission(
+                            mission_id=session_id, 
+                            user_id=user_id, 
+                            objective=payload.get("objective", "Sync")[:200], 
+                            status="completed"
+                        )
+                        session.add(mission)
+                    
+                    msg = Message(
+                        mission_id=session_id, 
+                        role="bot", 
+                        content=payload.get("response", ""), 
+                        timestamp=datetime.now(timezone.utc)
+                    )
+                    session.add(msg)
+                
+                elif event_type in ["fact_extracted", "fact"]:
                     facts = payload.get("facts", [payload])
                     for f in facts:
-                        await SovereignVectorStore.store_fact(user_id, f.get("fact") or f.get("text"), category=f.get("category", "semantic"), importance=f.get("importance", 0.5))
+                        fact_obj = UserFact(
+                            user_id=user_id, 
+                            fact=f.get("fact") or f.get("text"), 
+                            category=f.get("category", "general"), 
+                            importance=f.get("importance", 0.5)
+                        )
+                        session.add(fact_obj)
+
+            # 3. Tier 4 Sync (Vector Stores - Background)
+            from backend.db.vector_store import SovereignVectorStore
+            try:
+                if event_type == "MISSION_COMPLETED":
+                    asyncio.create_task(SovereignVectorStore.store_fact(
+                        user_id, 
+                        f"Recall: {payload.get('objective')[:50]}...", 
+                        category="interaction",
+                        importance=payload.get("fidelity", 0.8)
+                    ))
             except Exception as e:
                 logger.error(f"[MCM] Vector Sync failed: {e}")
 

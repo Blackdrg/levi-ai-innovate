@@ -35,117 +35,13 @@ standard_retry = retry(
     reraise=True
 )
 
-class CircuitBreaker:
-    def __init__(self, name: str, threshold: int = 5, recovery_time: int = 60, success_threshold: int = 3):
-        self.name = name
-        self.threshold = threshold
-        self.recovery_time = recovery_time
-        self.success_threshold = success_threshold
-        self.failures = 0
-        self.consecutive_successes = 0
-        self.last_failure_time = 0
-        self.state = "CLOSED"  # CLOSED, OPEN, HALF-OPEN
-        self.webhook_url = os.getenv("ALERT_WEBHOOK_URL")
-
-    def _send_alert(self, message: str):
-        """Send a proactive Discord/Slack-compatible alert when circuit trips."""
-        if not self.webhook_url:
-            return
-        try:
-            payload = {
-                "content": f"🚨 **LEVI-AI ALERT**: Circuit Breaker **[{self.name}]** {message}",
-                "username": "LEVI Monitoring",
-            }
-            requests.post(self.webhook_url, json=payload, timeout=2.0)
-        except Exception as e:
-            logger.error(f"Failed to send circuit-breaker alert for {self.name}: {e}")
-
-    def call(self, func: Callable, *args, **kwargs):
-        if self.state == "OPEN":
-            if time.time() - self.last_failure_time > self.recovery_time:
-                self.state = "HALF-OPEN"
-                logger.info(f"Circuit {self.name} is now HALF-OPEN.")
-            else:
-                raise RuntimeError(f"Circuit {self.name} is OPEN. Try again later.")
-
-        try:
-            result = func(*args, **kwargs)
-            self.on_success()
-            return result
-        except requests.exceptions.HTTPError as e:
-            # 429 doesn't break the circuit, it just means wait
-            if e.response is not None and e.response.status_code == 429:
-                logger.warning(f"Rate limit hit in {self.name}. Circuit remains {self.state}.")
-                raise e
-            self.on_failure()
-            raise e
-        except Exception as e:
-            self.on_failure()
-            raise e
-
-    async def async_call(self, func: Callable, *args, **kwargs):
-        """Async support for circuit breaking."""
-        if self.state == "OPEN":
-            if time.time() - self.last_failure_time > self.recovery_time:
-                self.state = "HALF-OPEN"
-                logger.info(f"Circuit {self.name} is now HALF-OPEN.")
-            else:
-                raise RuntimeError(f"Circuit {self.name} is OPEN. Try again later.")
-
-        try:
-            result = await func(*args, **kwargs)
-            self.on_success()
-            return result
-        except Exception as e:
-            # Standardize 429 check for both requests and httpx
-            is_rate_limit = False
-            if hasattr(e, "response") and e.response is not None:
-                status_code = getattr(e.response, "status_code", None)
-                if status_code == 429:
-                    is_rate_limit = True
-
-            if is_rate_limit:
-                logger.warning(f"Async Rate limit hit in {self.name}. Circuit remains {self.state}.")
-                raise e
-
-            self.on_failure()
-            raise e
-
-    def on_success(self):
-        if self.state == "HALF-OPEN":
-            self.consecutive_successes += 1
-            if self.consecutive_successes >= self.success_threshold:
-                logger.info(f"✅ Circuit {self.name} is now FULLY RECOVERED and CLOSED.")
-                self.state = "CLOSED"
-                self.failures = 0
-                self.consecutive_successes = 0
-        else:
-            self.failures = 0
-            self.consecutive_successes = 0
-
-    def on_failure(self):
-        self.failures += 1
-        self.consecutive_successes = 0 # Reset recovery on any failure
-        self.last_failure_time = time.time()
-        
-        if self.state == "HALF-OPEN":
-            logger.warning(f"❌ Circuit {self.name} failed during recovery. Reverting to OPEN.")
-            self.state = "OPEN"
-            return
-
-        if self.failures >= self.threshold:
-            was_open = self.state == "OPEN"
-            self.state = "OPEN"
-            if not was_open:
-                logger.critical(f"💥 Circuit {self.name} has OPENED due to {self.failures} failures.")
-                self._send_alert("TRIPPED! Transitioned to OPEN state due to repeated failures.")
-
-# Global circuit breakers (single source of truth — circuit_breaker.py is deprecated)
-ai_service_breaker = CircuitBreaker("AI_SERVICE", threshold=3, recovery_time=30)
-redis_breaker = CircuitBreaker("REDIS", threshold=5, recovery_time=60)
-groq_breaker = CircuitBreaker("Groq", threshold=3, recovery_time=30)
-together_breaker = CircuitBreaker("TogetherAI", threshold=5, recovery_time=60)
-neo4j_breaker = CircuitBreaker("NEO4J", threshold=3, recovery_time=30)
+from backend.utils.circuit_breaker import (
+    agent_breaker as ai_service_breaker, 
+    neo4j_breaker, 
+    postgres_breaker as redis_breaker
+)
+groq_breaker = ai_service_breaker # Aliasing for legacy compatibility
+together_breaker = ai_service_breaker
 
 def safe_request(method: str, url: str, **kwargs) -> requests.Response:
     """

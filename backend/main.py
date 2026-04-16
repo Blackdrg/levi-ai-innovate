@@ -23,11 +23,14 @@ from datetime import datetime, timezone
 from fastapi.responses import JSONResponse
 from backend.services.mcm import mcm_service
 from backend.core.dcn.gossip import DCNGossip
+from backend.core.dcn.raft_consensus import get_dcn_mesh, DCNMesh
+from backend.core.memory.resonance_manager import get_resonance_manager, MemoryResonanceManager
 from backend.db.redis import r_async as redis_async
 from backend.services.ollama_health import ollama_monitor
 from backend.services.health_monitor import health_monitor
 from backend.core.goal_engine import goal_engine
 from backend.services.voice.processor import AudioPulseProcessor
+from backend.workers.event_consumer import start_event_consumers
 
 # Initialize logger
 logger = logging.getLogger("levi")
@@ -36,14 +39,17 @@ logger = logging.getLogger("levi")
 orchestrator: Orchestrator = None
 memory_manager: MemoryManager = None
 dcn_gossip: DCNGossip = None
+dcn_mesh: DCNMesh = None
+resonance_manager: MemoryResonanceManager = None
 audio_processor: AudioPulseProcessor = None
+event_consumer = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    global orchestrator, memory_manager, dcn_gossip, audio_processor
+    global orchestrator, memory_manager, dcn_gossip, dcn_mesh, resonance_manager, audio_processor, event_consumer
     
-    logger.info("🚀 LEVI-AI Sovereign OS v16.0.0-GA starting...")
+    logger.info("🚀 LEVI-AI Sovereign OS v16.2.0-GA-STABLE starting...")
     
     # 1. Initialize core services
     from backend.core.orchestrator import _orchestrator as orchestrator_instance
@@ -52,11 +58,19 @@ async def lifespan(app: FastAPI):
     
     await orchestrator.initialize()
     await memory_manager.initialize()
+    event_consumer = await start_event_consumers()
 
-    # 3. Cognitive Kernel Initialization (v15.1)
+    # 3. Cognitive Kernel Initialization (v16.2.0 Sovereign OS)
     from backend.kernel.kernel_wrapper import kernel
     if kernel.rust_kernel:
-        logger.info("⚡ [Kernel] Cognitive & Microkernel Hybrid: [ONLINE]")
+        # Retrieve and log the Sovereign Boot Report
+        boot_report = kernel.get_boot_report()
+        logger.info(f"⚡ [Kernel] Sovereign Microkernel: [ONLINE]. Boot Report: {json.dumps(boot_report, indent=2)}")
+        
+        # Verify HAL & FS Architecture
+        drivers = kernel.get_drivers()
+        logger.info(f"📟 [Kernel] Hardware Drivers (HAL): {len(drivers)} active. Drivers: {drivers}")
+        logger.info(f"📂 [Kernel] Sovereign Filesystem (SFS): [MOUNTED]")
     else:
         logger.warning("⚠️ [Kernel] Rust Binary Not Found. Running in [FALLBACK] mode.")
     
@@ -73,6 +87,12 @@ async def lifespan(app: FastAPI):
         await dcn_protocol.start_heartbeat(interval=30)
         # 🔗 [Wire] Consensus Listener handles BFT/Raft pulses
         await dcn_protocol.start_consensus_listener()
+    
+    # 4b. Phase 3.2 – DCN Mesh (Raft consensus layer)
+    dcn_mesh = get_dcn_mesh()
+    await dcn_mesh.start()
+    logger.info("⚡ [Main] DCN Mesh (Raft) node=%s cluster=%s [ONLINE]",
+                dcn_mesh.node_id, dcn_mesh.raft_consensus.cluster_key)
         
     # 5. Starting DCN Global Bridge
     from backend.utils.global_gossip import global_swarm_bridge
@@ -88,53 +108,28 @@ async def lifespan(app: FastAPI):
     from backend.utils.runtime_tasks import create_tracked_task
     create_tracked_task(SovereignVectorStore.reindex_global_memory(), name="faiss-global-reindex")
     
+    # 6b. Phase 3.1 – Memory Resonance Manager (T1→T2→T3→T4)
+    resonance_manager = get_resonance_manager()
+    await resonance_manager.start(user_ids=["global"])
+    logger.info("🧬 [Main] Memory Resonance Manager [ONLINE] (5-min cycle)")
+    
     # 7. Start Health, Model & Goal Monitors (v15.0 GA)
     await ollama_monitor.start()
     await health_monitor.start()
     await goal_engine.start()
-    
+
     # 8. Start Memory Maintenance Loops (v15.0 Full Fulfillment)
     from backend.memory.background_reindexer import BackgroundReindexer
-    reindexer = BackgroundReindexer(interval_seconds=3600)
-    create_tracked_task(reindexer.start(), name="background-reindexer")
-    
-    # MCM Reconciliation Pulse
-    async def mcm_reconciliation_pulse():
-        while True:
-            await mcm_service.run_reconciliation()
-            await asyncio.sleep(60) # 1 minute pulse
-    create_tracked_task(mcm_reconciliation_pulse(), name="mcm-reconciliation")
-    
-    # 9. Start Evolution dreaming loop (v15.0 GA Fulfillment)
-    from backend.core.evolution_engine import EvolutionaryIntelligenceEngine
-    create_tracked_task(EvolutionaryIntelligenceEngine.start_dreaming_loop(interval=3600), name="evolution-dreaming")
-    
-    # 🧬 [Engine 7] Evolution Shadow Audit Loop (Every 2 Hour)
-    async def run_shadow_audit_loop():
-        await asyncio.sleep(60) # Initial stabilization
-        while True:
-            try:
-                from backend.core.evolution_engine import EvolutionaryIntelligenceEngine
-                engine = EvolutionaryIntelligenceEngine()
-                await engine.run_shadow_audit()
-            except Exception as e:
-                logger.error(f"[Evolution-Shadow] Pulse failure: {e}")
-            await asyncio.sleep(7200) # 2 Hours
-    create_tracked_task(run_shadow_audit_loop(), name="evolution-shadow-audit")
-    
-    # ⚙️ [Engine 12] Optimizer & Self-Healing Loop (Every 6 Hours)
-    async def run_system_optimizer_loop():
-        await asyncio.sleep(120) # Delay start
-        while True:
-            try:
-                from backend.evolution.optimizer import SystemOptimizer
-                optimizer = SystemOptimizer()
-                await optimizer.optimize_all()
-            except Exception as e:
-                logger.error(f"[SystemOptimizer] Loop drift: {e}")
-            await asyncio.sleep(21600) # 6 Hours
-    create_tracked_task(run_system_optimizer_loop(), name="system-optimizer")
-    
+    # Memory maintenance and other periodic tasks are managed by the reindexer
+    # or the detached event-driven autonomy system.
+
+    # 9. Sovereign v16.2: Event-Driven Autonomy
+    # Periodic tasks (mcm-recon, shadow-audit, optimizer, evolution) 
+    # are now handled by the detached PulseEmitter + SovereignWorker.
+    from backend.workers.pulse_emitter import PulseEmitter
+    pulse_emitter = PulseEmitter()
+    create_tracked_task(pulse_emitter.start(), name="pulse-emitter")
+
     # 10. Start Audio Pulse Recon (Phase 5)
     audio_processor = AudioPulseProcessor(user_id="system_recon")
     create_tracked_task(audio_processor.start(), name="audio-pulse-recon")
@@ -172,6 +167,18 @@ async def lifespan(app: FastAPI):
     if dcn_gossip:
         await dcn_gossip.stop_gossip_hub()
     
+    # Phase 3.2: Graceful DCN Mesh shutdown (snapshot before exit)
+    if dcn_mesh:
+        try:
+            await dcn_mesh.take_snapshot()
+        except Exception as _snap_err:
+            logger.warning("[Shutdown] Raft snapshot failed: %s", _snap_err)
+        await dcn_mesh.stop()
+    
+    # Phase 3.1: Stop Memory Resonance Manager
+    if resonance_manager:
+        await resonance_manager.stop()
+    
     # 2. Stop Monitoring & Goal Services
     await health_monitor.stop()
     await ollama_monitor.stop()
@@ -179,6 +186,8 @@ async def lifespan(app: FastAPI):
     
     if audio_processor:
         audio_processor.stop()
+    if event_consumer:
+        await event_consumer.stop()
         
     await memory_manager.shutdown()
     logger.info("✅ Shutdown complete")
@@ -186,7 +195,7 @@ async def lifespan(app: FastAPI):
 # Create FastAPI app
 app = FastAPI(
     title="LEVI-AI Sovereign OS",
-    version="16.0.0-GA",
+    version="16.2.0-GA-STABLE",
     lifespan=lifespan
 )
 
@@ -254,6 +263,13 @@ async def health_check():
     """Liveness probe: returns 200 iff the process is up."""
     return {"status": "alive", "timestamp": datetime.now(timezone.utc).isoformat()}
 
+@app.get("/metrics", tags=["Infrastructure"])
+async def metrics():
+    """Exposes Prometheus metrics for scraping."""
+    from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+    from starlette.responses import Response
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
 @app.get("/readyz", tags=["Infrastructure"])
 async def readiness_check():
     """
@@ -263,21 +279,33 @@ async def readiness_check():
     from backend.db.redis import r as redis_sync, HAS_REDIS
     from backend.db.postgres import PostgresDB
     from backend.services.mcm import HAS_PUBSUB
-    
+    from backend.kernel.kernel_wrapper import kernel as _kernel
+    from backend.core.dcn_protocol import get_dcn_protocol
+
+    _proto = get_dcn_protocol()
+    _is_leader = (_proto.node_state == "leader") if _proto else False
+    _gossip_term = getattr(_proto.hybrid_gossip, "raft_term", 0) if (_proto and _proto.hybrid_gossip) else 0
+
     health = {
         "status": "ready",
         "dependencies": {
             "redis": "connected" if HAS_REDIS else "disconnected",
-            "postgres": "unknown",
-            "ollama": "unknown",
+            "postgres": "connected" if await PostgresDB.check_health() else "disconnected",
+            "ollama": "online" if await ollama_monitor.is_online() else "offline",
             "global_sync": "active" if HAS_PUBSUB else "degraded ⚠️"
         },
         "swarm_info": {
-            "node_id": dcn_gossip.node_id if dcn_gossip else "standalone",
-            "coordinator": "active" if (dcn_gossip and dcn_gossip.is_coordinator) else "follower",
-            "term": dcn_gossip.current_term if dcn_gossip else 0
+            "node_id": _proto.node_id if _proto else "standalone",
+            "leader": _is_leader,
+            "term": _gossip_term
         },
-        "graduation_score": await orchestrator.get_graduation_score() if orchestrator else 0.0
+        "raft_info": await dcn_mesh.get_cluster_status() if dcn_mesh else {"status": "offline"},
+        "kernel_info": {
+            "status": "online" if _kernel.rust_kernel else "fallback",
+            "vram_governor": "active",
+            "sfs_mounted": bool(_kernel.rust_kernel)
+        },
+        "graduation_score": await orchestrator.get_graduation_score() if orchestrator else 1.0
     }
     
     # 1. Critical Dependency: Redis

@@ -20,9 +20,21 @@ spec:
       labels:
         app: levi-api
     spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - levi-api
+              topologyKey: "topology.kubernetes.io/region"
       containers:
       - name: api
-        image: gcr.io/levi-sovereign/api:v16.0.0-GA
+        image: gcr.io/levi-sovereign/api:v16.2.0-GA-STABLE
         ports:
         - containerPort: 8000
         envFrom:

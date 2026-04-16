@@ -1,6 +1,7 @@
 # backend/core/dcn/peer_discovery.py
 import asyncio
 import json
+import os
 import time
 import random
 import hmac
@@ -181,5 +182,3 @@ class HybridGossip:
 
     def stop(self):
         self.is_active = False
-
-import os

@@ -124,3 +124,31 @@ class Neo4jStore:
         )
         
         await self.upsert_triplet(triplet)
+
+    async def check_causal_bottleneck(self, agent: str, action: str) -> Dict[str, Any]:
+        """
+        Sovereign v16.2: Causal Resonance Grounding.
+        Queries Neo4j for known constraints and historical failure patterns related to an agent-action pair.
+        """
+        try:
+            driver = await self.connect()
+            async with driver.session() as session:
+                cypher = (
+                    "MATCH (a:Agent {name: $agent})-[r:EXECUTES]->(act:Action {description: $action}) "
+                    "OPTIONAL MATCH (act)-[c:CONSTRAINED_BY]->(constraint) "
+                    "RETURN act.risk_score as risk_score, collect(constraint.rule) as constraints"
+                )
+                result = await session.run(cypher, agent=agent, action=action)
+                record = await result.single()
+                
+                if record:
+                    return {
+                        "bottleneck_detected": record["risk_score"] > 0.7 if record["risk_score"] else False,
+                        "risk_score": record["risk_score"] or 0.0,
+                        "constraints": record["constraints"] or []
+                    }
+                return {"bottleneck_detected": False, "risk_score": 0.0, "constraints": []}
+        except Exception as e:
+            logger.error(f"[Neo4j] Causal check failed: {e}")
+            return {"bottleneck_detected": False, "risk_score": 0.0, "constraints": []}
+

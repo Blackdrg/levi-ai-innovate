@@ -266,6 +266,8 @@ class SovereignVectorStore:
                 await user_memory.remove_indices(indices_to_remove, hard_delete=False)
                 logger.info(f"[VectorStore] Fact {fact_id} marked for deletion in {user_id}'s memory.")
         except Exception as e:
+            logger.error(f"[VectorStore] Fact deletion failed for {user_id}/{fact_id}: {e}")
+
     @staticmethod
     async def get_all_facts(user_id: str) -> List[Dict[str, Any]]:
         """
@@ -314,3 +316,48 @@ class SovereignVectorStore:
             logger.info(f"[VectorStore] Hard-cleared local FAISS index for {user_id}")
         except Exception as e:
             logger.error(f"[VectorStore] Clear failed for {user_id}: {e}")
+
+    @staticmethod
+    async def monitor_drift(user_id: str) -> Dict[str, Any]:
+        """
+        Sovereign v16.2: Embedding Drift Monitoring.
+        Detects if semantic clusters are migrating away from the core truth.
+        """
+        try:
+            user_memory = await SovereignVectorStore.get_user_memory(user_id)
+            if not user_memory.index or user_memory.index.ntotal < 10:
+                return {"drift_detected": False, "score": 0.0}
+
+            # 1. Fetch random samples to compute current centroid
+            import numpy as np
+            count = user_memory.index.ntotal
+            samples = np.random.choice(count, min(count, 50), replace=False)
+            vectors = [user_memory.index.reconstruct(int(i)) for i in samples]
+            current_centroid = np.mean(vectors, axis=0)
+
+            # 2. Compare with 'Anchor Centroid' from 24h ago (stored in Redis)
+            from backend.db.redis import r as redis_client
+            anchor_key = f"mcm:centroid:anchor:{user_id}"
+            anchor_raw = redis_client.get(anchor_key)
+            
+            if not anchor_raw:
+                # First run: establish baseline
+                redis_client.setex(anchor_key, 86400 * 7, current_centroid.tobytes())
+                return {"drift_detected": False, "score": 0.0, "status": "baseline_established"}
+
+            anchor_centroid = np.frombuffer(anchor_raw, dtype=np.float32)
+            cosine_sim = np.dot(current_centroid, anchor_centroid) / (np.linalg.norm(current_centroid) * np.linalg.norm(anchor_centroid))
+            drift_score = 1.0 - cosine_sim
+
+            DRIFT_THRESHOLD = 0.15 # 15% deviation
+            if drift_score > DRIFT_THRESHOLD:
+                logger.warning(f"⚠️ [MCM-T3] Significant Semantic Drift Detected for {user_id}: {drift_score:.4f}")
+                # Trigger re-index event
+                asyncio.create_task(SovereignVectorStore.reindex_user_memory(user_id))
+                return {"drift_detected": True, "score": drift_score}
+
+            return {"drift_detected": False, "score": drift_score}
+        except Exception as e:
+            logger.error(f"[VectorStore] Drift monitor failure: {e}")
+            return {"drift_detected": False, "error": str(e)}
+

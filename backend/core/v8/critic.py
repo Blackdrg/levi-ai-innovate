@@ -13,101 +13,125 @@ class ReflectionEngine:
 
     async def evaluate(self, response: str, goal: Any, perception: Dict[str, Any]) -> Dict[str, Any]:
         """
-        LeviBrain v13.1 Bias-Aware Qualitative Audit.
-        Implements Shadow Critic cross-verification and Fidelity Badging.
+        LeviBrain v16.2 strict Qualitative Audit.
+        Rejects low-fidelity responses and implements rule-based fallbacks.
         """
-        mission_id = perception.get("context", {}).get("mission_id", "audit")
+        from backend.models.events import CriticResult
+        mission_id = perception.get("context", {}).get("mission_id", perception.get("mission_id", "audit"))
         user_id = perception.get("user_id", "default_user")
-        user_input = perception.get("input", "")
+        user_input = perception.get("raw_input", perception.get("input", ""))
         context = perception.get("context", {})
         
-        # 1. Pull Evolutionary Weight (0.1 to 1.0)
+        # 1. Pull Evolutionary Weight
         sc_weight = getattr(goal, "self_correction_weight", 0.5)
         hyper_reflection = sc_weight > 0.8
+        threshold = 0.80 + (sc_weight * 0.15)
         
-        logger.info(f"[V8 Reflection] Initiating qualitative audit (Weight: {sc_weight:.2f})...")
+        logger.info(f"[V16.2 Critic] Initiating audit for mission {mission_id} (Threshold: {threshold:.2f})...")
         
-        # 2. Auditor Invocation (CriticAgentV8)
-        # We inject the hyper_reflection flag into context to trigger deeper audit logic in the agent
-        audit_context = {**context, "hyper_reflection": hyper_reflection, "sc_weight": sc_weight}
-        
-        audit_raw = await call_tool("critic_agent", {
-            "goal": goal.objective,
-            "success_criteria": goal.success_criteria,
-            "response": response,
-            "user_input": user_input,
-            "rigor": "exhaustive" if hyper_reflection else "standard"
-        }, audit_context)
-        
-        # 🛡️ Shadow Critic Intervention (v13.1 Phase 5)
-        # We invoke an independent model (e.g., phi3:mini) to detect self-referential bias
-        shadow_audit_context = {**audit_context, "preferred_model": "phi3:mini"} # Force lightweight shadow model
-        shadow_audit = await call_tool("critic_agent", {
-            "goal": goal.objective,
-            "success_criteria": goal.success_criteria,
-            "response": response,
-            "user_input": user_input,
-            "rigor": "standard"
-        }, shadow_audit_context)
+        try:
+            # 2. Primary Auditor (LLM-based)
+            audit_context = {**context, "hyper_reflection": hyper_reflection, "sc_weight": sc_weight}
+            audit_raw = await call_tool("critic_agent", {
+                "goal": getattr(goal, 'objective', str(goal)),
+                "success_criteria": getattr(goal, 'success_criteria', "Standard mission success"),
+                "response": response,
+                "user_input": user_input,
+                "rigor": "exhaustive" if hyper_reflection else "standard"
+            }, audit_context)
+            
+            # Shadow Critic for divergence detection
+            shadow_audit_context = {**audit_context, "preferred_model": "phi3:mini"}
+            shadow_audit = await call_tool("critic_agent", {
+                "goal": getattr(goal, 'objective', str(goal)),
+                "success_criteria": getattr(goal, 'success_criteria', "Standard mission success"),
+                "response": response,
+                "user_input": user_input,
+                "rigor": "standard"
+            }, shadow_audit_context)
 
-        # 3. Extract High-Fidelity Metrics
-        metrics = audit_raw.get("data", {})
-        fidelity_score = metrics.get("quality_score", 0.5)
-        shadow_score = shadow_audit.get("data", {}).get("quality_score", 0.5)
-        
-        # 🧪 Bias Detection Logic
+            metrics = audit_raw.get("data", {})
+            fidelity_score = metrics.get("quality_score", metrics.get("fidelity", 0.5))
+            shadow_score = shadow_audit.get("data", {}).get("quality_score", 0.5)
+            
+            if fidelity_score is None:
+                fidelity_score = 0.5 # Default to neutral if missing
+
+        except Exception as e:
+            logger.warning(f"[V16.2 Critic] Primary Critic Failed: {e}. Falling back to Rule-Based Critic.")
+            return await self.fallback_evaluate(response, goal, perception)
+
+        # 3. Bias and Divergence
         divergence = abs(fidelity_score - shadow_score)
-        
-        # 🛡️ v13.1 Phase 7: Personalized Calibration Offset
         offset = await self._get_calibration_offset(user_id)
         fidelity_score = max(0.0, min(1.0, fidelity_score + offset))
-        
         requires_hitl = divergence > 0.15
         
-        # Log calibration data for weekly offset calculation
-        from backend.utils.runtime_tasks import create_tracked_task
-        create_tracked_task(self._log_calibration(mission_id, fidelity_score, shadow_score, divergence), name=f"critic-calibration-{mission_id}")
         issues = metrics.get("issues", [])
-        fix_strategy = metrics.get("fix", "Apply general refinement.")
         is_safe = not metrics.get("hallucination_detected", True)
-        
-        # 4. Dynamic Threshold Logic
-        # High-fragility missions require higher fidelity (up to 0.95)
-        threshold = 0.80 + (sc_weight * 0.15)
         is_satisfactory = fidelity_score >= threshold and is_safe and not requires_hitl
         
-        # 🏷️ Fidelity Badge Allocation (v13.1 Limbo Gap Correction)
-        if fidelity_score >= 0.85:
-            badge = "VERIFIED"
-        elif fidelity_score >= 0.65:
-            badge = "REVIEWED"
-        else:
-            badge = "DRAFT"
+        # 4. Strict Model Enforcement
+        report = CriticResult(
+            score=fidelity_score,
+            confidence=1.0 - divergence,
+            fidelity=fidelity_score, # ALWAYS defined
+            errors=issues if not is_satisfactory else [],
+            validated=is_satisfactory,
+            metadata={
+                "shadow_score": shadow_score,
+                "divergence": divergence,
+                "threshold": threshold,
+                "requires_hitl": requires_hitl
+            }
+        )
 
-        if requires_hitl:
-            logger.warning("[V13.1 Bias] Primary/Shadow Divergence detected (%.2f). Blocking auto-crystallization.", divergence)
-
-        if hyper_reflection and not is_satisfactory:
-            logger.warning("[V8 Reflection] Hyper-Reflection Triggered: Fidelity (%.2f) < Threshold (%.2f)", fidelity_score, threshold)
+        # 🛡️ HARD GATE: BLOCK further processing if not validated
+        if not report.validated or report.confidence < 0.5:
+             logger.error(f"[V16.2 Critic] MISSION REJECTED: Fidelity {fidelity_score:.2f} < {threshold:.2f} or Evidence of Bias.")
         
-        # 5. PII Scrubbing (v14.0 Graduation)
-        anon_result = await self.anonymize_content(response)
+        return report.dict()
+
+    async def fallback_evaluate(self, response: str, goal: Any, perception: Dict[str, Any]) -> Dict[str, Any]:
+        """Deterministic Rule-Based Fallback Critic (No LLM)."""
+        logger.info("[V16.2 Critic] Executing deterministic fallback audit...")
+        
+        errors = []
+        score = 1.0
+        
+        # Heuristic 1: Length check
+        if len(response) < 20:
+            errors.append("Response too short")
+            score -= 0.4
+            
+        # Heuristic 2: Error markers
+        error_markers = ["error", "exception", "failed", "unknown agency", "i cannot", "sorry"]
+        for marker in error_markers:
+            if marker in response.lower():
+                errors.append(f"Found error marker: {marker}")
+                score -= 0.2
+        
+        # Heuristic 3: PII detection (basic)
+        if "@" in response or "0x" in response:
+            errors.append("Potential PII/Address detected")
+            score -= 0.1
+            
+        score = max(0.0, score)
+        is_satisfactory = score >= 0.7
         
         return {
-            "score": fidelity_score,
-            "shadow_score": shadow_score,
-            "divergence": divergence,
-            "badge": badge,
-            "requires_hitl": requires_hitl,
-            "issues": issues,
-            "fix": fix_strategy,
+            "score": score,
+            "confidence": 0.5, # Lower confidence for fallback
+            "errors": errors,
+            "validated": is_satisfactory,
+            "badge": "FALLBACK",
             "is_satisfactory": is_satisfactory,
-            "threshold": threshold,
-            "metrics": metrics.get("metrics", {}),
-            "pii_redacted": anon_result["redacted"],
-            "redaction_count": anon_result["redaction_count"],
-            "masked_response": anon_result["content"]
+            "threshold": 0.7,
+            "pii_redacted": False,
+            "redaction_count": 0,
+            "masked_response": response
         }
+
 
     async def _log_calibration(self, mission_id: str, primary: float, shadow: float, divergence: float):
         """Persists calibration drift to Postgres."""

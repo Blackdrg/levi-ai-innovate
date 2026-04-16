@@ -172,66 +172,40 @@ class HybridIntentClassifier:
     async def _match_ml(self, text: str) -> IntentResult:
         """
         Layer 3: Cognitive ML Layer.
-        Uses a local BERT classifier (Zero-Shot) and Tiny LLM for complex cases.
+        v16.2: Uses Embedding + Classifier Pipeline (KNN/CosSim over Ground Truth).
+        Removes legacy BERT-C2 claims.
         """
-        logger.info("[Intent ML] Invoking BERT Layer for input: %s", text[:50])
+        logger.info("[SovereignIntent] Running semantic pipeline for: %s", text[:50])
         
-        # 1. BERT Zero-Shot Classification (v15.0 Hardened)
-        if self._ml_pipeline is None:
-            try:
-                # Using a lightweight distilbert for speed in Sovereign OS
-                model_name = "typeform/distilbert-base-uncased-mnli"
-                device = 0 if torch.cuda.is_available() else -1
-                self._ml_pipeline = pipeline("zero-shot-classification", model=model_name, device=device)
-            except Exception as e:
-                logger.error(f"[Intent ML] BERT Load failure: {e}")
+        # 1. Semantic Resonance over Ground Truth Anchors
+        # (This is a robust fallback for complex queries that miss Layer 1 & 2 thresholds)
+        match = await self._match_embeddings(text)
+        if match:
+            # We boost the confidence since this is the final neural pass
+            match.confidence_score = min(0.99, match.confidence_score + 0.1)
+            return match
 
-        if self._ml_pipeline:
-            try:
-                candidate_labels = [a.intent for a in self.anchors] + ["chat"]
-                # zero-shot is blocking, run in thread
-                res = await asyncio.to_thread(lambda: self._ml_pipeline(text, candidate_labels=candidate_labels))
-                
-                best_label = res["labels"][0]
-                best_score = res["scores"][0]
-                
-                if best_score > 0.6: # Confidence threshold
-                    anchor = next((a for a in self.anchors if a.intent == best_label), None)
-                    return IntentResult(
-                        intent_type=best_label,
-                        complexity_level=anchor.complexity if anchor else 1,
-                        estimated_cost_weight=anchor.cost_weight if anchor else "low",
-                        confidence_score=float(best_score),
-                        is_sensitive=False
-                    )
-            except Exception as e:
-                logger.error(f"[Intent ML] BERT Inference failure: {e}")
-
-        # 2. LLM Fallback (Stubbed/Legacy)
+        # 2. Final Fallback: Simple LLM Classification (Local Model)
         from backend.utils.llm_utils import call_lightweight_llm
-        
         prompt = (
-            f"Classify the intent of this user input into one of these: "
-            f"{[a.intent for a in self.anchors] + ['chat']}.\n"
+            f"Classify intent into list: {[a.intent for a in self.anchors] + ['chat']}.\n"
             f"Input: {text}\n"
-            f"Output as JSON: {{\"intent\": \"string\", \"confidence\": float, \"complexity\": int}}"
+            "Return JSON: {\"intent\": \"string\", \"confidence\": float}"
         )
-        
         try:
             res_str = await call_lightweight_llm([{"role": "user", "content": prompt}])
-            import json
-            json_match = re.search(r"\{.*\}", res_str, re.DOTALL)
-            if json_match:
-                res = json.loads(json_match.group(0))
+            import json, re
+            match = re.search(r"\{.*\}", res_str, re.DOTALL)
+            if match:
+                res = json.loads(match.group())
                 return IntentResult(
                     intent_type=res.get("intent", "chat"),
-                    complexity_level=max(0, min(res.get("complexity", 1), 3)),
-                    estimated_cost_weight="medium",
-                    confidence_score=res.get("confidence", 0.7),
+                    complexity_level=1,
+                    estimated_cost_weight="low",
+                    confidence_score=res.get("confidence", 0.5),
                     is_sensitive=False
                 )
-        except Exception as e:
-            logger.error(f"[Intent ML] Layer 3 (LLM) failure: {e}")
+        except Exception: pass
 
         return IntentResult(
             intent_type="chat",
@@ -254,11 +228,15 @@ class HybridIntentClassifier:
              # Logic to generate a clean regex from query (simplistic)
              sanitized = re.escape(query.strip().lower())
              # Graduation pulse
-             from backend.broadcast_utils import SovereignBroadcaster
-             SovereignBroadcaster.publish("INTENT_REFINED", {
-                 "query": query,
-                 "intent": intent,
-                 "regex_candidate": f"r'^({sanitized})$'"
-             }, user_id="global")
+             from backend.utils.event_bus import sovereign_event_bus
+             await sovereign_event_bus.emit("system_pulses", {
+                 "event_type": "INTENT_REFINED",
+                 "payload": {
+                     "query": query,
+                     "intent": intent,
+                     "regex_candidate": f"r'^({sanitized})$'"
+                 },
+                 "source": "intent_classifier"
+             })
         except Exception as e:
              logger.error(f"[Intent] Refinement failure: {e}")

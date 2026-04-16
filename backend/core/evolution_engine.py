@@ -59,12 +59,21 @@ class EvolutionaryIntelligenceEngine:
     async def _validate_before_learning(cls, query: str, response: str, fidelity: float, context: Optional[Dict[str, Any]] = None) -> bool:
         """
         Performs a multi-pass validation check before allowing an outcome to influence the system.
+        v16.2 Hardened: Respects the Reflection Engine (Critic) hard gate.
         """
-        # 1. Base Fidelity Threshold
+        # 1. Base Fidelity Threshold (Hard reject if below engine-specific threshold)
         if fidelity < cls.FIDELITY_GRADUATION_THRESHOLD:
+            logger.debug(f"[Evolution] Rejected: Fidelity {fidelity} < {cls.FIDELITY_GRADUATION_THRESHOLD}")
             return False
             
-        # 2. Critic Agent Audit
+        # 2. Reflection Engine (Critic) Veto
+        if context and "critic_report" in context:
+            report = context["critic_report"]
+            if not report.get("validated", False):
+                logger.critical(f"🚨 [Evolution] Hard Block: Critic Veto detected for mission learning pulse.")
+                return False
+
+        # 3. Independent Model-Audit (Deep Validation)
         try:
             from backend.agents.critic_agent import CriticAgent, CriticInput
             critic = CriticAgent()
@@ -81,6 +90,7 @@ class EvolutionaryIntelligenceEngine:
             return False
             
         return True
+
 
     @classmethod
     async def get_fragility(cls, user_id: str, domain: str) -> float:

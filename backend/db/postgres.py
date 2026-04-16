@@ -1,8 +1,10 @@
 import os
 import logging
+import asyncio
 from contextlib import asynccontextmanager
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base
+from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
 
@@ -34,11 +36,18 @@ class PostgresDB:
             cls._engine = create_async_engine(
                 db_url,
                 echo=False,
-                pool_size=20,          # Increased for swarm concurrency
-                max_overflow=40,       # High burst tolerance
-                pool_recycle=3600,     # Prevent stale connections (1h)
-                pool_pre_ping=True,    # Liveness check (Postgres HA)
-                pool_timeout=30,       # Fail fast on exhaustion
+                pool_size=20,
+                max_overflow=10,
+                pool_timeout=30,
+                pool_recycle=3600,
+                pool_pre_ping=True,
+                connect_args={
+                    "server_settings": {
+                        "application_name": "levi-orchestrator",
+                        "jit": "off",
+                    },
+                    "timeout": 10,
+                },
             )
             cls._session_factory = async_sessionmaker(
                 cls._engine, 
@@ -61,10 +70,29 @@ class PostgresDB:
         return None
 
     @classmethod
+    async def get_session_with_retry(cls, retries: int = 3) -> AsyncSession:
+        """Acquire a verified session with bounded retry/backoff."""
+        last_exc = None
+        for attempt in range(retries):
+            session = await cls.get_session()
+            if not session:
+                raise ConnectionError("Postgres session factory unavailable.")
+
+            try:
+                await session.execute(text("SELECT 1"))
+                return session
+            except Exception as exc:
+                last_exc = exc
+                await session.close()
+                if attempt < retries - 1:
+                    await asyncio.sleep(2 ** attempt)
+        raise last_exc
+
+    @classmethod
     @asynccontextmanager
     async def session_scope(cls):
         """Transactional session scope management (Graduation #18)."""
-        session = await cls.get_session()
+        session = await cls.get_session_with_retry()
         if not session:
             logger.critical("[Postgres] Failed to acquire session scope.")
             raise ConnectionError("Postgres session unavailable.")

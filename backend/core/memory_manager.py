@@ -40,6 +40,7 @@ from backend.memory.vector_store import SovereignVectorStore
 from backend.memory.resonance import MemoryResonance
 from backend.memory.graph_engine import GraphEngine
 from backend.memory.bm25_retriever import BM25Retriever
+from backend.core.event_bus import event_bus
 
 logger = logging.getLogger(__name__)
 
@@ -392,6 +393,99 @@ class MemoryManager:
         if fidelity:
             from backend.core.learning_loop import LearningLoop
             create_tracked_task(LearningLoop.crystallize_pattern(session_id, user_input, response, fidelity), name="learning_crystallize")
+
+    async def store_mission_event(
+        self,
+        mission_id: str,
+        user_id: str,
+        session_id: str,
+        user_input: str,
+        response: str,
+        perception: Dict[str, Any],
+        results: List[Any],
+        fidelity: Optional[float] = None,
+        policy: Optional[Any] = None,
+        source: str = "orchestrator",
+    ) -> Optional[str]:
+        """Emit a durable mission-completed event instead of writing inline."""
+        payload = {
+            "mission_id": mission_id,
+            "user_id": user_id,
+            "session_id": session_id,
+            "user_input": user_input,
+            "response": response,
+            "perception": perception,
+            "results": [r.dict() if hasattr(r, "dict") else r for r in (results or [])],
+            "fidelity": fidelity,
+            "policy": getattr(policy, "dict", lambda: policy)() if policy else None,
+        }
+        return await event_bus.emit_event(
+            topic="memory.events",
+            event_type="mission_completed",
+            payload=payload,
+            mission_id=mission_id,
+            source=source,
+        )
+
+    async def store_mission(
+        self,
+        mission_id: str,
+        user_id: str,
+        session_id: str,
+        user_input: str,
+        response: str,
+        perception: Dict[str, Any],
+        results: List[Any],
+        fidelity: Optional[float] = None,
+        policy: Optional[Any] = None,
+    ):
+        """Durable side-effect handler used by the event consumer."""
+        await self.store(
+            user_id=user_id,
+            session_id=session_id,
+            user_input=user_input,
+            response=response,
+            perception=perception,
+            results=results or [],
+            fidelity=fidelity,
+            policy=policy,
+        )
+
+        try:
+            async with PostgresDB.session_scope() as session:
+                mission = await session.get(Mission, mission_id)
+                if mission is None:
+                    mission = Mission(
+                        mission_id=mission_id,
+                        user_id=user_id,
+                        objective=user_input[:1000],
+                        status="completed",
+                        fidelity_score=float(fidelity or 0.0),
+                        payload={"response": response},
+                    )
+                    session.add(mission)
+                else:
+                    mission.status = "completed"
+                    mission.objective = user_input[:1000]
+                    mission.fidelity_score = float(fidelity or 0.0)
+                    mission.payload = {"response": response}
+                if hasattr(mission, "updated_at"):
+                    mission.updated_at = datetime.now(timezone.utc)
+        except Exception as exc:
+            logger.error("[MemoryV15] Mission persistence failed for %s: %s", mission_id, exc)
+            raise
+
+    async def index_fact_to_neo4j(self, triplet: Dict[str, Any], user_id: Optional[str] = None):
+        """Compatibility hook for event-driven fact indexing."""
+        if not triplet:
+            return
+        graph = GraphEngine()
+        await graph.upsert_triplet(
+            user_id or triplet.get("user_id", "system"),
+            triplet["subject"],
+            triplet["relation"],
+            triplet["object"],
+        )
 
     async def _store_working_memory(self, user_id: str, session_id: str, user_input: str, bot_response: str):
         """Updates the Redis session buffer."""

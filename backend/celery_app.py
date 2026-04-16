@@ -114,71 +114,10 @@ celery_app.conf.update(
     worker_pool="solo" if IS_WINDOWS else "prefork",
 )
 
-# ── Celery Beat: Periodic Task Schedule ──────────────────────
-# IMPORTANT: Requires `celery -A backend.celery_app beat` running as a separate process.
-celery_app.conf.beat_schedule = {
-    "flush-memory-buffers-every-30s": {
-        "task": "backend.core.memory_tasks.flush_all_memory_buffers",
-        "schedule": 30.0,
-    },
-    "sovereign-dreaming-cycle-4h": {
-        "task": "backend.core.memory_tasks.dream_all_users",
-        "schedule": 14400.0, # Every 4 hours (distillation)
-    },
-    "self-healing-monitor-5m": {
-        "task": "backend.core.critic_tasks.process_failure_queue",
-        "schedule": 300.0, # Every 5 mins
-    },
-    "global-evolution-daily": {
-        "task": "backend.core.learning_tasks.run_autonomous_evolution",
-        "schedule": 86400.0, # Daily (3 AM default)
-    },
-    "studio-stuck-job-cleanup-every-hour": {
-        "task": "backend.services.studio.tasks.cleanup_stuck_jobs",
-        "schedule": 3600.0,
-    },
-    "daily-wisdom-dispatch": {
-        "task": "backend.services.notifications.tasks.dispatch_daily_emails",
-        "schedule": crontab(hour=8, minute=0),
-    },
-    "monthly-credit-reset": {
-        "task": "backend.services.payments.tasks.reset_monthly_credits",
-        "schedule": crontab(day_of_month=1, hour=0, minute=5),
-    },
-    # ── Phase 6: Unbound Training Array ──────────────────────
-    "unbound-training-cycle-weekly": {
-        "task": "backend.core.learning_tasks.unbound_training_cycle",
-        "schedule": crontab(hour=0, minute=0, day_of_week=0), # Weekly on Sunday
-    },
-    "survival-hygiene-weekly": {
-        "task": "backend.core.memory_tasks.run_survival_hygiene",
-        "schedule": crontab(hour=0, minute=0, day_of_week=0), # Weekly on Sunday
-    },
-    "poll-training-status-4h": {
-        "task": "backend.core.learning_tasks.poll_training_status",
-        "schedule": 14400.0, # Every 4 hours
-    },
-    "trigger-scheduled-missions-60s": {
-        "task": "backend.services.scheduling.trigger_scheduled_missions",
-        "schedule": 60.0,
-    },
-    "daily-compliance-sweep": {
-        "task": "backend.jobs.audit_jobs.run_daily_compliance_sweep",
-        "schedule": crontab(hour=2, minute=0), # 2 AM Daily
-    },
-    "nightly-maintenance-suite": {
-        "task": "backend.jobs.maintenance.run_full_maintenance_suite",
-        "schedule": crontab(hour=3, minute=0), # 3 AM Daily
-    },
-    "sovereign-shadow-audit-6h": {
-        "task": "backend.services.orchestrator.learning_tasks.run_shadow_audit_task",
-        "schedule": 21600.0, # Every 6 hours
-    },
-    "pattern-crystallization-4h": {
-        "task": "backend.services.orchestrator.learning_tasks.crystallize_patterns_task",
-        "schedule": 14400.0, # Every 4 hours
-    }
-}
+    # ── Celery Beat: Periodic Task Schedule ──────────────────────
+    # ALL legacy schedules have been migrated to Sovereign Event Streams.
+    # See backend/services/pulse_emitter.py for the autonomous rhythm.
+    celery_app.conf.beat_schedule = {}
 
 # ── Thread-local task context for log enrichment ─────────────
 import threading

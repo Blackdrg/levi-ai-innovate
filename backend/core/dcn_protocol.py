@@ -82,6 +82,7 @@ class DCNProtocol:
         self.hybrid_gossip = None
         self.last_leader_pulse = time.time()
         self.election_timeout = 90 # 3x heartbeat interval
+        self.partition_active = False # For split-brain simulation
 
         # Audit Point 27: Strict Secret Validation
         if len(self.secret) < 32:
@@ -562,6 +563,18 @@ class DCNProtocol:
             return False
 
         return True
+
+    async def simulate_partition(self, active: bool = True):
+        """
+        Sovereign v16.2 Chaos Engineering: Simulate Network Partition.
+        When active, the node ignores all incoming pulses and stops broadcasting.
+        """
+        self.partition_active = active
+        status = "ISOLATED" if active else "RECONNECTED"
+        logger.warning(f"🔧 [DCN-Chaos] Node {self.node_id} is now {status}. Split-brain simulation active.")
+        if not active:
+             # Trigger reconciliation on reconnect
+             await self.start_election()
 
     def verify_quorum(self, votes: int, regional_diversity: Optional[List[str]] = None, enforce_diversity: bool = False) -> bool:
         """

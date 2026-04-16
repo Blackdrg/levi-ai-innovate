@@ -105,5 +105,135 @@ class LeviKernel:
         secret = os.getenv("DCN_SECRET", "fallback_entropy_levi_ai_sovereign_32")
         return hashlib.sha256(secret.encode() + b"_signing_v1").digest()
 
+    def spawn_task(self, name: str, command: str, args: List[str] = None) -> Optional[str]:
+        """Sovereign v16.2: Native Process Spawning (Docker Replacement)."""
+        if not self.rust_kernel:
+            logger.warning("⚠️ [Kernel] Rust Kernel not found. Task spawning simulated.")
+            return f"simulated-{name}"
+        try:
+            return self.rust_kernel.spawn_task(name, command, args or [])
+        except Exception as e:
+            logger.error(f"[Kernel] Failed to spawn task {name}: {e}")
+            return None
+
+    def kill_task(self, task_id: str):
+        """Sovereign v16.2: Native Process Termination."""
+        if self.rust_kernel:
+            try:
+                self.rust_kernel.kill_task(task_id)
+            except Exception as e:
+                logger.error(f"[Kernel] Failed to kill task {task_id}: {e}")
+
+    def get_processes(self) -> List[Dict[str, Any]]:
+        """Sovereign v16.2: Retrieve list of kernel-managed processes."""
+        if not self.rust_kernel:
+            return []
+        try:
+            return json.loads(self.rust_kernel.get_processes())
+        except Exception as e:
+            logger.error(f"[Kernel] Failed to get process list: {e}")
+            return []
+
+    def schedule_mission(self, mission_id: str, priority: str = "Normal"):
+        """Sovereign v16.2: Kernel-level mission scheduling."""
+        if self.rust_kernel:
+            try:
+                # priority: Critical, High, Normal, Low
+                self.rust_kernel.schedule_mission(mission_id, json.dumps(priority))
+            except Exception as e:
+                logger.error(f"[Kernel] Failed to schedule mission {mission_id}: {e}")
+
+    def update_mission_state(self, mission_id: str, state: str):
+        """Sovereign v16.2: Update mission state in kernel registry."""
+        if self.rust_kernel:
+            try:
+                # state: Queued, Analyzing, Executing, Verifying, Succeeded, Failed
+                self.rust_kernel.update_mission_state(mission_id, json.dumps(state))
+            except Exception as e:
+                logger.error(f"[Kernel] Failed to update mission state {mission_id}: {e}")
+
+    def get_gpu_metrics(self) -> Dict[str, Any]:
+        """Sovereign v16.2: Retrieve GPU telemetry from kernel governance layer."""
+        if not self.rust_kernel:
+            return {"vram_total_mb": 0, "vram_used_mb": 0, "load_pct": 0, "temp_c": 0}
+        try:
+            return json.loads(self.rust_kernel.get_gpu_metrics())
+        except Exception as e:
+            logger.error(f"[Kernel] Failed to get GPU metrics: {e}")
+            return {}
+
+    def request_gpu_vram(self, agent_id: str, amount_mb: int) -> bool:
+        """Sovereign v16.2: Request GPU VRAM allocation from kernel."""
+        if not self.rust_kernel:
+            return True
+        try:
+            return self.rust_kernel.request_gpu_vram(agent_id, amount_mb)
+        except Exception as e:
+            logger.error(f"[Kernel] GPU VRAM request failed for {agent_id}: {e}")
+            return False
+
+    def get_boot_report(self) -> Dict[str, Any]:
+        """Sovereign v16.2: Retrieve kernel boot sequence report."""
+        if not self.rust_kernel:
+            return {}
+        try:
+            return json.loads(self.rust_kernel.get_boot_report())
+        except Exception as e:
+            logger.error(f"[Kernel] Failed to get boot report: {e}")
+            return {}
+
+    def get_fs_tree(self) -> Dict[str, Any]:
+        """Sovereign v16.2: Retrieve virtual filesystem tree."""
+        if not self.rust_kernel:
+            return {}
+        try:
+            return json.loads(self.rust_kernel.get_fs_tree())
+        except Exception as e:
+            logger.error(f"[Kernel] Failed to get FS tree: {e}")
+            return {}
+
+    def get_drivers(self) -> List[Any]:
+        """Sovereign v16.2: List active HAL drivers."""
+        if not self.rust_kernel:
+            return []
+        try:
+            return json.loads(self.rust_kernel.get_drivers())
+        except Exception as e:
+            logger.error(f"[Kernel] Failed to get drivers: {e}")
+            return []
+
+    def get_agent_capabilities(self, agent_id: str) -> Dict[str, Any]:
+        """Sovereign v16.2: Retrieve capability set for a specific agent."""
+        if not self.rust_kernel:
+            return {"active": ["NetworkAccess", "FileSystemWrite"]}
+        try:
+            return json.loads(self.rust_kernel.get_agent_capabilities(agent_id))
+        except Exception as e:
+            logger.error(f"[Kernel] Failed to get capabilities for {agent_id}: {e}")
+            return {}
+
+    # --- Phase 4: Hardening & Optimization ---
+
+    def allocate_vram(self, mission_id: str, amount_mb: int) -> bool:
+        """Production-grade VRAM allocation with mission-id tracking."""
+        if not self.rust_kernel:
+            return True
+        try:
+            return self.rust_kernel.allocate_vram(mission_id, amount_mb)
+        except Exception as e:
+            logger.error(f"[Kernel] allocate_vram failed for {mission_id}: {e}")
+            return False
+
+    def spawn_isolated_task(self, task_id: str, cmd: str) -> Optional[int]:
+        """Sovereign v16.2: Spawns an isolated process and returns its OS PID."""
+        if not self.rust_kernel:
+            logger.warning(f"⚠️ [Kernel] Simulated PID for {task_id}")
+            return 9999
+        try:
+            return self.rust_kernel.spawn_isolated_task(task_id, cmd)
+        except Exception as e:
+            logger.error(f"[Kernel] spawn_isolated_task failed for {task_id}: {e}")
+            return None
+
 # Global singleton
 kernel = LeviKernel()
