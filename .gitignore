@@ -70,3 +70,8 @@ commit_*.bat
 .pytest_cache/
 htmlcov/
 .coverage
+
+# Sovereign Data Persistence
+data/
+artifacts/weights/
+

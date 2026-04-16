@@ -62,6 +62,13 @@ together==1.1.0
 llama-cpp-python==0.2.76
 tiktoken==0.7.0
 
+# LoRA Training (Evolution Engine)
+peft>=0.10.0
+trl>=0.8.6
+bitsandbytes>=0.43.1
+datasets>=2.19.0
+# Note: unsloth requires specialized installation (see README)
+
 # Cloud & Infrastructure
 firebase-admin==6.5.0
 google-cloud-firestore==2.15.0
