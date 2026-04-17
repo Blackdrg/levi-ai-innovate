@@ -125,3 +125,51 @@ async def orchestrate_stream_v15(
             yield f"event: error\ndata: {str(e)}\n\n"
 
     return StreamingResponse(_event_wrapper(), media_type="text/event-stream")
+
+class FeedbackRequest(BaseModel):
+    is_positive: bool
+    criticism: Optional[str] = None
+    fidelity_override: Optional[float] = None
+
+@router.post("/mission/{mission_id}/feedback")
+async def mission_feedback(
+    mission_id: str,
+    request: FeedbackRequest,
+    identity: Any = Depends(get_sovereign_identity)
+):
+    """
+    Manual Intelligence Feedback Loop.
+    Allows users to reinforce or correct cognitive patterns.
+    High-reward feedback triggers immediate Learning Buffer graduation.
+    """
+    from backend.main import orchestrator
+    from backend.core.evolution_engine import EvolutionaryIntelligenceEngine
+    from backend.db.postgres import PostgresDB
+    from backend.db.models import Mission
+    
+    uid = getattr(identity, "uid", "guest")
+    
+    async with PostgresDB._session_factory() as session:
+        mission = await session.get(Mission, mission_id)
+        if not mission:
+            raise HTTPException(status_code=404, detail="Mission not found.")
+        
+        # Calculate final fidelity (Boost if positive, Penalize if negative)
+        reward = request.fidelity_override if request.fidelity_override is not None else (1.0 if request.is_positive else 0.1)
+        
+        logger.info(f"✨ [Feedback] User feedback received for {mission_id}: reward={reward}")
+        
+        # 🔗 Record Outcome to Evolution Buffer
+        await EvolutionaryIntelligenceEngine.record_outcome(
+            user_id=uid,
+            query=mission.objective,
+            response=str(mission.payload.get("output", "")) if isinstance(mission.payload, dict) else str(mission.payload),
+            fidelity=reward,
+            mission_context={
+                "mission_id": mission_id,
+                "user_feedback": request.criticism,
+                "is_manual_reinforcement": True
+            }
+        )
+        
+    return {"status": "feedback_absorbed", "reward": reward}

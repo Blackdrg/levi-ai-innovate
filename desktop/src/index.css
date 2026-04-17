@@ -1,0 +1,103 @@
+:root {
+  --bg-primary: rgba(13, 17, 23, 0.85);
+  --bg-secondary: rgba(22, 27, 34, 0.9);
+  --accent: #58a6ff;
+  --text: #c9d1d9;
+  --glass: blur(16px) saturate(180%);
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: transparent;
+  color: var(--text);
+  overflow: hidden;
+}
+
+.palette-container {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 50px;
+}
+
+.command-box {
+  background: var(--bg-primary);
+  backdrop-filter: var(--glass);
+  width: 650px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
+  overflow: hidden;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from { transform: translateY(-20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.input-wrapper {
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.levi-logo {
+  font-size: 24px;
+  margin-right: 15px;
+}
+
+input {
+  background: transparent;
+  border: none;
+  font-size: 20px;
+  color: white;
+  width: 100%;
+  outline: none;
+}
+
+.results {
+  max-height: 300px;
+  overflow-y: auto;
+  background: var(--bg-secondary);
+}
+
+.result-item {
+  padding: 15px 20px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.result-item:hover, .result-item.selected {
+  background: rgba(88, 166, 255, 0.1);
+}
+
+.result-item .icon {
+  margin-right: 15px;
+  opacity: 0.7;
+}
+
+.status-bar {
+  padding: 10px 20px;
+  font-size: 12px;
+  color: #8b949e;
+  background: rgba(0, 0, 0, 0.2);
+  display: flex;
+  justify-content: space-between;
+}
+
+.pulse {
+  width: 8px;
+  height: 8px;
+  background: #238636;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 5px;
+  box-shadow: 0 0 8px #238636;
+}

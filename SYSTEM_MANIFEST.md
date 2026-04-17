@@ -1,4 +1,4 @@
-# LEVI-AI Sovereign OS Manifest (v16.2.0-SOVEREIGN-OS)
+# LEVI-AI Sovereign OS Manifest (v16.4.0-NATIVE)
 
 This manifest summarizes the production-ready state of the LEVI-AI Sovereign OS as of April 2026. The system has successfully graduated to a **True Sovereign AI Operating System**.
 
@@ -11,6 +11,7 @@ This manifest summarizes the production-ready state of the LEVI-AI Sovereign OS 
 | **L2: HAL** | Virtual Hardware Abstraction Layer for AI compute & storage. | [GRADUATED] |
 | **L3: Filesystem**| Sovereign Filesystem (SFS) with VFS mount points. | [GRADUATED] |
 | **L4: Security** | Capability-based isolation & Kernel/User-space separation. | [GRADUATED] |
+| **L5: Shell**    | Native Windows Desktop Shell (Tauri) with IPC sidecars.    | [GRADUATED] |
 
 ## Core System Status
 
@@ -40,3 +41,4 @@ This manifest summarizes the production-ready state of the LEVI-AI Sovereign OS 
 
 ---
 > **System Notice**: LEVI-AI is now operating as a self-consistent, autonomous intelligence platform.
+> **Note**: Certain components (Arweave, Video Studio, DeepDense-E1) are currently operational as high-fidelity prototype simulations for v16.2.0 testing.

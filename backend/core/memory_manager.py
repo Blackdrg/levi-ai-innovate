@@ -204,6 +204,40 @@ class MemoryManager:
         """Compatibility bridge for legacy conversational context discovery."""
         return await self.get_mid_term(user_id, limit=10)
 
+    async def _rank_context_by_relevance(self, facts: Dict[str, Any], query: str) -> Dict[str, Any]:
+        """
+        Sovereign v16.2: Neural Context Ranking.
+        Score and rank episodic and semantic tiers based on current intent resonance.
+        Uses BM25 + Importance weighting + Similarity.
+        """
+        if not query: return facts
+
+        logger.info(f"🧠 [Memory-Rank] Ranking context for query: '{query[:40]}...'")
+
+        # 1. Rank Long Term Facts (Semantic)
+        lt_raw = facts.get("long_term", {}).get("raw", [])
+        if lt_raw:
+            bm25 = BM25Retriever()
+            # Combine importance score with BM25 resonance
+            ranked_lt = bm25.compute_bm25_scores(query, lt_raw)
+            ranked_lt.sort(key=lambda x: (x.get("bm25_score", 0) * 0.7 + x.get("importance", 0.5) * 0.3), reverse=True)
+            facts["long_term"]["raw"] = ranked_lt[:10]
+
+        # 2. Rank Mid Term (Episodic)
+        mid_term = facts.get("mid_term", [])
+        if mid_term:
+            # Rank missions by keyword overlap with the current query
+            for m in mid_term:
+                score = 0
+                obj = m.get("objective", "").lower()
+                for word in query.lower().split():
+                    if word in obj: score += 1
+                m["relevance_score"] = score
+            mid_term.sort(key=lambda x: x.get("relevance_score", 0), reverse=True)
+            facts["mid_term"] = mid_term[:5]
+
+        return facts
+
     async def get_unified_context(self, user_id: str, session_id: Optional[str] = None, query: str = "") -> Dict[str, Any]:
         """
         Sovereign v15.0 GA: Primary Cognitive Context Hub.
@@ -259,8 +293,9 @@ class MemoryManager:
             "latency":           int((asyncio.get_event_loop().time() - start_time) * 1000)
         }
 
-        # 🪐 Sovereign v16.2: Truth-Aware Conflict Resolution
+        # 🪐 Sovereign v16.2: Truth-Aware Conflict Resolution & Relevance Ranking
         facts = await self._resolve_cognitive_conflicts(facts)
+        facts = await self._rank_context_by_relevance(facts, query)
 
         # 4. Token-Aware Pruning for Production Safety
         pruned_context = self._trim_facts_by_tokens(facts, max_tokens=_MAX_CONTEXT_TOKENS)
@@ -389,8 +424,17 @@ class MemoryManager:
                     name=f"fact_extraction_{session_id}"
                 )
         
-        # 3. Learning Loop Crystallization (v14.0.0-Autonomous-SOVEREIGN)
+        # 3. Learning Loop Crystallization (v16.3-Autonomous-SOVEREIGN)
         if fidelity:
+            from backend.core.evolution_engine import EvolutionaryIntelligenceEngine
+            asyncio.create_task(EvolutionaryIntelligenceEngine.record_outcome(
+                user_id=user_id, 
+                query=user_input, 
+                response=response, 
+                fidelity=fidelity,
+                mission_context={"mission_id": session_id}
+            ))
+            
             from backend.core.learning_loop import LearningLoop
             create_tracked_task(LearningLoop.crystallize_pattern(session_id, user_input, response, fidelity), name="learning_crystallize")
 
@@ -955,10 +999,20 @@ class MemoryManager:
         return facts
 
     def _is_semantic_conflict(self, fact1: str, fact2: str) -> bool:
-        """Simple negation/conflict detector (Place-holder for NLI model)."""
-        f1, f2 = fact1.lower(), fact2.lower()
-        # Look for simple antonyms or 'not'
-        if f"not {f1}" in f2 or f"not {f2}" in f1: return True
+        """Lightweight semantic conflict detector (Levenshtein/Keyword overlap)."""
+        f1 = fact1.lower()
+        f2 = fact2.lower()
+        # If they share many words but have a NOT or NO in one, it's a conflict
+        words1 = set(f1.split())
+        words2 = set(f2.split())
+        intersection = words1.intersection(words2)
+        if len(intersection) / max(len(words1), len(words2)) > 0.6:
+            # Check for negation mismatch
+            negations = {"not", "no", "never", "cannot", "won't", "don't"}
+            if (negations.intersection(words1) and not negations.intersection(words2)) or \
+               (negations.intersection(words2) and not negations.intersection(words1)):
+                logger.warning(f"🚨 [Memory-Resonance] Cognitive conflict detected: '{fact1}' vs '{fact2}'")
+                return True
         return False
 
     def _calculate_truth_score(self, fact: Dict[str, Any]) -> float:

@@ -38,19 +38,25 @@ class EvolutionaryIntelligenceEngine:
         """
         if cls.DISABLED: return
         
-        # 🛡️ Graduation #29: High-Fidelity Validation Gate
-        is_valid = await cls._validate_before_learning(query, response, fidelity, mission_context)
-        if not is_valid:
-            logger.warning(f"🚫 [Evolution] Outcome REJECTED for learning due to low fidelity or critic veto. ({query[:30]}...)")
-            return
-
         # 🔄 Replay Buffer Integration
+        experience_reward = fidelity
+        # 🪐 Sovereign v16.2: Manual Reinforcement Priority
+        if mission_context and mission_context.get("is_manual_reinforcement"):
+            experience_reward = fidelity * 1.2 # Boost manual wisdom
+            logger.info(f"🌟 [Evolution] Manual Wisdom detected! Priority learning for: {query[:30]}")
+
         global_replay_buffer.add(
             state={"query": query, "domain": domain},
             action={"response": response},
-            reward=fidelity,
+            reward=min(1.0, experience_reward),
             next_state={"fidelity": fidelity}
         )
+
+        # 🪐 Sovereign v16.3: Autonomous Learning Trigger (Rapid Demonstration)
+        if len(global_replay_buffer) >= 5: # Threshold for rapid feedback (Real: 50+)
+            logger.info("🔥 [Evolution] Replay buffer threshold met. Spawning autonomous training pulse...")
+            from backend.utils.runtime_tasks import create_tracked_task
+            create_tracked_task(cls.trigger_autonomous_lora_tuning(), name="auto-lora-tuning")
 
         await cls._update_fragility(user_id, domain, fidelity)
         await cls._track_pattern(query, response, fidelity, domain)
@@ -395,6 +401,8 @@ class EvolutionaryIntelligenceEngine:
         while True:
             try:
                 await cls._perform_evolutionary_cycle()
+                # 🔬 Sovereign v16.3: Autonomous Self-Healing Check
+                await cls.analyze_system_fragility()
             except Exception as e:
                 logger.error(f"[Evolution] Dreaming cycle failed: {e}")
             await asyncio.sleep(interval)

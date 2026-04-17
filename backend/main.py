@@ -49,7 +49,7 @@ async def lifespan(app: FastAPI):
     # Startup
     global orchestrator, memory_manager, dcn_gossip, dcn_mesh, resonance_manager, audio_processor, event_consumer
     
-    logger.info("🚀 LEVI-AI Sovereign OS v16.2.0-GA-STABLE starting...")
+    logger.info("🚀 LEVI-AI Sovereign OS v16.3.0-AUTONOMOUS starting...")
     
     # 1. Initialize core services
     from backend.core.orchestrator import _orchestrator as orchestrator_instance
@@ -195,7 +195,7 @@ async def lifespan(app: FastAPI):
 # Create FastAPI app
 app = FastAPI(
     title="LEVI-AI Sovereign OS",
-    version="16.2.0-GA-STABLE",
+    version="16.3.0-AUTONOMOUS",
     lifespan=lifespan
 )
 

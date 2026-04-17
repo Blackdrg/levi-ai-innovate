@@ -54,25 +54,56 @@
         }
     }
 
-    function renderAuditBadge(status) {
+    function renderAuditBadge(status, fidelity = 1.0, details = null) {
         const badges = {
             'VERIFIED': 'bg-gradient-to-r from-emerald-500/20 to-teal-500/20 text-emerald-400 border-emerald-500/30',
             'REVIEWED': 'bg-gradient-to-r from-blue-500/20 to-indigo-500/20 text-blue-400 border-blue-500/30',
-            'DRAFT': 'bg-gradient-to-r from-orange-500/20 to-amber-500/20 text-orange-400 border-orange-500/30'
+            'DRAFT': 'bg-gradient-to-r from-orange-500/20 to-amber-500/20 text-orange-400 border-orange-500/30',
+            'HALT': 'bg-gradient-to-r from-red-500/20 to-rose-500/20 text-red-400 border-red-500/30'
         };
 
         const config = badges[status] || badges['DRAFT'];
+        const score = Math.round(fidelity * 100);
+        
+        let tooltip = '';
+        if (details) {
+            const issues = details.issues && details.issues.length > 0 ? details.issues.join(', ') : 'No alignment issues detected.';
+            tooltip = `title="Confidence: ${score}% | Critique: ${issues}"`;
+        }
+
         return `
-            <span class="px-2 py-0.5 rounded-full border text-[8px] font-bold tracking-tighter uppercase ${config}">
-                ${status}
+            <span class="px-2 py-0.5 rounded-full border text-[8px] font-bold tracking-tighter uppercase cursor-help transition-all hover:scale-105 ${config}" ${tooltip}>
+                ${status} <span class="ml-1 opacity-60">${score}%</span>
             </span>
         `;
+    }
+
+    async function submitFeedback(missionId, isPositive) {
+        if (!missionId) return;
+        try {
+            const response = await fetch(`/api/v1/orchestrator/mission/${missionId}/feedback`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ is_positive: isPositive })
+            });
+            if (response.ok) {
+                console.log(`✨ [Feedback] Reinforced mission ${missionId}`);
+                // Visual feedback: find buttons and disable
+                const container = document.querySelector(`.feedback-pulse[data-mid="${missionId}"]`);
+                if (container) {
+                    container.classList.add('opacity-40', 'pointer-events-none');
+                }
+            }
+        } catch (e) {
+            console.error('Feedback submission failed:', e);
+        }
     }
 
     // Export helpers
     window.LeviUI = {
         injectNavigation,
-        renderAuditBadge
+        renderAuditBadge,
+        submitFeedback
     };
 
     document.addEventListener('DOMContentLoaded', injectNavigation);

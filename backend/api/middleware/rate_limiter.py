@@ -19,6 +19,12 @@ TIER_LIMITS = {
     "sovereign": {"rpm": 120, "rpd": 5000, "concurrency": 20}
 }
 
+# 🛡️ Sovereign v16.3: Abuse Detection Thresholds
+ABUSE_THRESHOLDS = {
+    "burst_threshold_rpm": 10, # Rapid bursts for Free tier
+    "rapid_fire_ms": 500,       # Minimum ms between requests
+}
+
 class SlidingWindowRateLimiter:
     """
     Sovereign v14.0 Sliding Window Rate Limiter.

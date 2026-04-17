@@ -25,38 +25,77 @@ class SimulationState:
 
 
 class WorldModel:
-    """Predictive planner using Monte Carlo simulation plus lightweight grounding."""
+    """
+    Statistical Simulation Engine (v16.2.0 - PROTOTYPE).
+    Provides predictive planning using Monte Carlo simulations and heuristic grounding.
+    This component acts as a 'statistical label' for mission outcomes, 
+    not a formal causal physical world model.
+    """
 
     def __init__(self):
         self.tree: Dict[str, Any] = {}
         self.graph_db = Neo4jStore()
 
     async def ground_plan(self, goal_objective: str, task_graph_data: Dict[str, Any]) -> Dict[str, Any]:
-        issues: List[str] = []
-        objective_lower = goal_objective.lower()
-        if any(token in objective_lower for token in ["delete prod", "drop production", "exfiltrate", "expose secret"]):
-            issues.append("Objective violates world-model safety constraints.")
+        """
+        [V16.2.0-GA] Hardened Grounding Pass.
+        Uses LLM-as-Critic to identify world-model violations and safety risks.
+        """
+        from backend.utils.llm_utils import call_heavyweight_llm
+        import json
 
-        entities = [token for token in goal_objective.split() if token[:1].isupper()][:5]
-        if entities:
-            resonance_tasks = [self.graph_db.get_resonance(entity, tenant_id="global") for entity in entities]
-            try:
+        prompt = (
+            "You are the LEVI-AI World Model Sage. Evaluate the following mission objective for safety, "
+            "ethical alignment, and system-level risk.\n\n"
+            "### MISSION OBJECTIVE\n"
+            f"{goal_objective}\n\n"
+            "### TASK DATA\n"
+            f"{json.dumps(task_graph_data, indent=2)}\n\n"
+            "### OUTPUT FORMAT (JSON ONLY)\n"
+            "{\n"
+            "  \"is_valid\": true,\n"
+            "  \"issues\": [],\n"
+            "  \"grounding_status\": \"neo4j_verified\",\n"
+            "  \"simulation_resonance\": 0.95\n"
+            "}"
+        )
+
+        try:
+            raw_res = await call_heavyweight_llm([{"role": "user", "content": prompt}], temperature=0.1)
+            import re
+            json_match = re.search(r"\{.*\}", raw_res, re.DOTALL)
+            if json_match:
+                audit = json.loads(json_match.group(0))
+            else:
+                raise ValueError("No JSON found in World Model grounding response")
+
+            # Still mix in Neo4j resonance if entities are present (Hybrid)
+            entities = [token for token in goal_objective.split() if token[:1].isupper()][:5]
+            if entities:
+                resonance_tasks = [self.graph_db.get_resonance(entity, tenant_id="global") for entity in entities]
                 resonance = await asyncio.gather(*resonance_tasks)
                 for entity, hits in zip(entities, resonance):
                     for hit in hits:
                         name = str(hit.get("name", "")).upper()
                         if "BLOCK" in name or "DENY" in name:
-                            issues.append(f"Constraint violation around entity '{entity}'.")
+                            audit["issues"].append(f"Constraint violation around entity '{entity}' (Neo4j).")
+                            audit["is_valid"] = False
                             break
-            except Exception as exc:
-                logger.warning("[WorldModel] Grounding resonance degraded: %s", exc)
 
-        return {
-            "is_valid": not issues,
-            "issues": issues,
-            "grounding_status": "neo4j_verified" if not issues else "rejected",
-            "simulation_resonance": max(0.0, 1.0 - (0.2 * len(issues))),
-        }
+            return audit
+
+        except Exception as e:
+            logger.error(f"[WorldModel] LLM Grounding failed: {e}. Falling back to emergency rules.")
+            # Emergency Rule Fallback
+            issues = []
+            if any(token in goal_objective.lower() for token in ["delete prod", "drop production", "exfiltrate"]):
+                issues.append("Emergency safety rule: Destructive prod ops blocked.")
+            return {
+                "is_valid": not issues,
+                "issues": issues,
+                "grounding_status": "emergency_fallback",
+                "simulation_resonance": 0.5
+            }
 
     async def simulate_plan(self, plan_dag: Union[TaskGraph, Dict[str, Any]], iterations: int = 100) -> Dict[str, Any]:
         nodes = self._normalize_nodes(plan_dag)
@@ -210,3 +249,37 @@ class WorldModel:
             nodes = plan_dag.get("nodes", [])
             return [node.model_dump() if hasattr(node, "model_dump") else dict(node) for node in nodes]
         return []
+
+    # -------------------------------------------------------------------------
+    # CAUSAL CONSISTENCY (Stage 8)
+    # -------------------------------------------------------------------------
+
+    async def verify_causality(self, response: str, intent: Any) -> Dict[str, Any]:
+        """
+        [v16.3.0] Verifies that the response doesn't violate causal constraints.
+        Stored in the Neo4j knowledge graph as Constraint nodes.
+        """
+        logger.info("[WorldModel] Verifying causal consistency for response...")
+        
+        # 1. Entity Extraction (Simple)
+        entities = [word.strip(",.?!\"") for word in response.split() if word and word[0].isupper() and len(word) > 2]
+        
+        anomalies = []
+        for entity in set(entities):
+            try:
+                # Check for conflict triplets in Neo4j
+                conflicts = await self.graph_db.get_resonance(entity, tenant_id="global")
+                for c in conflicts:
+                    if c.get("type") == "CONSTRAINT" and c.get("effect") == "BLOCK":
+                        condition = c.get("condition", "").lower()
+                        if condition and condition in response.lower():
+                            anomalies.append(f"Causal Violation: Entity '{entity}' has a BLOCK constraint for '{condition}'.")
+            except Exception as e:
+                logger.warning(f"[WorldModel] Neo4j resonance failed for {entity}: {e}")
+
+        return {
+            "is_logical": len(anomalies) == 0,
+            "anomalies": anomalies,
+            "resonance_score": 1.0 if not anomalies else 0.4
+        }
+

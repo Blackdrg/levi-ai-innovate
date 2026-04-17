@@ -8,6 +8,7 @@ import numpy as np
 
 from backend.core.agent_registry import AgentRegistry
 from backend.core.task_graph import TaskGraph
+from .identity import identity_system
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +71,7 @@ class BeliefNetwork:
 
 
 class ReasoningCore:
-    """Bayesian reasoning gate between planning and execution."""
+    """Sovereign Cognitive Auditor v16.2.0-GA-HARDENED."""
 
     MIN_CONFIDENCE = 0.65
     COMPLEXITY_SKIP_THRESHOLD = 0.35
@@ -99,43 +100,92 @@ class ReasoningCore:
         self.belief_network.add_causality("can_execute", "mission_achievable", 0.8)
 
     async def audit_plan(self, plan_dag: Any) -> Dict[str, Any]:
+        """
+        [V16.2.0-GA] Multi-Layer Plan Audit.
+        1. Structural Validation (NetworkX)
+        2. Identity Alignment (Belief System)
+        3. LLM-as-Critic High-Fidelity Audit
+        """
+        from backend.utils.llm_utils import call_heavyweight_llm
+        import json
+
         dag = self._graph_to_dict(plan_dag)
-        self.belief_network.reset()
+        # Extract metadata from TaskGraph if available
+        metadata = getattr(plan_dag, "metadata", {}) if hasattr(plan_dag, "metadata") else {}
+        mission_goal = metadata.get("objective", "Unknown Objective")
 
-        has_context = len(dag.get("nodes", [])) > 0
-        is_logical = self._check_logical_structure(dag)
-        is_safe = self._check_safety_constraints(dag)
-        can_execute = self._check_executability(dag)
+        nodes_summary = "\n".join([f"- {n.get('id')}: {n.get('description')} (by {n.get('agent')})" for n in dag.get("nodes", [])])
+        edges_summary = "\n".join([f"- {e[0]} -> {e[1]}" for e in dag.get("edges", [])])
+        plan_str = f"TOTAL MISSION OBJECTIVE: {mission_goal}\n\nNODES:\n{nodes_summary}\n\nEDGES:\n{edges_summary}"
 
-        self.belief_network.observe("has_sufficient_context", has_context)
-        self.belief_network.observe("plan_is_logical", is_logical)
-        self.belief_network.observe("plan_is_safe", is_safe)
-        self.belief_network.observe("can_execute", can_execute)
-        self.belief_network.propagate(iterations=5)
+        # 🛡️ Layer 1: Identity Consistency (Belief Alignment)
+        identity_audit = await identity_system.validate_consistency(plan_str)
+        if not identity_audit.get("is_consistent", True):
+            logger.warning(f"🚨 [ReasoningCore] BELIEF VIOLATION DETECTED: {identity_audit.get('conflicts')}")
+            return {
+                "is_valid": False,
+                "confidence": 0.0,
+                "beliefs": {},
+                "recommendation": "HALT",
+                "issues": identity_audit.get("conflicts", ["Core belief violation."]),
+                "warnings": [],
+                "logic_reasoning": identity_audit.get("reasoning", "Failed identity alignment check.")
+            }
 
-        achievability = self.belief_network.query("mission_achievable")
-        recommendation = "APPROVE" if achievability > 0.75 else "REFINE" if achievability > 0.50 else "REJECT"
-        issues: List[str] = []
-        warnings: List[str] = []
-        if not has_context:
-            issues.append("Plan contains no executable nodes.")
-        if not is_logical:
-            issues.append("Plan graph is structurally invalid or cyclic.")
-        if not is_safe:
-            issues.append("Plan violates safety constraints.")
-        if not can_execute:
-            issues.append("Plan references unavailable agents.")
-        if recommendation == "REFINE" and not issues:
-            warnings.append("Plan is plausible but confidence is not yet strong.")
+        # 🧠 Layer 2: LLM-as-Critic High-Fidelity Audit
+        prompt = (
+            "You are the LEVI-AI Sovereign Critic. Audit the following cognitive plan (DAG):\n\n"
+            "### PLAN OVERVIEW\n"
+            f"{plan_str}\n\n"
+            "### EVALUATION CRITERIA\n"
+            "1. CORRECTNESS: Does the plan logically address the user's intent?\n"
+            "2. CONSISTENCY: Are the dependencies valid? (No cycles, logical flow)\n"
+            "3. GOAL ALIGNMENT: Does every step contribute to the goal without filler?\n"
+            "4. SUCCESS CRITERIA: Will this plan result in the following success criteria being met?\n"
+            f"   - {chr(10).join(getattr(plan_dag, 'metadata', {}).get('success_criteria', ['Factual alignment']))}\n\n"
+            "### OUTPUT FORMAT (JSON ONLY)\n"
+            "{\n"
+            "  \"is_valid\": true,\n"
+            "  \"confidence\": 0.95,\n"
+            "  \"recommendation\": \"APPROVE\",\n"
+            "  \"issues\": [],\n"
+            "  \"warnings\": [],\n"
+            "  \"logic_reasoning\": \"...\"\n"
+            "}"
+        )
 
-        return {
-            "is_valid": achievability > self.MIN_CONFIDENCE,
-            "confidence": round(achievability, 4),
-            "beliefs": self.belief_network.get_all_beliefs(),
-            "recommendation": recommendation,
-            "issues": issues,
-            "warnings": warnings,
-        }
+        try:
+            raw_res = await call_heavyweight_llm([{"role": "user", "content": prompt}], temperature=0.2)
+            import re
+            json_match = re.search(r"\{.*\}", raw_res, re.DOTALL)
+            if json_match:
+                audit = json.loads(json_match.group(0))
+            else:
+                raise ValueError("No JSON found in LLM response")
+            
+            return {
+                "is_valid": audit.get("is_valid", False),
+                "confidence": audit.get("confidence", 0.5),
+                "beliefs": {}, # Compatibility
+                "recommendation": audit.get("recommendation", "REFINE"),
+                "issues": audit.get("issues", []),
+                "warnings": audit.get("warnings", []),
+                "logic_reasoning": audit.get("logic_reasoning", "")
+            }
+
+        except Exception as e:
+            logger.error(f"[ReasoningCore] LLM Critic Loop failed: {e}. Falling back to structural audit.")
+            # Emergency Fallback to structural checks
+            has_context = len(dag.get("nodes", [])) > 0
+            is_logical = self._check_logical_structure(dag)
+            return {
+                "is_valid": has_context and is_logical,
+                "confidence": 0.5,
+                "beliefs": {},
+                "recommendation": "APPROVE" if (has_context and is_logical) else "REJECT",
+                "issues": ["LLM Critic loop failed. Structural fallback active."],
+                "warnings": [],
+            }
 
     async def evaluate_plan(
         self,

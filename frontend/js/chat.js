@@ -273,11 +273,24 @@ async function sendMessage() {
                 let badgeContainer = botDiv.querySelector('.audit-badge-container');
                 if (!badgeContainer) {
                     badgeContainer = document.createElement('div');
-                    badgeContainer.className = 'audit-badge-container absolute -top-2 -right-2';
+                    badgeContainer.className = 'audit-badge-container flex gap-1 absolute -top-2 -right-2';
                     botDiv.style.position = 'relative';
                     botDiv.appendChild(badgeContainer);
                 }
-                badgeContainer.innerHTML = LeviUI.renderAuditBadge(event.status);
+                const fidelity = event.data?.fidelity || 1.0;
+                const missionId = event.data?.request_id || metadataCaptured?.request_id;
+                
+                let feedbackHtml = '';
+                if (missionId) {
+                    feedbackHtml = `
+                        <div class="feedback-pulse flex gap-1 ml-2" data-mid="${missionId}">
+                            <button onclick="LeviUI.submitFeedback('${missionId}', true)" class="hover:scale-125 transition-transform" title="Good Response">👍</button>
+                            <button onclick="LeviUI.submitFeedback('${missionId}', false)" class="hover:scale-125 transition-transform" title="Needs Improvement">👎</button>
+                        </div>
+                    `;
+                }
+                
+                badgeContainer.innerHTML = LeviUI.renderAuditBadge(event.status, fidelity, event.data) + feedbackHtml;
             }
 
             if (event.type === 'metadata') {

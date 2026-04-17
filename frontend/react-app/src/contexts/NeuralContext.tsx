@@ -30,7 +30,9 @@ interface TelemetryPulse {
 interface NeuralContextType {
   activeMissions: Mission[];
   telemetryHistory: TelemetryPulse[];
-  globalLoad: number;  
+  globalLoad: number;
+  graduationScore: number;
+  dcnStatus: string;
   updateMission: (id: string, update: Partial<Mission>) => void;
   addMission: (mission: Mission) => void;
   dispatchMission: (objective: string) => Promise<void>;
@@ -43,6 +45,8 @@ export const NeuralProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [activeMissions, setActiveMissions] = useState<Mission[]>([]);
   const [telemetryHistory, setTelemetryHistory] = useState<TelemetryPulse[]>([]);
   const [globalLoad, setGlobalLoad] = useState(0);
+  const [graduationScore, setGraduationScore] = useState(1.0);
+  const [dcnStatus, setDcnStatus] = useState('offline');
 
   const fetchInitialData = useCallback(async () => {
     try {
@@ -50,6 +54,13 @@ export const NeuralProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const data = await res.json();
       if (Array.isArray(data)) {
         setActiveMissions(data);
+      }
+      
+      const pulseRes = await fetch('/api/v1/brain/pulse');
+      if (pulseRes.ok) {
+        const pulse = await pulseRes.json();
+        setGraduationScore(pulse.system_graduation_score || 1.0);
+        setDcnStatus(pulse.dcn_health?.status || 'standalone');
       }
     } catch (err) {
       console.error("Failed to fetch initial missions:", err);
@@ -134,6 +145,8 @@ export const NeuralProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         activeMissions, 
         telemetryHistory, 
         globalLoad, 
+        graduationScore,
+        dcnStatus,
         updateMission, 
         addMission, 
         dispatchMission, 

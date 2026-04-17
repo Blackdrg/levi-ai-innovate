@@ -10,8 +10,9 @@ class PricingTier:
 
 class CognitiveBilling:
     """
-    Sovereign Cognitive Billing v14.1.
+    Sovereign Cognitive Billing v14.1 [PROTOTYPE - STUB].
     Calculates consumption and manages Pricing Tiers.
+    NOTE: Currently operates with hardcoded 'FREE' tier logic as a prototype.
     """
     
     # CU Multipliers

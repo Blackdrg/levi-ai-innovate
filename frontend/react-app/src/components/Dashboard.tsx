@@ -12,14 +12,28 @@ import { KernelHealth } from './KernelHealth';
 
 
 export const Dashboard: React.FC = () => {
-  const { activeMissions, globalLoad, telemetryHistory } = useNeuralContext();
+  const { activeMissions, globalLoad, telemetryHistory, graduationScore, dcnStatus } = useNeuralContext();
   const [activeTab, setActiveTab] = React.useState<'missions' | 'evolution'>('missions');
 
 
   return (
     <div className="dashboard-container">
       <header className="dashboard-header">
-        <h1>LEVI-AI Sovereign OS</h1>
+        <div className="header-top">
+          <div className="title-section">
+            <h1>LEVI-AI Sovereign OS</h1>
+            <div className={`graduation-badge ${graduationScore > 0.95 ? 'graduated' : 'hardening'}`}>
+              <div className="badge-ring" style={{'--score': graduationScore} as any}></div>
+              <span className="badge-text">{(graduationScore * 100).toFixed(1)}% Sovereign</span>
+            </div>
+          </div>
+          <div className="system-status">
+            <div className={`status-pill ${dcnStatus === 'online' ? 'status-online' : 'status-standalone'}`}>
+              <Activity size={12} /> {dcnStatus.toUpperCase()}
+            </div>
+          </div>
+        </div>
+        
         <div className="global-metrics">
           <div className="metric-item">
             <span className="metric-value">{(globalLoad * 100).toFixed(1)}%</span>

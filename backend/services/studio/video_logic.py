@@ -9,7 +9,11 @@ from backend.utils.logger import get_logger
 logger = get_logger("studio_video")
 
 async def process_video_generation(job_id: str, payload: Dict[str, Any]):
-    """Processes a video generation job from the queue."""
+    """
+    Processes a video generation job from the queue [SIMULATED].
+    NOTE: This is a placeholder that simulates the delay and response of 
+    a video generation engine for the v16.2.0-PROTOTYPE release.
+    """
     user_id = payload.get("user_id")
     prompt = payload.get("prompt")
     style = payload.get("style", "cinematic")

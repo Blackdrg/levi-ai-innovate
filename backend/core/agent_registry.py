@@ -176,6 +176,20 @@ DEFAULT_AGENTS = {
         agent_type="core",
         input_schema={"type": "object", "properties": {"input": {"type": "string"}}, "required": ["input"]},
         output_schema={"type": "object"}
+    ),
+    "system": AgentCapability(
+        name="SystemController",
+        agent_type="os_control",
+        input_schema={
+            "type": "object", 
+            "properties": {
+                "action": {"type": "string", "enum": ["read_file", "write_file", "list_dir", "process_status", "system_health"]},
+                "params": {"type": "object"}
+            }, 
+            "required": ["action"]
+        },
+        required_role="admin",
+        output_schema={"type": "object"}
     )
 }
 

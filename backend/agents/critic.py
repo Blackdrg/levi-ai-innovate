@@ -35,49 +35,79 @@ class CriticAgent:
         self.graph = Neo4jStore()
 
     async def evaluate(self, mission_id: str, objective: str, result: Dict[str, Any]) -> Dict[str, Any]:
-        issues: List[str] = []
-        scores: List[float] = []
+        """
+        [V16.2.0-GA] LLM-as-Critic Loop for Agent Results.
+        Replaces legacy regex filters with high-fidelity LLM validation.
+        """
+        from backend.utils.llm_utils import call_heavyweight_llm
+        import json
 
-        logic_score = await self._check_logical_consistency(objective, result)
-        scores.append(logic_score)
-        if logic_score < 0.80:
-            issues.append("Logical inconsistency detected")
+        output_text = str(result.get("output", result.get("message", result)))
+        context = result.get("context", {})
 
-        safety_score = await self._check_safety(result)
-        scores.append(safety_score)
-        if safety_score < 0.90:
-            issues.append("Safety constraint violation")
+        prompt = (
+            "You are the LEVI-AI Sovereign Auditor. Evaluate the following agent output against the mission objective.\n\n"
+            "### MISSION OBJECTIVE\n"
+            f"{objective}\n\n"
+            "### AGENT OUTPUT\n"
+            f"{output_text}\n\n"
+            "### EVALUATION CRITERIA\n"
+            "1. CORRECTNESS: Is the information accurate and grounded in the objective?\n"
+            "2. CONSISTENCY: Does the tone and content align with system context?\n"
+            "3. ALIGNMENT: Does the output fully satisfy the mission goal?\n"
+            "4. SAFETY: Does the output contain unsafe commands or leak credentials?\n\n"
+            "### OUTPUT FORMAT (JSON ONLY)\n"
+            "{\n"
+            "  \"fidelity_score\": 0.95,\n"
+            "  \"is_valid\": true,\n"
+            "  \"issues\": [],\n"
+            "  \"reasoning\": \"...\",\n"
+            "  \"breakdown\": {\n"
+            "    \"logic\": 0.95,\n"
+            "    \"safety\": 1.0,\n"
+            "    \"completeness\": 0.9,\n"
+            "    \"accuracy\": 0.95\n"
+            "  }\n"
+            "}"
+        )
 
-        completeness_score = await self._check_completeness(objective, result)
-        scores.append(completeness_score)
-        if completeness_score < 0.70:
-            issues.append("Incomplete answer")
+        try:
+            raw_res = await call_heavyweight_llm([{"role": "user", "content": prompt}], temperature=0.1)
+            import re
+            json_match = re.search(r"\{.*\}", raw_res, re.DOTALL)
+            if json_match:
+                audit = json.loads(json_match.group(0))
+            else:
+                raise ValueError("No JSON found in LLM response")
 
-        accuracy_score = await self._check_factual_accuracy(result)
-        scores.append(accuracy_score)
-        if accuracy_score < 0.75:
-            issues.append("Factual inaccuracy detected")
+            fidelity = audit.get("fidelity_score", 0.5)
+            is_valid = audit.get("is_valid", fidelity > 0.7)
 
-        memory_consistency = await self._check_memory_consistency(result)
-        scores.append(memory_consistency)
-        if memory_consistency < 0.80:
-            issues.append("Contradicts previously stored facts")
+            return {
+                "mission_id": mission_id,
+                "fidelity_score": round(fidelity, 4),
+                "is_valid": is_valid,
+                "validated": is_valid,
+                "issues": audit.get("issues", []),
+                "breakdown": audit.get("breakdown", {
+                    "logic": fidelity,
+                    "safety": 1.0,
+                    "completeness": fidelity,
+                    "accuracy": fidelity
+                }),
+                "logic_reasoning": audit.get("reasoning", "")
+            }
 
-        fidelity = sum(scores) / len(scores) if scores else 0.0
-        return {
-            "mission_id": mission_id,
-            "fidelity_score": round(fidelity, 4),
-            "is_valid": fidelity > 0.70,
-            "validated": fidelity > 0.70,
-            "issues": issues,
-            "breakdown": {
-                "logic": round(logic_score, 4),
-                "safety": round(safety_score, 4),
-                "completeness": round(completeness_score, 4),
-                "accuracy": round(accuracy_score, 4),
-                "memory_consistency": round(memory_consistency, 4),
-            },
-        }
+        except Exception as e:
+            logger.error(f"[CriticAgent] LLM Result Audit failed: {e}. Falling back to neutral score.")
+            return {
+                "mission_id": mission_id,
+                "fidelity_score": 0.5,
+                "is_valid": False,
+                "validated": False,
+                "issues": ["Critic evaluation failed due to internal error."],
+                "breakdown": {"logic": 0.5, "safety": 0.5, "completeness": 0.5, "accuracy": 0.5},
+            }
 
     async def _run(self, input_data: CriticInput, lang: str = "en", **kwargs) -> Dict[str, Any]:
         objective = input_data.resolved_objective

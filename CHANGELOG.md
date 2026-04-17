@@ -1,3 +1,10 @@
+## [16.4.0-NATIVE] - 2026-04-17
+### **Desktop Convergence & Standalone Runtime**
+- `[SHELL]` **Tauri Desktop Integration**: Launched the native Windows shell with system tray residency and native notification bus.
+- `[RUNTIME]` **PyInstaller Backend Hardening**: Packaged the Python cognitive core into a standalone executable (`levi-core.exe`) with all dependencies bundled.
+- `[IPC]` **Rust IPC Bridge**: Implemented high-speed asynchronous communication between the React UI and the backend sidecar via Tauri's command system.
+- `[BUILD]` **Master Packaging Pipeline**: Created `package_levi.ps1` for automated MSI installer generation.
+
 ## [16.1.0-GA Graduation] - 2026-04-14
 ### **Cognitive Sovereignty & Decentralized Audit Graduation**
 - `[COGNITION]` **Unified Memory Consistency (MCM)**: Harmonized v14.2 and v15.1 consistency layers into a single high-fidelity service. Fixed sync lag for real-time Neo4j triplet streaming.

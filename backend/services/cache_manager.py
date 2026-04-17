@@ -11,7 +11,7 @@ import hashlib
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timezone
 
-from backend.db.redis import r as redis_client, HAS_REDIS
+from backend.db.redis import state_bridge, HAS_REDIS
 from backend.embeddings import embed_text
 from backend.memory.vector_store import SovereignVectorStore
 from backend.core.orchestrator_types import BrainMode, EngineRoute
@@ -33,7 +33,7 @@ class CacheManager:
         if not HAS_REDIS: return None
         
         key = cls._get_key("resp", user_input)
-        cached = redis_client.get(key)
+        cached = await state_bridge.get(key)
         if cached:
             logger.info(f"[Cache] T1 HIT for query: {user_input[:40]}...")
             return json.loads(cached)
@@ -59,9 +59,9 @@ class CacheManager:
         
         payload_json = json.dumps(response_payload)
         
-        # T1: Redis
+        # T1: Resilient Cache
         key = cls._get_key("resp", user_input)
-        redis_client.set(key, payload_json, ex=cls.DEFAULT_TTL)
+        await state_bridge.set(key, payload_json, ex=cls.DEFAULT_TTL)
         
         # T2: Semantic
         if semantic:
@@ -81,7 +81,7 @@ class CacheManager:
         """T3: Strategy Cache (DAG Reuse)."""
         if not HAS_REDIS: return None
         key = f"cache:strat:{intent_type}:{signature}"
-        cached = redis_client.get(key)
+        cached = await state_bridge.get(key)
         if cached:
             return json.loads(cached)
         return None
@@ -90,4 +90,4 @@ class CacheManager:
     async def set_strategy(cls, intent_type: str, signature: str, graph_data: Dict[str, Any]):
         if not HAS_REDIS: return
         key = f"cache:strat:{intent_type}:{signature}"
-        redis_client.set(key, json.dumps(graph_data), ex=cls.DEFAULT_TTL * 7) # Strategies last longer (1 week)
+        await state_bridge.set(key, json.dumps(graph_data), ex=cls.DEFAULT_TTL * 7) # Strategies last longer (1 week)

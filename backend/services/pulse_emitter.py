@@ -18,7 +18,7 @@ class SovereignPulseEmitter:
         while True:
             try:
                 # 1. 60s Heartbeat (Trigger for scheduled missions, monitor check)
-                await sovereign_event_bus.emit("system_pulses", {
+                await sovereign_event_bus.emit("system.pulses", {
                     "event_type": "PULSE",
                     "mission_id": "system",
                     "payload": {"pulse_type": "HEARTBEAT", "counter": counter},
@@ -64,7 +64,7 @@ class SovereignPulseEmitter:
     async def _emit_pulse(self, pulse_type: str):
         """Standardized pulse emission to the sovereign event stream."""
         logger.info(f"📤 [PulseEmitter] Emitting {pulse_type} pulse")
-        await sovereign_event_bus.emit("system_pulses", {
+        await sovereign_event_bus.emit("system.pulses", {
             "event_type": "PULSE",
             "mission_id": "system",
             "payload": {"pulse_type": pulse_type},

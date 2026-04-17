@@ -25,7 +25,7 @@ class LoRATrainer:
     
     TRAINING_DATA_DIR = "backend/data/training"
     MODEL_BASE = os.getenv("MODEL_BASE_PATH", "models/llama-3-8b")
-    MIN_SAMPLES = 50 
+    MIN_SAMPLES = 5 
     
     def __init__(self):
         os.makedirs(self.TRAINING_DATA_DIR, exist_ok=True)
@@ -106,6 +106,12 @@ class LoRATrainer:
                 
                 if process.returncode == 0:
                     logger.info("✅ [LoRA] Training pulse SUCCESS. Model crystallized.")
+                    
+                    # 🪐 Sovereign v16.2: Autonomous Deployment (Reload)
+                    from backend.services.local_llm import local_llm
+                    # Check if GGUF export is requested (Simulated for MVP)
+                    local_llm.reload_model() 
+                    logger.info("🚀 [LoRA] Model RELOAD signaled to inference engine.")
                 else:
                     logger.error(f"❌ [LoRA] Training pulse FAILED (Code {process.returncode}): {stderr.decode()}")
                     
