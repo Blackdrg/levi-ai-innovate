@@ -17,6 +17,7 @@ pub enum MissionState {
     Queued,
     Analyzing,
     Executing,
+    Suspended, // Sovereign v17.0: Support for Preemption
     Verifying,
     Succeeded,
     Failed(String),
@@ -32,10 +33,21 @@ pub struct MissionTask {
 
 impl Ord for MissionTask {
     fn cmp(&self, other: &Self) -> Ordering {
-        // Higher priority (lower numeric value) comes first
-        other.priority.clone() as u32 as i32
-            .cmp(&(self.priority.clone() as u32 as i32))
-            .then_with(|| other.created_at.cmp(&self.created_at))
+        // Reverse priority: 0 (Critical) is HIGHEST
+        let s_p = match self.priority {
+            MissionPriority::Critical => 4,
+            MissionPriority::High => 3,
+            MissionPriority::Normal => 2,
+            MissionPriority::Low => 1,
+        };
+        let o_p = match other.priority {
+            MissionPriority::Critical => 4,
+            MissionPriority::High => 3,
+            MissionPriority::Normal => 2,
+            MissionPriority::Low => 1,
+        };
+        
+        s_p.cmp(&o_p).then_with(|| other.created_at.cmp(&self.created_at))
     }
 }
 
@@ -85,6 +97,25 @@ impl MissionScheduler {
             return Some(task);
         }
         None
+    }
+
+    pub fn preempt(&self, id: String) -> bool {
+        let mut active = self.active_missions.lock().unwrap();
+        if let Some(task) = active.get_mut(&id) {
+            if task.state == MissionState::Executing {
+                task.state = MissionState::Suspended;
+                log::info!("🛑 [Scheduler] Mission {} preempted and suspended.", id);
+                
+                // Re-queue it
+                let mut queue = self.queue.lock().unwrap();
+                let mut re_task = task.clone();
+                re_task.state = MissionState::Queued;
+                queue.push(re_task);
+                
+                return true;
+            }
+        }
+        false
     }
 
     pub fn update_state(&self, id: String, state: MissionState) {

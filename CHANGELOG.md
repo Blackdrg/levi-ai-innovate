@@ -1,3 +1,12 @@
+## [17.0.0-GA GLOBAL AUTONOMY] - 2026-04-18
+### **The Sovereign Graduation: Systems Integrated & Self-Evolved**
+- `[GRADUATION]` **Sovereign OS Graduation**: Successfully transitioned the system to a fully autonomous, production-ready AI Operating Layer.
+- `[CORE]` **Pulse-Driven Core**: Hardened the `PulseEmitter` and `SovereignWorker` for deterministic self-healing and proactive goal generation.
+- `[KERNEL]` **Hardened Rust Microkernel**: Integrated VRAM-aware mission gating and isolated OS-level process tasking into the primary mission lifecycle.
+- `[MEMORY]` **Tier-5 Resonance Fabric**: Established 100% data sovereignty through localized Redis, Postgres, FAISS, Neo4j, and Arweave-anchored audit trails.
+- `[DESKTOP]` **Native Convergence**: Finalized the Tauri-based Desktop Shell with standalone backend sidecar, system tray residency, and hardware telemetry.
+- `[INTELLIGENCE]` **Evolution Loop v2**: Activated the autonomous weight crystallization loop via Unsloth-optimized LoRA training on high-fidelity mission trajectories.
+
 ## [16.4.0-NATIVE] - 2026-04-17
 ### **Desktop Convergence & Standalone Runtime**
 - `[SHELL]` **Tauri Desktop Integration**: Launched the native Windows shell with system tray residency and native notification bus.

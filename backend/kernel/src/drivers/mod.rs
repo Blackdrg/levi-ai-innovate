@@ -48,3 +48,33 @@ impl SovereignDriver for VirtualMemoryDriver {
     fn get_name(&self) -> &str { "VMem-Driver-01" }
     fn status(&self) -> String { format!("Available: {}MB", self.total_vmem) }
 }
+
+pub struct CpuDriver {
+    pub cores: u32,
+}
+
+impl SovereignDriver for CpuDriver {
+    fn get_type(&self) -> DriverType { DriverType::Compute }
+    fn get_name(&self) -> &str { "CPU-Core-Driver" }
+    fn status(&self) -> String { format!("Active Cores: {}", self.cores) }
+}
+
+pub struct NetworkDriver {
+    pub throughput_mbps: u32,
+}
+
+impl SovereignDriver for NetworkDriver {
+    fn get_type(&self) -> DriverType { DriverType::Storage } // Mapped to storage for IO
+    fn get_name(&self) -> &str { "Net-Mesh-Driver" }
+    fn status(&self) -> String { format!("Bandwidth: {} Mbps", self.throughput_mbps) }
+}
+
+pub struct PerceptionDriver {
+    pub latency_ms: u32,
+}
+
+impl SovereignDriver for PerceptionDriver {
+    fn get_type(&self) -> DriverType { DriverType::Perception }
+    fn get_name(&self) -> &str { "Intent-HAL-v2" }
+    fn status(&self) -> String { format!("Latency: {}ms", self.latency_ms) }
+}

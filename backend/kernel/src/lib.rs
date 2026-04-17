@@ -10,6 +10,7 @@ mod scheduler;
 mod gpu_controller;
 mod bootloader;
 mod drivers;
+mod stdlib;
 mod filesystem;
 mod security_monitor;
 
@@ -32,6 +33,7 @@ struct LeviKernel {
     gpu_controller: Arc<gpu_controller::GpuController>,
     filesystem: Arc<filesystem::SovereignFS>,
     driver_registry: Arc<drivers::DriverRegistry>,
+    security_monitor: Arc<security_monitor::SecurityMonitor>,
     boot_report: Option<bootloader::BootReport>,
     micro_tx: Option<mpsc::Sender<micro_kernel::Message>>,
     telemetry_rx: Option<mpsc::Receiver<String>>,
@@ -55,9 +57,16 @@ impl LeviKernel {
         let gpu_controller = Arc::new(gpu_controller::GpuController::new());
         let filesystem = Arc::new(filesystem::SovereignFS::new());
         let driver_registry = Arc::new(drivers::DriverRegistry::new());
+        let security_monitor = Arc::new(security_monitor::SecurityMonitor::new());
 
         // Register default HAL drivers
         driver_registry.register(Box::new(drivers::VirtualMemoryDriver { total_vmem: 16384 }));
+        driver_registry.register(Box::new(drivers::CpuDriver { cores: 16 }));
+        driver_registry.register(Box::new(drivers::NetworkDriver { throughput_mbps: 1000 }));
+        driver_registry.register(Box::new(drivers::PerceptionDriver { latency_ms: 12 }));
+
+        // Implementation of Mandatory Access Control (MAC) labels
+        security_monitor.register_agent("system".to_string(), security_monitor::SecurityMonitor::kernel_caps());
 
         // Initialize components
         let mut kernel = Self {
@@ -71,6 +80,7 @@ impl LeviKernel {
             gpu_controller,
             filesystem,
             driver_registry,
+            security_monitor,
             boot_report: Some(boot_report),
             micro_tx: Some(tx),
             telemetry_rx: Some(tel_rx),
@@ -81,10 +91,13 @@ impl LeviKernel {
         kernel.memory_kernel.set_telemetry(tel_tx.clone());
 
         // Spawn Microkernel in background
+        let stdlib = stdlib::StdLib::new();
+
         let micro_core = Arc::new(micro_kernel::TrustedCore {
             mission_router: micro_kernel::MissionRouter,
             resource_allocator: micro_kernel::ResourceAllocator,
             security_gate: micro_kernel::SecurityGate,
+            stdlib,
         });
 
         let mut micro_kernel_instance = micro_kernel::Microkernel {
@@ -153,10 +166,13 @@ impl LeviKernel {
         Ok(serde_json::to_string(&drivers).unwrap())
     }
 
-    fn get_agent_capabilities(&self, _agent_id: String) -> PyResult<String> {
-        // Return default caps for now
-        let caps = security_monitor::SecurityMonitor::default_agent_caps();
+    fn get_agent_capabilities(&self, agent_id: String) -> PyResult<String> {
+        let caps = self.security_monitor.get_caps(&agent_id);
         Ok(serde_json::to_string(&caps).unwrap())
+    }
+
+    fn preempt_mission(&self, id: String) -> PyResult<bool> {
+        Ok(self.scheduler.preempt(id))
     }
 
     fn schedule_mission(&self, id: String, priority_json: String) -> PyResult<()> {
@@ -185,14 +201,21 @@ impl LeviKernel {
         Ok(serde_json::to_string(&metrics).unwrap())
     }
 
-    fn request_gpu_vram(&self, agent_id: String, amount_mb: u64) -> PyResult<bool> {
-        match self.gpu_controller.request_vram(agent_id, amount_mb) {
+    fn request_gpu_vram(&self, agent_id: String, amount_mb: u64, priority_json: String) -> PyResult<bool> {
+        let priority: scheduler::MissionPriority = serde_json::from_str(&priority_json)
+             .unwrap_or(scheduler::MissionPriority::Normal);
+        match self.gpu_controller.request_vram(agent_id, amount_mb, priority) {
             Ok(_) => Ok(true),
             Err(_) => Ok(false),
         }
     }
 
     fn spawn_task(&self, name: String, command: String, args: Vec<String>) -> PyResult<String> {
+        // Mandatory Access Control Check
+        if !self.security_monitor.check_agent_cap("system", security_monitor::Capability::ProcessSpawn) {
+            return Err(PyRuntimeError::new_err("Permission Denied: System cannot spawn processes"));
+        }
+
         self.process_manager.spawn_task(name, command, args)
             .map_err(|e| PyRuntimeError::new_err(e))
     }
@@ -259,8 +282,10 @@ impl LeviKernel {
 
     // --- Phase 4: Hardening & Optimization ---
 
-    fn allocate_vram(&self, mission_id: String, amount_mb: u32) -> PyResult<bool> {
-        match self.gpu_controller.request_vram(mission_id, amount_mb as u64) {
+    fn allocate_vram(&self, mission_id: String, amount_mb: u32, priority_json: String) -> PyResult<bool> {
+        let priority: scheduler::MissionPriority = serde_json::from_str(&priority_json)
+             .unwrap_or(scheduler::MissionPriority::Normal);
+        match self.gpu_controller.request_vram(mission_id, amount_mb as u64, priority) {
             Ok(_) => Ok(true),
             Err(e) => {
                 log::warn!("[Kernel] VRAM allocation failed for {}: {}", mission_id, e);
@@ -270,6 +295,11 @@ impl LeviKernel {
     }
 
     fn spawn_isolated_task(&self, task_id: String, cmd: String) -> PyResult<u32> {
+        // Mandatory Access Control Check
+        if !self.security_monitor.check_agent_cap("system", security_monitor::Capability::ProcessSpawn) {
+            return Err(PyRuntimeError::new_err("Permission Denied: Isolation layer cannot spawn processes"));
+        }
+
         let parts: Vec<&str> = cmd.split_whitespace().collect();
         if parts.is_empty() {
             return Err(PyRuntimeError::new_err("Empty command"));
@@ -291,6 +321,19 @@ impl LeviKernel {
         }
         
         Err(PyRuntimeError::new_err("Process spawned but PID missing"))
+    
+    // --- Phase 5: Standard Library & SysCalls ---
+    
+    fn sys_call(&self, agent_id: String, call_json: String) -> PyResult<String> {
+        let call: stdlib::SysCall = serde_json::from_str(&call_json)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
+        
+        // This execution assumes TrustedCore has been fully initialized in new()
+        let stdlib = stdlib::StdLib::new(); // Fallback instance
+        let res = stdlib.execute(call)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))?;
+            
+        Ok(res)
     }
 }
 

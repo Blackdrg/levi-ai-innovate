@@ -38,7 +38,12 @@ class GoalEngine:
         if self._is_running: return
         self._is_running = True
         self._spawner_task = asyncio.create_task(self._autospawn_loop())
-        logger.info("🛰️ [GoalEngine] Autonomous Spawner active.")
+        
+        # Start the Self-Healing Engine
+        from .self_healing import self_healing
+        await self_healing.start()
+        
+        logger.info("🛰️ [GoalEngine] Autonomous Spawner and Self-Healer active.")
 
     async def stop(self):
         """Stops the background AutoSpawner."""
@@ -83,23 +88,30 @@ class GoalEngine:
 
             logger.info(f"[GoalEngine] Decomposing objective: {goal.objective}")
             
-            # 1. Fetch LLM Policy for decomposition
+            # 1. Fetch LLM Policy and Kernel Context
             model = ModelRouter.get_model_for_tier("L3", complexity=0.8)
+            metrics = kernel.get_gpu_metrics()
+            drivers = kernel.get_drivers()
             
             prompt = f"""
-            ### SOVEREIGN OBJECTIVE DECOMPOSITION ###
+            ### SOVEREIGN OBJECTIVE DECOMPOSITION (v17.0-DYNAMIC) ###
             Goal ID: {goal.goal_id}
             Objective: {goal.objective}
             
-            Break this long-term objective into a list of nested SUB-GOALS and immediate MISSIONS.
-            Sub-goals are high-level strategic steps.
-            Missions are concrete, actionable tasks for the Orchestrator to execute NOW.
+            [SYSTEM CONTEXT - HARDWARE RESONANCE]
+            - GPU VRAM: {metrics.get('vram_used_mb', 0)}/{metrics.get('vram_total_mb', 0)} MB
+            - HAL Drivers: {drivers}
+            - OS Status: v17.0.0-GA Sovereign
+            
+            Break this objective into nested SUB-GOALS and immediate MISSIONS.
+            If resources (VRAM) are low, prioritize 'Optimization' or 'Cleanup' missions.
+            If new HAL drivers are detected, generate 'Capability Probe' missions.
             
             Output strictly as JSON:
             {{
                 "sub_goals": [{{ "objective": "...", "priority": 1.5 }}],
-                "missions": [{{ "objective": "...", "intent_type": "search/code/etc" }}],
-                "reasoning": "Brief technical logic"
+                "missions": [{{ "objective": "...", "intent_type": "search/code/recovery" }}],
+                "reasoning": "Brief technical logic considering hardware state"
             }}
             """
             

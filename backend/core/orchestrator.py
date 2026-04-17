@@ -78,9 +78,9 @@ from .execution_state import CentralExecutionState, MissionState
 from .dcn.raft_consensus import get_dcn_mesh
 
 # -------------------------------------------------------------------------
-# GLOBAL OS PARAMETERS (v16.3)
+# GLOBAL OS PARAMETERS (v17.0)
 # -------------------------------------------------------------------------
-OS_VERSION = "v16.3.0-AUTONOMOUS"
+OS_VERSION = "v17.0.0-GA"
 KERNEL_ID = socket.gethostname()
 NODE_SECRET = os.getenv("DCN_SECRET", "sovereign_fallback")
 VRAM_ADMISSION_LEVEL = 0.94
@@ -165,10 +165,12 @@ class Orchestrator:
             await goal_engine.start()
 
             # Stage 5: Sentinel loop Start (Self-Healing)
+            from .self_healing import self_healing
+            await self_healing.start()
             self._sentinel = asyncio.create_task(self._sentinel_worker())
             self._pulse = asyncio.create_task(self._pulse_worker())
 
-            logger.info(f"🚀 [Mainframe] Sovereign OS is ONLINE. [STATUS: AUTO-GRADUATE]")
+            logger.info(f"🚀 [Mainframe] Sovereign OS is ONLINE. [STATUS: v17.0-GA-AUTONOMOUS]")
             
         except Exception as e:
             logger.critical(f"🛑 [Mainframe] BOOT CATASTROPHE: {e}")
@@ -446,12 +448,12 @@ class Orchestrator:
                 # 1. Graduation Scan
                 score = await self.get_graduation_score()
                 
-                # 2. Resonance Check
-                # If high VRAM pressure but 0 missions, we have a leak.
+                # 2. Resonance Check (Self-Healing Integration)
+                from .self_healing import self_healing
                 vram = await self.get_vram_pressure()
-                if vram > 0.96 and len(self._active_missions) == 0:
-                    logger.critical("🚨 [Sentinel] RESONANCE DIVORCE DETECTED. Triggering healing pulse.")
-                    await self._reset_hardware_pools()
+                if vram > 0.90:
+                    logger.info("🩺 [Sentinel] High pressure detected. Invoking self-healer.")
+                    await self_healing._heal_resource_exhaustion()
 
                 # 3. Memory Hygiene Pulse
                 if iteration % 30 == 0:

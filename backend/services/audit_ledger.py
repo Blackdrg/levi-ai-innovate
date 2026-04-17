@@ -77,6 +77,18 @@ class SovereignAuditLedger:
         except Exception as e:
             logger.error(f"❌ [Ledger] Disk archival failed: {e}")
 
+        # 🛡️ 3. Arweave (Global Anchoring) - v17.0
+        try:
+            from backend.utils.arweave import arweave
+            tx_id = await arweave.anchor_hash(
+                identifier=mission_id,
+                data_hash=checksum,
+                metadata={"user_id": summary.get("user_id", "system"), "ts": time.time()}
+            )
+            logger.info(f"🔗 [Ledger] Global Anchor COMPLETE: {tx_id}")
+        except Exception as e:
+            logger.error(f"❌ [Ledger] Arweave anchor failed: {e}")
+
         return checksum
 
     async def verify_integrity(self, mission_id: str) -> bool:

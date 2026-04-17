@@ -162,18 +162,18 @@ class LeviKernel:
             logger.error(f"[Kernel] Failed to get GPU metrics: {e}")
             return {}
 
-    def request_gpu_vram(self, agent_id: str, amount_mb: int) -> bool:
-        """Sovereign v16.2: Request GPU VRAM allocation from kernel."""
+    def request_gpu_vram(self, agent_id: str, amount_mb: int, priority: str = "Normal") -> bool:
+        """Sovereign v17.0: Request GPU VRAM allocation with priority rebalancing."""
         if not self.rust_kernel:
             return True
         try:
-            return self.rust_kernel.request_gpu_vram(agent_id, amount_mb)
+            return self.rust_kernel.request_gpu_vram(agent_id, amount_mb, json.dumps(priority))
         except Exception as e:
             logger.error(f"[Kernel] GPU VRAM request failed for {agent_id}: {e}")
             return False
 
     def get_boot_report(self) -> Dict[str, Any]:
-        """Sovereign v16.2: Retrieve kernel boot sequence report."""
+        """Sovereign v17.0: Retrieve kernel boot sequence report."""
         if not self.rust_kernel:
             return {}
         try:
@@ -183,7 +183,7 @@ class LeviKernel:
             return {}
 
     def get_fs_tree(self) -> Dict[str, Any]:
-        """Sovereign v16.2: Retrieve virtual filesystem tree."""
+        """Sovereign v17.0: Retrieve virtual filesystem tree."""
         if not self.rust_kernel:
             return {}
         try:
@@ -192,8 +192,39 @@ class LeviKernel:
             logger.error(f"[Kernel] Failed to get FS tree: {e}")
             return {}
 
+    def take_fs_snapshot(self, signature: str) -> str:
+        """Sovereign v17.0: Take a BFT-chained cryptographic filesystem snapshot."""
+        if not self.rust_kernel:
+            return "simulated-snap-id"
+        try:
+            return self.rust_kernel.take_fs_snapshot(signature)
+        except Exception as e:
+            logger.error(f"[Kernel] Failed to take FS snapshot: {e}")
+            return ""
+
+    def restore_fs_snapshot(self, snapshot_id: str) -> bool:
+        """Sovereign v17.0: Restore system state from a snapshot."""
+        if not self.rust_kernel:
+            return True
+        try:
+            return self.rust_kernel.restore_fs_snapshot(snapshot_id)
+        except Exception as e:
+            logger.error(f"[Kernel] Failed to restore FS snapshot {snapshot_id}: {e}")
+            return False
+
+    def sys_call(self, agent_id: str, call_type: str, args: Any) -> str:
+        """Sovereign v17.0: Standard Library (StdLib) System Call bridge."""
+        if not self.rust_kernel:
+            return "OK (Simulated)"
+        try:
+            call_json = json.dumps({call_type: args})
+            return self.rust_kernel.sys_call(agent_id, call_json)
+        except Exception as e:
+            logger.error(f"[Kernel] SysCall failed for {agent_id}: {e}")
+            return "ERROR"
+
     def get_drivers(self) -> List[Any]:
-        """Sovereign v16.2: List active HAL drivers."""
+        """Sovereign v17.0: List active HAL drivers."""
         if not self.rust_kernel:
             return []
         try:
@@ -203,7 +234,7 @@ class LeviKernel:
             return []
 
     def get_agent_capabilities(self, agent_id: str) -> Dict[str, Any]:
-        """Sovereign v16.2: Retrieve capability set for a specific agent."""
+        """Sovereign v17.0: Retrieve capability set for a specific agent."""
         if not self.rust_kernel:
             return {"active": ["NetworkAccess", "FileSystemWrite"]}
         try:
@@ -214,18 +245,26 @@ class LeviKernel:
 
     # --- Phase 4: Hardening & Optimization ---
 
-    def allocate_vram(self, mission_id: str, amount_mb: int) -> bool:
-        """Production-grade VRAM allocation with mission-id tracking."""
+    def allocate_vram(self, mission_id: str, amount_mb: int, priority: str = "Normal") -> bool:
+        """Production-grade VRAM allocation with priority support."""
         if not self.rust_kernel:
             return True
         try:
-            return self.rust_kernel.allocate_vram(mission_id, amount_mb)
+            return self.rust_kernel.allocate_vram(mission_id, amount_mb, json.dumps(priority))
         except Exception as e:
             logger.error(f"[Kernel] allocate_vram failed for {mission_id}: {e}")
             return False
 
+    def preempt_mission(self, mission_id: str):
+        """Sovereign v17.0: Autonomously preempt and suspend a mission."""
+        if self.rust_kernel:
+            try:
+                self.rust_kernel.preempt_mission(mission_id)
+            except Exception as e:
+                logger.error(f"[Kernel] Preemption failed for {mission_id}: {e}")
+
     def spawn_isolated_task(self, task_id: str, cmd: str) -> Optional[int]:
-        """Sovereign v16.2: Spawns an isolated process and returns its OS PID."""
+        """Sovereign v17.0: Spawns an isolated process and returns its OS PID."""
         if not self.rust_kernel:
             logger.warning(f"⚠️ [Kernel] Simulated PID for {task_id}")
             return 9999

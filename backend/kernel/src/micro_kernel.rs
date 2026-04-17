@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use serde::{Deserialize, Serialize};
+use crate::stdlib::{StdLib, SysCall};
 
 pub type AgentId = String;
 
@@ -10,9 +11,10 @@ pub type AgentId = String;
 pub enum Message {
     MissionRequest(MissionRequest),
     ResourceRequest(ResourceRequest),
+    SysCallRequest(AgentId, SysCall), // New: Standard Library SysCalls
     AgentCrash(AgentId),
     ResourceGrant(f32),
-    Telemetry(String), // JSON pulse for UI bridge
+    Telemetry(String), 
     _None,
 }
 
@@ -39,6 +41,7 @@ pub struct TrustedCore {
     pub mission_router: MissionRouter,
     pub resource_allocator: ResourceAllocator,
     pub security_gate: SecurityGate,
+    pub stdlib: StdLib, // Standard library bridge
 }
 
 pub struct MissionRouter;
@@ -51,7 +54,7 @@ pub struct Agent {
 
 impl Agent {
     pub async fn restart(&self) {
-        // Restart agent process
+        // Restart agent process (Simulated)
     }
 }
 
@@ -69,42 +72,44 @@ impl ResourceAllocator {
 
 impl MissionRouter {
     pub async fn route(&self, _req: MissionRequest) {
-        // Route to the appropriate engine
+        // Route to the appropriate engine (Simulated)
     }
 }
 
 impl Microkernel {
     pub async fn run(mut self) -> ! {
         loop {
-            // Receive message from any agent or system component
             let msg = self.message_rx.recv().await;
             
             if let Some(msg) = msg {
                 match msg {
                     Message::MissionRequest(req) => {
-                        // Route through security gate
                         if let Ok(true) = self.trusted_core.security_gate.validate(&req).await {
-                            // Emit telemetry for UI
                             let _ = self.telemetry_tx.send(format!(r#"{{"type":"MissionRoute","id":"{}"}}"#, req.mission_id)).await;
                             self.trusted_core.mission_router.route(req).await;
                         }
                     },
                     Message::ResourceRequest(req) => {
-                        // Allocate from pre-computed budget
                         if let Ok(quota) = self.trusted_core.resource_allocator.allocate(&req) {
                             let _ = self.telemetry_tx.send(format!(r#"{{"type":"ResourceGrant","agent":"{}","quota":{}}}"#, req.agent_id, quota)).await;
-                            // self.message_bus.send(Message::ResourceGrant(quota)).await;
                         }
                     },
+                    Message::SysCallRequest(agent_id, call) => {
+                        // Execute through standard library
+                        let result = self.trusted_core.stdlib.execute(call);
+                        let log_msg = match result {
+                            Ok(res) => format!(r#"{{"type":"SysCall","agent":"{}","status":"SUCCESS","data":"{}"}}"#, agent_id, res),
+                            Err(e) => format!(r#"{{"type":"SysCall","agent":"{}","status":"ERROR","data":"{}"}}"#, agent_id, e),
+                        };
+                        let _ = self.telemetry_tx.send(log_msg).await;
+                    },
                     Message::AgentCrash(agent_id) => {
-                        // Isolate crash; restart agent; continue
                         let _ = self.telemetry_tx.send(format!(r#"{{"type":"AgentCrash","id":"{}"}}"#, agent_id)).await;
                         if let Some(agent) = self.agents.get(&agent_id) {
                             agent.restart().await;
                         }
                     },
                     Message::Telemetry(pulse) => {
-                        // Direct passthrough to Python bridge
                         let _ = self.telemetry_tx.send(pulse).await;
                     },
                     _ => {}
