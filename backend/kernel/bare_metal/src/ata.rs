@@ -39,6 +39,7 @@ impl AtaDriver {
 
     pub fn read_sectors(&mut self, lba: u32, sector_count: u8, target: &mut [u16]) {
         unsafe {
+            self.wait_for_ready();
             self.drive_head.write(0xE0 | (u8::try_from((lba >> 24) & 0x0F).unwrap()));
             self.sector_count.write(sector_count);
             self.lba_low.write(u8::try_from(lba & 0xFF).unwrap());
@@ -46,12 +47,36 @@ impl AtaDriver {
             self.lba_high.write(u8::try_from((lba >> 16) & 0xFF).unwrap());
             self.command_status.write(0x20); // Command: Read with retry
 
-            while (self.command_status.read() & 0x80) != 0 {} // Wait for not busy
-            while (self.command_status.read() & 0x08) == 0 {} // Wait for DRQ
+            self.wait_for_ready();
 
             for i in 0..target.len() {
                 target[i] = self.data.read();
             }
+        }
+    }
+
+    pub fn write_sectors(&mut self, lba: u32, sector_count: u8, source: &[u16]) {
+        unsafe {
+            self.wait_for_ready();
+            self.drive_head.write(0xE0 | (u8::try_from((lba >> 24) & 0x0F).unwrap()));
+            self.sector_count.write(sector_count);
+            self.lba_low.write(u8::try_from(lba & 0xFF).unwrap());
+            self.lba_mid.write(u8::try_from((lba >> 8) & 0xFF).unwrap());
+            self.lba_high.write(u8::try_from((lba >> 16) & 0xFF).unwrap());
+            self.command_status.write(0x30); // Command: Write sectors with retry
+
+            self.wait_for_ready();
+
+            for i in 0..source.len() {
+                self.data.write(source[i]);
+            }
+        }
+    }
+
+    fn wait_for_ready(&mut self) {
+        unsafe {
+            while (self.command_status.read() & 0x80) != 0 {} // Wait for not busy
+            while (self.command_status.read() & 0x08) == 0 {} // Wait for DRQ or READY
         }
     }
 }

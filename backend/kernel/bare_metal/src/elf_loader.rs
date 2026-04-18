@@ -18,12 +18,19 @@ pub struct ProgramHeader {
 }
 
 impl ElfLoader {
-    pub fn load_and_execute(elf_data: &[u8]) {
+    pub fn load_and_execute<M, A>(
+        elf_data: &[u8],
+        mapper: &mut M,
+        frame_allocator: &mut A,
+    ) -> Result<VirtAddr, &'static str>
+    where
+        M: Mapper<Size4KiB>,
+        A: FrameAllocator<Size4KiB>,
+    {
         println!(" [OK] ELF: Parsing 64-bit binary header...");
         
         if elf_data.len() < 64 || &elf_data[1..4] != b"ELF" {
-            println!(" [ERR] ELF: Invalid binary header.");
-            return;
+            return Err("Invalid ELF header");
         }
 
         let entry_point = unsafe { *(elf_data.as_ptr().add(24) as *const u64) };
@@ -31,24 +38,37 @@ impl ElfLoader {
         let ph_count = unsafe { *(elf_data.as_ptr().add(56) as *const u16) };
 
         println!(" [OK] ELF: Entry Point: 0x{:X}", entry_point);
-        println!(" [OK] ELF: Found {} Program Headers at offset 0x{:X}", ph_count, ph_offset);
 
         for i in 0..ph_count {
-            let offset = ph_offset as usize + (i as usize * 56); // ELF64 PH size
+            let offset = ph_offset as usize + (i as usize * 56);
             let ph = unsafe { *(elf_data.as_ptr().add(offset) as *const ProgramHeader) };
             
             if ph.p_type == 1 { // PT_LOAD
-                println!(" [ELF] Mapping Segment: V:0x{:X} S:{} bytes Flags:{}", 
-                    ph.p_vaddr, ph.p_memsz, ph.p_flags);
+                let start_addr = VirtAddr::new(ph.p_vaddr);
+                let mem_size = ph.p_memsz;
                 
-                // 1. Calculate page range
-                // 2. Map pages with permissions based on ph.p_flags
-                // 3. Copy ph.p_filesz bytes from ph.p_offset in elf_data to ph.p_vaddr
+                let start_page = Page::containing_address(start_addr);
+                let end_page = Page::containing_address(start_addr + mem_size - 1u64);
+                let pages = Page::range_inclusive(start_page, end_page);
+
+                for page in pages {
+                    let frame = frame_allocator.allocate_frame()
+                        .ok_or("No frames available for ELF loading")?;
+                    let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::USER_ACCESSIBLE;
+                    unsafe { mapper.map_to(page, frame, flags, frame_allocator).map_err(|_| "Mapping failed")?.flush() };
+                }
+
+                // Copy data
+                let data_start = ph.p_offset as usize;
+                let data_end = data_start + ph.p_filesz as usize;
+                let target = unsafe { core::slice::from_raw_parts_mut(ph.p_vaddr as *mut u8, ph.p_filesz as usize) };
+                target.copy_from_slice(&elf_data[data_start..data_end]);
                 
-                println!(" [OK] ELF: Segment securely isolation in user-space.");
+                println!(" [ELF] Mapped Segment: V:0x{:X} ({} bytes)", ph.p_vaddr, ph.p_memsz);
             }
         }
         
-        println!(" [OK] ELF: Handoff ready. Switching to Ring 3...");
+        println!(" [OK] ELF: Handoff ready.");
+        Ok(VirtAddr::new(entry_point))
     }
 }

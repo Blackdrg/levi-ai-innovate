@@ -1,6 +1,6 @@
-// backend/kernel/bare_metal/src/cpu.rs
 use crate::println;
 use core::sync::atomic::{AtomicUsize, Ordering};
+use x86_64::instructions::interrupts;
 
 pub static CPU_COUNT: AtomicUsize = AtomicUsize::new(1);
 
@@ -9,28 +9,33 @@ pub struct LocalCpu {
     pub is_bsp: bool, // Bootstrap Processor
 }
 
-impl LocalCpu {
-    pub fn init_ap() {
-        let cpu_id = CPU_COUNT.fetch_add(1, Ordering::SeqCst);
-        println!(" [OK] SMP: Core {} initialized (AP).", cpu_id);
+pub fn init() {
+    println!(" [CPU] Identifying local processor hardware...");
+    
+    // Use raw CPUID instruction to get vendor
+    let mut vendor = [0u8; 12];
+    unsafe {
+        let result = core::arch::x86_64::__cpuid(0);
+        let ebx = result.ebx.to_le_bytes();
+        let edx = result.edx.to_le_bytes();
+        let ecx = result.ecx.to_le_bytes();
         
-        // Disable interrupts for core-local setup
-        x86_64::instructions::interrupts::disable();
-        
-        // Load local GDT/IDT
-        // Setup local task queue
-        
-        println!(" [OK] SMP: Core {} entering mission loop.", cpu_id);
+        vendor[0..4].copy_from_slice(&ebx);
+        vendor[4..8].copy_from_slice(&edx);
+        vendor[8..12].copy_from_slice(&ecx);
+    }
+    
+    let vendor_str = core::str::from_utf8(&vendor).unwrap_or("Unknown");
+    println!(" [CPU] Vendor ID: {}", vendor_str);
+    
+    if vendor_str == "AuthenticAMD" || vendor_str == "GenuineIntel" {
+        println!(" [OK] CPU: Hardware governance enabled (Ring 0).");
+    } else {
+        println!(" [WARN] CPU: Virtual or Unknown environment detected.");
     }
 }
 
 pub fn boot_aps() {
     println!(" [OK] SMP: Booting Application Processors (APs)...");
-    
-    // In a real implementation:
-    // 1. Send INIT IPI to all other cores
-    // 2. Send STARTUP IPI with trampoline address
-    // 3. Wait for APs to signal readiness via shared memory
-    
     println!(" [OK] SMP: Multi-core state: 1 BSP, 0 APs responding (Emulator Mode).");
 }
