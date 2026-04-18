@@ -4,9 +4,17 @@ Central Gateway & Service Orchestrator.
 """
 
 import os
+import sys
 import logging
 import time
 import uuid
+
+# --- Project Root Discovery ---
+# This allows 'backend' to be imported even if the script is run from a subdirectory.
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if BASE_DIR not in sys.path:
+    sys.path.append(BASE_DIR)
+
 from datetime import datetime, timezone
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware

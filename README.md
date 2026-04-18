@@ -1,5 +1,6 @@
 # 🪐 LEVI-AI: Sovereign Cognitive OS (v17.0.0-GA GLOBAL AUTONOMY)
-> **STATUS**: GLOBAL AUTONOMY GRADUATED. The system has completed its v17.0 lifecycle, transitioning from a distributed agent swarm to a standalone **Native Windows AI Operating Layer** with autonomous self-healing, hardware-governed memory resonance, and blockchain-anchored auditability.
+> **STATUS**: GLOBAL AUTONOMY GRADUATED. The system has completed its v17.0 lifecycle.
+> **RESOURCES**: [Technical Architecture Manifest](./README_ARCHITECTURE.md)
 
 ---
 

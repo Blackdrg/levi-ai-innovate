@@ -13,6 +13,7 @@ mod drivers;
 mod stdlib;
 mod filesystem;
 mod security_monitor;
+mod bft_signer;
 
 use pyo3::prelude::*;
 use pyo3::exceptions::PyRuntimeError;
@@ -34,6 +35,7 @@ struct LeviKernel {
     filesystem: Arc<filesystem::SovereignFS>,
     driver_registry: Arc<drivers::DriverRegistry>,
     security_monitor: Arc<security_monitor::SecurityMonitor>,
+    bft_signer: Arc<bft_signer::BftSigner>,
     boot_report: Option<bootloader::BootReport>,
     micro_tx: Option<mpsc::Sender<micro_kernel::Message>>,
     telemetry_rx: Option<mpsc::Receiver<String>>,
@@ -58,6 +60,7 @@ impl LeviKernel {
         let filesystem = Arc::new(filesystem::SovereignFS::new());
         let driver_registry = Arc::new(drivers::DriverRegistry::new());
         let security_monitor = Arc::new(security_monitor::SecurityMonitor::new());
+        let bft_signer = Arc::new(bft_signer::BftSigner::new());
 
         // Register default HAL drivers
         driver_registry.register(Box::new(drivers::VirtualMemoryDriver { total_vmem: 16384 }));
@@ -81,6 +84,7 @@ impl LeviKernel {
             filesystem,
             driver_registry,
             security_monitor,
+            bft_signer,
             boot_report: Some(boot_report),
             micro_tx: Some(tx),
             telemetry_rx: Some(tel_rx),
@@ -278,6 +282,21 @@ impl LeviKernel {
             self.memory_kernel.crystallize_batch(facts).await
                 .map_err(|e| PyRuntimeError::new_err(format!("{:?}", e)))
         })
+    }
+
+    // --- Phase 2: Sovereign BFT Signing ---
+
+    fn get_signing_key(&self) -> PyResult<Vec<u8>> {
+        Ok(self.bft_signer.get_signing_key_bytes().to_vec())
+    }
+
+    fn sign_payload(&self, payload: Vec<u8>) -> PyResult<Vec<u8>> {
+        let sig = self.bft_signer.sign(&payload);
+        Ok(sig.to_bytes().to_vec())
+    }
+
+    fn get_public_key(&self) -> PyResult<Vec<u8>> {
+        Ok(self.bft_signer.get_public_key().to_vec())
     }
 
     // --- Phase 4: Hardening & Optimization ---

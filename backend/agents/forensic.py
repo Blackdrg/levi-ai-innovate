@@ -1,0 +1,79 @@
+# backend/agents/forensic.py
+import logging
+import json
+import hashlib
+from typing import Dict, Any, List, Optional
+from backend.agents.base import BaseAgent, AgentInput, AgentOutput
+from backend.utils.kms import SovereignKMS
+
+logger = logging.getLogger(__name__)
+
+class ForensicAgent(BaseAgent):
+    """
+    Sovereign Forensic: The Audit Authority.
+    Performs forensic analysis of mission failures and verifies pulse integrity.
+    """
+
+    def __init__(self):
+        super().__init__(
+            agent_id="forensic_agent",
+            name="Forensic",
+            role="Audit & Trace Integrity",
+            goal="Ensure absolute non-repudiability of system operations."
+        )
+
+    async def _run(self, input_data: AgentInput) -> AgentOutput:
+        """Analyzes mission traces for anomalies or tampering."""
+        objective = input_data.objective
+        mission_id = input_data.context.get("mission_id", "unknown")
+        
+        logger.info(f"🔍 [Forensic] Analyzing mission trace for: {mission_id}")
+        
+        # 1. Fetch Trace
+        from backend.services.audit_ledger import audit_ledger
+        trace = await audit_ledger.get_trace(mission_id)
+        
+        if not trace:
+            return AgentOutput(
+                agent_id=self.agent_id,
+                success=False,
+                output="Audit trace not found. Integrity cannot be verified.",
+                data={"error": "trace_missing"}
+            )
+
+        # 2. Verify Signatures
+        valid = await self._verify_pulse_chain(trace)
+        
+        # 3. Analyze for Hallucinations or Bias
+        from backend.utils.llm_utils import call_heavyweight_llm
+        analysis_prompt = (
+            "You are the LEVI Forensic Analyst. Review the following mission trace for:\n"
+            "1. Logical inconsistencies.\n"
+            "2. Potential security leaks (credentials, paths).\n"
+            "3. Hallucination signals.\n\n"
+            f"TRACE:\n{json.dumps(trace, indent=2)}\n\n"
+            "Provide a forensic verdict (SAFE | TAMPERED | ANOMALY)."
+        )
+        
+        verdict = await call_heavyweight_llm([{"role": "user", "content": analysis_prompt}])
+        
+        return AgentOutput(
+            agent_id=self.agent_id,
+            success=valid,
+            output=f"Forensic Analysis Complete. Status: {'VERIFIED' if valid else 'TAMPERED'}.\n\n{verdict}",
+            data={
+                "integrity_verdict": "VERIFIED" if valid else "TAMPERED",
+                "detailed_analysis": verdict,
+                "trace_hash": hashlib.sha256(json.dumps(trace).encode()).hexdigest()
+            }
+        )
+
+    async def _verify_pulse_chain(self, trace: List[Dict[str, Any]]) -> bool:
+        """Verifies that every pulse in the chain is signed correctly."""
+        for pulse in trace:
+            sig = pulse.get("audit_sig")
+            if not sig: return False
+            # Verify via KMS
+            if not await SovereignKMS.verify_trace(pulse, sig):
+                return False
+        return True

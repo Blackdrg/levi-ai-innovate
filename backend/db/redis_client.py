@@ -3,11 +3,13 @@
 import redis  # type: ignore
 import os
 import json
+import logging
 from typing import Optional, Any
 from dotenv import load_dotenv  # type: ignore
 from backend.utils.network import redis_breaker
 
 load_dotenv()
+logger = logging.getLogger(__name__)
 
 from backend.db.firestore_db import db as firestore_db # type: ignore
 

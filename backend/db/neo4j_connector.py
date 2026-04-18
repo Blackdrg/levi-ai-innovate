@@ -1,7 +1,7 @@
 # neo4j_connector.py
 import os
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from neo4j import AsyncGraphDatabase
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from .ontology import KnowledgeTriplet, Entity, EntityType, RelationType

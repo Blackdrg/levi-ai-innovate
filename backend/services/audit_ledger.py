@@ -112,4 +112,21 @@ class SovereignAuditLedger:
         logger.info(f"💾 [Ledger] Anchoring system snapshot: {snapshot_id}")
         return await self.anchor_mission(snapshot_id, data)
 
+    async def get_trace(self, mission_id: str) -> Optional[List[Dict[str, Any]]]:
+        """
+        Retrieves the full execution trace for a mission from disk or DB.
+        Used by the Forensic agent for integrity audits.
+        """
+        blob_path = os.path.join(self.ledger_dir, f"{mission_id}.json")
+        if not os.path.exists(blob_path): 
+            # Fallback: check db if needed
+            return None
+        
+        try:
+            with open(blob_path, "r") as f:
+                data = json.load(f)
+                return data.get("data", {}).get("trace", [])
+        except Exception:
+            return None
+
 audit_ledger = SovereignAuditLedger()

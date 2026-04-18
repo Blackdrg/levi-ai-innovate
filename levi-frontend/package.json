@@ -1,7 +1,7 @@
 {
   "name": "levi-frontend",
   "private": true,
-  "version": "15.0.0-GA",
+  "version": "17.0.0-GA",
   "type": "module",
   "scripts": {
     "dev": "vite",

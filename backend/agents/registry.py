@@ -2,101 +2,100 @@ import os
 from backend.core.agent_config import AgentConfig
 
 AGENT_REGISTRY = {
-    "ResearchArchitect": AgentConfig(
+    "Sovereign": AgentConfig(
+        name="Sovereign Coordinator",
+        type="sovereign",
+        mtls_endpoint=os.getenv("AGENT_SOVEREIGN_MTLS_ENDPOINT", "https://localhost:5000"),
+        capabilities=["orchestration", "goal_decomposition"]
+    ),
+    "Architect": AgentConfig(
         name="Research Architect",
-        type="research",
-        mtls_endpoint=os.getenv("AGENT_RESEARCH_MTLS_ENDPOINT", "https://localhost:5005"),
-        timeout_ms=60000,
-        capabilities=["recursive_discovery", "synthesis"]
+        type="architect",
+        mtls_endpoint=os.getenv("AGENT_ARCHITECT_MTLS_ENDPOINT", "https://localhost:5005"),
+        capabilities=["recursive_discovery", "synthesis", "dag_design"]
+    ),
+    "Librarian": AgentConfig(
+        name="Librarian Agent",
+        type="librarian",
+        mtls_endpoint=os.getenv("AGENT_LIBRARIAN_MTLS_ENDPOINT", "https://localhost:5006"),
+        capabilities=["semantic_rag", "document_analysis", "memory_indexing"]
     ),
     "Artisan": AgentConfig(
         name="Artisan Agent",
         type="artisan",
         mtls_endpoint=os.getenv("AGENT_ARTISAN_MTLS_ENDPOINT", "https://localhost:5002"),
-        capabilities=["code_execution", "repl_shell"]
+        capabilities=["code_execution", "repl_shell", "tool_creation"]
+    ),
+    "Analyst": AgentConfig(
+        name="Data Analyst",
+        type="analyst",
+        mtls_endpoint=os.getenv("AGENT_ANALYST_MTLS_ENDPOINT", "https://localhost:5007"),
+        capabilities=["pattern_recognition", "statistical_audit"]
     ),
     "Critic": AgentConfig(
         name="Critic Agent",
         type="critic",
         mtls_endpoint=os.getenv("AGENT_CRITIC_MTLS_ENDPOINT", "https://localhost:5003"),
-        capabilities=["adversarial_verification", "bias_correction"]
+        capabilities=["adversarial_verification", "bias_correction", "fidelity_rating"]
     ),
-    "Librarian": AgentConfig(
-        name="Librarian Agent",
-        type="document",
-        mtls_endpoint=os.getenv("AGENT_LIBRARIAN_MTLS_ENDPOINT", "https://localhost:5006"),
-        capabilities=["semantic_rag", "document_analysis"]
+    "Sentinel": AgentConfig(
+        name="Sentinel Security",
+        type="sentinel",
+        mtls_endpoint=os.getenv("AGENT_SENTINEL_MTLS_ENDPOINT", "https://localhost:5008"),
+        capabilities=["self_healing", "anomaly_detection", "firewall_governance"]
     ),
-    "Optimizer": AgentConfig(
-        name="Optimizer Agent",
-        type="optimizer",
-        mtls_endpoint=os.getenv("AGENT_OPTIMIZER_MTLS_ENDPOINT", "https://localhost:5007"),
-        capabilities=["performance_tuning", "resource_allocation"]
+    "Dreamer": AgentConfig(
+        name="Dreamer Engine",
+        type="dreamer",
+        mtls_endpoint=os.getenv("AGENT_DREAMER_MTLS_ENDPOINT", "https://localhost:5011"),
+        capabilities=["evolutionary_distillation", "creative_synthesis"]
     ),
-    "DiagnosticAgent": AgentConfig(
-        name="Diagnostic Agent",
-        type="diagnostic",
-        mtls_endpoint=os.getenv("AGENT_DIAGNOSTIC_MTLS_ENDPOINT", "https://localhost:5008"),
-        capabilities=["self_healing", "anomaly_detection"]
+    "Scout": AgentConfig(
+        name="Scout Search",
+        type="scout",
+        mtls_endpoint=os.getenv("AGENT_SCOUT_MTLS_ENDPOINT", "https://localhost:5001"),
+        capabilities=["web_retrieval", "real_time_tracking"]
     ),
-    "ImageArchitect": AgentConfig(
-        name="Image Architect",
-        type="image",
-        mtls_endpoint=os.getenv("AGENT_IMAGE_MTLS_ENDPOINT", "https://localhost:5009"),
-        capabilities=["multi_modal_synthesis"]
+    "Historian": AgentConfig(
+        name="Historian Chronicler",
+        type="historian",
+        mtls_endpoint=os.getenv("AGENT_HISTORIAN_MTLS_ENDPOINT", "https://localhost:5012"),
+        capabilities=["long_term_ledger", "context_continuity"]
     ),
-    "VideoArchitect": AgentConfig(
-        name="Video Architect",
-        type="video",
-        mtls_endpoint=os.getenv("AGENT_VIDEO_MTLS_ENDPOINT", "https://localhost:5010"),
-        capabilities=["temporal_synthesis"]
+    "Vision": AgentConfig(
+        name="Vision Multimodal",
+        type="vision",
+        mtls_endpoint=os.getenv("AGENT_VISION_MTLS_ENDPOINT", "https://localhost:5009"),
+        capabilities=["multi_modal_synthesis", "spatial_reasoning"]
     ),
-    "MemoryAgent": AgentConfig(
-        name="Memory Agent",
-        type="memory",
-        mtls_endpoint=os.getenv("AGENT_MEMORY_MTLS_ENDPOINT", "https://localhost:5011"),
-        capabilities=["episodic_crystallization"]
+    "Echo": AgentConfig(
+        name="Echo Audio",
+        type="echo",
+        mtls_endpoint=os.getenv("AGENT_ECHO_MTLS_ENDPOINT", "https://localhost:5017"),
+        capabilities=["text_to_speech", "audio_recon", "vocal_cloning"]
     ),
-    "SearchAgent": AgentConfig(
-        name="Search Agent",
-        type="search",
-        mtls_endpoint=os.getenv("AGENT_SEARCH_MTLS_ENDPOINT", "https://localhost:5001"),
-        capabilities=["web_retrieval"]
+    "Forensic": AgentConfig(
+        name="Forensic Auditor",
+        type="forensic",
+        mtls_endpoint=os.getenv("AGENT_FORENSIC_MTLS_ENDPOINT", "https://localhost:5018"),
+        capabilities=["non_repudiation", "tamper_detection"]
     ),
-    "TaskAgent": AgentConfig(
-        name="Task Agent",
-        type="task",
-        mtls_endpoint=os.getenv("AGENT_TASK_MTLS_ENDPOINT", "https://localhost:5012"),
-        capabilities=["atomic_execution", "dependency_checking"]
+    "Healer": AgentConfig(
+        name="Healer Physician",
+        type="healer",
+        mtls_endpoint=os.getenv("AGENT_HEALER_MTLS_ENDPOINT", "https://localhost:5019"),
+        capabilities=["autonomous_refactor", "bug_healing"]
     ),
-    "ChatAgent": AgentConfig(
-        name="Chat Agent",
-        type="chat",
-        mtls_endpoint=os.getenv("AGENT_CHAT_MTLS_ENDPOINT", "https://localhost:5013"),
-        capabilities=["long_running_nlp"]
-    ),
-    "LocalAgent": AgentConfig(
-        name="Local Agent",
-        type="local",
-        mtls_endpoint=os.getenv("AGENT_LOCAL_MTLS_ENDPOINT", "https://localhost:5014"),
-        capabilities=["cpu_inference"]
-    ),
-    "PolicyAgent": AgentConfig(
-        name="Policy Agent",
-        type="policy",
-        mtls_endpoint=os.getenv("AGENT_POLICY_MTLS_ENDPOINT", "https://localhost:5015"),
-        capabilities=["real_time_alignment", "boundary_enforcement"]
-    ),
-    "ConsensusAgent": AgentConfig(
-        name="Consensus Agent",
+    "Consensus": AgentConfig(
+        name="Consensus Pulse",
         type="consensus",
         mtls_endpoint=os.getenv("AGENT_CONSENSUS_MTLS_ENDPOINT", "https://localhost:5016"),
         capabilities=["distributed_agreement", "region_awareness"]
     ),
-    "EchoAgent": AgentConfig(
-        name="Echo Agent",
-        type="voice",
-        mtls_endpoint=os.getenv("AGENT_ECHO_MTLS_ENDPOINT", "https://localhost:5017"),
-        capabilities=["text_to_speech", "audio_recon"]
+    "Identity": AgentConfig(
+        name="Identity Guard",
+        type="identity",
+        mtls_endpoint=os.getenv("AGENT_IDENTITY_MTLS_ENDPOINT", "https://localhost:5015"),
+        capabilities=["real_time_alignment", "boundary_enforcement", "persona_lock"]
     ),
 }
