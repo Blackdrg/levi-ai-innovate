@@ -1,63 +1,93 @@
 # build_kernel.ps1
-# Helper script to build the Levi Rust Kernel bindings for Python
+# Helper script to build the LEVI HAL-0 Sovereign OS kernel
+# Produces:
+#   - Python FFI bindings (maturin)
+#   - Bootable disk image via `bootimage` (QEMU-ready + flashable to USB)
 
-Write-Host "[Kernel-Builder] Commencing Rust Kernel Build..." -ForegroundColor Cyan
+Write-Host "══════════════════════════════════════════" -ForegroundColor Cyan
+Write-Host " HAL-0 SOVEREIGN KERNEL — Build Pipeline " -ForegroundColor Cyan
+Write-Host "══════════════════════════════════════════" -ForegroundColor Cyan
 
-# 1. Check for Cargo and Toolchain
+$scriptPath = Split-Path $MyInvocation.MyCommand.Path
+
+# ── 1. Verify toolchain ──────────────────────────────────────────────────────
 if (!(Get-Command cargo -ErrorAction SilentlyContinue)) {
-    Write-Error "Cargo not found! Please install Rust from https://rustup.rs"
+    Write-Error "Cargo not found! Install Rust from https://rustup.rs"
     exit 1
 }
 
-# Ensure a default toolchain is configured (Fix for 'rustup could not choose a version' error)
 try {
-    & rustc --version >$null 2>&1
+    & rustc --version > $null 2>&1
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "[Kernel-Builder] No default Rust toolchain detected. Setting to stable..." -ForegroundColor Yellow
+        Write-Host "[Builder] No default toolchain. Setting stable..." -ForegroundColor Yellow
         & rustup default stable
     }
 } catch {
-    Write-Host "[Kernel-Builder] Configuring stable toolchain..." -ForegroundColor Yellow
     & rustup default stable
 }
 
-# 2. Check for maturin
-python -m maturin --version >$null 2>&1
+# Ensure the bare-metal target is installed
+& rustup target add x86_64-unknown-none
+& rustup component add rust-src llvm-tools-preview
+
+# ── 2. Python FFI bindings (levi_kernel Python module) ──────────────────────
+Write-Host "`n[Builder] Building Python FFI bindings..." -ForegroundColor Green
+
+python -m maturin --version > $null 2>&1
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "Installing maturin build tool..." -ForegroundColor Yellow
+    Write-Host "[Builder] Installing maturin..." -ForegroundColor Yellow
     python -m pip install maturin
 }
 
-# 3. Build and Install
-Write-Host "Building Python bindings (this may take a few minutes)..." -ForegroundColor Green
-
-$scriptPath = Split-Path $MyInvocation.MyCommand.Path
 Push-Location $scriptPath
-
 python -m maturin develop --release
-
-$buildStatus = $LASTEXITCODE
+$ffiStatus = $LASTEXITCODE
 Pop-Location
 
-# 4. Build Bare-Metal Kernel (HAL-0 Native)
-Write-Host "`n[Kernel-Builder] Commencing Bare-Metal (no_std) Kernel Build..." -ForegroundColor Cyan
+# ── 3. Bare-Metal Bootable Image (GRUB/UEFI via bootimage) ──────────────────
+Write-Host "`n[Builder] Building HAL-0 bare-metal kernel + bootable image..." -ForegroundColor Cyan
+
+# Install bootimage if not present
+cargo install bootimage --version "0.10.3" 2>$null
+
 Push-Location "$scriptPath\bare_metal"
 
-# Ensure target is installed
-& rustup target add x86_64-unknown-none
-
-Write-Host "Compiling HAL-0 Native binary for x86_64-unknown-none..." -ForegroundColor Green
-& cargo build --release --target x86_64-unknown-none
+# Build debug (fast iteration)
+& cargo bootimage
 
 if ($LASTEXITCODE -eq 0) {
-    Write-Host "[Kernel-Builder] Bare-Metal Kernel binary built successfully: .\target\x86_64-unknown-none\release\hal0-bare" -ForegroundColor Cyan
+    $imgPath = "target\x86_64-unknown-none\debug\bootimage-hal0-bare.bin"
+    Write-Host ""
+    Write-Host "[OK] Bootable disk image: $scriptPath\bare_metal\$imgPath" -ForegroundColor Green
+    Write-Host ""
+    Write-Host " To run in QEMU:" -ForegroundColor Yellow
+    Write-Host "   qemu-system-x86_64 -drive format=raw,file=$imgPath -serial stdio" -ForegroundColor White
+    Write-Host ""
+    Write-Host " To flash to USB (replace X: with your drive letter):" -ForegroundColor Yellow
+    Write-Host "   dd if=$imgPath of=\\.\PhysicalDriveX bs=512" -ForegroundColor White
+    Write-Host ""
+
+    # Optionally wrap in ISO with grub-mkrescue (requires WSL or Linux)
+    if (Get-Command wsl -ErrorAction SilentlyContinue) {
+        Write-Host "[Builder] Generating ISO via WSL grub-mkrescue..." -ForegroundColor Cyan
+        $wslImg = ($imgPath -replace '\\', '/') -replace 'C:', '/mnt/c'
+        wsl grub-mkrescue -o hal0-sovereign.iso --overlay=$wslImg 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "[OK] ISO: $scriptPath\bare_metal\hal0-sovereign.iso" -ForegroundColor Green
+        } else {
+            Write-Host "[INFO] grub-mkrescue not available in WSL; .bin image is flashable directly." -ForegroundColor Yellow
+        }
+    }
 } else {
-    Write-Host "[ERROR] Bare-Metal build failed. Ensure 'no_std' dependencies are compatible." -ForegroundColor Red
+    Write-Host "[ERROR] Bare-metal kernel build failed. See above." -ForegroundColor Red
 }
+
 Pop-Location
 
-if ($buildStatus -eq 0) {
-    Write-Host "`n[Kernel-Builder] ALL SOVEREIGN LAYERS GRADUATED." -ForegroundColor Cyan
+# ── 4. Summary ───────────────────────────────────────────────────────────────
+Write-Host ""
+if ($ffiStatus -eq 0) {
+    Write-Host "══ ALL SOVEREIGN LAYERS GRADUATED ══" -ForegroundColor Cyan
 } else {
-    Write-Error "Build cycle completed with errors. See above."
+    Write-Warning "Python FFI build had errors. Bare-metal image may still be usable."
 }

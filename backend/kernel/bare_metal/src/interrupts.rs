@@ -43,9 +43,40 @@ lazy_static! {
         idt[InterruptIndex::Keyboard.as_usize()]
             .set_handler_fn(keyboard_interrupt_handler);
         idt.page_fault.set_handler_fn(page_fault_handler);
+        idt.general_protection_fault.set_handler_fn(general_protection_fault_handler);
+        idt.stack_segment_fault.set_handler_fn(stack_segment_fault_handler);
+        idt.invalid_opcode.set_handler_fn(invalid_opcode_handler);
         idt[0x80].set_handler_fn(crate::syscalls::syscall_handler);
         idt
     };
+}
+
+extern "x86-interrupt" fn general_protection_fault_handler(
+    stack_frame: InterruptStackFrame,
+    error_code: u64,
+) {
+    println!(" [INT] EXCEPTION: GENERAL PROTECTION FAULT");
+    println!(" [INT] Error Code: {}", error_code);
+    println!(" [INT] {:#?}", stack_frame);
+    panic!("GENERAL PROTECTION FAULT - SOVEREIGN HALT");
+}
+
+extern "x86-interrupt" fn stack_segment_fault_handler(
+    stack_frame: InterruptStackFrame,
+    error_code: u64,
+) {
+    println!(" [INT] EXCEPTION: STACK SEGMENT FAULT");
+    println!(" [INT] Error Code: {}", error_code);
+    println!(" [INT] {:#?}", stack_frame);
+    panic!("STACK SEGMENT FAULT - SOVEREIGN HALT");
+}
+
+extern "x86-interrupt" fn invalid_opcode_handler(
+    stack_frame: InterruptStackFrame,
+) {
+    println!(" [INT] EXCEPTION: INVALID OPCODE");
+    println!(" [INT] {:#?}", stack_frame);
+    panic!("INVALID OPCODE - SOVEREIGN HALT");
 }
 
 extern "x86-interrupt" fn page_fault_handler(
