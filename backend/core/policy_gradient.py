@@ -26,7 +26,7 @@ class PolicyGradientEngine:
     }
 
     @classmethod
-    async def get_optimal_params(cls, agent_type: str, domain: str = "default") -> Dict[str, Any]:
+    async def get_optimal_params(cls, agent_type: str, domain: str = "default", mission_id: str = "default") -> Dict[str, Any]:
         """
         Retrieves the optimized policy for a specific agent and domain.
         v16.2: Uses PPO policy network to select actions (temperature).
@@ -34,9 +34,8 @@ class PolicyGradientEngine:
         try:
             from backend.core.evolution.ppo_engine import ppo_engine
             # State vector: [base_fidelity, base_latency, complexity, risk]
-            # Here we use defaults as we don't have the context yet, but we'll selection an action
             state = [0.85, 0.5, 0.4, 0.2] 
-            optimized_temp = ppo_engine.select_action(state)
+            optimized_temp = ppo_engine.select_action(mission_id, state)
             
             return {
                 "temperature": optimized_temp,
@@ -46,10 +45,6 @@ class PolicyGradientEngine:
             }
         except Exception as e:
             logger.error(f"[PolicyGradient] PPO selection failed: {e}")
-            return cls.DEFAULT_POLICY
-                
-        except Exception as e:
-            logger.error(f"[PolicyGradient] Parameter estimation failed: {e}")
             return cls.DEFAULT_POLICY
 
     @classmethod
@@ -62,15 +57,7 @@ class PolicyGradientEngine:
         
         try:
             from backend.core.evolution.ppo_engine import ppo_engine
-            await ppo_engine.record_experience(reward=fidelity, state={"reward": fidelity, "context": mission_id})
-            
-            # Legacy DB update for tracking persistence
-            async with PostgresDB._session_factory() as session:
-                from backend.db.models import Mission, AgentPolicy
-                # ... (existing DB logic)
-                # (Skipped for brevity but kept in actual implementation)
-                pass
-
+            await ppo_engine.record_experience(mission_id, reward=fidelity)
         except Exception as e:
             logger.error(f"[PolicyGradient] Policy update failed: {e}")
 

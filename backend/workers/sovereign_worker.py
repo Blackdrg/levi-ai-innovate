@@ -41,6 +41,14 @@ class SovereignEventWorker:
             callback=self.handle_system_pulse
         )
 
+        # 3. Agent Execution results (Phase 2.3)
+        await sovereign_event_bus.subscribe(
+            topic="agent.results",
+            group="cognitive_worker",
+            consumer_id="worker_1",
+            callback=self.handle_agent_result
+        )
+
         logger.info("📡 [SovereignWorker] All streams subscribed. Standing by.")
 
     async def handle_mission_completion(self, event_data: dict):
@@ -122,6 +130,30 @@ class SovereignEventWorker:
             from backend.core.memory_manager import MemoryManager
             mm = MemoryManager()
             await mm.cleanup_stale_working_memory()
+
+    async def handle_agent_result(self, event_data: dict):
+        """
+        Sovereign v17.0 EventBus Integrity.
+        Bridges isolated NodeWorker results back to the CentralExecutionState.
+        """
+        mission_id = event_data.get("mission_id")
+        payload = event_data.get("payload", {})
+        
+        if not mission_id or not payload:
+            return
+
+        node_id = payload.get("node_id") or event_data.get("source", "").split(":")[-1]
+        success = payload.get("success", False)
+        
+        logger.info(f"💾 [SovereignWorker] Recording result for node {node_id} (Success: {success})")
+        
+        from backend.core.execution_state import CentralExecutionState
+        state = CentralExecutionState(mission_id)
+        state.record_node(
+            node_id=node_id,
+            status="completed" if success else "failed",
+            info=payload
+        )
 
 if __name__ == "__main__":
     worker = SovereignEventWorker()

@@ -82,12 +82,8 @@ class LearningLoop:
             from backend.core.evolution.ppo_engine import ppo_engine
             # Reward = fidelity normalized to [-1, 1]
             reward = (fidelity - 0.5) * 2
-            await ppo_engine.record_experience(reward)
+            await ppo_engine.record_experience(mission_id, reward)
             
-            # Periodically train the policy network
-            if mission_id.endswith("5") or mission_id.endswith("0"): # Pseudo-batch trigger
-                asyncio.create_task(ppo_engine.train_step())
-
             # 3. Check for Evolution Trigger
             await cls._check_evolution_trigger()
 

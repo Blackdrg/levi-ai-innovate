@@ -93,6 +93,12 @@ async def lifespan(app: FastAPI):
     await dcn_mesh.start()
     logger.info("⚡ [Main] DCN Mesh (Raft) node=%s cluster=%s [ONLINE]",
                 dcn_mesh.node_id, dcn_mesh.raft_consensus.cluster_key)
+                
+    # 4c. Phase 2.3 - Start gRPC P2P Server & Active Discovery
+    from backend.dcn.grpc_server import serve_gossip_service
+    create_tracked_task(serve_gossip_service(dcn_protocol, port=int(os.getenv("DCN_GRPC_PORT", "9000"))), name="dcn-grpc-server")
+    if dcn_protocol.hybrid_gossip:
+        create_tracked_task(dcn_protocol.hybrid_gossip.start_discovery_loop(interval=int(os.getenv("DCN_GOSSIP_INTERVAL", "30"))), name="dcn-hybrid-gossip")
         
     # 5. Starting DCN Global Bridge
     from backend.utils.global_gossip import global_swarm_bridge

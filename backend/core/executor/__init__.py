@@ -524,24 +524,60 @@ class GraphExecutor:
                                     timeout=timeout
                                 )
                             else:
-                                # Legacy Local Call
-                                raw_res = await asyncio.wait_for(
-                                    ai_service_breaker.async_call(
-                                        call_tool,
-                                        agent_name,
-                                        {
-                                            **merged_params,
-                                            "__memory_scope__": memory_scope,
-                                            "__sandbox__": policy.sandbox_required if policy else False,
-                                        },
-                                        {
-                                            **perception.get("context", {}),
-                                            "model_tier": getattr(node, "model_tier", "L2"),
-                                        },
-                                    ),
-                                    timeout=timeout,
-                                )
-                                return ToolResult(**raw_res) if isinstance(raw_res, dict) else raw_res
+                                # Sovereign v17.0: HAL-0 MANDATORY EXECUTION
+                                logger.info(f"🛡️ [HAL-0] Spawning isolated worker for agent: {agent_name}")
+                                
+                                # Prepare JSON strings for CLI args
+                                p_json = json.dumps({**merged_params, "__memory_scope__": memory_scope})
+                                c_json = json.dumps({**perception.get("context", {}), "model_tier": getattr(node, "model_tier", "L2")})
+                                
+                                # Spawn via kernel
+                                from backend.kernel.kernel_wrapper import kernel
+                                task_cmd = f"python backend/workers/node_worker.py {mission_id} {node.id} {agent_name} '{p_json}' '{c_json}'"
+                                pid = kernel.spawn_isolated_task(node.id, task_cmd)
+                                
+                                if pid is None:
+                                    logger.error(f"❌ [HAL-0] Failed to spawn worker for {node.id}")
+                                    return ToolResult(success=False, error="HAL-0 Spawn Failure", agent=agent_name)
+                                
+                                # Wait for result via EventBus (Phase 2.3)
+                                logger.info(f"⏳ [HAL-0] Waiting for EventBus result from PID {pid}...")
+                                
+                                start_wait = time.time()
+                                max_wait = timeout or 60.0 # Default 60s
+                                
+                                from backend.utils.event_bus import sovereign_event_bus
+                                
+                                while time.time() - start_wait < max_wait:
+                                    # We poll the agent.results topic for this mission_id and node_id
+                                    # In a more advanced implementation, we'd use a specific consumer group or subscription.
+                                    # For v17.0, we'll check the mission state bridge which is updated by the worker/EventBus.
+                                    
+                                    state_data = CentralExecutionState.get_full_data(mission_id)
+                                    if state_data:
+                                        node_data = state_data.get("nodes", {}).get(node.id, {})
+                                        events = node_data.get("events", [])
+                                        for evt in events:
+                                            if evt.get("status") == "completed":
+                                                info = evt.get("info", {})
+                                                return ToolResult(
+                                                    success=True,
+                                                    message=info.get("message", ""),
+                                                    data=info.get("data", {}),
+                                                    agent=agent_name,
+                                                    latency_ms=info.get("latency_ms", 0),
+                                                    total_tokens=info.get("total_tokens", 0)
+                                                )
+                                            elif evt.get("status") == "failed":
+                                                return ToolResult(
+                                                    success=False,
+                                                    error=evt.get("info", {}).get("error", "Isolated Task Failure"),
+                                                    agent=agent_name
+                                                )
+                                    
+                                    await asyncio.sleep(0.5) # Poll interval
+                                
+                                return ToolResult(success=False, error=f"HAL-0 Task Timeout ({max_wait}s)", agent=agent_name)
 
                         # Wrap execution with Circuit Breaker
                         result = await breaker.call(_do_call)

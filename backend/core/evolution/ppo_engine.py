@@ -1,4 +1,6 @@
 import logging
+import os
+import json
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
@@ -10,7 +12,6 @@ from torch.distributions import Categorical
 
 logger = logging.getLogger(__name__)
 
-
 @dataclass
 class Trajectory:
     states: List[Dict[str, Any]]
@@ -19,7 +20,6 @@ class Trajectory:
     log_probs: List[float]
     values: List[float]
     returns: List[float] = field(default_factory=list)
-
 
 class PolicyNetwork(nn.Module):
     def __init__(self, state_dim: int = 256, hidden_dim: int = 128):
@@ -48,8 +48,14 @@ class PolicyNetwork(nn.Module):
         value = self.value_head(features)
         return policy_probs, value
 
-
 class PPOEngine:
+    """
+    Sovereign Evolution Engine v16.3 [PPO-HARDENED].
+    Manages autonomous policy refinement for cognitive parameters.
+    """
+    
+    WEIGHTS_PATH = "d:\\LEVI-AI\\data\\evolution\\ppo_policy.v2.pt"
+    
     def __init__(
         self,
         state_dim: int = 256,
@@ -63,7 +69,8 @@ class PPOEngine:
         self.gamma = gamma
         self.epsilon_clip = epsilon_clip
         self.trajectories: List[Trajectory] = []
-        self._pending_step: Optional[Dict[str, Any]] = None
+        self._pending_steps: Dict[str, Dict[str, Any]] = {} # keyed by mission_id
+        
         self.action_map = {
             "high_temp": 0,
             "low_temp": 1,
@@ -74,44 +81,57 @@ class PPOEngine:
             1: 0.2,
             2: 0.7,
         }
+        
+        self._load_weights()
 
-    def select_action(self, state: List[float] | Dict[str, Any]) -> float:
+    def _load_weights(self):
+        """Loads evolved weights from Sovereign storage."""
+        if os.path.exists(self.WEIGHTS_PATH):
+            try:
+                self.policy_net.load_state_dict(torch.load(self.WEIGHTS_PATH, map_location="cpu"))
+                logger.info(f"🧠 [Evolution] Evolved weights loaded from {self.WEIGHTS_PATH}")
+            except Exception as e:
+                logger.error(f"⚠️ [Evolution] Weight load failure: {e}")
+        else:
+            logger.info("ℹ️ [Evolution] Initializing from base biological priors (default weights).")
+
+    def _save_weights(self):
+        """Persists evolved weights to Sovereign storage."""
+        try:
+            os.makedirs(os.path.dirname(self.WEIGHTS_PATH), exist_ok=True)
+            torch.save(self.policy_net.state_dict(), self.WEIGHTS_PATH)
+            logger.info(f"💾 [Evolution] Evolved weights PERSISTED to {self.WEIGHTS_PATH}")
+        except Exception as e:
+            logger.error(f"❌ [Evolution] Weight persistence failure: {e}")
+
+    def select_action(self, mission_id: str, state: List[float] | Dict[str, Any]) -> float:
+        """Selects a cognitive action (hyper-param) via the current policy."""
         encoded = self._encode_states([state])
         state_tensor = torch.tensor(encoded, dtype=torch.float32)
-        policy_probs, value = self.policy_net(state_tensor)
+        
+        with torch.no_grad():
+            policy_probs, value = self.policy_net(state_tensor)
+            
         distribution = Categorical(policy_probs)
         action_tensor = distribution.sample()
         action_idx = int(action_tensor.item())
-        self._pending_step = {
+        
+        self._pending_steps[mission_id] = {
             "state": state if isinstance(state, dict) else {"vector": list(state)},
             "action": self._idx_to_action(action_idx),
             "log_prob": float(distribution.log_prob(action_tensor).item()),
             "value": float(value.squeeze().item()),
         }
+        
         return self.temperature_map[action_idx]
 
-    async def record_trajectory(self, trajectory: Trajectory):
-        self.trajectories.append(trajectory)
-        if len(self.trajectories) >= 10:
-            await self.train_step()
+    async def record_experience(self, mission_id: str, reward: float):
+        """Records the outcome (reward) for a specific mission step."""
+        if mission_id not in self._pending_steps:
+             # Fallback if mission_id wasn't tracked (legacy support)
+             return
 
-    async def record_experience(self, reward: float, state: Optional[Dict[str, Any]] = None):
-        """Compatibility bridge for older call sites that only emit reward."""
-        if self._pending_step is None:
-            base_state = state or {"context": "", "reward_only": True}
-            encoded = self._encode_states([base_state])
-            state_tensor = torch.tensor(encoded, dtype=torch.float32)
-            policy_probs, value = self.policy_net(state_tensor)
-            distribution = Categorical(policy_probs)
-            action_tensor = distribution.sample()
-            self._pending_step = {
-                "state": base_state,
-                "action": self._idx_to_action(int(action_tensor.item())),
-                "log_prob": float(distribution.log_prob(action_tensor).item()),
-                "value": float(value.squeeze().item()),
-            }
-
-        step = self._pending_step
+        step = self._pending_steps.pop(mission_id)
         trajectory = Trajectory(
             states=[step["state"]],
             actions=[step["action"]],
@@ -119,14 +139,19 @@ class PPOEngine:
             log_probs=[float(step["log_prob"])],
             values=[float(step["value"])],
         )
-        self._pending_step = None
-        await self.record_trajectory(trajectory)
+        
+        self.trajectories.append(trajectory)
+        if len(self.trajectories) >= 20: # Training batch threshold
+            await self.train_step()
 
     async def train_step(self):
+        """Executes a PPO optimization cycle on collected experiences."""
         if not self.trajectories:
             return
 
-        batch = self.trajectories[-min(len(self.trajectories), 32):]
+        logger.info(f"🌪️ [Evolution] Commencing training cycle on {len(self.trajectories)} experiences...")
+        
+        batch = self.trajectories[:]
         for trajectory in batch:
             returns: List[float] = []
             cumulative = 0.0
@@ -152,7 +177,7 @@ class PPOEngine:
         actions_tensor = torch.tensor([self._action_to_idx(action) for action in all_actions], dtype=torch.long)
 
         total_loss = None
-        for _ in range(3):
+        for _ in range(3): # Epochs
             self.optimizer.zero_grad()
             policy_probs, values = self.policy_net(states_tensor)
             values = values.squeeze(-1)
@@ -174,14 +199,9 @@ class PPOEngine:
             torch.nn.utils.clip_grad_norm_(self.policy_net.parameters(), 0.5)
             self.optimizer.step()
 
-        logger.info("✅ PPO training step complete. Loss: %.4f", float(total_loss.item()) if total_loss is not None else 0.0)
+        logger.info("✅ [Evolution] PPO cycle complete. Loss: %.4f", float(total_loss.item()) if total_loss is not None else 0.0)
         self.trajectories = []
-
-    def save_model(self, path: str):
-        torch.save(self.policy_net.state_dict(), path)
-
-    def load_model(self, path: str):
-        self.policy_net.load_state_dict(torch.load(path, map_location="cpu"))
+        self._save_weights()
 
     def _action_to_idx(self, action: str) -> int:
         return self.action_map.get(action, 2)
@@ -204,11 +224,9 @@ class PPOEngine:
             encoded[i, 2] = float(state.get("risk", 0.2))
             encoded[i, 3] = float(state.get("latency_ms", 0.0)) / 10000.0
             encoded[i, 4] = float(state.get("fidelity", state.get("reward", 0.5)))
-            # Stable hashed text features
             for ch in text.encode("utf-8"):
                 idx = 5 + (ch % (self.state_dim - 5))
                 encoded[i, idx] += 1.0 / 255.0
         return encoded
-
 
 ppo_engine = PPOEngine()

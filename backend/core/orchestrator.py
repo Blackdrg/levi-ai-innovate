@@ -266,6 +266,20 @@ class Orchestrator:
             latency = (time.time() - start_ts) * 1000
             result["latency_mainframe_ms"] = latency
             
+            # Step 4b: Closed-Loop Learning (v15.0)
+            await self.learning.crystallize_pattern(
+                mission_id=mission_id,
+                query=user_input,
+                result=str(result.get("response", "")),
+                fidelity=result.get("fidelity", 1.0),
+                metadata={
+                    "user_id": user_id,
+                    "latency_ms": latency,
+                    "intent_type": result.get("intent", "chat"),
+                    "agent_sequence": result.get("agent_sequence", [])
+                }
+            )
+
             # Non-Repudiable Audit Pulse (Layer-6)
             pulse_hash = await self._sign_mission_pulse(mission_id, result)
             result["audit_sig"] = pulse_hash
@@ -376,7 +390,7 @@ class Orchestrator:
         if redis: redis.srem(f"orchestrator:{self.kernel_id}:active", mid)
 
     async def _inject_calibration_weights(self, mid):
-        params = await policy_gradient.get_optimal_params("mainframe")
+        params = await policy_gradient.get_optimal_params("mainframe", mission_id=mid)
         logger.debug(f"[Mainframe] Cognitive calibration injected for {mid}: {params}")
 
     # -------------------------------------------------------------------------
