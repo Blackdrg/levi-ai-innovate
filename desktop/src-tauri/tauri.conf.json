@@ -1,6 +1,6 @@
 {
   "project_name": "LEVI-AI",
-  "version": "1.0.0",
+  "version": "17.0.0",
   "identifier": "com.levi.os",
   "build": {
     "beforeDevCommand": "npm run dev",
