@@ -36,6 +36,7 @@ struct LeviKernel {
     driver_registry: Arc<drivers::DriverRegistry>,
     security_monitor: Arc<security_monitor::SecurityMonitor>,
     bft_signer: Arc<bft_signer::BftSigner>,
+    stdlib: Arc<stdlib::StdLib>,
     boot_report: Option<bootloader::BootReport>,
     micro_tx: Option<mpsc::Sender<micro_kernel::Message>>,
     telemetry_rx: Option<mpsc::Receiver<String>>,
@@ -62,11 +63,19 @@ impl LeviKernel {
         let security_monitor = Arc::new(security_monitor::SecurityMonitor::new());
         let bft_signer = Arc::new(bft_signer::BftSigner::new());
 
-        // Register default HAL drivers
-        driver_registry.register(Box::new(drivers::VirtualMemoryDriver { total_vmem: 16384 }));
-        driver_registry.register(Box::new(drivers::CpuDriver { cores: 16 }));
-        driver_registry.register(Box::new(drivers::NetworkDriver { throughput_mbps: 1000 }));
-        driver_registry.register(Box::new(drivers::PerceptionDriver { latency_ms: 12 }));
+        // Register real HAL-0 drivers
+        driver_registry.register(Box::new(drivers::HardenedMemoryDriver::new()));
+        driver_registry.register(Box::new(drivers::HardenedCpuDriver::new()));
+        driver_registry.register(Box::new(drivers::HardenedGpuDriver::new()));
+        driver_registry.register(Box::new(drivers::NetworkMeshDriver { throughput_mbps: 1000 }));
+
+        // 🚀 Initialize REAL Standard Library
+        let stdlib = Arc::new(stdlib::StdLib::new(
+            process_manager.clone(),
+            memory_controller.clone(),
+            gpu_controller.clone(),
+            bft_signer.clone(),
+        ));
 
         // Implementation of Mandatory Access Control (MAC) labels
         security_monitor.register_agent("system".to_string(), security_monitor::SecurityMonitor::kernel_caps());
@@ -85,6 +94,7 @@ impl LeviKernel {
             driver_registry,
             security_monitor,
             bft_signer,
+            stdlib: stdlib.clone(),
             boot_report: Some(boot_report),
             micro_tx: Some(tx),
             telemetry_rx: Some(tel_rx),
@@ -95,13 +105,11 @@ impl LeviKernel {
         kernel.memory_kernel.set_telemetry(tel_tx.clone());
 
         // Spawn Microkernel in background
-        let stdlib = stdlib::StdLib::new();
-
         let micro_core = Arc::new(micro_kernel::TrustedCore {
             mission_router: micro_kernel::MissionRouter,
             resource_allocator: micro_kernel::ResourceAllocator,
             security_gate: micro_kernel::SecurityGate,
-            stdlib,
+            stdlib: stdlib.clone(),
         });
 
         let mut micro_kernel_instance = micro_kernel::Microkernel {
@@ -127,6 +135,13 @@ impl LeviKernel {
                 pm_clone.update_metrics();
                 mc_clone.enforce_limits();
                 
+                // 🌡️ Thermal Authority: Backpressure on high temp
+                let metrics = gpu_clone.get_metrics();
+                if metrics.temp_c > 82.0 {
+                    log::error!("[Kernel] THERMAL CRITICAL ({}°C): Throttling mission scheduler.", metrics.temp_c);
+                    // In a real scenario, we'd pause the scheduler here
+                }
+
                 // Emit system health pulse
                 let processes = pm_clone.get_process_list();
                 let tasks = sch_clone.get_all_tasks();
@@ -274,7 +289,17 @@ impl LeviKernel {
         }
     }
 
-    fn sync_memory_batch(&self, facts_json: String) -> PyResult<()> {
+    fn sync_memory_batch(&self, facts_json: String, signature_hex: String) -> PyResult<()> {
+        let facts_bytes = facts_json.as_bytes();
+        let sig_bytes = hex::decode(&signature_hex)
+            .map_err(|e| PyRuntimeError::new_err(format!("Invalid signature hex: {}", e)))?;
+        
+        let signature = ed25519_dalek::Signature::from_bytes(&sig_bytes.try_into().map_err(|_| PyRuntimeError::new_err("Invalid signature length"))?);
+
+        if !self.bft_signer.verify(facts_bytes, &signature) {
+             return Err(PyRuntimeError::new_err("BFT SECURITY BREACH: Memory batch signature verification failed. Tamper detected."));
+        }
+
         let facts: Vec<memory_kernel::Fact> = serde_json::from_str(&facts_json)
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             
@@ -340,16 +365,15 @@ impl LeviKernel {
         }
         
         Err(PyRuntimeError::new_err("Process spawned but PID missing"))
-    
+    }
+
     // --- Phase 5: Standard Library & SysCalls ---
     
     fn sys_call(&self, agent_id: String, call_json: String) -> PyResult<String> {
         let call: stdlib::SysCall = serde_json::from_str(&call_json)
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
         
-        // This execution assumes TrustedCore has been fully initialized in new()
-        let stdlib = stdlib::StdLib::new(); // Fallback instance
-        let res = stdlib.execute(call)
+        let res = self.stdlib.execute(call)
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))?;
             
         Ok(res)

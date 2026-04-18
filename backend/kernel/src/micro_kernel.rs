@@ -41,7 +41,7 @@ pub struct TrustedCore {
     pub mission_router: MissionRouter,
     pub resource_allocator: ResourceAllocator,
     pub security_gate: SecurityGate,
-    pub stdlib: StdLib, // Standard library bridge
+    pub stdlib: Arc<StdLib>, // Shared standard library bridge
 }
 
 pub struct MissionRouter;

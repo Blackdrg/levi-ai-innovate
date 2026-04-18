@@ -1,32 +1,60 @@
-// backend/kernel/src/main.rs
 mod micro_kernel;
 mod dag_executor;
 mod memory_kernel;
 mod intent_kernel;
 mod dispatcher_kernel;
+mod process_manager;
+mod memory_controller;
+mod scheduler;
+mod gpu_controller;
+mod bootloader;
+mod drivers;
+mod stdlib;
+mod filesystem;
+mod security_monitor;
+mod bft_signer;
 
 use std::sync::Arc;
 use tokio::sync::mpsc;
+use crate::stdlib::SysCall;
 
 #[tokio::main]
 async fn main() {
-    println!("🚀 LEVI-AI Microkernel starting up...");
+    println!("🚀 LEVI-AI HAL-0 Kernel: Independent Boot Sequence...");
     
-    let (tx, rx) = mpsc::channel(100);
+    let process_manager = Arc::new(process_manager::ProcessManager::new());
+    let memory_controller = Arc::new(memory_controller::MemoryController::new(process_manager.clone(), 1024));
+    let gpu_controller = Arc::new(gpu_controller::GpuController::new());
+    let bft_signer = Arc::new(bft_signer::BftSigner::new());
     
-    let microkernel = micro_kernel::Microkernel {
-        trusted_core: Arc::new(micro_kernel::TrustedCore {
-            mission_router: micro_kernel::MissionRouter,
-            resource_allocator: micro_kernel::ResourceAllocator,
-            security_gate: micro_kernel::SecurityGate,
-        }),
-        agents: std::collections::HashMap::new(),
-        message_rx: rx,
-    };
+    let stdlib = Arc::new(stdlib::StdLib::new(
+        process_manager.clone(),
+        memory_controller.clone(),
+        gpu_controller.clone(),
+        bft_signer.clone(),
+    ));
 
-    println!("✅ Microkernel online. Listening for IPC pulses...");
-    
-    // In a real implementation, we would start an IPC listener here that sends messages to `tx`.
-    
-    microkernel.run().await;
+    println!("✅ HAL-0 Subsystems Online.");
+
+    // --- Syscall Self-Test ---
+    println!("🧪 Test 1: MEM_RESERVE...");
+    match stdlib.execute(SysCall::MemReserve(1024 * 1024)) {
+        Ok(addr) => println!("   Result: OK (Address: {})", addr),
+        Err(e) => println!("   Result: FAIL ({})", e),
+    }
+
+    println!("🧪 Test 2: BFT_SIGN...");
+    let payload = b"HAL-0 GENESIS PULSE";
+    match stdlib.execute(SysCall::BftSign(payload.to_vec())) {
+        Ok(sig) => println!("   Result: OK (Signature: {})", sig),
+        Err(e) => println!("   Result: FAIL ({})", e),
+    }
+
+    println!("🧪 Test 3: VRAM_GAUGE...");
+    match stdlib.execute(SysCall::VramGauge) {
+        Ok(json) => println!("   Result: OK (Metrics: {})", json),
+        Err(e) => println!("   Result: FAIL ({})", e),
+    }
+
+    println!("🏁 HAL-0 Standalone Self-Test Complete.");
 }

@@ -11,17 +11,14 @@ class LeviKernel:
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super(LeviKernel, cls).__new__(cls)
-            try:
-                from .levi_kernel import LeviKernel as RustKernel
-                cls._instance.rust_kernel = RustKernel()
-                logger.info("🚀 [Kernel] Levi Rust Kernel initialized successfully.")
-                # Start background telemetry poller
-                import asyncio
-                from backend.utils.runtime_tasks import create_tracked_task
-                create_tracked_task(cls._instance._telemetry_poller(), name="kernel-telemetry-poller")
-            except ImportError:
-                logger.warning("⚠️ [Kernel] Levi Rust Kernel NOT FOUND. Falling back to Python (Simulated).")
-                cls._instance.rust_kernel = None
+            # Sovereign v17.0: DISABLING ALL FALLBACKS. System must work natively or fail loudly.
+            from .levi_kernel import LeviKernel as RustKernel
+            cls._instance.rust_kernel = RustKernel()
+            logger.info("🚀 [Kernel] Levi Rust Kernel initialized successfully.")
+            # Start background telemetry poller
+            import asyncio
+            from backend.utils.runtime_tasks import create_tracked_task
+            create_tracked_task(cls._instance._telemetry_poller(), name="kernel-telemetry-poller")
         return cls._instance
 
     async def _telemetry_poller(self):

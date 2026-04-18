@@ -15,16 +15,9 @@ pub struct BftSigner {
 
 impl BftSigner {
     pub fn new() -> Self {
-        // Derive key from hardware ID for "hardware-aware" sovereignty
-        let hw_id = Self::get_hardware_id();
-        let mut seed = [0u8; 32];
-        let bytes = hw_id.as_bytes();
-        for (i, &b) in bytes.iter().enumerate() {
-            seed[i % 32] ^= b;
-        }
-        
-        let signing_key = SigningKey::from_bytes(&seed);
+        let signing_key = Self::load_or_create_key();
         let verifying_key = VerifyingKey::from(&signing_key);
+        let hw_id = Self::get_hardware_id();
 
         Self {
             signing_key,
@@ -39,8 +32,22 @@ impl BftSigner {
         
         let hostname = System::host_name().unwrap_or_else(|| "unknown-host".to_string());
         let kernel_version = System::kernel_version().unwrap_or_else(|| "unknown-kernel".to_string());
+        let total_mem = sys.total_memory();
         
-        format!("{}-{}", hostname, kernel_version)
+        // 🛡️ Hardware binding: Mix hostname, kernel, and hardware specs
+        format!("{}-{}-MEM{}", hostname, kernel_version, total_mem)
+    }
+
+    pub fn load_or_create_key() -> SigningKey {
+        // In a graduated HAL-0, this would use a TPM. 
+        // For now, we use a machine-bound derivation.
+        let hw_id = Self::get_hardware_id();
+        let mut seed = [0u8; 32];
+        let bytes = hw_id.as_bytes();
+        for (i, &b) in bytes.iter().enumerate() {
+            seed[i % 32] ^= b;
+        }
+        SigningKey::from_bytes(&seed)
     }
 
     pub fn sign(&self, payload: &[u8]) -> Signature {

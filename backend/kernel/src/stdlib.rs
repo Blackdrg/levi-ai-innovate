@@ -8,43 +8,64 @@ use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum SysCall {
-    Alloc(u64),      // malloc equivalent
-    Free(u64),       // free equivalent
-    Write(String),   // stdout equivalent
-    Exit(i32),       // process exit
-    ReadClock,       // time syscall
+    MemReserve(u64),                                   // MEM_RESERVE
+    WaveSpawn { name: String, cmd: String, args: Vec<String> }, // WAVE_SPAWN
+    BftSign(Vec<u8>),                                 // BFT_SIGN
+    RootJail(String),                                 // ROOT_JAIL
+    VramGauge,                                         // VRAM_GAUGE
+    Write(String),                                    // stdout
+    Exit(i32),                                        // terminate
+    ReadClock,                                        // gettimeofday
 }
 
+use crate::process_manager::ProcessManager;
+use crate::memory_controller::MemoryController;
+use crate::gpu_controller::GpuController;
+use crate::bft_signer::BftSigner;
+
 pub struct StdLib {
-    heap_map: Arc<Mutex<HashMap<u64, u64>>>, // ptr -> size
-    next_ptr: Arc<Mutex<u64>>,
+    pub process_manager: Arc<ProcessManager>,
+    pub memory_controller: Arc<MemoryController>,
+    pub gpu_controller: Arc<GpuController>,
+    pub bft_signer: Arc<BftSigner>,
 }
 
 impl StdLib {
-    pub fn new() -> Self {
+    pub fn new(
+        pm: Arc<ProcessManager>, 
+        mc: Arc<MemoryController>, 
+        gc: Arc<GpuController>, 
+        bs: Arc<BftSigner>
+    ) -> Self {
         Self {
-            heap_map: Arc::new(Mutex::new(HashMap::new())),
-            next_ptr: Arc::new(Mutex::new(0x1000)),
+            process_manager: pm,
+            memory_controller: mc,
+            gpu_controller: gc,
+            bft_signer: bs,
         }
     }
 
     pub fn execute(&self, call: SysCall) -> Result<String, String> {
         match call {
-            SysCall::Alloc(size) => {
-                let mut map = self.heap_map.lock().unwrap();
-                let mut ptr_gen = self.next_ptr.lock().unwrap();
-                let ptr = *ptr_gen;
-                map.insert(ptr, size);
-                *ptr_gen += size;
-                Ok(format!("0x{:X}", ptr))
+            SysCall::MemReserve(size) => {
+                let addr = self.memory_controller.reserve_memory(size)?;
+                Ok(format!("0x{:X}", addr))
             },
-            SysCall::Free(ptr) => {
-                let mut map = self.heap_map.lock().unwrap();
-                if map.remove(&ptr).is_some() {
-                    Ok("SUCCESS".to_string())
-                } else {
-                    Err("Invalid Pointer".to_string())
-                }
+            SysCall::WaveSpawn { name, cmd, args } => {
+                let uuid = self.process_manager.spawn_task(name, cmd, args)?;
+                Ok(uuid)
+            },
+            SysCall::BftSign(payload) => {
+                let sig = self.bft_signer.sign(&payload);
+                Ok(hex::encode(sig.to_bytes()))
+            },
+            SysCall::RootJail(path) => {
+                self.process_manager.set_jail_root(path);
+                Ok("JAIL_ENFORCED".to_string())
+            },
+            SysCall::VramGauge => {
+                let metrics = self.gpu_controller.get_metrics();
+                Ok(serde_json::to_string(&metrics).unwrap())
             },
             SysCall::Write(msg) => {
                 log::info!("[StdLib-OUT] {}", msg);
