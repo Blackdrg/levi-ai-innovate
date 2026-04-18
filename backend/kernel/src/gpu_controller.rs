@@ -1,5 +1,6 @@
 // backend/kernel/src/gpu_controller.rs
 use std::sync::{Arc, Mutex};
+use std::collections::HashMap;
 use serde::{Serialize, Deserialize};
 use crate::scheduler::MissionPriority;
 use nvml_wrapper::Nvml;
@@ -15,6 +16,13 @@ pub struct GpuMetrics {
 }
 
 #[derive(Debug, Clone)]
+pub struct GpuBuffer {
+    pub id: u64,
+    pub size: u64,
+    pub ptr: u64, // Simulated GPU Memory Pointer
+}
+
+#[derive(Debug, Clone)]
 struct GPUAllocation {
     pub amount_mb: u64,
     pub priority: MissionPriority,
@@ -22,7 +30,9 @@ struct GPUAllocation {
 
 pub struct GpuController {
     metrics: Arc<Mutex<GpuMetrics>>,
-    allocation: Arc<Mutex<std::collections::HashMap<String, GPUAllocation>>>,
+    allocation: Arc<Mutex<HashMap<String, GPUAllocation>>>,
+    buffers: Arc<Mutex<HashMap<u64, GpuBuffer>>>,
+    next_buffer_id: Arc<Mutex<u64>>,
     nvml: Option<Nvml>,
 }
 
@@ -50,9 +60,29 @@ impl GpuController {
 
         Self {
             metrics: Arc::new(Mutex::new(initial_metrics)),
-            allocation: Arc::new(Mutex::new(std::collections::HashMap::new())),
+            allocation: Arc::new(Mutex::new(HashMap::new())),
+            buffers: Arc::new(Mutex::new(HashMap::new())),
+            next_buffer_id: Arc::new(Mutex::new(1)),
             nvml,
         }
+    }
+
+    pub fn allocate_sovereign_buffer(&self, size_mb: u64) -> Result<GpuBuffer, String> {
+        let mut id_gen = self.next_buffer_id.lock().unwrap();
+        let id = *id_gen;
+        *id_gen += 1;
+
+        let buffer = GpuBuffer {
+            id,
+            size: size_mb,
+            ptr: (id << 32) | 0xDEADBEEF, // Pseudo GPU address
+        };
+
+        let mut buffers = self.buffers.lock().unwrap();
+        buffers.insert(id, buffer.clone());
+        
+        log::info!("🎮 [Kernel] Sovereign GPU Buffer {} allocated ({}MB at 0x{:X})", id, size_mb, buffer.ptr);
+        Ok(buffer)
     }
 
     pub fn get_metrics(&self) -> GpuMetrics {
@@ -77,15 +107,14 @@ impl GpuController {
     pub fn request_vram(&self, mission_id: String, amount_mb: u64, priority: MissionPriority) -> Result<(), String> {
         let metrics = self.get_metrics();
         
-        // 🚨 VRAM Governor: Admission Control (92% Saturation limit as per manifest)
+        // 🚨 VRAM Governor: Admission Control (92% Saturation limit)
         let saturation = (metrics.vram_used_mb + amount_mb) as f32 / metrics.vram_total_mb as f32;
         if saturation >= 0.92 {
             self.rebalance(amount_mb, &priority)?;
         }
 
-        // Secondary Check: Thermal Integrity (82°C as per manifest)
         if metrics.temp_c > 82.0 {
-            return Err(format!("THERMAL THROTTLE: GPU Temp is {:.1}°C. Delaying mission.", metrics.temp_c));
+            return Err(format!("THERMAL THROTTLE: GPU Temp is {:.1}°C. Delaying hardware-intensive mission.", metrics.temp_c));
         }
 
         let mut alloc = self.allocation.lock().unwrap();
@@ -101,7 +130,6 @@ impl GpuController {
         let mut missions_to_evict = Vec::new();
         let mut freed_mb = 0;
         
-        // Find lower priority missions (Lower priority missions have HIGHER numeric values)
         let mut sorted_allocs: Vec<_> = alloc.iter().collect();
         sorted_allocs.sort_by(|a, b| (b.1.priority.clone() as u32).cmp(&(a.1.priority.clone() as u32)));
 
@@ -133,3 +161,4 @@ impl GpuController {
         alloc.remove(&mission_id);
     }
 }
+
