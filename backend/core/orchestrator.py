@@ -1,23 +1,23 @@
 """
-LEVI-AI Sovereign OS v16.3.0-AUTONOMOUS.
-SOVEREIGN KERNEL MAINFRAME (Orchestrator v16.3.0-FINAL).
+LEVI-AI Sovereign OS v22.0.0
+SOVEREIGN KERNEL MAINFRAME — Orchestrator
 
-[ARCHITECTURAL REASONING]
-This module represents the final, production-grade graduation of the LEVI-AI OS.
-It integrates every system-level component into a singular, high-velocity authority.
-The Orchestrator manages the 'Hardware Resonance' and the 'Mesh Consensus', serving
-as the body that gates the'Soul' (LeviBrain).
+ARCHITECTURAL REALITY (honest):
+  The Orchestrator is the Python-layer mission dispatcher. It:
+    1. Accepts user requests from the FastAPI API layer.
+    2. Applies admission control (VRAM backpressure, safety gate).
+    3. Delegates cognitive work to LeviBrain (singleton).
+    4. Runs post-execution crystallization (learning, evolution, audit, mesh).
+    5. Manages background workers: sentinel loop, DCN pulse, self-healing.
 
-[SYSTEM SUBSYSTEMS]
-1.  HARDWARE Gating: Direct VRAM/CPU telemetry via Rust Kernel integration.
-2.  MISSION ADMISSION: BFT-signed mission gating with resource backpressure.
-3.  DCN PROTOCOL: Multi-region Gossip, Heartbeat, and Leader Election.
-4.  SAFETY SHIELD: HMAC-signed event verified and confirmation-locked security.
-5.  AUDIT LEDGER: Non-repudiable mission traces signed with Sovereign KMS.
-6.  SENTINEL LOOP: Autonomous maintenance, self-healing, and memory hygiene.
-7.  FAILOVER MESH: Dynamic mission delegation to peer nodes on load saturation.
+  The Rust kernel (kernel_wrapper) handles:
+    - GPU VRAM governance
+    - Process spawning / isolation
+    - BFT signature verification
+    - Filesystem snapshot
 
-Total Logic Complexity: 8000+ Functional Points.
+  The Brain (LeviBrain singleton) handles:
+    - All cognitive reasoning: perception → plan → execute → reflect
 """
 
 import logging
@@ -34,12 +34,9 @@ import socket
 import datetime
 import hmac
 from typing import Any, Dict, Optional, List, Union, AsyncGenerator, Tuple, Set, Callable
-from abc import ABC, abstractmethod
 from datetime import timezone
 
-# -------------------------------------------------------------------------
-# CORE ARCHITECTURAL ENTITIES (Wired-Fully)
-# -------------------------------------------------------------------------
+# ── Core cognitive engines ────────────────────────────────────────────────────
 from .perception import PerceptionEngine
 from .planner import DAGPlanner
 from .executor import GraphExecutor
@@ -55,7 +52,7 @@ from .context_manager import ContextManager
 from .learning_loop import LearningLoop
 from .identity import identity_system
 
-# Persistence & Mesh Layers
+# ── Persistence & mesh layers ─────────────────────────────────────────────────
 from backend.services.audit_ledger import audit_ledger
 from backend.services.brain_service import brain_service
 from backend.services.memory_manager import MemoryManager
@@ -73,494 +70,521 @@ from backend.kernel.kernel_wrapper import kernel
 from backend.utils.kms import SovereignKMS
 from backend.services.graduation import graduation_service
 
-# DCN / Swarm Infrastructure
+# ── DCN / swarm ───────────────────────────────────────────────────────────────
 from .dcn.registry import dcn_registry
 from .execution_state import CentralExecutionState, MissionState
 from .dcn.raft_consensus import get_dcn_mesh
 
-# -------------------------------------------------------------------------
-# GLOBAL OS PARAMETERS (v17.0)
-# -------------------------------------------------------------------------
-OS_VERSION = "v17.0.0-GA"
-KERNEL_ID = socket.gethostname()
-NODE_SECRET = os.getenv("DCN_SECRET", "sovereign_fallback")
-VRAM_ADMISSION_LEVEL = 0.94
-VRAM_CRITICAL_LEVEL = 0.98
-MISSION_TTL_SEC = 900
-PULSE_INTERVAL = 30 
+# ─────────────────────────────────────────────────────────────────────────────
+OS_VERSION       = "v22.0.0-SOVEREIGN"
+KERNEL_ID        = socket.gethostname()
+NODE_SECRET      = os.getenv("DCN_SECRET", "sovereign_fallback")
+VRAM_ADMISSION   = 0.94    # fraction — missions blocked above this
+VRAM_CRITICAL    = 0.98
+MISSION_TTL_SEC  = 900
+PULSE_INTERVAL   = 30
+# ─────────────────────────────────────────────────────────────────────────────
 
 logger = logging.getLogger(__name__)
 
-# -------------------------------------------------------------------------
-# SOVEREIGN MAINFRAME (THE ORCHESTRATOR MONOLITH)
-# -------------------------------------------------------------------------
+# ─── LeviBrain singleton ──────────────────────────────────────────────────────
+# Instantiated once at module load so every handle_mission call reuses the
+# same in-memory state (memory, planner caches, evolution counters, etc.)
+_brain_instance = None
+
+def _get_brain():
+    global _brain_instance
+    if _brain_instance is None:
+        from .brain import LeviBrain
+        _brain_instance = LeviBrain()
+        logger.info("🧠 [Orchestrator] LeviBrain singleton created.")
+    return _brain_instance
+
 
 class Orchestrator:
     """
-    [Mainframe-v16.3] The Sovereign AI Orchestrator.
-    The Singular System Authority for all mission cycles and resource governance.
-    This component manages the 'Body'—ensuring physical integrity and connectivity.
+    The Sovereign Mission Mainframe.
+    Owns the full mission lifecycle: admission → brain → crystallization → audit.
     """
 
     def __init__(self):
-        # 🟢 1. SYSTEM IDENTITY & STATE
-        self.kernel_id = KERNEL_ID
-        self.start_time = time.time()
-        self._shutdown_event = asyncio.Event()
-        self._active_missions: Dict[str, MissionState] = {}
-        self._mission_lock = asyncio.Lock()
-        
-        # 🟢 2. ENGINE WIRING (Brain-to-Body Matrix)
-        self.memory = MemoryManager()
+        self.kernel_id      = KERNEL_ID
+        self.start_time     = time.time()
+        self._shutdown_evt  = asyncio.Event()
+        self._active: Dict[str, MissionState] = {}
+        self._lock          = asyncio.Lock()
+        self._initialized   = False
+
+        # ── Engine matrix (shared instances) ──────────────────────────────────
+        self.memory     = MemoryManager()
         self.perception = PerceptionEngine(self.memory)
-        self.planner = DAGPlanner()
-        self.executor = GraphExecutor()
-        self.reasoning = ReasoningCore()
-        self.world_model = WorldModel()
+        self.planner    = DAGPlanner()
+        self.executor   = GraphExecutor()
+        self.reasoning  = ReasoningCore()
+        self.world      = WorldModel()
         self.reflection = ReflectionEngine()
-        self.evolution = EvolutionaryIntelligenceEngine()
-        self.identity = identity_system
-        self.failure = FailurePolicyEngine()
-        self.workflow = WorkflowEngine()
-        self.context = ContextManager()
-        self.learning = LearningLoop()
-        
-        # 🟢 3. INFRASTRUCTURE & MESH
-        self.dcn = dcn_registry.get_gossip()
-        self.consensus = get_dcn_mesh()
-        self._metrics = MetricsHub()
-        self._sentinel = None
-        self._pulse = None
-        
-        # 🟢 4. ADVANCED AUTONOMY (Priority 2 & 3)
+        self.evolution  = EvolutionaryIntelligenceEngine()
+        self.identity   = identity_system
+        self.failure    = FailurePolicyEngine()
+        self.workflow   = WorkflowEngine()
+        self.context    = ContextManager()
+        self.learning   = LearningLoop()
+
+        # ── Mesh / autonomy ────────────────────────────────────────────────────
+        self.dcn        = dcn_registry.get_gossip()
+        self.consensus  = get_dcn_mesh()
+        self._metrics   = MetricsHub()
+        self._sentinel  = None
+        self._pulse     = None
+        self.mesh_proto = None
+
+        # ── Autonomy engines ───────────────────────────────────────────────────
         from backend.core.evolution.drift_detector import drift_detector
         from backend.agents.chaos import ChaosAgent
         self.drift_detector = drift_detector
-        self.chaos_agent = ChaosAgent(self)
-        
-        logger.info(f"🛰️ [Mainframe] Instinctual initialization complete. Kernel: {self.kernel_id}")
+        self.chaos_agent    = ChaosAgent(self)
 
-    # -------------------------------------------------------------------------
-    # LIFECYCLE MANAGEMENT (The Awakening Pulse)
-    # -------------------------------------------------------------------------
+        logger.info("🛰️  [Orchestrator] Instinctual init complete. Kernel: %s", self.kernel_id)
+
+    # ── Lifecycle ─────────────────────────────────────────────────────────────
+
+    async def initialize(self) -> None:
+        """Called from main.py lifespan — boot sequence."""
+        await self.boot_sovereign_os()
 
     async def boot_sovereign_os(self) -> None:
-        """
-        [PHASE-0] High-Fidelity OS Boot.
-        Executes multi-stage initialization of hardware, state, and swarm.
-        """
-        logger.info(f"🧩 [Mainframe] Initiating SOVEREIGN BOOT SEQUENCE ({OS_VERSION})...")
-        
+        """Multi-stage OS boot."""
+        logger.info("🧩 [Orchestrator] SOVEREIGN BOOT (%s)...", OS_VERSION)
         try:
-            # Stage 1: Hardware-Kernel Resonance Calibration
-            await self._calibrate_hardware_stratum()
-            
-            # Stage 2: Memory Re-hydration & Resonance Sync
-            # Attempt to recover any missions interrupted by previous shutdown.
+            await self._calibrate_hardware()
             recovered = await CentralExecutionState.recover_active_missions()
-            async with self._mission_lock:
+            async with self._lock:
                 for mid, state in recovered.items():
-                    self._active_missions[mid] = state
-            logger.info(f"✅ [Mainframe] Re-hydrated {len(recovered)} mission states.")
+                    self._active[mid] = state
+            logger.info("✅ [Orchestrator] Recovered %d mission states.", len(recovered))
 
-            # Stage 3: DCN Mesh Establishment & BFT Election
-            await self._establish_mesh_quorum()
+            await self._establish_mesh()
 
-            # Stage 4: Goal Engine & Autonomous Planner Ignition
             from backend.core.goal_engine import goal_engine
             goal_engine.orchestrator = self
             await goal_engine.start()
 
-            # Stage 5: Sentinel loop Start (Self-Healing)
             from .self_healing import self_healing
             await self_healing.start()
-            self._sentinel = asyncio.create_task(self._sentinel_worker())
-            self._pulse = asyncio.create_task(self._pulse_worker())
 
-            # Stage 6: Chaos Resilience Activation (v18.0 Priority 3)
+            self._sentinel = asyncio.create_task(self._sentinel_worker())
+            self._pulse    = asyncio.create_task(self._pulse_worker())
             asyncio.create_task(self.chaos_agent.ignite_storm())
 
-            logger.info(f"🚀 [Mainframe] Sovereign OS is ONLINE. [STATUS: v17.0-GA-AUTONOMOUS]")
-            
-        except Exception as e:
-            logger.critical(f"🛑 [Mainframe] BOOT CATASTROPHE: {e}")
-            raise RuntimeError(f"Could not awaken Sovereign Mainframe: {e}")
+            # Start kernel telemetry background tasks
+            kernel.start_background_tasks()
 
-    async def _calibrate_hardware_stratum(self):
-        """Verifies GPU admission hooks and Disk anchor."""
-        metrics = kernel.get_gpu_metrics()
-        logger.info(f"🖥️ [Hardware] GPU: {metrics.get('gpu_name')}. VRAM: {metrics.get('vram_total_mb')}MB")
-        
-        # Ensure Drive D anchor is healthy
-        disk = shutil.disk_usage(os.getcwd())
-        free_gb = disk.free / (1024**3)
-        if free_gb < 20: 
-            logger.warning(f"🚨 [Hardware] Storage Constraint: only {free_gb:.1f}GB free.")
+            self._initialized = True
+            logger.info("🚀 [Orchestrator] ONLINE. [%s]", OS_VERSION)
+        except Exception as exc:
+            logger.critical("🛑 [Orchestrator] BOOT FAILURE: %s", exc)
+            raise RuntimeError(f"Sovereign boot failed: {exc}") from exc
 
-    async def _establish_mesh_quorum(self):
-        """Wires up the DCN protocol and heartbeats."""
-        from backend.core.dcn_protocol import get_dcn_protocol
-        self.mesh_proto = get_dcn_protocol()
-        if self.mesh_proto and self.mesh_proto.is_active:
-             logger.info(f"🛰️ [Mainframe] Mesh Consensus Established at node: {self.mesh_proto.node_id}")
-        else:
-             logger.warning("📡 [Mainframe] Mesh Isolate. Operating in REGIONAL MODE.")
+    async def teardown_gracefully(self, timeout: int = 30) -> None:
+        """Graceful shutdown — drain in-flight missions then stop workers."""
+        logger.info("🛑 [Orchestrator] Graceful teardown (timeout=%ds)...", timeout)
+        self._shutdown_evt.set()
 
-    # -------------------------------------------------------------------------
-    # MASTER MISSION GATEWAY (Mission-v16.3)
-    # -------------------------------------------------------------------------
+        deadline = time.time() + timeout
+        while self._active and time.time() < deadline:
+            await asyncio.sleep(0.5)
+
+        if self._sentinel and not self._sentinel.done():
+            self._sentinel.cancel()
+        if self._pulse and not self._pulse.done():
+            self._pulse.cancel()
+
+        logger.info("✅ [Orchestrator] Teardown complete. Remaining missions: %d", len(self._active))
+
+    async def force_abort_all(self, reason: str) -> None:
+        """Abort all active missions immediately (called on SIGTERM)."""
+        logger.warning("⚠️  [Orchestrator] Force-aborting all missions. Reason: %s", reason)
+        async with self._lock:
+            for mid in list(self._active.keys()):
+                self._active[mid].status = "ABORTED"
+            self._active.clear()
+
+    async def reboot_engine(self, agent_id: str) -> None:
+        """Restart a named sub-engine (called by kernel on agent crash)."""
+        logger.warning("🔄 [Orchestrator] Rebooting engine: %s", agent_id)
+        # Future: call agent registry to restart the specific agent process.
+
+    # ── Mission gateway ───────────────────────────────────────────────────────
 
     async def handle_mission(
-        self, 
-        user_input: str, 
-        user_id: str, 
-        session_id: str, 
-        streaming: bool = False,
-        **kwargs
+        self,
+        user_input:  str,
+        user_id:     str,
+        session_id:  str,
+        streaming:   bool = False,
+        **kwargs,
     ) -> Any:
         """
-        The Singular Authority for Mission Orchestration.
-        Synchronizes perception, planning, execution, and reflection via the Brain.
+        Single authority for all mission orchestration.
+        Perception → Brain → Crystallization → Audit → Mesh sync.
         """
         mission_id = kwargs.get("request_id") or f"mission-{uuid.uuid4().hex[:12]}"
         log_request_id.set(mission_id)
         log_user_id.set(user_id)
         log_session_id.set(session_id)
-        
+
         start_ts = time.time()
-        logger.info(f"🌀 [Mainframe] Mission Awakening: {mission_id} (User: {user_id})")
+        logger.info("🌀 [Orchestrator] Mission %s awakening (user=%s)", mission_id, user_id)
 
-        # [STEP 1] ADMISSION CONTROL (Hardware Backpressure)
-        # ---------------------------------------------------------
+        # ── 1. Admission control ──────────────────────────────────────────────
         vram_pressure = await self.get_vram_pressure()
-        if vram_pressure > VRAM_ADMISSION_LEVEL and not kwargs.get("force_admission"):
-            logger.critical(f"🛑 [Resources] Capacity Exhausted (VRAM {vram_pressure:.2f}). Offloading to Mesh.")
-            return await self._delegate_to_mesh(mission_id, user_id, user_input, session_id, "RESOURCE_BACKPRESSURE", **kwargs)
+        if vram_pressure > VRAM_ADMISSION and not kwargs.get("force_admission"):
+            logger.critical("🛑 [Resources] VRAM %.2f > threshold. Offloading.", vram_pressure)
+            return await self._delegate_to_mesh(mission_id, user_id, user_input, session_id,
+                                                "RESOURCE_BACKPRESSURE", **kwargs)
 
-        # [STEP 2] SAFETY SHIELD & INTENT INTERCEPTION
-        # ---------------------------------------------------------
-        intercept = await self._safety_gate_intercept(user_id, user_input, mission_id)
+        # ── 2. Safety gate ────────────────────────────────────────────────────
+        intercept = await self._safety_gate(user_id, user_input, mission_id)
         if intercept and intercept.get("action") == "REJECT":
             return intercept["result"]
-        elif intercept and intercept.get("action") == "BYPASS":
+        if intercept and intercept.get("action") == "BYPASS":
             user_input = intercept.get("new_input", user_input)
 
-        # [STEP 3] COGNITIVE DELEGATION (Wire to LeviBrain)
-        # ---------------------------------------------------------
-        from backend.core.brain import LeviBrain
-        brain = LeviBrain()
-        
+        # ── 3. Register mission ────────────────────────────────────────────────
+        await self._register_mission(mission_id, user_id, user_input)
+
         try:
-            # [STEP 3a] T0 GRADUATION BYPASS (O(1) Cognition)
-            # ---------------------------------------------------------
-            # We classify intent first to see if it's a graduated rule
+            # ── 3a. Graduation bypass (T0 fast-path) ──────────────────────────
             intent_type = await self.perception.classify_intent(user_input)
             bypass_rule = await graduation_service.get_bypass_rule(intent_type)
-            
+            if bypass_rule and bypass_rule.get("deterministic_response"):
+                result = {
+                    "response":  bypass_rule["deterministic_response"],
+                    "intent":    intent_type,
+                    "fidelity":  1.0,
+                    "graduated": True,
+                }
+                await self._post_execute(mission_id, user_id, user_input, session_id,
+                                         result, start_ts)
+                return result
             if bypass_rule:
-                logger.info(f"🎓 [Mainframe] T0 GRADUATION BYPASS triggered for mission {mission_id}")
-                # Use deterministic response if rule dictates
-                if bypass_rule.get("deterministic_response"):
-                    result = {
-                        "response": bypass_rule["deterministic_response"],
-                        "intent": intent_type,
-                        "fidelity": 1.0,
-                        "graduated": True
-                    }
-                    # Skip to post-execution
-                else:
-                    # Modify brain params based on rule
-                    kwargs.update(bypass_rule)
+                kwargs.update(bypass_rule)
 
-            # [STEP 3b] MISSION ADMISSION (HAL-0 + BFT)
-            # ---------------------------------------------------------
-            admission_payload = {
+            # ── 3b. Mission admission (HAL-0 BFT gate) ────────────────────────
+            admission = {
                 "mission_id": mission_id,
-                "user_id": user_id,
-                "input_hash": hashlib.sha256(user_input.encode()).hexdigest()
+                "user_id":    user_id,
+                "input_hash": hashlib.sha256(user_input.encode()).hexdigest(),
             }
-            admission_payload = await graduation_service.admit_pulse(mission_id, admission_payload)
-            kwargs.update(admission_payload)
+            admission = await graduation_service.admit_pulse(mission_id, admission)
+            kwargs.update(admission)
+
+            # ── 3c. Kernel resource reservation ──────────────────────────────
+            kernel.schedule_mission(mission_id, "Normal")
+            kernel.update_mission_state(mission_id, "Analyzing")
+
+            # ── 4. Brain delegation ───────────────────────────────────────────
+            brain = _get_brain()
 
             if streaming:
-                return self._handle_stream_lifecycle(brain, user_input, user_id, session_id, mission_id, **kwargs)
+                return self._handle_stream(brain, user_input, user_id, session_id,
+                                           mission_id, **kwargs)
 
-            # --- COORDINATED EXECUTION ---
             result = await brain.route(
                 user_input=user_input,
                 user_id=user_id,
                 session_id=session_id,
                 streaming=False,
                 request_id=mission_id,
-                **kwargs
+                **kwargs,
             )
 
-            # [STEP 4] POST-EXECUTION CRYSTALLIZATION
-            # ---------------------------------------------------------
-            latency = (time.time() - start_ts) * 1000
-            result["latency_mainframe_ms"] = latency
-            
-            # Step 4b: Closed-Loop Learning (v15.0)
-            await self.learning.crystallize_pattern(
-                mission_id=mission_id,
-                query=user_input,
-                result=str(result.get("response", "")),
-                fidelity=result.get("fidelity", 1.0),
-                metadata={
-                    "user_id": user_id,
-                    "latency_ms": latency,
-                    "intent_type": result.get("intent", "chat"),
-                    "agent_sequence": result.get("agent_sequence", [])
-                }
-            )
+            kernel.update_mission_state(mission_id, "Succeeded")
 
-            # Step 4c: Evolution Ingestion (v18.0 Priority 2)
-            await self.evolution.ingest_mission_outcome(
-                mission_id=mission_id,
-                input_data=user_input,
-                output_data=result.get("response", ""),
-                fidelity=result.get("fidelity", 0.95),
-                agent_path=result.get("agent_sequence", [])
-            )
+            # ── 5. Post-execution crystallization ──────────────────────────────
+            await self._post_execute(mission_id, user_id, user_input, session_id,
+                                     result, start_ts)
+            return result
 
-            # Non-Repudiable Audit Pulse (Layer-6)
-            pulse_hash = await self._sign_mission_pulse(mission_id, result)
-            result["audit_sig"] = pulse_hash
-            
-            # Mesh Synchronization (Swarm Event)
-            await self._propagate_to_mesh(mission_id, result)
-            
-            # Step 4d: Production Monitoring (v18.0 Priority 1)
+        except Exception as exc:
+            logger.exception("🚑 [Orchestrator] Mission %s fault: %s", mission_id, exc)
+            kernel.update_mission_state(mission_id, "Failed")
+            MISSION_ABORTED.inc()
+            await self._deregister_mission(mission_id)
+            return await self._delegate_to_mesh(mission_id, user_id, user_input, session_id,
+                                                str(exc), **kwargs)
+
+    async def _post_execute(
+        self,
+        mission_id: str,
+        user_id:    str,
+        user_input: str,
+        session_id: str,
+        result:     Dict[str, Any],
+        start_ts:   float,
+    ) -> None:
+        """Crystallization, learning, evolution, audit, mesh sync."""
+        latency = (time.time() - start_ts) * 1000
+        result["latency_mainframe_ms"] = latency
+
+        # Closed-loop learning
+        await self.learning.crystallize_pattern(
+            mission_id=mission_id,
+            query=user_input,
+            result=str(result.get("response", "")),
+            fidelity=result.get("fidelity", 1.0),
+            metadata={
+                "user_id":       user_id,
+                "latency_ms":    latency,
+                "intent_type":   result.get("intent", "chat"),
+                "agent_sequence": result.get("agent_sequence", []),
+            },
+        )
+
+        # Evolution ingestion
+        await self.evolution.ingest_mission_outcome(
+            mission_id=mission_id,
+            input_data=user_input,
+            output_data=result.get("response", ""),
+            fidelity=result.get("fidelity", 0.95),
+            agent_path=result.get("agent_sequence", []),
+        )
+
+        # Non-repudiable audit signature
+        pulse_hash = await self._sign_pulse(mission_id, result)
+        result["audit_sig"] = pulse_hash
+
+        # Mesh propagation
+        await self._propagate_to_mesh(mission_id, result)
+
+        # Production monitoring
+        try:
             from backend.services.monitoring import monitoring_service
             await monitoring_service.log_mission_metrics(
                 mission_id=mission_id,
                 fidelity=result.get("fidelity", 1.0),
                 latency=latency,
-                agent_count=len(result.get("agent_sequence", []))
+                agent_count=len(result.get("agent_sequence", [])),
             )
+        except Exception:
+            pass  # monitoring is non-critical
 
-            # Finalize & Deregister
-            await self._deregister_mission(mission_id)
-            MISSION_COMPLETED.inc()
-            CognitiveTracer.end_trace(mission_id, "success", {"fidelity": result.get("fidelity", 1.0)})
-            
-            logger.info(f"✅ [Mainframe] Mission Satisfied: {mission_id} in {latency:.1f}ms")
-            return result
+        await self._deregister_mission(mission_id)
+        MISSION_COMPLETED.inc()
+        CognitiveTracer.end_trace(mission_id, "success", {"fidelity": result.get("fidelity", 1.0)})
+        logger.info("✅ [Orchestrator] Mission %s done in %.1fms", mission_id, latency)
 
-        except Exception as e:
-            logger.exception(f"🚑 [Mainframe] Critical Structural Fault in mission {mission_id}: {e}")
-            MISSION_ABORTED.inc()
-            await self._deregister_mission(mission_id)
-            return await self._delegate_to_mesh(mission_id, user_id, user_input, session_id, str(e), **kwargs)
+    # ── Streaming ─────────────────────────────────────────────────────────────
 
-    # -------------------------------------------------------------------------
-    # STREAMING LIFECYCLE HANDLER
-    # -------------------------------------------------------------------------
-
-    async def _handle_stream_lifecycle(self, brain, inp, uid, sid, mid, **kwargs):
-        """Wraps cognitive stream in OS-level telemetry."""
+    async def _handle_stream(self, brain, inp, uid, sid, mid, **kwargs):
+        """Wrap the Brain streaming generator in OS-level telemetry."""
         try:
-            async for chunk in await brain.route(inp, uid, sid, streaming=True, request_id=mid, **kwargs):
-                # We can perform real-time verification of chunks for security leaks
+            async for chunk in await brain.route(inp, uid, sid, streaming=True,
+                                                  request_id=mid, **kwargs):
                 yield chunk
-            
-            # Finalize post-stream
             await self._deregister_mission(mid)
             MISSION_COMPLETED.inc()
-        except Exception as e:
-            logger.error(f"🌊 [Mainframe] Stream rupture in mission {mid}: {e}")
-            yield {"event": "error", "data": "Cognitive stream interrupted by mainframe-level fault."}
+        except Exception as exc:
+            logger.error("🌊 [Orchestrator] Stream rupture %s: %s", mid, exc)
+            yield {"event": "error", "data": "Cognitive stream interrupted."}
             await self._deregister_mission(mid)
 
-    # -------------------------------------------------------------------------
-    # SAFETY SHIELD (Layer-2 Security)
-    # -------------------------------------------------------------------------
+    # ── Safety gate ───────────────────────────────────────────────────────────
 
-    async def _safety_gate_intercept(self, user_id, user_input, mission_id) -> Optional[Dict[str, Any]]:
-        """Handles destructuve intent blocks and confirmation bypass."""
-        raw_target = user_input.lower().strip()
-        
-        # 🟢 Confirmation Bridge (Verification Pulse)
-        if "levi, execute" in raw_target or "levi execute" in raw_target:
-            ctx_hash = self._get_fast_hash(user_id, user_input)
+    async def _safety_gate(self, user_id, user_input, mission_id) -> Optional[Dict]:
+        raw = user_input.lower().strip()
+
+        if "levi, execute" in raw or "levi execute" in raw:
+            ctx_hash = self._fast_hash(user_id, user_input)
             cached = await state_bridge.get(f"confirm:{user_id}:{ctx_hash}")
             if cached:
                 data = json.loads(cached)
-                logger.info(f"🚀 [Safety] Confirmation validated for destructuve command: {data['original']}")
                 return {"action": "BYPASS", "new_input": data["original"]}
 
-        # 🟢 Destructive Intent Detection
-        risky_terms = ["delete all", "wipe drive", "format", "shutdown sovereign", "kill kernel", "factory reset"]
-        if any(r in raw_target for r in risky_terms):
-            logger.warning(f"🚨 [Safety] Destructure Intent Alert: {user_input}")
-            ctx_hash = self._get_fast_hash(user_id, user_input)
-            await state_bridge.set(f"confirm:{user_id}:{ctx_hash}", json.dumps({"original": user_input}), ex=60)
+        risky = ["delete all", "wipe drive", "format", "shutdown sovereign",
+                 "kill kernel", "factory reset"]
+        if any(r in raw for r in risky):
+            ctx_hash = self._fast_hash(user_id, user_input)
+            await state_bridge.set(
+                f"confirm:{user_id}:{ctx_hash}",
+                json.dumps({"original": user_input}),
+                ex=60,
+            )
             return {
                 "action": "REJECT",
                 "result": {
-                    "response": "Destructive system command detected. Please say 'Levi, Execute' to confirm authorization.",
-                    "status": "AWAIT_CONFIRMATION",
-                    "request_id": mission_id
-                }
+                    "response": "Destructive command detected. Say 'Levi, Execute' to confirm.",
+                    "status":   "AWAIT_CONFIRMATION",
+                    "request_id": mission_id,
+                },
             }
         return None
 
-    def _get_fast_hash(self, uid, txt):
+    def _fast_hash(self, uid, txt):
         return hashlib.sha256(f"{uid}:{txt[:60]}".encode()).hexdigest()[:8]
 
-    async def _sign_mission_pulse(self, mid, res) -> str:
-        """[Layer-6] Non-Repudiable Mission Signature."""
+    # ── Audit ─────────────────────────────────────────────────────────────────
+
+    async def _sign_pulse(self, mid: str, res: Dict) -> str:
         res_hash = hashlib.sha256(str(res.get("response", "")).encode()).hexdigest()
         payload = {
-            "mid": mid,
-            "hash": res_hash,
-            "ts": datetime.datetime.now(timezone.utc).isoformat(),
+            "mid":    mid,
+            "hash":   res_hash,
+            "ts":     datetime.datetime.now(timezone.utc).isoformat(),
             "kernel": self.kernel_id,
-            "os": OS_VERSION
+            "os":     OS_VERSION,
         }
         return await SovereignKMS.sign_trace(json.dumps(payload))
 
-    async def _propagate_to_mesh(self, mid, res):
-        """Swarm event synchronization."""
-        if hasattr(self, 'mesh_proto') and self.mesh_proto and self.mesh_proto.is_active:
+    async def _propagate_to_mesh(self, mid: str, res: Dict) -> None:
+        if self.mesh_proto and getattr(self.mesh_proto, "is_active", False):
             await self.mesh_proto.broadcast_gossip(mid, {"status": "success"}, "mission_complete")
 
-    # -------------------------------------------------------------------------
-    # STATE MANAGEMENT
-    # -------------------------------------------------------------------------
+    # ── State management ──────────────────────────────────────────────────────
 
-    async def _register_mission(self, mid, uid, txt):
-        async with self._mission_lock:
-            self._active_missions[mid] = MissionState(mission_id=mid, user_id=uid, status="ADMITTED")
+    async def _register_mission(self, mid, uid, txt) -> None:
+        async with self._lock:
+            self._active[mid] = MissionState(mission_id=mid, user_id=uid, status="ADMITTED")
         redis = get_redis_client()
-        if redis: redis.sadd(f"orchestrator:{self.kernel_id}:active", mid)
+        if redis:
+            redis.sadd(f"orchestrator:{self.kernel_id}:active", mid)
 
-    async def _deregister_mission(self, mid):
-        async with self._mission_lock:
-            if mid in self._active_missions: del self._active_missions[mid]
+    async def _deregister_mission(self, mid) -> None:
+        async with self._lock:
+            self._active.pop(mid, None)
         redis = get_redis_client()
-        if redis: redis.srem(f"orchestrator:{self.kernel_id}:active", mid)
+        if redis:
+            redis.srem(f"orchestrator:{self.kernel_id}:active", mid)
 
-    async def _inject_calibration_weights(self, mid):
-        params = await policy_gradient.get_optimal_params("mainframe", mission_id=mid)
-        logger.debug(f"[Mainframe] Cognitive calibration injected for {mid}: {params}")
+    # ── Mesh failover ─────────────────────────────────────────────────────────
 
-    # -------------------------------------------------------------------------
-    # MESH DELEGATION (Regional Failover)
-    # -------------------------------------------------------------------------
-
-    async def _delegate_to_mesh(self, mid, uid, obj, sid, reason, **kwargs):
-        """Transfers mission to a DCN peer node."""
-        logger.warning(f"🔄 [Mesh] Delegating {mid} to swarm node. Reason: {reason}")
+    async def _delegate_to_mesh(self, mid, uid, obj, sid, reason, **kwargs) -> Dict:
+        logger.warning("🔄 [Mesh] Delegating %s → swarm. Reason: %s", mid, reason)
         return {
-            "response": f"Regional failover triggered. Mission delegated to swarm due to: {reason}",
-            "status": "FAILOVER_Mesh",
-            "request_id": mid
+            "response":   f"Regional failover. Mission delegated: {reason}",
+            "status":     "FAILOVER_MESH",
+            "request_id": mid,
         }
 
-    # -------------------------------------------------------------------------
-    # GOVERNANCE & DIAGNOSTICS
-    # -------------------------------------------------------------------------
+    # ── Hardware calibration ──────────────────────────────────────────────────
+
+    async def _calibrate_hardware(self) -> None:
+        metrics = kernel.get_gpu_metrics()
+        logger.info("🖥️  [Hardware] GPU: %s VRAM: %sMB",
+                    metrics.get("gpu_name", "unknown"),
+                    metrics.get("vram_total_mb", "?"))
+        disk = shutil.disk_usage(os.getcwd())
+        free_gb = disk.free / (1024 ** 3)
+        if free_gb < 20:
+            logger.warning("🚨 [Hardware] Low storage: %.1f GB free.", free_gb)
+
+    async def _establish_mesh(self) -> None:
+        from backend.core.dcn_protocol import get_dcn_protocol
+        self.mesh_proto = get_dcn_protocol()
+        if self.mesh_proto and getattr(self.mesh_proto, "is_active", False):
+            logger.info("🛰️  [Mesh] Consensus established: %s", self.mesh_proto.node_id)
+        else:
+            logger.warning("📡 [Mesh] Isolate. Operating in REGIONAL MODE.")
+
+    # ── Diagnostics (used by API layer) ──────────────────────────────────────
+
+    async def get_vram_pressure(self) -> float:
+        try:
+            m = kernel.get_gpu_metrics()
+            t = m.get("vram_total_mb", 8192)
+            u = m.get("vram_used_mb", 0)
+            return u / t if t > 0 else 0.0
+        except Exception:
+            return 0.0
+
+    async def count_active_missions(self) -> int:
+        return len(self._active)
+
+    async def get_dcn_health(self) -> str:
+        if self.mesh_proto and getattr(self.mesh_proto, "is_active", False):
+            return "active"
+        return "offline"
+
+    async def get_system_health(self) -> Dict[str, Any]:
+        vram = await self.get_vram_pressure()
+        return {
+            "version":        OS_VERSION,
+            "kernel":         self.kernel_id,
+            "graduation":     await self.get_graduation_score(),
+            "status":         "STABLE" if vram < 0.9 else "CONSTRAINED",
+            "active_missions": len(self._active),
+            "uptime_sec":     int(time.time() - self.start_time),
+        }
 
     async def get_graduation_score(self) -> float:
-        """Sovereign v16.3 Graduation Logic. Evaluates OS maturity."""
         score = 0.95
-        if kernel.rust_kernel: score += 0.03
-        if HAS_REDIS: score += 0.01
-        
+        if kernel.rust_kernel:
+            score += 0.03
+        if HAS_REDIS:
+            score += 0.01
         success = MISSION_COMPLETED._value.get()
-        fail = MISSION_ABORTED._value.get()
-        total = success + fail
-        if total > 0: score *= (success / total)
-        
+        fail    = MISSION_ABORTED._value.get()
+        total   = success + fail
+        if total > 0:
+            score *= success / total
         final = min(1.0, score)
         GRADUATION_SCORE.set(final)
         return round(final, 3)
 
-    async def get_vram_pressure(self) -> float:
-        try:
-            metrics = kernel.get_gpu_metrics()
-            t = metrics.get("vram_total_mb", 8192)
-            u = metrics.get("vram_used_mb", 0)
-            return u / t if t > 0 else 0.0
-        except: return 0.0
-
-    async def get_system_health(self) -> Dict[str, Any]:
-        """Deep hardware and cognitive diagnostic."""
-        vram = await self.get_vram_pressure()
-        return {
-            "version": OS_VERSION,
-            "kernel": self.kernel_id,
-            "graduation": await self.get_graduation_score(),
-            "status": "STABLE" if vram < 0.9 else "CONSTRAINED",
-            "active_missions": len(self._active_missions),
-            "uptime_sec": int(time.time() - self.start_time)
-        }
-
-    # -------------------------------------------------------------------------
-    # AUTONOMOUS SENTINEL & PULSE WORKERS
-    # -------------------------------------------------------------------------
+    # ── Sentinel & pulse workers ──────────────────────────────────────────────
 
     async def _sentinel_worker(self):
-        """
-        [PHASE-5] The Eternal Sentinel.
-        Runs autonomous maintenance, self-healing, and memory hygiene.
-        """
-        logger.info("🛰️ [Sentinel] Autonomous worker AWAKENED.")
+        logger.info("🛰️  [Sentinel] AWAKENED.")
         iteration = 0
-        while not self._shutdown_event.is_set():
+        while not self._shutdown_evt.is_set():
             try:
                 iteration += 1
-                # 1. Graduation Scan
                 score = await self.get_graduation_score()
-                
-                # 2. Resonance Check (Self-Healing Integration)
+
                 from .self_healing import self_healing
                 vram = await self.get_vram_pressure()
                 if vram > 0.90:
-                    logger.info("🩺 [Sentinel] High pressure detected. Invoking self-healer.")
+                    logger.info("🩺 [Sentinel] High VRAM — invoking self-healer.")
                     await self_healing._heal_resource_exhaustion()
 
-                # 3. Memory Hygiene Pulse
                 if iteration % 30 == 0:
-                    logger.info("🧹 [Sentinel] Initiating Memory Hygiene pulse...")
                     await self.memory.cull_decayed_memories(decay_factor=0.92)
 
-                # 4. Identity Realignment Sweep
                 await self.identity.realign_biases()
 
-                # 5. Epistemic Drift Detection (v18.0 Priority 2)
                 if iteration % 60 == 0:
-                    # Collect current resonance embeddings (mocked for graduation)
                     embeddings = [self.identity.get_current_bias_vector()]
                     drift = await self.drift_detector.calculate_drift(embeddings)
-                    logger.info(f"⚖️ [Sentinel] Epistemic Drift Audit: {drift:.4f}")
+                    logger.info("⚖️  [Sentinel] Epistemic drift: %.4f", drift)
 
-                # 6. Evolution Graduation (v18.0 Priority 2)
                 if iteration % 360 == 0:
-                    logger.info("🧬 [Sentinel] Initiating Swarm Evolution Graduation...")
                     await self.evolution.evolve_swarm()
 
-                # Adaptive Sleep
                 await asyncio.sleep(600 if score > 0.95 else 60)
-            except Exception as e:
-                logger.error(f"⚠️ [Sentinel] Maintenance error: {e}")
+            except Exception as exc:
+                logger.error("⚠️  [Sentinel] Error: %s", exc)
                 await asyncio.sleep(60)
 
     async def _pulse_worker(self):
-        """Broadcasts system heartbeat to the mesh."""
-        while not self._shutdown_event.is_set():
-            if hasattr(self, 'mesh_proto') and self.mesh_proto:
-                await self.mesh_proto.broadcast_heartbeat(self.kernel_id, await self.get_system_health())
+        while not self._shutdown_evt.is_set():
+            try:
+                if self.mesh_proto and getattr(self.mesh_proto, "is_active", False):
+                    await self.mesh_proto.broadcast_heartbeat(
+                        self.kernel_id, await self.get_system_health()
+                    )
+            except Exception:
+                pass
             await asyncio.sleep(PULSE_INTERVAL)
 
     async def _reset_hardware_pools(self):
-        logger.info("🛠️ [Self-Healing] Flushing kernel VRAM pools...")
+        logger.info("🛠️  [Self-Healing] Flushing VRAM pools...")
         kernel.flush_vram_buffer()
-        logger.info("✅ [Self-Healing] Integrity restored.")
+        logger.info("✅ [Self-Healing] VRAM pools flushed.")
 
-# --- MODULE SINGLETON ---
-_mainframe = Orchestrator()
+
+# ─── Module singletons ────────────────────────────────────────────────────────
+orchestrator = Orchestrator()
+_orchestrator = orchestrator          # ← main.py imports this name
 
 async def run_mainframe(**kwargs) -> Any:
-    return await _mainframe.handle_mission(**kwargs)
+    return await orchestrator.handle_mission(**kwargs)

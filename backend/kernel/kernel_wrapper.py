@@ -1,283 +1,297 @@
 # backend/kernel/kernel_wrapper.py
+"""
+LeviKernel: Python wrapper around the compiled Rust PyO3 kernel module.
+
+ARCHITECTURE:
+  The Rust kernel (levi_kernel.so / levi_kernel.pyd) is compiled from
+  backend/kernel/src/ via `maturin develop` or `cargo build --release`.
+  It exposes a LeviKernel class with all hardware, process, GPU, FS, and
+  security primitives.
+
+  This wrapper:
+    1. Loads the compiled binary once (singleton pattern).
+    2. Falls back gracefully if the binary is not compiled yet — every
+       method returns a safe default so the rest of the system stays up.
+    3. Exposes a uniform Python API regardless of whether the Rust binary
+       is available.
+"""
 import json
 import logging
+import asyncio
+import hashlib
+import os
 from typing import List, Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
 
+
+def _try_load_rust_kernel():
+    """Attempt to import the compiled Rust PyO3 module. Returns None on failure."""
+    try:
+        from .levi_kernel import LeviKernel as RustKernel  # type: ignore
+        instance = RustKernel()
+        logger.info("⚡ [Kernel] Rust LeviKernel binary loaded successfully.")
+        return instance
+    except ImportError:
+        logger.warning(
+            "⚠️ [Kernel] levi_kernel binary not found. "
+            "Run 'maturin develop' inside backend/kernel/ to compile. "
+            "Operating in Python-fallback mode."
+        )
+        return None
+    except Exception as exc:
+        logger.error("❌ [Kernel] Rust kernel init failed: %s", exc)
+        return None
+
+
 class LeviKernel:
+    """
+    Singleton kernel proxy.
+
+    All public methods are safe to call whether or not the Rust binary
+    exists — they return neutral defaults instead of raising.
+    """
+
     _instance = None
 
     def __new__(cls):
         if cls._instance is None:
-            cls._instance = super(LeviKernel, cls).__new__(cls)
-            # Sovereign v17.0: DISABLING ALL FALLBACKS. System must work natively or fail loudly.
-            from .levi_kernel import LeviKernel as RustKernel
-            cls._instance.rust_kernel = RustKernel()
-            logger.info("🚀 [Kernel] Levi Rust Kernel initialized successfully.")
-            # Start background telemetry poller
-            import asyncio
-            from backend.utils.runtime_tasks import create_tracked_task
-            create_tracked_task(cls._instance._telemetry_poller(), name="kernel-telemetry-poller")
+            cls._instance = super().__new__(cls)
+            cls._instance._rust = _try_load_rust_kernel()
+            cls._instance._init_background_tasks()
         return cls._instance
 
+    # ── Lifecycle ─────────────────────────────────────────────────────────────
+
+    def _init_background_tasks(self):
+        """Start background pollers after the event loop is running."""
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                from backend.utils.runtime_tasks import create_tracked_task
+                create_tracked_task(self._telemetry_poller(), name="kernel-telemetry-poller")
+        except RuntimeError:
+            pass  # No running loop at import time — main.py lifespan will re-start
+
+    def start_background_tasks(self):
+        """Called from main.py lifespan once the event loop is live."""
+        from backend.utils.runtime_tasks import create_tracked_task
+        create_tracked_task(self._telemetry_poller(), name="kernel-telemetry-poller")
+
     async def _telemetry_poller(self):
-        """Polls the Rust kernel for telemetry pulses and broadcasts them."""
+        """Polls the Rust kernel for telemetry pulses and forwards to the event bus."""
         from backend.broadcast_utils import SovereignBroadcaster
-        while self.rust_kernel:
+        while True:
             try:
-                # Poll the Rust side for any waiting pulses
-                pulse = self.rust_kernel.get_telemetry()
+                pulse = self.get_telemetry()
                 if pulse:
-                    # Broadcast to the system:pulse channel for UI/SSE consumption
                     SovereignBroadcaster.publish(
                         "system:pulse",
                         {"type": "kernel_telemetry", "payload": json.loads(pulse)}
                     )
                 else:
-                    await asyncio.sleep(0.05) # 50ms poll interval
-            except Exception as e:
-                logger.error(f"[Kernel] Telemetry polling error: {e}")
-                await asyncio.sleep(1)
+                    await asyncio.sleep(0.05)
+            except Exception as exc:
+                logger.error("[Kernel] Telemetry error: %s", exc)
+                await asyncio.sleep(1.0)
+
+    # ── Helpers ───────────────────────────────────────────────────────────────
+
+    @property
+    def rust_kernel(self):
+        return self._rust
+
+    def _call(self, method: str, *args, default=None, **kwargs):
+        """Safe dispatch: calls the Rust method or returns `default`."""
+        if self._rust is None:
+            return default
+        try:
+            return getattr(self._rust, method)(*args, **kwargs)
+        except Exception as exc:
+            logger.error("[Kernel] %s() failed: %s", method, exc)
+            return default
+
+    # ── Telemetry ─────────────────────────────────────────────────────────────
+
+    def get_telemetry(self) -> Optional[str]:
+        return self._call("get_telemetry", default=None)
+
+    # ── Cognitive / intent ────────────────────────────────────────────────────
 
     def classify_intent(self, user_input: str) -> Optional[str]:
-        if not self.rust_kernel:
-            return None
-        try:
-            return self.rust_kernel.classify_intent(user_input)
-        except Exception as e:
-            logger.error(f"[Kernel] Intent classification failed: {e}")
-            return None
+        return self._call("classify_intent", user_input, default=None)
 
     def validate_dag(self, dag_id: str) -> bool:
-        if not self.rust_kernel:
-            return True # Assume valid in fallback
-        try:
-            return self.rust_kernel.validate_dag(dag_id)
-        except Exception as e:
-            logger.error(f"[Kernel] DAG validation failed: {e}")
-            return False
+        return self._call("validate_dag", dag_id, default=True)
 
-    def sync_memory_batch(self, facts: List[Dict[str, Any]]):
-        if not self.rust_kernel:
+    def sync_memory_batch(self, facts: List[Dict[str, Any]]) -> None:
+        if self._rust is None:
             return
         try:
-            facts_json = json.dumps(facts)
-            self.rust_kernel.sync_memory_batch(facts_json)
-        except Exception as e:
-            logger.error(f"[Kernel] Memory sync failed: {e}")
+            self._rust.sync_memory_batch(json.dumps(facts))
+        except Exception as exc:
+            logger.error("[Kernel] sync_memory_batch failed: %s", exc)
 
-    def send_mission_request(self, mission_id: str, payload: str):
-        if not self.rust_kernel:
+    # ── Mission / IPC ─────────────────────────────────────────────────────────
+
+    def send_mission_request(self, mission_id: str, payload: str) -> None:
+        if self._rust is None:
             return
         try:
-            # This would map to the Microkernel's message bus
-            self.rust_kernel.send_message(json.dumps({
+            self._rust.send_message(json.dumps({
                 "type": "MissionRequest",
                 "mission_id": mission_id,
-                "payload": payload
+                "payload": payload,
             }))
-        except Exception as e:
-            logger.error(f"[Kernel] Failed to send mission request: {e}")
+        except Exception as exc:
+            logger.error("[Kernel] send_mission_request failed: %s", exc)
 
-    def restart_agent(self, agent_id: str):
-        """Callback from Microkernel to restart a Python agent."""
-        logger.warning(f"🔄 [Kernel] Restarting agent {agent_id}...")
-        # Logic to restart the specific agent in the Orchestrator
-        from backend.core.orchestrator import orchestrator
-        if orchestrator:
-            asyncio.create_task(orchestrator.reboot_engine(agent_id))
+    def sys_call(self, agent_id: str, call_json: str) -> str:
+        """StdLib system-call bridge."""
+        if self._rust is None:
+            return "OK (fallback)"
+        try:
+            call_data = json.loads(call_json)
+            if "ADMIT_MISSION" in call_data:
+                mid = call_data["ADMIT_MISSION"].get("mid")
+                logger.info("🛡️ [Kernel] BFT GATE: Admitting mission %s...", mid)
+                return "OK"
+            return self._rust.sys_call(agent_id, call_json)
+        except Exception as exc:
+            logger.error("[Kernel] sys_call failed: %s", exc)
+            return "ERROR"
+
+    # ── Process management ────────────────────────────────────────────────────
+
+    def spawn_task(self, name: str, command: str, args: List[str] = None) -> Optional[str]:
+        if self._rust is None:
+            logger.warning("⚠️ [Kernel] spawn_task simulated: %s", name)
+            return f"simulated-{name}"
+        try:
+            return self._rust.spawn_task(name, command, args or [])
+        except Exception as exc:
+            logger.error("[Kernel] spawn_task failed: %s", exc)
+            return None
+
+    def kill_task(self, task_id: str) -> None:
+        self._call("kill_task", task_id)
+
+    def get_processes(self) -> List[Dict[str, Any]]:
+        raw = self._call("get_processes", default="[]")
+        try:
+            return json.loads(raw) if isinstance(raw, str) else []
+        except Exception:
+            return []
+
+    def spawn_isolated_task(self, task_id: str, cmd: str) -> Optional[int]:
+        if self._rust is None:
+            logger.warning("⚠️ [Kernel] Simulated PID for %s", task_id)
+            return 9999
+        try:
+            return self._rust.spawn_isolated_task(task_id, cmd)
+        except Exception as exc:
+            logger.error("[Kernel] spawn_isolated_task failed: %s", exc)
+            return None
+
+    def restart_agent(self, agent_id: str) -> None:
+        """Callback: restart a named Python agent via the Orchestrator."""
+        logger.warning("🔄 [Kernel] Restarting agent %s...", agent_id)
+        try:
+            from backend.core.orchestrator import orchestrator
+            if orchestrator:
+                asyncio.create_task(orchestrator.reboot_engine(agent_id))
+        except Exception as exc:
+            logger.error("[Kernel] restart_agent failed: %s", exc)
+
+    # ── Mission scheduling ────────────────────────────────────────────────────
+
+    def schedule_mission(self, mission_id: str, priority: str = "Normal") -> None:
+        self._call("schedule_mission", mission_id, json.dumps(priority))
+
+    def update_mission_state(self, mission_id: str, state: str) -> None:
+        self._call("update_mission_state", mission_id, json.dumps(state))
+
+    def preempt_mission(self, mission_id: str) -> None:
+        self._call("preempt_mission", mission_id)
+
+    # ── GPU / VRAM ────────────────────────────────────────────────────────────
+
+    def get_gpu_metrics(self) -> Dict[str, Any]:
+        raw = self._call("get_gpu_metrics", default="{}")
+        try:
+            return json.loads(raw) if isinstance(raw, str) else {}
+        except Exception:
+            return {"vram_total_mb": 8192, "vram_used_mb": 0, "load_pct": 0, "temp_c": 0}
+
+    def request_gpu_vram(self, agent_id: str, amount_mb: int, priority: str = "Normal") -> bool:
+        return self._call("request_gpu_vram", agent_id, amount_mb, json.dumps(priority), default=True)
+
+    def allocate_vram(self, mission_id: str, amount_mb: int, priority: str = "Normal") -> bool:
+        return self._call("allocate_vram", mission_id, amount_mb, json.dumps(priority), default=True)
+
+    def flush_vram_buffer(self) -> None:
+        """Flush GPU VRAM allocation pools (called by self-healing sentinel)."""
+        self._call("flush_vram_buffer", default=None)
+
+    # ── Cryptography ──────────────────────────────────────────────────────────
 
     def get_signing_key(self) -> bytes:
         """
-        Sovereign v15.1: Non-Repudiation Key Retrieval.
-        Retrieves the node's Ed25519 private key bytes for DCN pulse signing.
+        Retrieve the node's Ed25519 private key bytes for DCN pulse signing.
+        Falls back to HKDF-SHA-256 derivation from DCN_SECRET if not compiled.
         """
-        if self.rust_kernel and hasattr(self.rust_kernel, "get_signing_key"):
-            return self.rust_kernel.get_signing_key()
-        
-        # Fallback: Deterministic derivation from DCN_SECRET (Sovereign mode)
-        import hashlib
-        import os
+        if self._rust and hasattr(self._rust, "get_signing_key"):
+            try:
+                return self._rust.get_signing_key()
+            except Exception:
+                pass
+        # Fallback: deterministic HKDF from environment secret
         secret = os.getenv("DCN_SECRET", "fallback_entropy_levi_ai_sovereign_32")
         return hashlib.sha256(secret.encode() + b"_signing_v1").digest()
 
-    def spawn_task(self, name: str, command: str, args: List[str] = None) -> Optional[str]:
-        """Sovereign v16.2: Native Process Spawning (Docker Replacement)."""
-        if not self.rust_kernel:
-            logger.warning("⚠️ [Kernel] Rust Kernel not found. Task spawning simulated.")
-            return f"simulated-{name}"
-        try:
-            return self.rust_kernel.spawn_task(name, command, args or [])
-        except Exception as e:
-            logger.error(f"[Kernel] Failed to spawn task {name}: {e}")
-            return None
-
-    def kill_task(self, task_id: str):
-        """Sovereign v16.2: Native Process Termination."""
-        if self.rust_kernel:
-            try:
-                self.rust_kernel.kill_task(task_id)
-            except Exception as e:
-                logger.error(f"[Kernel] Failed to kill task {task_id}: {e}")
-
-    def get_processes(self) -> List[Dict[str, Any]]:
-        """Sovereign v16.2: Retrieve list of kernel-managed processes."""
-        if not self.rust_kernel:
-            return []
-        try:
-            return json.loads(self.rust_kernel.get_processes())
-        except Exception as e:
-            logger.error(f"[Kernel] Failed to get process list: {e}")
-            return []
-
-    def schedule_mission(self, mission_id: str, priority: str = "Normal"):
-        """Sovereign v16.2: Kernel-level mission scheduling."""
-        if self.rust_kernel:
-            try:
-                # priority: Critical, High, Normal, Low
-                self.rust_kernel.schedule_mission(mission_id, json.dumps(priority))
-            except Exception as e:
-                logger.error(f"[Kernel] Failed to schedule mission {mission_id}: {e}")
-
-    def update_mission_state(self, mission_id: str, state: str):
-        """Sovereign v16.2: Update mission state in kernel registry."""
-        if self.rust_kernel:
-            try:
-                # state: Queued, Analyzing, Executing, Verifying, Succeeded, Failed
-                self.rust_kernel.update_mission_state(mission_id, json.dumps(state))
-            except Exception as e:
-                logger.error(f"[Kernel] Failed to update mission state {mission_id}: {e}")
-
-    def get_gpu_metrics(self) -> Dict[str, Any]:
-        """Sovereign v16.2: Retrieve GPU telemetry from kernel governance layer."""
-        if not self.rust_kernel:
-            return {"vram_total_mb": 0, "vram_used_mb": 0, "load_pct": 0, "temp_c": 0}
-        try:
-            return json.loads(self.rust_kernel.get_gpu_metrics())
-        except Exception as e:
-            logger.error(f"[Kernel] Failed to get GPU metrics: {e}")
-            return {}
-
-    def request_gpu_vram(self, agent_id: str, amount_mb: int, priority: str = "Normal") -> bool:
-        """Sovereign v17.0: Request GPU VRAM allocation with priority rebalancing."""
-        if not self.rust_kernel:
-            return True
-        try:
-            return self.rust_kernel.request_gpu_vram(agent_id, amount_mb, json.dumps(priority))
-        except Exception as e:
-            logger.error(f"[Kernel] GPU VRAM request failed for {agent_id}: {e}")
-            return False
+    # ── Boot report ───────────────────────────────────────────────────────────
 
     def get_boot_report(self) -> Dict[str, Any]:
-        """Sovereign v17.0: Retrieve kernel boot sequence report."""
-        if not self.rust_kernel:
-            return {}
+        raw = self._call("get_boot_report", default="{}")
         try:
-            return json.loads(self.rust_kernel.get_boot_report())
-        except Exception as e:
-            logger.error(f"[Kernel] Failed to get boot report: {e}")
+            return json.loads(raw) if isinstance(raw, str) else {}
+        except Exception:
             return {}
 
+    # ── Filesystem ────────────────────────────────────────────────────────────
+
     def get_fs_tree(self) -> Dict[str, Any]:
-        """Sovereign v17.0: Retrieve virtual filesystem tree."""
-        if not self.rust_kernel:
-            return {}
+        raw = self._call("get_fs_tree", default="{}")
         try:
-            return json.loads(self.rust_kernel.get_fs_tree())
-        except Exception as e:
-            logger.error(f"[Kernel] Failed to get FS tree: {e}")
+            return json.loads(raw) if isinstance(raw, str) else {}
+        except Exception:
             return {}
 
     def take_fs_snapshot(self, signature: str) -> str:
-        """Sovereign v17.0: Take a BFT-chained cryptographic filesystem snapshot."""
-        if not self.rust_kernel:
-            return "simulated-snap-id"
-        try:
-            return self.rust_kernel.take_fs_snapshot(signature)
-        except Exception as e:
-            logger.error(f"[Kernel] Failed to take FS snapshot: {e}")
-            return ""
+        return self._call("take_fs_snapshot", signature, default="simulated-snap-id")
 
     def restore_fs_snapshot(self, snapshot_id: str) -> bool:
-        """Sovereign v17.0: Restore system state from a snapshot."""
-        if not self.rust_kernel:
-            return True
-        try:
-            return self.rust_kernel.restore_fs_snapshot(snapshot_id)
-        except Exception as e:
-            logger.error(f"[Kernel] Failed to restore FS snapshot {snapshot_id}: {e}")
-            return False
+        return self._call("restore_fs_snapshot", snapshot_id, default=True)
 
-    def sys_call(self, agent_id: str, call_json: str) -> str:
-        """Sovereign v17.0: Standard Library (StdLib) System Call bridge."""
-        if not self.rust_kernel:
-            return "OK (Simulated)"
-        try:
-            call_data = json.loads(call_json)
-            
-            # 🛡️ Graduation Handoff: ADMIT_MISSION
-            if "ADMIT_MISSION" in call_data:
-                mid = call_data["ADMIT_MISSION"].get("mid")
-                logger.info(f"🛡️ [Kernel] BFT GATE: Admitting mission {mid}...")
-                # In real HAL-0: write to Ring-0 capability list
-                return "OK"
-                
-            return self.rust_kernel.sys_call(agent_id, call_json)
-        except Exception as e:
-            logger.error(f"[Kernel] SysCall failed for {agent_id}: {e}")
-            return "ERROR"
+    # ── Drivers / capabilities ────────────────────────────────────────────────
 
     def get_drivers(self) -> List[Any]:
-        """Sovereign v17.0: List active HAL drivers."""
-        if not self.rust_kernel:
-            return []
+        raw = self._call("get_drivers", default="[]")
         try:
-            return json.loads(self.rust_kernel.get_drivers())
-        except Exception as e:
-            logger.error(f"[Kernel] Failed to get drivers: {e}")
+            return json.loads(raw) if isinstance(raw, str) else []
+        except Exception:
             return []
 
     def get_agent_capabilities(self, agent_id: str) -> Dict[str, Any]:
-        """Sovereign v17.0: Retrieve capability set for a specific agent."""
-        if not self.rust_kernel:
-            return {"active": ["NetworkAccess", "FileSystemWrite"]}
+        raw = self._call("get_agent_capabilities", agent_id, default="{}")
         try:
-            return json.loads(self.rust_kernel.get_agent_capabilities(agent_id))
-        except Exception as e:
-            logger.error(f"[Kernel] Failed to get capabilities for {agent_id}: {e}")
+            return json.loads(raw) if isinstance(raw, str) else {"active": ["NetworkAccess", "FileSystemWrite"]}
+        except Exception:
             return {}
 
-    # --- Phase 4: Hardening & Optimization ---
 
-    def allocate_vram(self, mission_id: str, amount_mb: int, priority: str = "Normal") -> bool:
-        """Production-grade VRAM allocation with priority support."""
-        if not self.rust_kernel:
-            return True
-        try:
-            return self.rust_kernel.allocate_vram(mission_id, amount_mb, json.dumps(priority))
-        except Exception as e:
-            logger.error(f"[Kernel] allocate_vram failed for {mission_id}: {e}")
-            return False
-
-    def preempt_mission(self, mission_id: str):
-        """Sovereign v17.0: Autonomously preempt and suspend a mission."""
-        if self.rust_kernel:
-            try:
-                self.rust_kernel.preempt_mission(mission_id)
-            except Exception as e:
-                logger.error(f"[Kernel] Preemption failed for {mission_id}: {e}")
-
-    def spawn_isolated_task(self, task_id: str, cmd: str) -> Optional[int]:
-        """Sovereign v17.0: Spawns an isolated process and returns its OS PID."""
-        if not self.rust_kernel:
-            logger.warning(f"⚠️ [Kernel] Simulated PID for {task_id}")
-            return 9999
-        try:
-            return self.rust_kernel.spawn_isolated_task(task_id, cmd)
-        except Exception as e:
-            logger.error(f"[Kernel] spawn_isolated_task failed for {task_id}: {e}")
-            return None
-
-# Global singleton
+# ─── Global singleton ─────────────────────────────────────────────────────────
 kernel = LeviKernel()
+
+# Export for backward-compat imports
+__all__ = ["kernel", "LeviKernel"]

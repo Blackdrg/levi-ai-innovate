@@ -46,6 +46,24 @@ impl IntentKernel {
         Ok(intent)
     }
 
+    /// Simplified adapter for lib.rs: returns intent name string.
+    pub fn classify(&self, input: &str) -> String {
+        if let Some(pattern) = self.patterns.get(input) {
+            return pattern.intent.name.clone();
+        }
+        // Keyword-based fast classification
+        let lower = input.to_lowercase();
+        if lower.contains("research") || lower.contains("analyze") {
+            "research_analysis".to_string()
+        } else if lower.contains("code") || lower.contains("write") {
+            "code_generation".to_string()
+        } else if lower.contains("summarize") || lower.contains("explain") {
+            "summarization".to_string()
+        } else {
+            "chat".to_string()
+        }
+    }
+
     fn vectorize(&self, _input: &str) -> Result<Vec<f32>, Error> {
         // BERT/Embedder logic
         Ok(vec![0.0; 768])

@@ -55,6 +55,12 @@ impl DAGKernel {
         Ok(())
     }
 
+    /// Simplified adapter for lib.rs: returns bool.
+    pub fn validate(&self, dag_id: &str) -> bool {
+        self.validate_dag(dag_id).is_ok()
+    }
+
+
     // Kahn's algorithm for O(V+E) cycle detection and wave generation
     pub fn compute_acyclicity(&mut self, dag: &DAG) -> Result<(), Error> {
         let mut in_degree: HashMap<TaskId, usize> = HashMap::new();

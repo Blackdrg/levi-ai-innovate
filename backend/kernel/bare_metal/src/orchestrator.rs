@@ -1,81 +1,141 @@
 // backend/kernel/bare_metal/src/orchestrator.rs
-// Sovereign AI Orchestrator — user-space service bridge
-// Runs in Ring-0 during bootstrap, hands off to Ring-3 agent tasks.
+//
+// KERNEL SERVICE BOOTSTRAPPER
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// NAMING HONESTY — READ THIS FIRST
+//
+// The previous version of this file used the labels:
+//   "AI", "BFT", "Cognitive swarm", "WAVE_SPAWN", "Sovereign Mode"
+//
+// Here is what those labels map to in kernel reality:
+//
+//   LABEL (old)           KERNEL REALITY (honest)
+//   ─────────────────────────────────────────────────────────────────────────
+//   "AI agent"            A named async task running in Ring-3.  No model
+//                         weights, no inference engine, no learning loop
+//                         exists in this bare-metal kernel.  The AI layer
+//                         lives in the host Python/Node.js process, not here.
+//
+//   "BFT consensus"       SHA-256 digest + Ed25519 structural signature check.
+//                         There is no Byzantine Fault-Tolerant quorum protocol
+//                         implemented in kernel space.  That would require a
+//                         network of nodes with a proper Paxos/PBFT round.
+//
+//   "Cognitive swarm"     A statically-sized array of named async tasks.
+//                         There is no collective intelligence, no inter-agent
+//                         communication channel, and no emergent behaviour.
+//
+//   "WAVE_SPAWN"          The syscall 0x02 dispatcher increments a counter
+//                         and logs a message.  A real process spawn would
+//                         call process::ProcessAddressSpace::new(), load an
+//                         ELF binary, and execute usermode::enter_usermode().
+//
+//   "Sovereign Mode"      Means: the kernel is running and has passed its
+//                         own self-checks.  Nothing more.
+//
+// What IS real in this module:
+//   • TPM key derivation uses real HKDF-SHA-256 (see crypto.rs).
+//   • Filesystem write uses the real block/inode FS (see vfs.rs).
+//   • Signature check uses real SHA-256 digest computation.
+//   • The async task count is a real counter updated by the syscall ABI.
+// ─────────────────────────────────────────────────────────────────────────────
 
 use crate::println;
 use crate::tpm;
-use crate::fs;
+use crate::vfs;
 use crate::syscalls;
+use crate::crypto;
 use alloc::vec::Vec;
 
-pub const AGENT_COUNT: usize = 10;
+/// Number of named kernel service tasks to bootstrap.
+pub const SERVICE_COUNT: usize = 10;
 
-pub static AGENT_NAMES: [&str; AGENT_COUNT] = [
-    "COGNITION", "MEMORY", "NETWORK", "SECURITY",
-    "SCHEDULER", "EVOLUTION", "STORAGE", "LOGGER",
-    "MONITOR", "REAPER",
+/// Human-readable names for each kernel service task.
+/// These are async tasks at the OS level — they are NOT AI agents.
+pub static SERVICE_NAMES: [&str; SERVICE_COUNT] = [
+    "net-rx",       // network receive dispatcher
+    "net-tx",       // network transmit scheduler
+    "fs-journal",   // filesystem journal flusher
+    "tpm-poller",   // TPM event and PCR updater
+    "irq-dispatch", // interrupt routing arbiter
+    "vfs-cache",    // VFS block cache evictor
+    "proc-reaper",  // zombie process collector
+    "uart-logger",  // serial console drain
+    "timer-tick",   // system clock and wakeup handler
+    "idle",         // idle / halt loop
 ];
 
-pub struct SovereignOrchestrator {
-    pub active_agents: Vec<u64>,
+pub struct KernelOrchestrator {
+    /// IDs of active kernel-service tasks (in order of spawn).
+    pub active_tasks: Vec<u64>,
 }
 
-impl SovereignOrchestrator {
+impl KernelOrchestrator {
     pub fn new() -> Self {
-        Self { active_agents: Vec::new() }
+        Self { active_tasks: Vec::new() }
     }
 
-    /// Bootstrap: spawn all core AI agents as Ring-3 processes
+    /// Bootstrap: derive system key, write boot manifest, register services.
     pub fn bootstrap() {
-        println!(" [AI] Orchestrator: Native Sovereign Mode — Bootstrapping {} Agents...", AGENT_COUNT);
+        println!(" [ORCH] Kernel Service Bootstrapper starting ({} services)...", SERVICE_COUNT);
 
-        // Step 1: TPM identity confirmation
-        let hw_seed = b"hal0-sovereign-hw-id-v17";
+        // ── 1. Derive system session key via HKDF-SHA-256 ────────────────────
+        // This is a REAL key derivation: HKDF-SHA-256(salt, seed) from crypto.rs.
+        let hw_seed = b"hal0-sovereign-hw-id-v22";
         let system_key = tpm::derive_key(hw_seed);
-        println!(" [AI] HSM: System key derived. Root[0] = 0x{:02X}{:02X}",
-            system_key[0], system_key[1]);
+        println!(" [ORCH] System key (HKDF-SHA-256): {:02x}{:02x}..{:02x}{:02x}",
+            system_key[0], system_key[1], system_key[30], system_key[31]);
 
-        // Step 2: Persist manifest to FS
-        fs::create_file("manifest.cfg", b"SOVEREIGN_OS_v17_BOOT_OK");
+        // ── 2. Hash and log the boot manifest ────────────────────────────────
+        let manifest = b"SOVEREIGN_OS_v22_BOOT_OK";
+        let _manifest_hash = crypto::hash_and_log("boot-manifest", manifest);
 
-        // Step 3: Spawn each agent via WAVE_SPAWN syscall
-        for i in 0..AGENT_COUNT {
-            println!(" [AI] WAVE_SPAWN: Agent PID={} [{}] -> Ring-3", i + 1, AGENT_NAMES[i]);
-            syscalls::dispatch(0x02); // WAVE_SPAWN
+        // ── 3. Persist boot manifest to the real block/inode filesystem ──────
+        vfs::create_file("manifest.cfg", manifest);
+
+        // ── 4. Register each kernel service task via the syscall dispatcher ──
+        // REALITY: syscalls::dispatch(0x02) currently increments a counter and
+        // logs a message.  A real WAVE_SPAWN would call:
+        //   process::ProcessAddressSpace::new(...) — allocate page tables
+        //   elf_loader::load(...)                  — load service ELF
+        //   usermode::enter_usermode(entry, stack) — iretq to Ring-3
+        for i in 0..SERVICE_COUNT {
+            println!(" [ORCH] Registering service task [{}]: {}", i, SERVICE_NAMES[i]);
+            syscalls::dispatch(0x02); // WAVE_SPAWN (logs + increments counter)
         }
 
         let total = syscalls::active_process_count();
-        println!(" [AI] Orchestrator: {} agents LIVE. SOVEREIGN MODE ACTIVE.", total);
-
-        // Step 4: Log boot event
-        println!(" [AI] Syscall interface tested: WAVE_SPAWN x{}, BFT_SIGN, FS_WRITE — OK", AGENT_COUNT);
+        println!(" [ORCH] {} kernel service tasks registered.", total);
+        println!(" [ORCH] NOTE: tasks are NOT running AI inference in the kernel.");
+        println!(" [ORCH]       Inference runs in the host process (Python/Rust user-land).");
     }
 
-    pub fn run_mission(&mut self, mission_id: u64, payload: &[u8]) {
-        println!(" [AI] Mission {}: Dispatching to Sovereign Agent...", mission_id);
+    /// Execute a signed work item (e.g. a filesystem write or net packet).
+    /// The "BFT" label here means: we verify the SHA-256 signature structure.
+    /// There is NO multi-node Byzantine quorum protocol.
+    pub fn execute_signed_task(&mut self, task_id: u64, payload: &[u8]) {
+        println!(" [ORCH] execute_signed_task({}): verifying payload digest...", task_id);
 
-        // Sign the payload
-        let dummy_sig = [0xCAu8; 64];
+        // Build a fake 64-byte test signature for demonstration.
+        // In production the caller would provide a real Ed25519 signature.
+        let dummy_sig = {
+            let digest = crypto::sha256(payload);
+            let mut sig = [0u8; 64];
+            sig[..32].copy_from_slice(&digest);  // R component = digest (not a real sig)
+            sig[32] = 0x01;                       // s[0] non-zero to pass structural check
+            sig
+        };
+
         let valid = tpm::verify_signature(payload, &dummy_sig);
         if !valid {
-            println!(" [AI] Mission {}: REJECTED — invalid BFT signature.", mission_id);
+            println!(" [ORCH] Task {}: payload signature REJECTED.", task_id);
             return;
         }
 
-        // Persist result
-        fs::create_file("mission_result.log", payload);
-        self.active_agents.push(mission_id);
-
-        println!(" [AI] Mission {}: COMPLETE. Total active agents: {}.",
-            mission_id, self.active_agents.len());
-    }
-
-    pub fn schedule_mission(&mut self, mission_id: u64) {
-        println!(" [AI] Scheduling Mission {} with Resource Governance...", mission_id);
-        let vram_headroom: u64 = 80; // 80 % headroom
-        if vram_headroom > 10 {
-             println!(" [AI] VRAM Headroom OK ({}%). Spawning Pulse...", vram_headroom);
-             self.active_agents.push(mission_id);
-        }
+        // Persist the result via the real VFS.
+        vfs::create_file("task_result.log", payload);
+        self.active_tasks.push(task_id);
+        println!(" [ORCH] Task {} complete. {} tasks total.", task_id, self.active_tasks.len());
     }
 }

@@ -79,17 +79,44 @@ extern "x86-interrupt" fn invalid_opcode_handler(
     panic!("INVALID OPCODE - SOVEREIGN HALT");
 }
 
+/// Global timer tick counter — incremented by every PIC timer interrupt.
+/// Used by a future pre-emptive scheduler to track time slices.
+pub static TIMER_TICKS: core::sync::atomic::AtomicU64 =
+    core::sync::atomic::AtomicU64::new(0);
+
 extern "x86-interrupt" fn page_fault_handler(
     stack_frame: InterruptStackFrame,
     error_code: PageFaultErrorCode,
 ) {
     use x86_64::registers::control::Cr2;
 
-    println!(" [INT] EXCEPTION: PAGE FAULT");
-    println!(" [INT] Accessed Address: {:?}", Cr2::read());
-    println!(" [INT] Error Code: {:?}", error_code);
-    println!(" [INT] {:#?}", stack_frame);
-    panic!("PAGE FAULT - SOVEREIGN HALT");
+    let fault_addr = Cr2::read();
+    println!(" [INT] PAGE FAULT @ {:?}  error={:?}", fault_addr, error_code);
+
+    // Attempt demand-zero recovery for user-stack pages.
+    // For this to work the kernel needs a live mapper + frame allocator
+    // reference.  In the current single-core design we use the boot-time
+    // allocator stored in a global Mutex (TODO: full per-process mapper).
+    // For now we panic on any fault that is not in the user stack range.
+    let addr_u64 = fault_addr.as_u64();
+    let in_user_stack = addr_u64 >= crate::process::USER_STACK_BASE
+        && addr_u64 < crate::process::USER_STACK_BASE + crate::process::USER_STACK_SIZE as u64;
+
+    if in_user_stack {
+        // NOTE: We cannot call handle_page_fault here without a live mapper
+        // reference.  The correct production solution is a global spinlocked
+        // (mapper, frame_allocator) pair initialised in kernel_main.
+        // Currently we log the recoverable attempt and continue.
+        println!(
+            " [PF] Recoverable user-stack fault at 0x{:X} — demand-zero TODO.",
+            addr_u64
+        );
+        // Without the mapper call the fault is unrecoverable in this build.
+        panic!("PAGE FAULT in user stack — demand-zero mapper not yet wired globally");
+    } else {
+        println!(" [INT] Unrecoverable PAGE FAULT\n{:#?}", stack_frame);
+        panic!("PAGE FAULT — SOVEREIGN HALT");
+    }
 }
 
 pub fn init_idt() {
@@ -111,7 +138,8 @@ extern "x86-interrupt" fn double_fault_handler(
 extern "x86-interrupt" fn timer_interrupt_handler(
     _stack_frame: InterruptStackFrame)
 {
-    // Heartbeat logic
+    // Increment the global tick counter (future pre-emptive scheduler hook).
+    TIMER_TICKS.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
     unsafe {
         PICS.lock().notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
     }

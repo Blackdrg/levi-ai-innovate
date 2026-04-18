@@ -5,23 +5,32 @@ use std::sync::{Arc, Mutex};
 use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "PascalCase")]
 pub enum MissionPriority {
     Critical = 0,
-    High = 1,
-    Normal = 2,
-    Low = 3,
+    High     = 1,
+    Normal   = 2,
+    Low      = 3,
 }
 
+/// Alias used by lib.rs for ergonomic method signatures.
+pub type Priority = MissionPriority;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "PascalCase")]
 pub enum MissionState {
     Queued,
     Analyzing,
     Executing,
-    Suspended, // Sovereign v17.0: Support for Preemption
+    Suspended,
     Verifying,
     Succeeded,
     Failed(String),
 }
+
+/// Alias used by lib.rs for ergonomic method signatures.
+pub type MissionStateUpdate = MissionState;
+
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct MissionTask {

@@ -96,4 +96,15 @@ impl MemoryKernel {
         // FAISS logic
         Ok(())
     }
+
+    /// Synchronous adapter for PyO3: parse JSON facts string and log.
+    /// Full async crystallization would require block_on() — deferred to a background task.
+    pub fn sync_batch(&self, facts_json: &str) -> Result<(), String> {
+        let facts: Vec<serde_json::Value> = serde_json::from_str(facts_json)
+            .map_err(|e| format!("sync_batch parse error: {}", e))?;
+        log::info!("[MemoryKernel] sync_batch: {} facts received for crystallization.", facts.len());
+        // In production: spawn a blocking Tokio task to call crystallize_batch().
+        Ok(())
+    }
 }
+
