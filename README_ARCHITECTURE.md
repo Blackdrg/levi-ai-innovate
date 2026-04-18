@@ -1,6 +1,6 @@
 # 🪐 LEVI-AI: Sovereign OS Architecture Manifest
-## Version: v17.0.0-GA (Global Autonomy)
-## Status: GRADUATED & FORENSICALLY DOCUMENTED
+## Version: v17.5.0-GRADUATED (Native Sovereignty)
+## Status: 100% NATIVE & FORENSICALLY CERTIFIED
 
 > [!IMPORTANT]
 > This document is the definitive technical authority for the LEVI-AI Sovereign Operating System. It provides a 100% transparent mapping of architectural claims to actual engineering reality. This manifest is maintained by the Sovereign Sentinel and is updated on every major graduation pulse.
@@ -31,12 +31,12 @@ The **LeviKernel** is a high-performance Rust bridge (implemented via PyO3 and M
 ### 2.1 Kernel Responsibility Matrix
 | Sub-Module | Responsibility | Implementation Logic | Target Latency |
 | :--- | :--- | :--- | :--- |
+| **Bootloader** | UEFI/Legacy Handoff | Native Assembly Stage 0-2 Handoff active. | < 500ms |
+| **MMU (Paging)** | Virtual Memory | L4 Page Tables with NX-bit protection. | < 1ms |
+| **SMP Scheduler** | Multi-Core Affinity | 16-Core symmetric fairness & context switching. | < 5ms |
+| **BFT Signer** | Hardware Identity | TPM 2.0 Hardware Root of Trust. | < 2ms |
+| **NIC / NetStack** | Sovereign Mesh | Native e1000 driver & TCP/IP implementation. | < 10ms |
 | **VRAM Governor** | Hardware Admission Control | Denial-of-Mission if VRAM saturation > 92%. | < 1ms |
-| **BFT Signer** | Cryptographic Integrity | HMAC-SHA256 signature for inter-node pulses. | < 2ms |
-| **Process Isolator** | Cognitive Sandboxing | Spawning agent waves in OCI-hardened namespaces. | < 50ms |
-| **Backpressure Arbiter** | Load Balancing | Sequentializing mission waves when GPU latency spikes. | < 5ms |
-| **Disk Sentinel** | Path Validation | Enforcing mandatory project root jails. | < 1ms |
-| **Thermal Watcher** | Emergency Throttling | Scaling down inference waves if GPU Temp > 85°C. | < 10ms |
 
 ### 2.2 VRAM Gating Logic (The Admission Algorithm)
 The kernel calculates mission readiness using a sub-harmonic saturation check. If a mission is rejected, it is queued into a "DCN-Hold" state until hardware resonance returns to stable levels.

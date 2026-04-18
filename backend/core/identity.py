@@ -201,4 +201,29 @@ class CognitiveIdentity:
         except Exception:
             return {"is_consistent": True, "score": 1.0, "conflicts": [], "reasoning": "Semantic pass skipped."}
 
+    async def realign_biases(self):
+        """Forces a re-sync with the Neo4j Genesis state."""
+        logger.info("🔧 [Identity] Realigning cognitive biases with Genesis state...")
+        self.cached_identity = None
+        await self.get_identity()
+
+    def get_current_bias_vector(self) -> Any:
+        # Mocked embedding extraction from personality traits
+        import numpy as np
+        p = self.DEFAULT_PERSONALITY
+        if self.cached_identity:
+            p = self.cached_identity["personality"]
+        
+        # Convert trait values (0.0 - 1.0) into a simple 1536-dim vector (padded)
+        vector = np.zeros(1536)
+        traits = [
+            p.get("trait_openness", 0.5),
+            p.get("trait_conscientiousness", 0.5),
+            p.get("trait_extraversion", 0.5),
+            p.get("trait_agreeableness", 0.5),
+            p.get("trait_neuroticism", 0.5)
+        ]
+        vector[:5] = traits
+        return vector
+
 identity_system = CognitiveIdentity()

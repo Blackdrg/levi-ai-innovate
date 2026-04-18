@@ -3,6 +3,8 @@ import os
 import json
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
+from datetime import datetime
+from .dataset_manager import dataset_manager
 
 import numpy as np
 import torch
@@ -81,7 +83,7 @@ class PPOEngine:
             1: 0.2,
             2: 0.7,
         }
-        
+        self.reward_history: List[float] = []
         self._load_weights()
 
     def _load_weights(self):
@@ -96,11 +98,16 @@ class PPOEngine:
             logger.info("ℹ️ [Evolution] Initializing from base biological priors (default weights).")
 
     def _save_weights(self):
-        """Persists evolved weights to Sovereign storage."""
+        """Persists evolved weights and creates a rolling backup."""
         try:
             os.makedirs(os.path.dirname(self.WEIGHTS_PATH), exist_ok=True)
+            # Create backup before saving new
+            if os.path.exists(self.WEIGHTS_PATH):
+                import shutil
+                shutil.copy2(self.WEIGHTS_PATH, self.WEIGHTS_PATH + ".bak")
+            
             torch.save(self.policy_net.state_dict(), self.WEIGHTS_PATH)
-            logger.info(f"💾 [Evolution] Evolved weights PERSISTED to {self.WEIGHTS_PATH}")
+            logger.info(f"💾 [Evolution] Weights PERSISTED and BACKUP Created.")
         except Exception as e:
             logger.error(f"❌ [Evolution] Weight persistence failure: {e}")
 
@@ -142,6 +149,15 @@ class PPOEngine:
         
         self.trajectories.append(trajectory)
         if len(self.trajectories) >= 20: # Training batch threshold
+            # Transform trajectories to JSON-serializable for anchoring
+            batch_data = [
+                {
+                    "states": t.states,
+                    "actions": t.actions,
+                    "rewards": t.rewards
+                } for t in self.trajectories
+            ]
+            dataset_manager.anchor_batch(batch_data)
             await self.train_step()
 
     async def train_step(self):
@@ -200,8 +216,33 @@ class PPOEngine:
             self.optimizer.step()
 
         logger.info("✅ [Evolution] PPO cycle complete. Loss: %.4f", float(total_loss.item()) if total_loss is not None else 0.0)
+        
+        # 📉 Performance Tracking & Rollback
+        avg_reward = np.mean([np.mean(t.rewards) for t in batch])
+        self.reward_history.append(float(avg_reward))
+        
+        logger.info(f"📊 [Evolution] Cycle Reward: {avg_reward:.4f}")
+        
+        if len(self.reward_history) > 5:
+            baseline = np.mean(self.reward_history[-5:-1])
+            if avg_reward < (baseline * 0.8): # 20% drop
+                logger.warning(f"⚠️ [Evolution] FIDELITY COLLAPSE DETECTED ({avg_reward:.4f} vs {baseline:.4f}). Triggering Atomic Rollback...")
+                self._rollback()
+            else:
+                self._save_weights()
+        else:
+            self._save_weights()
+
         self.trajectories = []
-        self._save_weights()
+
+    def _rollback(self):
+        """Rolls back policy weights to the last stable state."""
+        BACKUP_PATH = self.WEIGHTS_PATH + ".bak"
+        if os.path.exists(BACKUP_PATH):
+            self.policy_net.load_state_dict(torch.load(BACKUP_PATH, map_location="cpu"))
+            logger.info("♻️ [Evolution] Rollback complete. Stable weights restored.")
+        else:
+            logger.error("❌ [Evolution] Rollback failed: No backup weights found.")
 
     def _action_to_idx(self, action: str) -> int:
         return self.action_map.get(action, 2)

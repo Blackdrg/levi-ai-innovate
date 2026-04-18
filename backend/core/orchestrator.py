@@ -71,6 +71,7 @@ from backend.utils.tracing import traced_span
 from backend.utils.latency_tracer import LatencyTracer
 from backend.kernel.kernel_wrapper import kernel
 from backend.utils.kms import SovereignKMS
+from backend.services.graduation import graduation_service
 
 # DCN / Swarm Infrastructure
 from .dcn.registry import dcn_registry
@@ -131,6 +132,12 @@ class Orchestrator:
         self._sentinel = None
         self._pulse = None
         
+        # 🟢 4. ADVANCED AUTONOMY (Priority 2 & 3)
+        from backend.core.evolution.drift_detector import drift_detector
+        from backend.agents.chaos import ChaosAgent
+        self.drift_detector = drift_detector
+        self.chaos_agent = ChaosAgent(self)
+        
         logger.info(f"🛰️ [Mainframe] Instinctual initialization complete. Kernel: {self.kernel_id}")
 
     # -------------------------------------------------------------------------
@@ -169,6 +176,9 @@ class Orchestrator:
             await self_healing.start()
             self._sentinel = asyncio.create_task(self._sentinel_worker())
             self._pulse = asyncio.create_task(self._pulse_worker())
+
+            # Stage 6: Chaos Resilience Activation (v18.0 Priority 3)
+            asyncio.create_task(self.chaos_agent.ignite_storm())
 
             logger.info(f"🚀 [Mainframe] Sovereign OS is ONLINE. [STATUS: v17.0-GA-AUTONOMOUS]")
             
@@ -241,12 +251,36 @@ class Orchestrator:
         brain = LeviBrain()
         
         try:
-            # Calibrate Hyper-params (PPO weight injection)
-            await self._inject_calibration_weights(mission_id)
+            # [STEP 3a] T0 GRADUATION BYPASS (O(1) Cognition)
+            # ---------------------------------------------------------
+            # We classify intent first to see if it's a graduated rule
+            intent_type = await self.perception.classify_intent(user_input)
+            bypass_rule = await graduation_service.get_bypass_rule(intent_type)
             
-            # Mission Trace & Register
-            await self._register_mission(mission_id, user_id, user_input)
-            CognitiveTracer.start_trace(mission_id, user_id, "mission_lifecycle")
+            if bypass_rule:
+                logger.info(f"🎓 [Mainframe] T0 GRADUATION BYPASS triggered for mission {mission_id}")
+                # Use deterministic response if rule dictates
+                if bypass_rule.get("deterministic_response"):
+                    result = {
+                        "response": bypass_rule["deterministic_response"],
+                        "intent": intent_type,
+                        "fidelity": 1.0,
+                        "graduated": True
+                    }
+                    # Skip to post-execution
+                else:
+                    # Modify brain params based on rule
+                    kwargs.update(bypass_rule)
+
+            # [STEP 3b] MISSION ADMISSION (HAL-0 + BFT)
+            # ---------------------------------------------------------
+            admission_payload = {
+                "mission_id": mission_id,
+                "user_id": user_id,
+                "input_hash": hashlib.sha256(user_input.encode()).hexdigest()
+            }
+            admission_payload = await graduation_service.admit_pulse(mission_id, admission_payload)
+            kwargs.update(admission_payload)
 
             if streaming:
                 return self._handle_stream_lifecycle(brain, user_input, user_id, session_id, mission_id, **kwargs)
@@ -280,6 +314,15 @@ class Orchestrator:
                 }
             )
 
+            # Step 4c: Evolution Ingestion (v18.0 Priority 2)
+            await self.evolution.ingest_mission_outcome(
+                mission_id=mission_id,
+                input_data=user_input,
+                output_data=result.get("response", ""),
+                fidelity=result.get("fidelity", 0.95),
+                agent_path=result.get("agent_sequence", [])
+            )
+
             # Non-Repudiable Audit Pulse (Layer-6)
             pulse_hash = await self._sign_mission_pulse(mission_id, result)
             result["audit_sig"] = pulse_hash
@@ -287,6 +330,15 @@ class Orchestrator:
             # Mesh Synchronization (Swarm Event)
             await self._propagate_to_mesh(mission_id, result)
             
+            # Step 4d: Production Monitoring (v18.0 Priority 1)
+            from backend.services.monitoring import monitoring_service
+            await monitoring_service.log_mission_metrics(
+                mission_id=mission_id,
+                fidelity=result.get("fidelity", 1.0),
+                latency=latency,
+                agent_count=len(result.get("agent_sequence", []))
+            )
+
             # Finalize & Deregister
             await self._deregister_mission(mission_id)
             MISSION_COMPLETED.inc()
@@ -476,6 +528,18 @@ class Orchestrator:
 
                 # 4. Identity Realignment Sweep
                 await self.identity.realign_biases()
+
+                # 5. Epistemic Drift Detection (v18.0 Priority 2)
+                if iteration % 60 == 0:
+                    # Collect current resonance embeddings (mocked for graduation)
+                    embeddings = [self.identity.get_current_bias_vector()]
+                    drift = await self.drift_detector.calculate_drift(embeddings)
+                    logger.info(f"⚖️ [Sentinel] Epistemic Drift Audit: {drift:.4f}")
+
+                # 6. Evolution Graduation (v18.0 Priority 2)
+                if iteration % 360 == 0:
+                    logger.info("🧬 [Sentinel] Initiating Swarm Evolution Graduation...")
+                    await self.evolution.evolve_swarm()
 
                 # Adaptive Sleep
                 await asyncio.sleep(600 if score > 0.95 else 60)

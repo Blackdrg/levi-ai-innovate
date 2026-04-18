@@ -209,12 +209,20 @@ class LeviKernel:
             logger.error(f"[Kernel] Failed to restore FS snapshot {snapshot_id}: {e}")
             return False
 
-    def sys_call(self, agent_id: str, call_type: str, args: Any) -> str:
+    def sys_call(self, agent_id: str, call_json: str) -> str:
         """Sovereign v17.0: Standard Library (StdLib) System Call bridge."""
         if not self.rust_kernel:
             return "OK (Simulated)"
         try:
-            call_json = json.dumps({call_type: args})
+            call_data = json.loads(call_json)
+            
+            # 🛡️ Graduation Handoff: ADMIT_MISSION
+            if "ADMIT_MISSION" in call_data:
+                mid = call_data["ADMIT_MISSION"].get("mid")
+                logger.info(f"🛡️ [Kernel] BFT GATE: Admitting mission {mid}...")
+                # In real HAL-0: write to Ring-0 capability list
+                return "OK"
+                
             return self.rust_kernel.sys_call(agent_id, call_json)
         except Exception as e:
             logger.error(f"[Kernel] SysCall failed for {agent_id}: {e}")

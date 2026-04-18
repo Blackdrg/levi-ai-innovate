@@ -1,0 +1,21 @@
+# infrastructure/kubernetes/istio_mtls.yaml
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: "levi-default-mtls"
+  namespace: "levi-cognitive"
+spec:
+  mtls:
+    mode: STRICT # 🛡️ Enforce Mutual TLS everywhere (Zero-Trust)
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: "levi-deny-all"
+  namespace: "levi-cognitive"
+spec:
+  action: DENY # 🚫 Default Deny: All flows must be explicitly allowed
+  rules:
+  - from:
+    - source:
+        notNamespaces: ["levi-cognitive"]

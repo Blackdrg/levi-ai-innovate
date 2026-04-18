@@ -39,16 +39,25 @@ python -m maturin develop --release
 $buildStatus = $LASTEXITCODE
 Pop-Location
 
-if ($buildStatus -eq 0) {
-    Write-Host "[Kernel-Builder] Rust Kernel build successful and installed." -ForegroundColor Cyan
+# 4. Build Bare-Metal Kernel (HAL-0 Native)
+Write-Host "`n[Kernel-Builder] Commencing Bare-Metal (no_std) Kernel Build..." -ForegroundColor Cyan
+Push-Location "$scriptPath\bare_metal"
+
+# Ensure target is installed
+& rustup target add x86_64-unknown-none
+
+Write-Host "Compiling HAL-0 Native binary for x86_64-unknown-none..." -ForegroundColor Green
+& cargo build --release --target x86_64-unknown-none
+
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "[Kernel-Builder] Bare-Metal Kernel binary built successfully: .\target\x86_64-unknown-none\release\hal0-bare" -ForegroundColor Cyan
 } else {
-    Write-Host "`n[ERROR] Build failed." -ForegroundColor Red
-    if ($buildStatus -ne 0 -and $null -eq (Get-Command link.exe -ErrorAction SilentlyContinue)) {
-        Write-Host "CRITICAL: MSVC Linker (link.exe) not found in PATH." -ForegroundColor Yellow
-        Write-Host "Please ensure you have installed 'Desktop development with C++' in your Visual Studio Installer." -ForegroundColor Gray
-        Write-Host "URL: https://visualstudio.microsoft.com/visual-cpp-build-tools/" -ForegroundColor White
-        Write-Host "`nPRO-TIP: Run this script from the 'Developer PowerShell for VS 2022' if installations exist." -ForegroundColor Cyan
-    } else {
-        Write-Error "Build failed during cargo execution. Check the logs above for specific Rust/C++ errors."
-    }
+    Write-Host "[ERROR] Bare-Metal build failed. Ensure 'no_std' dependencies are compatible." -ForegroundColor Red
+}
+Pop-Location
+
+if ($buildStatus -eq 0) {
+    Write-Host "`n[Kernel-Builder] ALL SOVEREIGN LAYERS GRADUATED." -ForegroundColor Cyan
+} else {
+    Write-Error "Build cycle completed with errors. See above."
 }

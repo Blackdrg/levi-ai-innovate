@@ -16,18 +16,22 @@ pub enum SysCall {
     Write(String),                                    // stdout
     Exit(i32),                                        // terminate
     ReadClock,                                        // gettimeofday
+    FileCreate { name: String, size: u64 },           // open(O_CREAT)
+    FileStat(u64),                                    // fstat
 }
 
 use crate::process_manager::ProcessManager;
 use crate::memory_controller::MemoryController;
 use crate::gpu_controller::GpuController;
 use crate::bft_signer::BftSigner;
+use crate::filesystem::SovereignFS;
 
 pub struct StdLib {
     pub process_manager: Arc<ProcessManager>,
     pub memory_controller: Arc<MemoryController>,
     pub gpu_controller: Arc<GpuController>,
     pub bft_signer: Arc<BftSigner>,
+    pub filesystem: Arc<SovereignFS>,
 }
 
 impl StdLib {
@@ -35,13 +39,15 @@ impl StdLib {
         pm: Arc<ProcessManager>, 
         mc: Arc<MemoryController>, 
         gc: Arc<GpuController>, 
-        bs: Arc<BftSigner>
+        bs: Arc<BftSigner>,
+        fs: Arc<SovereignFS>
     ) -> Self {
         Self {
             process_manager: pm,
             memory_controller: mc,
             gpu_controller: gc,
             bft_signer: bs,
+            filesystem: fs,
         }
     }
 
@@ -81,6 +87,18 @@ impl StdLib {
                     .unwrap()
                     .as_secs();
                 Ok(now.to_string())
+            },
+            SysCall::FileCreate { name, size } => {
+                let inode = self.filesystem.create_file(name, size, 0)?;
+                Ok(inode.to_string())
+            },
+            SysCall::FileStat(inode) => {
+                let inodes = self.filesystem.inodes.lock().unwrap();
+                if let Some(i) = inodes.get(&inode) {
+                    Ok(format!(r#"{{"inode":{},"size":{},"ftype":"{:?}"}}"#, i.id, i.size, i.ftype))
+                } else {
+                    Err("ENOENT: Inode not found".to_string())
+                }
             }
         }
     }

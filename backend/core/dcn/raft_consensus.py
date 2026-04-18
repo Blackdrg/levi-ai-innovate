@@ -181,6 +181,17 @@ class RaftConsensus:
         term_raw = _s(await redis.get(self.term_key))
         self.current_term = int(term_raw) if term_raw else 0
 
+        # --- Latency Awareness: Prefer low-latency nodes ---
+        node_latencies = {}
+        for nid in active_nodes | {self.node_id}:
+            raw_data = await redis.hget(self.nodes_key, nid)
+            if raw_data:
+                try:
+                    data = json.loads(_s(raw_data))
+                    node_latencies[nid] = data.get("latency_ms", 0.0)
+                except Exception:
+                    node_latencies[nid] = 0.0
+
         # --- Check existing leader ---------------------------------------
         leader = _s(await redis.get(self.leader_key))
         all_nodes = active_nodes | {self.node_id}
@@ -190,8 +201,12 @@ class RaftConsensus:
 
         # --- No live leader: run election --------------------------------
         new_term = self.current_term + 1
-        candidates = sorted(all_nodes)
-        elected = candidates[0] if candidates else self.node_id
+        
+        # 🌐 Cross-Region: Filter out nodes with high latency (>300ms)
+        stable_candidates = [n for n in active_nodes | {self.node_id} if node_latencies.get(n, 0) < 300]
+        if not stable_candidates: stable_candidates = sorted(active_nodes | {self.node_id})
+        
+        elected = sorted(stable_candidates)[0] if stable_candidates else self.node_id
 
         # SET NX: first writer wins (race-safe)
         set_ok = await redis.set(self.leader_key, elected, ex=_LEADER_TTL, nx=True)

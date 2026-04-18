@@ -1,0 +1,38 @@
+# infrastructure/kubernetes/ingress_caching.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: levi-ingress-caching
+  namespace: levi-cognitive
+  annotations:
+    kubernetes.io/ingress.class: "gce"
+    # Enable Cloud CDN on the Load Balancer
+    cloud.google.com/backend-config: '{"default": "levi-backend-config"}'
+    # NGINX Ingress Caching (if using nginx-ingress)
+    nginx.ingress.kubernetes.io/proxy-buffering: "on"
+    nginx.ingress.kubernetes.io/proxy-cache: "levi-cache"
+    nginx.ingress.kubernetes.io/proxy-cache-valid: "200 10m"
+    nginx.ingress.kubernetes.io/proxy-cache-key: "$scheme$proxy_host$request_uri"
+spec:
+  rules:
+  - host: api.levi-ai.sovereign
+    http:
+      paths:
+      - path: /api/v1/public
+        pathType: Prefix
+        backend:
+          service:
+            name: levi-backend-service
+            port:
+              number: 80
+---
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: levi-backend-config
+  namespace: levi-cognitive
+spec:
+  cdn:
+    enabled: true
+    policy:
+      cacheMode: CACHE_ALL_STATIC

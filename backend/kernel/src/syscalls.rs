@@ -19,6 +19,12 @@ pub struct SysCallDispatcher;
 
 impl SysCallDispatcher {
     pub fn dispatch(call_type: SysCallType, args: Vec<u64>) -> Result<u64, String> {
+        // 🛡️ [Security] SysCall Filtering (seccomp-lite)
+        if Self::is_blacklisted(&call_type) {
+            log::error!("🔥 [Security] SANDBOX ESCAPE BLOCKED: Blacklisted SysCall {:?} rejected.", call_type);
+            return Err("EPERM: SysCall forbidden by security policy".to_string());
+        }
+
         match call_type {
             SysCallType::Write => {
                 // Implementation for sys_write
@@ -29,6 +35,16 @@ impl SysCallDispatcher {
                 Ok(0)
             },
             _ => Err("Syscall not yet implemented in this Ring".to_string()),
+        }
+    }
+
+    fn is_blacklisted(call_type: &SysCallType) -> bool {
+        match call_type {
+            SysCallType::Fork | SysCallType::Exec => {
+                // Deny process spawning directly through syscalls; must use WAVE_SPAWN
+                true
+            },
+            _ => false,
         }
     }
 }

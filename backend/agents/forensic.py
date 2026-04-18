@@ -44,7 +44,10 @@ class ForensicAgent(BaseAgent):
         # 2. Verify Signatures
         valid = await self._verify_pulse_chain(trace)
         
-        # 3. Analyze for Hallucinations or Bias
+        # 3. Graduation Compliance Check
+        compliance = await self._check_graduation_compliance(trace)
+        
+        # 4. Analyze for Hallucinations or Bias
         from backend.utils.llm_utils import call_heavyweight_llm
         analysis_prompt = (
             "You are the LEVI Forensic Analyst. Review the following mission trace for:\n"
@@ -52,6 +55,7 @@ class ForensicAgent(BaseAgent):
             "2. Potential security leaks (credentials, paths).\n"
             "3. Hallucination signals.\n\n"
             f"TRACE:\n{json.dumps(trace, indent=2)}\n\n"
+            f"COMPLIANCE_ALERTS: {compliance}\n\n"
             "Provide a forensic verdict (SAFE | TAMPERED | ANOMALY)."
         )
         
@@ -59,11 +63,12 @@ class ForensicAgent(BaseAgent):
         
         return AgentOutput(
             agent_id=self.agent_id,
-            success=valid,
+            success=valid and (not compliance),
             output=f"Forensic Analysis Complete. Status: {'VERIFIED' if valid else 'TAMPERED'}.\n\n{verdict}",
             data={
                 "integrity_verdict": "VERIFIED" if valid else "TAMPERED",
                 "detailed_analysis": verdict,
+                "graduation_compliance": compliance,
                 "trace_hash": hashlib.sha256(json.dumps(trace).encode()).hexdigest()
             }
         )
@@ -77,3 +82,15 @@ class ForensicAgent(BaseAgent):
             if not await SovereignKMS.verify_trace(pulse, sig):
                 return False
         return True
+
+    async def _check_graduation_compliance(self, trace: List[Dict[str, Any]]) -> List[str]:
+        """Ensures the mission followed v17.5 Graduation protocols."""
+        alerts = []
+        for pulse in trace:
+            # Check for HAL-0 admission
+            if not pulse.get("hal0_admitted"):
+                alerts.append(f"VIOLATION: Pulse {pulse.get('step')} bypassed HAL-0 admission gate.")
+            # Check for BFT signing
+            if not pulse.get("bft_signed"):
+                alerts.append(f"VIOLATION: Pulse {pulse.get('step')} missing hardware-level BFT signature.")
+        return alerts

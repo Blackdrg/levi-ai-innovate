@@ -40,6 +40,15 @@ class SovereignRateLimiter:
         results = pipe.execute()
         current_count = results[2]
         
+        # 🔨 Penalty Box Logic: If they exceed by 2x, block for longer
+        if current_count > limit * 2:
+            logger.critical(f"🔒 [RateLimiter] MALICIOUS BURST DETECTED. Penalty box active for {key}")
+            redis_client.setex(f"penalty:{key}", 600, "active")
+            return False, current_count
+
+        if redis_client.exists(f"penalty:{key}"):
+            return False, current_count
+
         allowed = current_count <= limit
         if not allowed:
             logger.warning(f"[RateLimiter] Limit exceeded for {key}: {current_count}/{limit}")

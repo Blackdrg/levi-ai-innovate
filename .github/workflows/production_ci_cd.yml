@@ -1,5 +1,5 @@
 # .github/workflows/production_ci_cd.yml
-name: LEVI-AI Production Pipeline
+name: LEVI-AI Sovereign Pro Pipeline
 
 on:
   push:
@@ -10,11 +10,12 @@ on:
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   SERVICE_NAME: levi-backend
+  CLUSTER_NAME: levi-sovereign-cluster-us
   REGION: us-central1
 
 jobs:
-  test:
-    name: Graduation Audit Gate
+  test-and-lint:
+    name: Critical Audit Gate
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -27,16 +28,42 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install pytest pytest-asyncio
-    - name: Run Production Audit Tests
+    - name: Run Forensic Audit Tests
       run: |
-        # Use a mock environment for CI tests
         export ENVIRONMENT=testing
-        pytest tests/v14_production_audit.py
+        pytest tests/forensic_audit.py
 
-  build-and-deploy:
-    name: Build & Deploy to Sovereign Cloud
-    needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  kernel-build:
+    name: HAL-0 Rust Kernel Verification
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+    - name: Compile Bare-Metal Stubs
+      run: |
+        cd backend/kernel/bare_metal
+        cargo build --release
+
+  terraform-plan:
+    name: Infrastructure Blueprint Validation
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: hashicorp/setup-terraform@v2
+    - name: Terraform Init & Plan
+      run: |
+        cd infrastructure/terraform
+        terraform init
+        terraform plan -var="gcp_project_id=${{ secrets.GCP_PROJECT_ID }}"
+
+  deploy:
+    name: Production Graduation Push
+    needs: [test-and-lint, kernel-build, terraform-plan]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -51,8 +78,7 @@ jobs:
       uses: 'google-github-actions/setup-gcloud@v1'
 
     - name: 'Configure Docker'
-      run: |
-        gcloud auth configure-docker --quiet
+      run: gcloud auth configure-docker --quiet
 
     - name: 'Build and Push Docker Image'
       run: |
@@ -61,11 +87,14 @@ jobs:
         docker push gcr.io/$PROJECT_ID/$SERVICE_NAME:$GITHUB_SHA
         docker push gcr.io/$PROJECT_ID/$SERVICE_NAME:latest
 
-    - name: 'Deploy to Cloud Run'
+    - name: 'Apply Infrastructure Updates'
       run: |
-        gcloud run deploy $SERVICE_NAME \
-          --image gcr.io/$PROJECT_ID/$SERVICE_NAME:$GITHUB_SHA \
-          --region $REGION \
-          --platform managed \
-          --allow-unauthenticated \
-          --service-account levi-cloud-run@$PROJECT_ID.iam.gserviceaccount.com
+        cd infrastructure/terraform
+        terraform init
+        terraform apply -auto-approve -var="gcp_project_id=${{ secrets.GCP_PROJECT_ID }}"
+
+    - name: 'Deploy to GKE Autopilot'
+      run: |
+        gcloud container clusters get-credentials $CLUSTER_NAME --region $REGION
+        # Update image version in K8s deployment
+        kubectl set image deployment/levi-backend-deployment levi-backend=gcr.io/$PROJECT_ID/$SERVICE_NAME:$GITHUB_SHA

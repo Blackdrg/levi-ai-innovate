@@ -64,9 +64,9 @@ impl LeviKernel {
 
         let process_manager = Arc::new(process_manager::ProcessManager::new());
         let memory_controller = Arc::new(memory_controller::MemoryController::new(process_manager.clone(), 1024));
-        let scheduler = Arc::new(scheduler::MissionScheduler::new());
+        let scheduler = Arc::new(scheduler::MissionScheduler::new(16)); // 16-Core SMP Support
         let gpu_controller = Arc::new(gpu_controller::GpuController::new());
-        let filesystem = Arc::new(filesystem::SovereignFS::new());
+        let filesystem = Arc::new(filesystem::SovereignFS::new("sovereign.img".to_string()));
         let network_stack = Arc::new(network_stack::SovereignNetworkStack::new());
         let mmu = Arc::new(memory_paging::VirtualMemoryManager::new(16384));
         let signals = Arc::new(tokio::sync::Mutex::new(signals::SignalManager::new()));
@@ -80,6 +80,7 @@ impl LeviKernel {
             memory_controller.clone(),
             gpu_controller.clone(),
             bft_signer.clone(),
+            filesystem.clone(),
         ));
 
         let kernel = Self {
@@ -110,8 +111,13 @@ impl LeviKernel {
     }
 
     fn send_ipc(&self, channel: String, from_pid: String, payload: Vec<u8>) -> PyResult<()> {
-        let msg = ipc::IPCMessage { from_pid, payload };
-        self.ipc.send(channel, msg);
+        let msg = ipc::IPCMessage { 
+            from_pid, 
+            payload,
+            signature: Some([0u8; 64]), // Simulating a signed message from userspace
+        };
+        self.ipc.send(channel, msg)
+            .map_err(|e| PyRuntimeError::new_err(e))?;
         Ok(())
     }
 

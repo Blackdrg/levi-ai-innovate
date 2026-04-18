@@ -53,6 +53,17 @@ class PulseEmitter:
                         "source": "pulse_emitter"
                     })
 
+                # 5. DCN Mesh Consensus Sync (Every 1 minute)
+                await sovereign_event_bus.emit("dcn_mesh_sync", {
+                    "event_type": "DCN_SYNC_PULSE",
+                    "payload": {
+                        "node_id": os.getenv("NODE_ID", "node-alpha"),
+                        "term": step,
+                        "action": "HEARTBEAT_ACK"
+                    },
+                    "source": "pulse_emitter"
+                })
+
                 step += 1
                 await asyncio.sleep(60)
             except Exception as e:

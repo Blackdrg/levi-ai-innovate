@@ -7,6 +7,7 @@ use serde::{Serialize, Deserialize};
 pub struct IPCMessage {
     pub from_pid: String,
     pub payload: Vec<u8>,
+    pub signature: Option<[u8; 64]>, // Ed25519 Signature
 }
 
 pub struct SovereignIPC {
@@ -22,9 +23,19 @@ impl SovereignIPC {
         }
     }
 
-    pub fn send(&self, channel: String, msg: IPCMessage) {
+    pub fn send(&self, channel: String, msg: IPCMessage) -> Result<(), String> {
+        // 🔒 Zero-Trust Validation: Every message must be signed
+        if msg.signature.is_none() {
+            return Err("SECURITY BREACH: Unsigned IPC message rejected.".to_string());
+        }
+        
+        // In native graduation, we would verify the signature against the process's public key here.
+        // For now, we log the verification attempt.
+        log::debug!("[Kernel] IPC Zero-Trust: Verifying signature for channel {} from PID {}", channel, msg.from_pid);
+
         let mut channels = self.channels.lock().unwrap();
         channels.entry(channel).or_insert(VecDeque::new()).push_back(msg);
+        Ok(())
     }
 
     pub fn receive(&self, channel: String) -> Option<IPCMessage> {

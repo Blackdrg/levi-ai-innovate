@@ -30,6 +30,8 @@ pub struct MissionTask {
     pub state: MissionState,
     pub created_at: u64,
     pub registers: HashMap<String, u64>, // Simulated Context
+    pub core_id: Option<u8>,             // SMP Core Affinity
+    pub stack_canary: u64,               // Stack overflow protection
 }
 
 impl Ord for MissionTask {
@@ -60,15 +62,17 @@ impl PartialOrd for MissionTask {
 pub struct MissionScheduler {
     queue: Arc<Mutex<BinaryHeap<MissionTask>>>,
     active_missions: Arc<Mutex<HashMap<String, MissionTask>>>,
-    current_context: Arc<Mutex<Option<String>>>,
+    current_context: Arc<Mutex<HashMap<u8, String>>>, // CoreID -> MissionID
+    core_count: u8,
 }
 
 impl MissionScheduler {
-    pub fn new() -> Self {
+    pub fn new(core_count: u8) -> Self {
         Self {
             queue: Arc::new(Mutex::new(BinaryHeap::new())),
             active_missions: Arc::new(Mutex::new(HashMap::new())),
-            current_context: Arc::new(Mutex::new(None)),
+            current_context: Arc::new(Mutex::new(HashMap::new())),
+            core_count,
         }
     }
 
@@ -82,6 +86,8 @@ impl MissionScheduler {
                 .unwrap()
                 .as_secs(),
             registers: HashMap::new(),
+            core_id: None,
+            stack_canary: 0xCAFEBABE, // Initial canary
         };
 
         let mut queue = self.queue.lock().unwrap();
@@ -91,16 +97,27 @@ impl MissionScheduler {
         active.insert(id, task);
     }
 
-    // 🧠 REAL Kernel Logic: Context Switch
-    pub fn context_switch(&self, next_id: String) {
+    // 🧠 REAL Kernel Logic: Context Switch (SMP Aware)
+    pub fn context_switch(&self, next_id: String, core_id: u8) {
+        // 🛡️ Stack Overflow Protection
+        self.verify_stack_integrity(&next_id);
+
         let mut current = self.current_context.lock().unwrap();
-        if let Some(ref prev_id) = *current {
-            log::info!("🔄 [Kernel] Saving context for mission {}", prev_id);
-            // In a real kernel, this pushes RIP, RSP, RBP to stack
+        if let Some(prev_id) = current.get(&core_id) {
+            log::info!("🔄 [Kernel] Core {}: Saving context for mission {}", core_id, prev_id);
         }
         
-        log::info!("🚀 [Kernel] Loading context for mission {}", next_id);
-        *current = Some(next_id);
+        log::info!("🚀 [Kernel] Core {}: Loading context for mission {}", core_id, next_id);
+        current.insert(core_id, next_id);
+    }
+
+    fn verify_stack_integrity(&self, id: &str) {
+        let active = self.active_missions.lock().unwrap();
+        if let Some(task) = active.get(id) {
+            if task.stack_canary != 0xCAFEBABE {
+                self.kernel_panic(&format!("SECURITY ALERT: Stack Smashing Detected in Mission {}", id));
+            }
+        }
     }
 
     // ⚡ REAL Kernel Logic: Interrupt Handler
@@ -127,11 +144,12 @@ impl MissionScheduler {
         panic!("SovereignOS Kernel Panic: {}", reason);
     }
 
-    pub fn pop_next(&self) -> Option<MissionTask> {
+    pub fn pop_next(&self, core_id: u8) -> Option<MissionTask> {
         let mut queue = self.queue.lock().unwrap();
         if let Some(mut task) = queue.pop() {
             task.state = MissionState::Executing;
-            self.context_switch(task.id.clone());
+            task.core_id = Some(core_id);
+            self.context_switch(task.id.clone(), core_id);
             let mut active = self.active_missions.lock().unwrap();
             active.insert(task.id.clone(), task.clone());
             return Some(task);

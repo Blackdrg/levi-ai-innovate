@@ -31,6 +31,11 @@ from backend.services.health_monitor import health_monitor
 from backend.core.goal_engine import goal_engine
 from backend.services.voice.processor import AudioPulseProcessor
 from backend.workers.event_consumer import start_event_consumers
+from backend.services.discovery import service_discovery
+from backend.services.dr_manager import dr_manager
+from backend.services.chaos_testing import chaos_agent
+from backend.services.secret_rotator import secret_rotator
+
 
 # Initialize logger
 logger = logging.getLogger("levi")
@@ -139,6 +144,15 @@ async def lifespan(app: FastAPI):
     # 10. Start Audio Pulse Recon (Phase 5)
     audio_processor = AudioPulseProcessor(user_id="system_recon")
     create_tracked_task(audio_processor.start(), name="audio-pulse-recon")
+
+    # 11. Sovereign Graduation Services (v17.5-NATIVE)
+    create_tracked_task(service_discovery.start_heartbeat_loop(), name="service-discovery")
+    create_tracked_task(dr_manager.check_regional_health(), name="dr-check")
+    create_tracked_task(secret_rotator.check_and_rotate(), name="secret-rotate")
+    
+    if os.getenv("ENABLE_CHAOS") == "true":
+        create_tracked_task(chaos_agent.start_chaos_simulation(), name="chaos-agent")
+
     
     # 🛡️ Phase 2: Model Pre-loading (Risk 2.2 Mitigation)
     # Pre-load embedding models and intent anchors during startup to eliminate first-request latency.

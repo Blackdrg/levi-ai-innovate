@@ -1,5 +1,6 @@
 """
 LEVI-AI Multi-Level Cache Manager v14.1.
+T0: Rule Graduation (Deterministic O(1) - Memory-Mapped)
 T1: Response Cache (Exact Match - Redis)
 T2: Semantic Cache (Vector Similarity - FAISS/VectorDB)
 T3: Strategy Cache (DAG Template Reuse - Redis)
@@ -21,6 +22,23 @@ logger = logging.getLogger(__name__)
 class CacheManager:
     DEFAULT_TTL = 86400 # 24 hours
     SEMANTIC_THRESHOLD = 0.92
+    
+    # 🎓 Tier-0: Deterministic O(1) Graduated Rules
+    _T0_BYPASS_CACHE: Dict[str, Any] = {
+        "analysis:security": {"mode": BrainMode.THOUGHTFUL, "temperature": 0.2, "fidelity_enforced": True},
+        "planning:rapid": {"mode": BrainMode.REACTION, "temperature": 0.9, "fidelity_enforced": False},
+        "mission:audit": {"mode": BrainMode.CRITICAL, "temperature": 0.0, "fidelity_enforced": True},
+        "system:diagnostics": {"mode": BrainMode.SOVEREIGN, "temperature": 0.5, "fidelity_enforced": True}
+    }
+
+    @classmethod
+    async def get_rule_bypass(cls, intent_type: str) -> Optional[Dict[str, Any]]:
+        """T0: Graduated Rule Promotion Bypass (Sub-millisecond)."""
+        rule = cls._T0_BYPASS_CACHE.get(intent_type)
+        if rule:
+            logger.info(f"🎓 [Cache] T0 GRADUATION HIT: Bypassing inference for {intent_type}")
+            return rule
+        return None
 
     @classmethod
     def _get_key(cls, category: str, text: str) -> str:

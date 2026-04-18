@@ -140,6 +140,73 @@ resource "google_redis_instance" "cache" {
   authorized_network = var.vpc_id
 }
 
+# --- Global Cloud Load Balancer (Multi-Region Ingress) ---
+resource "google_compute_global_forwarding_rule" "default" {
+  name       = "levi-global-lb"
+  target     = google_compute_target_http_proxy.default.id
+  port_range = "80"
+}
+
+resource "google_compute_target_http_proxy" "default" {
+  name    = "levi-http-proxy"
+  url_map = google_compute_url_map.default.id
+}
+
+resource "google_compute_url_map" "default" {
+  name            = "levi-url-map"
+  default_service = google_compute_backend_service.primary.id
+
+  host_rule {
+    hosts        = ["*"]
+    path_matcher = "allpaths"
+  }
+
+  path_matcher {
+    name            = "allpaths"
+    default_service = google_compute_backend_service.primary.id
+  }
+}
+
+resource "google_compute_backend_service" "primary" {
+  name        = "levi-backend-service"
+  port_name   = "http"
+  protocol    = "HTTP"
+  timeout_sec = 30
+  
+  backend {
+    group = google_container_cluster.primary.node_pool[0].instance_group_urls[0]
+  }
+
+  backend {
+    group = google_container_cluster.secondary.node_pool[0].instance_group_urls[0]
+  }
+
+  health_checks = [google_compute_health_check.default.id]
+}
+
+resource "google_compute_health_check" "default" {
+  name               = "levi-health-check"
+  check_interval_sec = 5
+  timeout_sec        = 5
+  http_health_check {
+    port = 8000
+    request_path = "/healthz"
+  }
+}
+
+# --- Workload Identity (Zero-Trust Security) ---
+resource "google_service_account" "levi_identity" {
+  account_id   = "levi-sovereign-identity"
+  display_name = "Sovereign Workload Identity"
+}
+
+resource "google_service_account_iam_member" "workload_identity" {
+  service_account_id = google_service_account.levi_identity.name
+  role               = "roles/iam.workloadIdentityUser"
+  member             = "serviceAccount:${var.gcp_project_id}.svc.id.goog[levi-cognitive/levi-sa]"
+}
+
+
 output "postgres_endpoint" {
   value = var.cloud_provider == "gcp" ? google_sql_database_instance.postgres.public_ip_address : (length(aws_db_instance.postgres) > 0 ? aws_db_instance.postgres[0].endpoint : "")
 }

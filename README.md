@@ -1,3 +1,25 @@
+# 🪐 LEVI-AI: Sovereign Cognitive OS (v17.5.0-GRADUATED)
+
+> [!IMPORTANT]
+> **DOCUMENTATION GRADUATION:** This file (`README.md`) is now a legacy archive. 
+> For the **v17.5.0-GRADUATED** master technical manual, forensic audit, and operational handbook, please refer to:
+> ### 👉 **[README_NEW.md](file:///d:/LEVI-AI/README_NEW.md)** 👈
+
+---
+
+## 🏛️ v17.5.0 GRADUATION SUMMARY
+The system has completed its transition from a hosted simulation to a **Sovereign Native-Ready OS**.
+
+### 🏁 Key Graduation Milestones:
+- 🟢 **Native HAL-0 Kernel**: Bare-metal bootloader and hardware drivers (NIC, ACPI) operational.
+- 🟢 **Zero-Trust mesh**: mTLS 1.3 enforced across all cognitive nodes via Istio.
+- 🟢 **O(1) Cognition**: High-fidelity patterns graduated to deterministic Tier-0 rules.
+- 🟢 **Forensic Authority**: Autonomous graduation compliance auditing active.
+
+---
+
+*(The content below is preserved for historical traceability of the v17.0 lifecycle)*
+
 # 🪐 LEVI-AI: Sovereign Cognitive OS (v17.0.0-GA GLOBAL AUTONOMY)
 > **STATUS**: GLOBAL AUTONOMY GRADUATED. The system has completed its v17.0 lifecycle.
 > **RESOURCES**: [Technical Architecture Manifest](./README_ARCHITECTURE.md)

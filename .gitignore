@@ -15,6 +15,10 @@ ENV/
 *.sqlite
 *.sqlite3
 
+# Installers and binaries
+vs_BuildTools.exe
+pip
+
 # Logs
 *.log
 server_log.txt
@@ -43,6 +47,9 @@ backend/__pycache__/
 rasa/__pycache__/
 node_modules/
 frontend/node_modules/
+levi-frontend/node_modules/
+desktop/node_modules/
+mobile/node_modules/
 
 # Temp files
 *.exe
@@ -70,8 +77,45 @@ commit_*.bat
 .pytest_cache/
 htmlcov/
 .coverage
+logs/
+scratch/
+tmp/
+.temp/
 
-# Sovereign Data Persistence
+
+# Sovereign Data Persistence (Local only)
 data/
 artifacts/weights/
+backend/data/models/registry/
+backend/data/training/datasets/
+
+# Rust build artifacts
+target/
+backend/kernel/target/
+debug/
+release/
+*.pdb
+
+# Large binaries / models (Use Git LFS or external Model Registry)
+models/
+brain/models/
+*.bin
+*.pt
+*.pth
+*.onnx
+*.weights
+*.gguf
+
+# Machine-specific state
+.cpu_id
+.node_id
+cluster_state.json
+raft_snapshot.bin
+
+# Sovereign OS Images & Binaries
+sovereign.img
+*.elf
+*.iso
+*.img
+bootloader.bin
 
