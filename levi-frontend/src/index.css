@@ -1,6 +1,6 @@
 /* Reset and Base Styles - Overridden by App-specific styles */
 :root {
-  background: #03030e;
+  background: var(--bg, #F8FAFC);
 }
 body {
   margin: 0;

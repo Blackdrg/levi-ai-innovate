@@ -1,5 +1,5 @@
 """
-LEVI-AI Evolutionary Intelligence Engine (v15.0) [ACTIVE]
+LEVI-AI Evolutionary Intelligence Engine (v22.0) [ACTIVE]
 Hardened self-improvement engine managing fragility tracking and pattern graduation.
 STATUS: This module is ACTIVE and managing autonomous mutations.
 """
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 class EvolutionaryIntelligenceEngine:
     """
-    Sovereign Evolution Engine v15.0 [ACTIVE].
+    Sovereign Evolution Engine v22.0 [ACTIVE].
     Unifies Fragility Tracking and Deterministic Rule Graduation.
     """
     DISABLED = False
@@ -585,9 +585,9 @@ class EvolutionaryIntelligenceEngine:
             
             # Trigger PPO train step if buffer is ready
             ppo.add_trajectory(traj)
-            if len(ppo.trajectories) >= 5: # Frequent updates for graduation visibility
-                logger.info(f"🔥 [Evolution] PPO Batch Threshold met (Anchor: {batch_id[:8]}). Optimizing Weights...")
-                ppo.train_step()
+            if len(ppo.trajectories) >= 20: # Optimized for v22 graduation visibility
+                 logger.info(f"🔥 [Evolution] PPO Batch Threshold met (Anchor: {batch_id[:8]}). Optimizing Weights...")
+                 await ppo.train_step()
                 
         except Exception as e:
             logger.error(f"❌ [Evolution] PPO Wiring failure: {e}")
@@ -658,3 +658,20 @@ class EvolutionaryIntelligenceEngine:
             logger.info(f"✅ [Evolution] Mutation Proposal PERSISTED: {proposal_name}")
         except Exception as e:
             logger.error(f"[Evolution] Patch synthesis failed: {e}")
+
+    @classmethod
+    async def evolve_swarm(cls):
+        """
+        Sovereign v22.0: Self-Driven Swarm Evolution.
+        Triggered by Orchestrator Sentinel.
+        Coordinates dreaming cycles and weight tuning.
+        """
+        logger.info("🌌 [Evolution] Sentinel Trigger: Initializing Swarm Evolution Pulse...")
+        await cls.run_dreaming_session()
+        
+        # Check if we have enough PPO data to train
+        from .evolution.ppo_engine import get_ppo_engine
+        ppo = get_ppo_engine()
+        if len(ppo.trajectories) >= 20:
+             logger.info("🔥 [Evolution] PPO Graduation Threshold met. Commencing policy optimization...")
+             await ppo.train_step()

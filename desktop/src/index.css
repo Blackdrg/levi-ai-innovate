@@ -25,6 +25,7 @@ body {
 
 .command-box {
   background: var(--bg-primary);
+  -webkit-backdrop-filter: var(--glass);
   backdrop-filter: var(--glass);
   width: 650px;
   border-radius: 12px;

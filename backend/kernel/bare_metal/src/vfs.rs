@@ -60,8 +60,12 @@
 
 use crate::println;
 use crate::ata::ATA_PRIMARY;
+use crate::journaling::{SovereignJournal, JournalEntry};
 use alloc::vec::Vec;
 use core::mem;
+use core::sync::atomic::{AtomicU64, Ordering};
+
+static TRANSACTION_ID: AtomicU64 = AtomicU64::new(1);
 
 // ─── Layout constants ─────────────────────────────────────────────────────────
 
@@ -309,9 +313,15 @@ fn format_fs() {
 /// Create a regular file under the root directory.
 /// Returns the new inode number or None if out of resources.
 pub fn create_file(name: &str, content: &[u8]) -> Option<u32> {
-    println!(" [VFS] create_file('{}', {} bytes)", name, content.len());
+    // 1. Journal the creation intent
+    SovereignJournal::commit(JournalEntry {
+        transaction_id: TRANSACTION_ID.fetch_add(1, Ordering::SeqCst),
+        sector_lba: INODE_TABLE_LBA,
+        operation: 0, // Write
+        checksum: 0,
+    });
 
-    // 1. Allocate an inode number.
+    // 2. Allocate an inode number.
     let ino = alloc_inode_number()?;
 
     // 2. Allocate enough data blocks for the content.
@@ -486,3 +496,55 @@ fn add_dir_entry(dir_ino: u32, child_ino: u32, name: &str, file_type: u8) {
         }
     }
 }
+
+/// Atomic append: extends a file with new data, allocating blocks if needed.
+pub fn append_to_file(name: &str, content: &[u8]) -> bool {
+    let ino = match lookup(name) {
+        Some(i) => i,
+        None => return false,
+    };
+
+    let mut inode = read_inode(ino);
+    
+    // 1. Journal the append intent
+    SovereignJournal::commit(JournalEntry {
+        transaction_id: TRANSACTION_ID.fetch_add(1, Ordering::SeqCst),
+        sector_lba: INODE_TABLE_LBA + (ino / 8),
+        operation: 0, // Write
+        checksum: 0,
+    });
+
+    let old_size = inode.size as usize;
+    let new_size = old_size + content.len();
+    
+    let old_blocks = (old_size + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    let new_blocks = (new_size + BLOCK_SIZE - 1) / BLOCK_SIZE;
+
+    if new_blocks > MAX_DIRECT_BLOCKS { return false; }
+
+    for i in old_blocks..new_blocks {
+        if let Some(blk) = alloc_block() {
+            inode.blocks[i] = blk;
+            inode.block_count += 1;
+        } else {
+            return false;
+        }
+    }
+
+    // Write content
+    for i in 0..content.len() {
+        let pos = old_size + i;
+        let blk_idx = pos / BLOCK_SIZE;
+        let off = pos % BLOCK_SIZE;
+        
+        let blk = inode.blocks[blk_idx];
+        let mut data = read_data_block(blk);
+        data[off] = content[i];
+        write_data_block(blk, &data);
+    }
+
+    inode.size = new_size as u32;
+    write_inode(ino, &inode);
+    true
+}
+

@@ -61,3 +61,6 @@ class DatasetManager:
         return self.manifest["versions"][-1]["path"]
 
 dataset_manager = DatasetManager()
+
+def get_dataset_manager() -> DatasetManager:
+    return dataset_manager

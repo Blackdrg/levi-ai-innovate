@@ -62,37 +62,66 @@ async def telemetry_websocket(websocket: WebSocket, client_id: str):
     await websocket.accept()
     from backend.broadcast_utils import SovereignBroadcaster
     
-    # Subscribe to global and client-specific channels
-    queue = asyncio.Queue()
-    
-    def on_event(event_data):
-        asyncio.create_task(queue.put(event_data))
+    async def listen_and_send(user_id: str):
+        try:
+            async for pulse in SovereignBroadcaster.subscribe(user_id):
+                # SovereignBroadcaster.subscribe yields SSE-formatted strings
+                # We need to extract the JSON data part for the WebSocket
+                # Each pulse is like "event: type\ndata: {...}\n\n"
+                lines = pulse.split("\n")
+                data_line = next((l for l in lines if l.startswith("data: ")), None)
+                if data_line:
+                    data_str = data_line[6:]
+                    try:
+                        await websocket.send_text(data_str)
+                    except Exception:
+                        break
+        except Exception as e:
+            logger.error(f"[Telemetry] WS Broadcaster task failed: {e}")
 
-    subscription = SovereignBroadcaster.subscribe(f"user:{client_id}", on_event)
-    global_sub = SovereignBroadcaster.subscribe("system:pulse", on_event)
+    # Start subscription tasks
+    tasks = [
+        asyncio.create_task(listen_and_send(f"user:{client_id}")),
+        asyncio.create_task(listen_and_send("system:pulse")),
+        asyncio.create_task(listen_and_send("global"))
+    ]
     
     try:
         while True:
-            # Check for incoming messages (e.g. commands to pause/resume)
-            try:
-                # Non-blocking check for internal queue
-                event = await asyncio.wait_for(queue.get(), timeout=0.1)
-                await websocket.send_json(event)
-            except asyncio.TimeoutError:
-                pass
-            
             # Check for client disconnect
             try:
-                # We don't expect much from client, but we must pump the receiver
-                await asyncio.wait_for(websocket.receive_text(), timeout=0.01)
+                await asyncio.wait_for(websocket.receive_text(), timeout=1.0)
             except asyncio.TimeoutError:
                 pass
                 
     except (WebSocketDisconnect, asyncio.CancelledError):
         logger.info(f"[Telemetry] WebSocket client {client_id} disconnected.")
     finally:
-        SovereignBroadcaster.unsubscribe(subscription)
-        SovereignBroadcaster.unsubscribe(global_sub)
+        for t in tasks:
+            t.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+@router.websocket("/ws/telemetry")
+async def telemetry_websocket_kernel(websocket: WebSocket):
+    """
+    Dedicated WebSocket for Real-Time Kernel Telemetry.
+    Streams structured records from the serial bridge.
+    """
+    await websocket.accept()
+    from backend.broadcast_utils import SovereignBroadcaster
+    
+    try:
+        async for pulse in SovereignBroadcaster.subscribe("system:pulse"):
+            # Each pulse looks like "event: kernel_event\ndata: {...}\n\n"
+            lines = pulse.split("\n")
+            data_line = next((l for l in lines if l.startswith("data: ")), None)
+            if data_line:
+                data_str = data_line[6:]
+                await websocket.send_text(data_str)
+    except (WebSocketDisconnect, asyncio.CancelledError):
+        logger.info("[Telemetry] Kernel WebSocket disconnected.")
+    except Exception as e:
+        logger.error(f"[Telemetry] Kernel WS failed: {e}")
 
 @router.get("/workflow/{mission_id}")
 async def get_workflow_trace(mission_id: str, current_user = Depends(get_current_user)):

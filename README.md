@@ -1,4 +1,4 @@
-# 🪐 LEVI-AI: Sovereign Cognitive OS (v17.5.0-GRADUATED)
+# 🪐 LEVI-AI: Sovereign Cognitive OS (v22.0.0-GA-GRADUATED)
 
 > [!IMPORTANT]
 > **DOCUMENTATION GRADUATION:** This file (`README.md`) is now a legacy archive. 

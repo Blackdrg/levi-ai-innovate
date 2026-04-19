@@ -34,6 +34,7 @@ class SovereignGenerator:
     def __init__(self):
         self.groq_api_key = os.getenv("GROQ_API_KEY")
         self.together_api_key = os.getenv("TOGETHER_API_KEY")
+        self.router = LLMRouter()
 
     async def stream_response(self, messages: List[Dict], model: Optional[str] = None, model_tier: str = "L2", lang: str = "en", task_type: str = "chat"):
         """

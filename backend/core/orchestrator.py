@@ -69,6 +69,7 @@ from backend.utils.latency_tracer import LatencyTracer
 from backend.kernel.kernel_wrapper import kernel
 from backend.utils.kms import SovereignKMS
 from backend.services.graduation import graduation_service
+from backend.services.rust_runtime_bridge import rust_bridge
 
 # ── DCN / swarm ───────────────────────────────────────────────────────────────
 from .dcn.registry import dcn_registry
@@ -283,6 +284,14 @@ class Orchestrator:
             kernel.schedule_mission(mission_id, "Normal")
             kernel.update_mission_state(mission_id, "Analyzing")
 
+            # ── 3d. Native Rust Core Handover ─────────────────────────────────
+            # We attempt to hand over the mission to the native core first.
+            native_res = await rust_bridge.admit_mission(user_input)
+            if native_res.get("status") == "admitted":
+                logger.info("⚡ [Orchestrator] Mission %s admitted by NATIVE RUST CORE", mission_id)
+                # We continue with brain delegation for the response generation,
+                # but the mission itself is being tracked/registered by the native runtime.
+            
             # ── 4. Brain delegation ───────────────────────────────────────────
             brain = _get_brain()
 
@@ -353,6 +362,15 @@ class Orchestrator:
         # Non-repudiable audit signature
         pulse_hash = await self._sign_pulse(mission_id, result)
         result["audit_sig"] = pulse_hash
+        
+        # Anchor mission to the immutable ledger
+        await audit_ledger.anchor_mission(mission_id, {
+            "user_id": user_id,
+            "intent": result.get("intent", "unknown"),
+            "fidelity": result.get("fidelity", 1.0),
+            "latency_ms": latency,
+            "hash": pulse_hash
+        })
 
         # Mesh propagation
         await self._propagate_to_mesh(mission_id, result)

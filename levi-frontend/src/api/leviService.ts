@@ -166,6 +166,22 @@ const leviService = {
   getTelemetryPulse: async () => {
     const { data } = await api.get('/analytics/pulse');
     return data;
+  },
+
+  getWebSocketUrl: () => {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = import.meta.env.VITE_API_BASE_URL 
+      ? import.meta.env.VITE_API_BASE_URL.replace(/^https?:\/\//, '') 
+      : window.location.host;
+    return `${protocol}//${host}/ws`;
+  },
+  
+  getTelemetryWebSocketUrl: () => {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = import.meta.env.VITE_API_BASE_URL 
+      ? import.meta.env.VITE_API_BASE_URL.replace(/^https?:\/\//, '') 
+      : window.location.host;
+    return `${protocol}//${host}/ws/telemetry`;
   }
 };
 

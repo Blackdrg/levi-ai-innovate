@@ -13,6 +13,26 @@ variable "cloud_provider" {
   default = "gcp"
 }
 
+variable "vpc_id" {
+  type    = string
+  default = "default"
+}
+
+variable "subnet_id" {
+  type    = string
+  default = "default"
+}
+
+variable "subnet_eu_id" {
+  type    = string
+  default = "default"
+}
+
+variable "gcp_project_id" {
+  type    = string
+  default = "my-project-id"
+}
+
 # --- GCP Provider Configuration ---
 provider "google" {
   project = var.gcp_project_id

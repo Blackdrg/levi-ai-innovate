@@ -13,6 +13,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from backend.auth import get_current_user
+from backend.services.auth.logic import verify_admin
 
 
 logger = logging.getLogger(__name__)

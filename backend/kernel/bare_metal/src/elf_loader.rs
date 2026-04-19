@@ -17,6 +17,8 @@ pub struct ProgramHeader {
     pub p_align: u64,
 }
 
+pub struct ElfLoader;
+
 impl ElfLoader {
     pub fn load_and_execute<M, A>(
         elf_data: &[u8],
@@ -70,5 +72,19 @@ impl ElfLoader {
         
         println!(" [OK] ELF: Handoff ready.");
         Ok(VirtAddr::new(entry_point))
+    }
+
+    pub fn load_from_vfs<M, A>(
+        path: &str,
+        mapper: &mut M,
+        frame_allocator: &mut A,
+    ) -> Result<VirtAddr, &'static str>
+    where
+        M: Mapper<Size4KiB>,
+        A: FrameAllocator<Size4KiB>,
+    {
+        let data = crate::vfs::read_file(path);
+        if data.is_empty() { return Err("File not found or empty"); }
+        Self::load_and_execute(&data, mapper, frame_allocator)
     }
 }

@@ -25,6 +25,7 @@ ed25519-dalek = "2.0"
 hmac = "0.12.1"
 sha2 = "0.10"
 libc = "0.2"
+wasmer = "4.2.5"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.52.0", features = ["Win32_System_JobObjects", "Win32_System_Threading", "Win32_Foundation", "Win32_Security"] }

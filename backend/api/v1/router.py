@@ -17,6 +17,7 @@ from backend.api.v1.evolution import router as evolution_router
 from backend.api.v1.perception import router as perception_router
 from backend.api.vault import router as vault_router
 from backend.api.v1.registry import router as registry_router
+from backend.api.audit import router as audit_router
 
 
 
@@ -38,5 +39,6 @@ router.include_router(evolution_router, prefix="/evolution")
 router.include_router(perception_router, prefix="/perception")
 router.include_router(vault_router, prefix="/vault")
 router.include_router(registry_router, prefix="/registry")
+router.include_router(audit_router, prefix="/audit")
 
 

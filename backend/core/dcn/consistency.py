@@ -22,6 +22,9 @@ class ConsistencyEngine:
     async def start_reconciliation_loop(self, interval: int = 60):
         """Background loop to perform anti-entropy check."""
         self.is_running = True
+        logger.info(f"🔄 [Consistency] Initializing Mesh Sync Bridge for {self.node_id}")
+        from backend.services.rust_runtime_bridge import rust_bridge
+        self.rust = rust_bridge
         logger.info(f"[Consistency] Anti-Entropy loop started (Interval: {interval}s)")
         while self.is_running:
             try:
@@ -29,6 +32,12 @@ class ConsistencyEngine:
             except Exception as e:
                 logger.error(f"[Consistency] Reconciliation pulse failed: {e}")
             await asyncio.sleep(interval)
+
+    async def synchronize_fragment(self, fragment: Dict[str, Any]):
+        """Synchronizes a cognitive fragment with the native cluster mesh."""
+        logger.info(f"📤 [Consistency] Syncing fragment to cluster mesh: {fragment.get('id')}")
+        # Cross-node sync via the Rust bridge
+        await self.rust.admit_mission(f"sync_memory_fragment {json.dumps(fragment)}")
 
     async def reconcile(self):
         """

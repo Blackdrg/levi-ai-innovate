@@ -204,11 +204,27 @@ impl ProcessManager {
     }
 
     pub fn kill_process(&self, id: String) -> Result<(), String> {
+        self.send_signal(id, 9)
+    }
+
+    pub fn send_signal(&self, id: String, signal: u32) -> Result<(), String> {
         let mut processes = self.processes.lock().unwrap();
         if let Some(proc) = processes.get_mut(&id) {
             if let Some(mut child) = proc.child.take() {
-                child.kill().map_err(|e| e.to_string())?;
-                proc.metadata.status = ProcessStatus::Killed;
+                log::info!("📡 [Kernel] Sending Signal {} to process {}", signal, id);
+                #[cfg(unix)]
+                {
+                    use libc::{kill, pid_t};
+                    unsafe { kill(child.id() as pid_t, signal as i32); }
+                }
+                #[cfg(windows)]
+                {
+                    if signal == 9 {
+                        child.kill().map_err(|e| e.to_string())?;
+                    }
+                }
+                proc.metadata.status = if signal == 9 { ProcessStatus::Killed } else { ProcessStatus::Running };
+                proc.child = Some(child);
                 return Ok(());
             }
         }

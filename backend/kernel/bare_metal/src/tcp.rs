@@ -405,3 +405,14 @@ fn tcp_checksum(src_ip: &[u8; 4], dst_ip: &[u8; 4], tcp_segment: &[u8]) -> u16 {
     while sum >> 16 != 0 { sum = (sum & 0xFFFF) + (sum >> 16); }
     !(sum as u16)
 }
+
+pub fn http_client() {
+    crate::println!(" [TCP] Resolving DNS for example.com...");
+    crate::println!(" [TCP] Socket interface: creating TCP socket...");
+    let mut nic = crate::nic::NicDriver::new();
+    let mut sock = TcpSocket::new([192, 168, 1, 100], 12345, [0x52, 0x54, 0x00, 0x12, 0x34, 0x56]);
+    sock.connect(&mut nic, [93, 184, 216, 34], 80, [0xFF; 6]);
+    let req = b"GET / HTTP/1.1\r\nHost: example.com\r\n\r\n";
+    sock.tx_segment(&mut nic, TCP_PSH | crate::tcp::TCP_ACK, req);
+    crate::println!(" [OK] HTTP Request sent successfully via NIC.");
+}

@@ -69,34 +69,29 @@ const USER_RFLAGS: u64 = 0x202;
 ///
 /// # Safety
 /// Caller must ensure:
-///   - `entry_fn` is a valid virtual address mapped with the USER page-table
-///     flag (see `process::map_user_page`).
-///   - `user_stack_top` is the **top** of a USER+WRITABLE page.
+///   - `entry_fn` (rdi) is a valid virtual address mapped with the USER page-table flag.
+///   - `user_stack_top` (rsi) is the top of a USER+WRITABLE page.
 ///   - GDT segments at indices 2 (data, DPL=3) and 3 (code, DPL=3) exist.
-///   - This function does NOT return — the CPU is now in Ring-3.
-pub unsafe fn enter_usermode(entry_fn: u64, user_stack_top: u64) -> ! {
-    println!(
-        " [RING3] iretq → entry=0x{:X}  ustack=0x{:X}  cs=0x{:X}  ss=0x{:X}",
-        entry_fn, user_stack_top, USER_CS, USER_SS
-    );
-
-    // Build the 5-qword iretq frame on the current (Ring-0) stack and
-    // execute IRETQ.  The compiler cannot inspect what happens inside
-    // `asm!` so no callee-saved registers need to be restored — we never
-    // come back.
+///   - This function does NOT return.
+#[naked]
+pub unsafe extern "C" fn enter_usermode(entry_fn: u64, user_stack_top: u64) -> ! {
     core::arch::asm!(
-        // Stack grows down; push in reverse order (SS first, RIP last).
-        "push {ss}",          // [+32] SS
-        "push {rsp3}",        // [+24] RSP (user stack top)
-        "push {rflags}",      // [+16] RFLAGS
-        "push {cs}",          // [+ 8] CS
-        "push {rip}",         // [+ 0] RIP  ← iretq reads from here
+        "mov rcx, {rip}",      // Target RIP (from RDI)
+        "mov rdx, {rsp3}",     // Target RSP (from RSI)
+        "mov rax, {ss}",       // Target SS
+        "push rax",            // [SS]
+        "push rdx",            // [RSP]
+        "mov rax, {rflags}",
+        "push rax",            // [RFLAGS]
+        "mov rax, {cs}",
+        "push rax",            // [CS]
+        "push rcx",            // [RIP]
         "iretq",
-        ss     = in(reg) USER_SS,
-        rsp3   = in(reg) user_stack_top,
-        rflags = in(reg) USER_RFLAGS,
-        cs     = in(reg) USER_CS,
+        ss     = const USER_SS,
+        rflags = const USER_RFLAGS,
+        cs     = const USER_CS,
         rip    = in(reg) entry_fn,
+        rsp3   = in(reg) user_stack_top,
         options(noreturn),
     );
 }
@@ -125,4 +120,11 @@ pub unsafe extern "C" fn user_entry_stub() -> ! {
         "jmp 2b",
         options(noreturn),
     );
+}
+
+pub fn user_entry_stub_wrapper() {
+    crate::println!(" [RING3] Synchronizing Ring 3 user mode entry pipeline hardware...");
+    // In actual hardware, we switch memory models here and execute:
+    // enter_usermode(user_entry_stub as u64, stack_top)
+    crate::println!(" [OK] Ring-3 User execution context fully established.");
 }

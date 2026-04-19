@@ -6,6 +6,10 @@
   <title>LEVI-AI | Sovereign OS Interface</title>
   <link rel="stylesheet" href="../shared/style.css" />
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet" />
+  <style>
+    .version-label { margin-top: auto; font-size: 10px; color: rgba(255,255,255,0.3); letter-spacing: 1px; }
+    .flex-column { display: flex; flex-direction: column; }
+  </style>
 </head>
 
 <body>
@@ -15,7 +19,7 @@
     <div class="sidebar">
       <h2>LEVI-AI</h2>
       <button onclick="newChat()">+ New Mission</button>
-      <div style="margin-top: auto; font-size: 10px; color: rgba(255,255,255,0.3); letter-spacing: 1px;">
+      <div class="version-label">
         SOVEREIGN OS v15.0-GA
       </div>
     </div>
@@ -23,7 +27,7 @@
     <!-- Main Chat -->
     <div class="chat-container">
 
-      <div id="messages" class="messages" style="display: flex; flex-direction: column;">
+      <div id="messages" class="messages flex-column">
         <div class="msg system">Welcome to LEVI-AI. Neural link established. Define your mission.</div>
       </div>
 

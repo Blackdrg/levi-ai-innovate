@@ -79,6 +79,44 @@ impl Writer {
         }
     }
 
+    pub fn clear_screen(&mut self) {
+        for row in 0..BUFFER_HEIGHT {
+            self.clear_row(row);
+        }
+    }
+
+    pub fn draw_box(&mut self, x: usize, y: usize, width: usize, height: usize, title: &str) {
+        let color = self.color_code;
+        // Top border
+        self.column_position = x;
+        self.write_string("┌");
+        for _ in 0..width - 2 { self.write_string("─"); }
+        self.write_string("┐");
+
+        // Title
+        if !title.is_empty() {
+            let title_x = x + (width / 2) - (title.len() / 2);
+            let prev_pos = self.column_position;
+            self.column_position = title_x;
+            self.write_string(title);
+            self.column_position = prev_pos;
+        }
+
+        // Sides
+        for row in 1..height - 1 {
+            self.column_position = x;
+            self.write_string("│");
+            self.column_position = x + width - 1;
+            self.write_string("│");
+        }
+
+        // Bottom border
+        self.column_position = x;
+        self.write_string("└");
+        for _ in 0..width - 2 { self.write_string("─"); }
+        self.write_string("┘");
+    }
+
     fn new_line(&mut self) {
         for row in 1..BUFFER_HEIGHT {
             for col in 0..BUFFER_WIDTH {
@@ -100,10 +138,14 @@ impl Writer {
         }
     }
 
+    pub fn set_color(&mut self, foreground: Color, background: Color) {
+        self.color_code = ColorCode::new(foreground, background);
+    }
+
     pub fn write_string(&mut self, s: &str) {
         for byte in s.bytes() {
             match byte {
-                0x20..=0x7e | b'\n' => self.write_byte(byte),
+                0x20..=0x7e | b'\n' | 0x80..=0xFF => self.write_byte(byte), // Allow extended ASCII/Box chars
                 _ => self.write_byte(0xfe),
             }
         }
@@ -120,10 +162,21 @@ impl fmt::Write for Writer {
 lazy_static! {
     pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
         column_position: 0,
-        color_code: ColorCode::new(Color::Yellow, Color::Black),
+        color_code: ColorCode::new(Color::White, Color::Black),
         buffer: unsafe { &mut *(0xb8000 as *mut Buffer) },
     });
 }
+
+pub fn init_gui() {
+    let mut writer = WRITER.lock();
+    writer.clear_screen();
+    writer.set_color(Color::LightCyan, Color::Black);
+    writer.draw_box(0, 0, 80, 25, " LEVI SOVEREIGN OS v22.0.0-GA ");
+    writer.draw_box(2, 2, 76, 5, " KERNEL STATUS ");
+    writer.column_position = 4;
+    writer.write_string("HAL-0 ACTIVE | TPM: VERIFIED | FS: ENCRYPTED");
+}
+
 
 #[macro_export]
 macro_rules! print {

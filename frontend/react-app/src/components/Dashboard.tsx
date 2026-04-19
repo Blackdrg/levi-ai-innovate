@@ -23,7 +23,8 @@ export const Dashboard: React.FC = () => {
           <div className="title-section">
             <h1>LEVI-AI Sovereign OS</h1>
             <div className={`graduation-badge ${graduationScore > 0.95 ? 'graduated' : 'hardening'}`}>
-              <div className="badge-ring" style={{'--score': graduationScore} as any}></div>
+              <style>{`.badge-ring { --score: ${graduationScore}; }`}</style>
+              <div className="badge-ring"></div>
               <span className="badge-text">{(graduationScore * 100).toFixed(1)}% Sovereign</span>
             </div>
           </div>

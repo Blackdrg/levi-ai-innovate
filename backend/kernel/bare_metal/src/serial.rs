@@ -11,6 +11,33 @@ lazy_static! {
     };
 }
 
+#[repr(C, packed)]
+pub struct TelemetryRecord {
+    pub magic: u32,      // 0xDEADBEEF or 0x4C455649
+    pub seq_id: u64,
+    pub pid: u32,
+    pub syscall_id: u8,
+    pub timestamp: u32,
+    pub fidelity: u8,    // 0-255 score from kernel
+}
+
+
+pub fn write_record(record: &TelemetryRecord) {
+    use x86_64::instructions::interrupts;
+    interrupts::without_interrupts(|| {
+        let mut serial = SERIAL1.lock();
+        let bytes = unsafe {
+            core::slice::from_raw_parts(
+                (record as *const TelemetryRecord) as *const u8,
+                core::mem::size_of::<TelemetryRecord>()
+            )
+        };
+        for &b in bytes {
+            serial.send(b);
+        }
+    });
+}
+
 #[doc(hidden)]
 pub fn _print(args: core::fmt::Arguments) {
     use core::fmt::Write;

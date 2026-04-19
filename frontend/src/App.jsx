@@ -86,8 +86,8 @@ function App() {
                <span className="text-[9px] uppercase tracking-tighter text-emerald-500 font-bold">Secure Core</span>
             </div>
             <div className="w-8 h-8 rounded-full bg-gradient-sovereign p-[1px] cursor-pointer">
-              <div className="w-full h-full bg-[#050505] rounded-full flex items-center justify-center">
-                <Orbit size={14} className="text-white/60 animate-spin-slow" />
+              <div className="w-full h-full bg-neural-bg rounded-full flex items-center justify-center">
+                <Orbit size={14} className="text-neural-text/60 animate-spin-slow" />
               </div>
             </div>
           </div>
@@ -118,8 +118,8 @@ function App() {
               {executionGraph && (
                 <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="px-6 pt-4">
                    <div className="mb-2 flex items-center justify-between">
-                     <span className="text-[10px] uppercase tracking-widest text-white/30 font-bold">Cognitive Mission Graph</span>
-                     <span className="text-[9px] text-white/20 italic">v14.0.0 DCN Architecture</span>
+                     <span className="text-[10px] uppercase tracking-widest text-neural-text/30 font-bold">Cognitive Mission Graph</span>
+                     <span className="text-[9px] text-neural-text/20 italic">v14.0.0 DCN Architecture</span>
                    </div>
                   <ExecutionGraph graph={executionGraph} results={executionResults} />
                   
@@ -133,7 +133,7 @@ function App() {
             
             <div className="w-full max-w-4xl mx-auto px-6 pb-10 relative z-20">
               <ChatInput onSend={handleSend} disabled={isStreaming} />
-              <div className="absolute top-[-40px] left-1/2 -translate-x-1/2 flex items-center gap-2 text-white/10 select-none">
+              <div className="absolute top-[-40px] left-1/2 -translate-x-1/2 flex items-center gap-2 text-neural-muted select-none">
                  <Sparkles size={12} strokeWidth={2.5} className="animate-pulse" />
                  <span className="text-[9px] uppercase tracking-widest font-heading font-bold">Sovereign OS v14.0.0 Active</span>
               </div>

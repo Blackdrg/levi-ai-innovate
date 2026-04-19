@@ -77,6 +77,17 @@ pub fn init() {
     }
 }
 
+pub fn get_lapic_address() -> u64 {
+    // Standard x86 Local APIC base is 0xFEE00000
+    0xFEE0_0000
+}
+
+pub fn get_core_count() -> usize {
+    // In a real system, we'd parse this from the MADT processor list
+    // We already do a partial parse in init(), here we return a consistent value
+    8 
+}
+
 pub fn shutdown() {
     println!(" [OS] ACPI: Triggering Sovereign Shutdown S5 transition...");
     // In real system, write to SLP_TYP and SLP_EN in PM1a_CNT/PM1b_CNT

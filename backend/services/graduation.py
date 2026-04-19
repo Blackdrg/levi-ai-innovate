@@ -1,7 +1,7 @@
 # backend/services/graduation.py
 import logging
 import os
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from backend.services.cache_manager import CacheManager
 from backend.kernel.kernel_wrapper import kernel
 
@@ -23,7 +23,8 @@ class GraduationService:
         admitted = False
         if self.is_native:
             # Syscall: ADMIT_MISSION(mission_id)
-            result = kernel.sys_call("mainframe", "ADMIT_MISSION", {"mid": mission_id})
+            import json
+            result = kernel.sys_call("mainframe", json.dumps({"ADMIT_MISSION": {"mid": mission_id}}))
             if result == "OK":
                 admitted = True
                 payload["hal0_admitted"] = True

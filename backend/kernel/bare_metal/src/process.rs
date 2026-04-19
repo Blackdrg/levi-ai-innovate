@@ -269,6 +269,16 @@ pub enum ProcessState {
     Running,
     Blocked,
     Zombie,
+    Terminated,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SavedContext {
+    pub r15: u64, pub r14: u64, pub r13: u64, pub r12: u64,
+    pub r11: u64, pub r10: u64, pub r9:  u64, pub r8:  u64,
+    pub rdi: u64, pub rsi: u64, pub rbp: u64, pub rbx: u64,
+    pub rdx: u64, pub rcx: u64, pub rax: u64,
 }
 
 pub struct ProcessControlBlock {
@@ -276,6 +286,7 @@ pub struct ProcessControlBlock {
     pub state:       ProcessState,
     pub pml4_phys:   PhysAddr,    // CR3 value for this process
     pub kernel_stack_top: VirtAddr, // RSP0 stored in TSS on ctx switch
+    pub context:     SavedContext, // general purpose registers
     pub user_rip:    u64,          // saved instruction pointer
     pub user_rsp:    u64,          // saved user stack pointer
 }
@@ -287,6 +298,7 @@ impl ProcessControlBlock {
             state: ProcessState::Ready,
             pml4_phys,
             kernel_stack_top,
+            context: SavedContext::default(),
             user_rip: entry,
             user_rsp,
         }

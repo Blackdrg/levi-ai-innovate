@@ -1,0 +1,26 @@
+{
+  "marketplace_version": "1.0.0",
+  "featured_agents": [
+    {
+      "id": "arch-v22",
+      "name": "Marketplace-Architect",
+      "category": "Orchestration",
+      "price": "0.00",
+      "author": "Levi-Core"
+    },
+    {
+      "id": "sec-bft",
+      "name": "BFT-Shield-Agent",
+      "category": "Security",
+      "price": "5.00",
+      "author": "Sovereign-Labs"
+    }
+  ],
+  "verified_templates": [
+    {
+      "id": "auto-report",
+      "name": "Watch-Folder-To-Report",
+      "steps": ["fs_watch", "extract", "gpt_analyze", "email_send"]
+    }
+  ]
+}

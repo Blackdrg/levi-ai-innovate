@@ -6,14 +6,16 @@ Refactored from backend/services/auth/router.py.
 """
 
 import logging
+import os
 from datetime import datetime
 from fastapi import APIRouter, Depends, Response
 
 from backend.utils.exceptions import LEVIException
 from backend.services.auth.logic import get_current_user
-
 from backend.auth.jwt_provider import JWTProvider
-from backend.services.auth.logic import get_current_user
+from backend.db.firestore_db import db as firestore_db, increment_field
+import firebase_admin
+from firebase_admin import firestore
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="", tags=["Auth"])
@@ -148,11 +150,13 @@ async def verify_registration(token: str):
 async def track_share(current_user: dict = Depends(get_current_user)):
     """Track viral shares and reward bonus credits."""
     uid = current_user.get("uid")
-    user_ref = firestore_db.collection("users").document(uid)
-    user_ref.update({"share_count": firestore.Increment(1)})
+    if not uid: return {"status": "error", "message": "Identity lost."}
+    
+    # Increment share count atomically
+    increment_field("users", uid, "share_count", 1)
     
     new_shares = current_user.get("share_count", 0) + 1
     if new_shares % 5 == 0:
-        user_ref.update({"credits": firestore.Increment(50)})
+        increment_field("users", uid, "credits", 50)
         return {"status": "rewarded", "bonus": 50}
     return {"status": "success"}

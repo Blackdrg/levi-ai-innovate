@@ -249,6 +249,17 @@ class LeviKernel:
         secret = os.getenv("DCN_SECRET", "fallback_entropy_levi_ai_sovereign_32")
         return hashlib.sha256(secret.encode() + b"_signing_v1").digest()
 
+    def get_signing_key_public(self) -> bytes:
+        """Retrieve the node's Ed25519 public key bytes for DCN verification."""
+        if self._rust and hasattr(self._rust, "get_signing_key_public"):
+            return self._rust.get_signing_key_public()
+        # Fallback public key (conceptually derived from secret)
+        return b"fallback_public_key_32_bytes_seq"
+
+    def get_pcr_measurement(self, index: int = 0) -> str:
+        """Retrieve a TPM 2.0 PCR measurement from the hardware layer."""
+        return self._call("get_pcr_measurement", index, default="00"*32)
+
     # ── Boot report ───────────────────────────────────────────────────────────
 
     def get_boot_report(self) -> Dict[str, Any]:

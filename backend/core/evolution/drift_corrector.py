@@ -3,7 +3,7 @@ import logging
 import datetime
 from typing import List, Dict
 from backend.services.model_registry import model_registry
-from backend.services.dataset_manager import dataset_manager
+from .dataset_manager import dataset_manager
 
 logger = logging.getLogger("drift_corrector")
 

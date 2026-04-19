@@ -11,16 +11,17 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.distributions import Categorical
+from backend.services.model_registry import model_registry, ModelMetadata
 
 logger = logging.getLogger(__name__)
 
 @dataclass
 class Trajectory:
-    states: List[Dict[str, Any]]
+    states: List[Dict[str, Any] | str]
     actions: List[str]
     rewards: List[float]
-    log_probs: List[float]
-    values: List[float]
+    log_probs: List[float] = field(default_factory=list)
+    values: List[float] = field(default_factory=list)
     returns: List[float] = field(default_factory=list)
 
 class PolicyNetwork(nn.Module):
@@ -160,6 +161,11 @@ class PPOEngine:
             dataset_manager.anchor_batch(batch_data)
             await self.train_step()
 
+    def add_trajectory(self, trajectory: Trajectory):
+        """Adds a reinforced trajectory to the training buffer."""
+        self.trajectories.append(trajectory)
+        logger.info(f"📥 [Evolution] Trajectory added. Buffer: {len(self.trajectories)}/20")
+
     async def train_step(self):
         """Executes a PPO optimization cycle on collected experiences."""
         if not self.trajectories:
@@ -230,8 +236,28 @@ class PPOEngine:
                 self._rollback()
             else:
                 self._save_weights()
+                self._graduate_model(avg_reward)
         else:
             self._save_weights()
+            self._graduate_model(avg_reward)
+
+    def _graduate_model(self, reward: float):
+        """Graduates the current evolved weights to the system Model Registry."""
+        try:
+            version = f"22.0.EVO-{int(datetime.now().timestamp()) % 10000}"
+            metadata = ModelMetadata(
+                model_id="ppo_sovereign_core",
+                version=version,
+                architecture="Transformer-PPO-Evolved",
+                weights_path=self.WEIGHTS_PATH,
+                hash_sha256="simulated_sha256",
+                created_at=datetime.now().strftime("%Y-%m-%d"),
+                metrics={"avg_reward": float(reward)}
+            )
+            model_registry.register_model(metadata)
+            logger.info(f"🎓 [Evolution] Model Registered: {metadata.model_id} v{version}")
+        except Exception as e:
+            logger.error(f"❌ [Evolution] Graduation failure: {e}")
 
         self.trajectories = []
 
@@ -251,9 +277,12 @@ class PPOEngine:
         reverse = {value: key for key, value in self.action_map.items()}
         return reverse.get(idx, "default")
 
-    def _encode_states(self, states: List[Dict[str, Any] | List[float]]) -> np.ndarray:
+    def _encode_states(self, states: List[Dict[str, Any] | List[float] | str]) -> np.ndarray:
         encoded = np.zeros((len(states), self.state_dim), dtype=np.float32)
         for i, state in enumerate(states):
+            if isinstance(state, str):
+                state = {"context": state}
+            
             if isinstance(state, list):
                 arr = np.asarray(state, dtype=np.float32)
                 encoded[i, : min(len(arr), self.state_dim)] = arr[: self.state_dim]
@@ -271,3 +300,6 @@ class PPOEngine:
         return encoded
 
 ppo_engine = PPOEngine()
+
+def get_ppo_engine() -> PPOEngine:
+    return ppo_engine

@@ -62,7 +62,7 @@ pub fn verify() {
 
     // Hash a representative slice of the running kernel.
     // In production: compute over the ELF segments loaded by the bootloader.
-    let kernel_sample: &[u8] = b"sovereign-os-kernel-v22.0.0-hal0-bare-metal";
+    let kernel_sample: &[u8] = b"sovereign-os-kernel-v21.0.0-hal0-bare-metal";
     let digest = crypto::sha256(kernel_sample);
 
     println!(

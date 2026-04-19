@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
-export type ThemeType = 'dark' | 'light' | 'obsidian' | 'amethyst' | 'cyan' | 'gold' | 'rose' | 'aether' | 'emerald';
+export type ThemeType = 'neural' | 'dark' | 'light' | 'obsidian' | 'amethyst' | 'cyan' | 'gold' | 'rose' | 'aether' | 'emerald';
 
 interface ThemeTokens {
   bg: string;
@@ -23,6 +23,15 @@ interface ThemeTokens {
 }
 
 const themes: Record<ThemeType, ThemeTokens> = {
+  neural: {
+    bg: "#F8FAFC", s1: "rgba(255,255,255,0.7)", s2: "rgba(255,255,255,0.65)",
+    p: "#6366F1", pd: "#4F46E5", pdd: "#4338CA",
+    cy: "#22D3EE", cyd: "#0891B2",
+    pk: "#ec4899", gn: "#10b981", am: "#f59e0b", rd: "#ef4444",
+    t1: "#0F172A", t2: "#64748B", t3: "#CBD5E1",
+    bd: "#E2E8F0",
+    glow: (c, r=16) => `0 4px ${r}px ${c}22`,
+  },
   dark: {
     bg:"#03030e", s1:"rgba(7,7,20,0.94)", s2:"rgba(11,11,28,0.88)",
     p:"#b490f5", pd:"#8b5cf6", pdd:"#6d28d9",
@@ -116,7 +125,8 @@ const ThemeContext = createContext<ThemeContextProps | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [themeName, setThemeName] = useState<ThemeType>(() => {
-    return (localStorage.getItem('levi-theme') as ThemeType) || 'dark';
+    const saved = localStorage.getItem('levi-theme') as ThemeType;
+    return themes[saved] ? saved : 'neural';
   });
 
   const tokens = themes[themeName];

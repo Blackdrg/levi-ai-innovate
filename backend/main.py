@@ -27,6 +27,7 @@ import logging
 import json
 import os
 import asyncio
+import subprocess
 from datetime import datetime, timezone
 
 from fastapi.responses import JSONResponse
@@ -59,6 +60,21 @@ async def lifespan(app: FastAPI):
 
     from backend.utils.runtime_tasks import create_tracked_task
 
+    # ── 0. Rust Core Runtime Wakeup ────────────────────────────────────────────
+    try:
+        logger.info("⚡ [Native] Awakening LEVI Core Runtime (Rust)...")
+        runtime_path = os.path.join(os.getcwd(), "backend", "levi_runtime")
+        # Run 'cargo run' in a background process
+        runtime_proc = subprocess.Popen(
+            ["cargo", "run", "--release"], 
+            cwd=runtime_path,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+        logger.info("✅ [Native] Core Runtime process spawned (PID: %d)", runtime_proc.pid)
+    except Exception as exc:
+        logger.error("⚠️  [Native] Failed to spawn Rust runtime: %s", exc)
+
     # ── 1. Orchestrator boot ──────────────────────────────────────────────────
     memory_manager = MemoryManager()
     await orchestrator.initialize()
@@ -68,8 +84,10 @@ async def lifespan(app: FastAPI):
     from backend.workers.event_consumer import start_event_consumers
     event_consumer = await start_event_consumers()
 
-    # ── 3. Kernel telemetry ────────────────────────────────────────────────────
+    # ── 3. Kernel telemetry & Serial Bridge ────────────────────────────────────
     from backend.kernel.kernel_wrapper import kernel
+    from backend.kernel.serial_bridge import kernel_bridge
+    
     if kernel.rust_kernel:
         boot_report = kernel.get_boot_report()
         logger.info("⚡ [Kernel] ONLINE. Boot report: %s", json.dumps(boot_report, indent=2))
@@ -77,6 +95,9 @@ async def lifespan(app: FastAPI):
         logger.info("📟 [Kernel] HAL drivers: %d active.", len(drivers))
     else:
         logger.warning("⚠️  [Kernel] Binary not compiled — Python fallback mode.")
+    
+    # Start the serial-to-event-bus bridge
+    await kernel_bridge.start()
     kernel.start_background_tasks()
 
     # ── 4. Goal engine linkage ────────────────────────────────────────────────
@@ -303,6 +324,12 @@ async def websocket_endpoint(websocket: WebSocket):
     await telemetry_websocket(websocket, "gateway_client")
 
 
+@app.websocket("/ws/telemetry")
+async def telemetry_websocket_endpoint(websocket: WebSocket):
+    from backend.api.telemetry import telemetry_websocket_kernel
+    await telemetry_websocket_kernel(websocket)
+
+
 @app.get("/healthz", tags=["Infrastructure"])
 async def health_check():
     """Liveness probe."""
@@ -330,7 +357,9 @@ async def readiness_check():
             "postgres":    "connected" if await PostgresDB.check_health() else "disconnected",
             "ollama":      "unknown",
             "global_sync": "active" if HAS_PUBSUB else "degraded",
+            "native_core": "online" if await rust_bridge.check_health() else "disconnected",
         },
+
         "swarm": {
             "node_id": _proto.node_id if _proto else "standalone",
             "leader":  _leader,
@@ -393,8 +422,10 @@ async def system_pulse(current_user=Depends(get_current_user)):
         "vram_pressure":    await orchestrator.get_vram_pressure()    if orchestrator else 0.0,
         "active_missions":  await orchestrator.count_active_missions() if orchestrator else 0,
         "dcn_health":       await orchestrator.get_dcn_health()        if orchestrator else "offline",
+        "native_cluster":   await rust_bridge.check_health(),
         "gpu":              gpu_monitor.get_vram_usage(),
     }
+
 
 
 @app.get("/metrics", tags=["Infrastructure"])

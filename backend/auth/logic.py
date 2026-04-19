@@ -222,6 +222,20 @@ async def get_current_user(cred: HTTPAuthorizationCredentials = Depends(security
         # 4. Context Enrichment
         user_data["tier_config"] = TIERS.get(user_data.get("tier", "pro"))
 
+        # 5. Hardware Attestation Bridge (PCR Measurement)
+        try:
+            from backend.kernel.kernel_wrapper import kernel as _kernel
+            pcr0 = _kernel.get_pcr_measurement(0)
+            user_data["attestation"] = {
+                "pcr0": pcr0,
+                "verified": len(pcr0) == 64 and pcr0 != "00"*32,
+                "source": "native_tpm_2.0" if _kernel.rust_kernel else "simulated"
+            }
+            if user_data["attestation"]["verified"]:
+                 logger.info(f"🛡️ [Auth] Hardware-Attested Login: {uid} (PCR0 Verified)")
+        except Exception as e:
+            logger.warning(f"⚠️ [Auth] Hardware attestation failed: {e}")
+
         if HAS_REDIS:
             redis_client.setex(cache_key, 1800, json.dumps(user_data))
         return user_data

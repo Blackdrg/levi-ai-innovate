@@ -145,6 +145,10 @@ async def track_share(current_user: dict = Depends(get_current_user)):
     """Track viral shares and reward bonus credits."""
     uid = current_user.get("uid")
     from backend.db.firebase import db as firestore_db
+    if firestore_db is None:
+        logger.warning("Firestore unavailable. Skipping viral share tracking.")
+        return {"status": "success", "message": "Simulated share tracking (Firestore offline)."}
+
     try:
         from google.cloud.firestore_v1 import Increment  # type: ignore
     except Exception:

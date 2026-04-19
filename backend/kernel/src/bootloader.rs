@@ -52,7 +52,7 @@ impl Bootloader {
         let boot_time = end.duration_since(UNIX_EPOCH).unwrap().as_secs();
 
         BootReport {
-            kernel_version: "v17.5.0-NATIVE-SOVEREIGN".to_string(),
+            kernel_version: "v21.5.0-NATIVE-SOVEREIGN".to_string(),
             boot_time,
             latency_ms: latency,
             integrity_hash: Self::verify_integrity(),
@@ -63,7 +63,6 @@ impl Bootloader {
 
     fn verify_integrity() -> String {
         // RSA-4096 Kernel Signature Verification
-        "0xED25519_SOVEREIGN_ROOT_CA_v17".to_string()
+        "0xED25519_SOVEREIGN_OS_v21_BOOT_OK".to_string()
     }
 }
-

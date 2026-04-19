@@ -17,7 +17,7 @@ impl TaskId {
 }
 
 pub struct Task {
-    id: TaskId,
+    pub id: TaskId, // Made public for convenience
     future: Pin<Box<dyn Future<Output = ()>>>,
 }
 
@@ -32,4 +32,26 @@ impl Task {
     fn poll(&mut self, context: &mut Context) -> Poll<()> {
         self.future.as_mut().poll(context)
     }
+}
+
+pub async fn yield_now() {
+    struct YieldNow {
+        yielded: bool,
+    }
+
+    impl Future for YieldNow {
+        type Output = ();
+
+        fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<()> {
+            if self.yielded {
+                Poll::Ready(())
+            } else {
+                self.yielded = true;
+                cx.waker().wake_by_ref();
+                Poll::Pending
+            }
+        }
+    }
+
+    YieldNow { yielded: false }.await
 }

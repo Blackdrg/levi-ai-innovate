@@ -65,4 +65,28 @@ async def approve_mission(
     logger.info(f"[Audit] User {current_user['uid']} approved mission {mission_id}")
     
     # Logic to update mission status and trigger distillation
+    from backend.core.evolution_engine import EvolutionaryIntelligenceEngine
+    from backend.db.models import MissionMetric
+    from backend.db.postgres import PostgresDB
+    from sqlalchemy import update
+    
+    async with PostgresDB._session_factory() as session:
+        # 1. Update Mission Status
+        stmt = update(MissionMetric).where(MissionMetric.mission_id == mission_id).values(
+            status="approved",
+            fidelity_score=1.0 # Human approved
+        )
+        await session.execute(stmt)
+        await session.commit()
+    
+    # 2. Trigger distillation into the Evolution Engine
+    # We simulate fetching the mission data for re-ingestion
+    await EvolutionaryIntelligenceEngine.ingest_mission_outcome(
+        mission_id=mission_id,
+        input_data="[Audited Mission]", # Real implementation would fetch from DB/Logs
+        output_data=f"[Human Approved] {feedback}",
+        fidelity=1.0,
+        agent_path=["auditor_feedback"]
+    )
+    
     return {"status": "approved", "mission_id": mission_id, "auditor_id": current_user["uid"]}
