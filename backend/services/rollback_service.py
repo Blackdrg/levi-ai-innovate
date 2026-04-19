@@ -60,6 +60,22 @@ class RollbackService:
         else:
             logger.warning("[Security] ROLLBACK_TOKEN missing. Skipping Cloud Revert signal.")
 
+        # 3. Kernel & Memory Rollback (Section 35)
+        try:
+            from backend.core.executor.compensation_coordinator import CompensationCoordinator
+            # We assume the last active mission ID is available or use a global emergency ID
+            mission_id = "emergency-rollback" 
+            coordinator = CompensationCoordinator(mission_id)
+            
+            # Register kernel-level recovery nodes
+            coordinator.register_node_execution("kernel_recovery", "fs_snapshot", {"snapshot_id": "latest"})
+            coordinator.register_node_execution("memory_recovery", "mcm_fact", {"mission_id": mission_id})
+            
+            await coordinator.compensate()
+            logger.critical(" [🛡️] EMER-REVERT: Kernel FS restored & MCM facts purged.")
+        except Exception as e:
+            logger.error(f"[EMER-REVERT] Kernel/MCM Rollback failed: {e}")
+
         return {
             "status": "triggered",
             "message": f"Rollback complete. Aborted {count} missions.",

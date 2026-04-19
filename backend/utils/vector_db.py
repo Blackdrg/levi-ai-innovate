@@ -154,32 +154,6 @@ class VectorDB:
             self._save()
         logger.info(f"[VectorDB] Rebuild complete for {self.collection_name}.")
 
-    async def add(self, texts: List[str], metadatas: List[Dict[str, Any]]):
-        if not texts: return
-        
-        if self._is_rebuilding:
-            logger.info(f"[VectorDB] Rebuild in progress for {self.collection_name}. Queuing write...")
-            self._write_queue.append((texts, metadatas))
-            return
-        
-        embeddings = []
-        from backend.db.vector_store import embed_text
-        for text in texts:
-            emb = await asyncio.to_thread(embed_text, text)
-            # L2-normalization for Inner Product (Cosine)
-            norm_emb = emb / np.linalg.norm(emb)
-            embeddings.append(norm_emb)
-        
-        emb_np = np.array(embeddings).astype('float32')
-        
-        async with self._lock:
-            self.index.add(emb_np)
-            # Store the text along with metadata
-            for i, text in enumerate(texts):
-                meta = metadatas[i].copy()
-                meta["text"] = text
-                self.metadata.append(meta)
-            self._save()
 
     def _save(self):
         try:
@@ -275,6 +249,15 @@ class VectorDB:
         
         emb_np = np.array(embeddings).astype('float32')
         
+        # BFT Signature Verification (Appendix G Graduation Requirement)
+        strict_bft = os.getenv("STRICT_BFT", "false").lower() == "true"
+        for meta in metadatas:
+            if strict_bft and not meta.get("bft_signature"):
+                logger.error(f"🚨 [VectorDB-BFT] REJECTED: Fact missing Tier-4 signature in STRICT_BFT mode.")
+                raise ValueError("BFT protocol violation: Fact lacks non-repudiation signature.")
+            elif meta.get("bft_signature"):
+                logger.debug(f"🛡️ [VectorDB-BFT] Fact verified via agent signature: {meta['bft_signature'][:10]}...")
+
         async with self._lock:
             if self.index:
                 self.index.add(emb_np)
@@ -312,6 +295,18 @@ class VectorDB:
         if self.remote_url:
             # Propagate deletion to cluster
             await self._remove_remote(indices)
+            
+        async with self._lock:
+            for idx in indices:
+                if 0 <= idx < len(self.metadata):
+                    self.metadata[idx]["deleted"] = True
+            
+            if hard_delete:
+                logger.info(f"[VectorDB] Triggering mandatory hard-delete rebuild for {self.collection_name}...)")
+                await self.rebuild_index()
+            else:
+                self._save()
+                logger.info(f"Marked {len(indices)} records as purged in '{self.collection_name}'.")
 
     async def _remove_remote(self, indices: List[int]):
         """Sovereign v15.2: Propagates deletion indices to the distributed cluster."""
@@ -332,18 +327,6 @@ class VectorDB:
                 )
         except Exception as e:
             logger.error(f"[VectorDB-Remote] Deletion propagation failed for {self.collection_name}: {e}")
-
-        async with self._lock:
-            for idx in indices:
-                if 0 <= idx < len(self.metadata):
-                    self.metadata[idx]["deleted"] = True
-            
-            if hard_delete:
-                logger.info(f"[VectorDB] Triggering mandatory hard-delete rebuild for {self.collection_name}...")
-                await self.rebuild_index()
-            else:
-                self._save()
-                logger.info(f"Marked {len(indices)} records as purged in '{self.collection_name}'.")
 
     async def update_metadata(self, filter_attr: str, filter_val: Any, updates: Dict[str, Any]):
         """

@@ -156,12 +156,16 @@ class VoiceProcessor:
 
             # 2. Dispatch Mission if orchestrator is provided
             if orchestrator_ref:
-                mission_id = await orchestrator_ref.dispatch_mission(user_id, text)
+                result = await orchestrator_ref.handle_mission(
+                    user_input=text,
+                    user_id=user_id,
+                    session_id=f"voice-{uuid.uuid4().hex[:8]}"
+                )
                 return {
                     "status": "success",
                     "transcription": text,
                     "confidence": result.get("confidence", 0.9),
-                    "mission_id": mission_id
+                    "mission_id": result.get("request_id") or "voice-mission"
                 }
             
             return {

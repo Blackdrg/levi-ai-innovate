@@ -1,5 +1,5 @@
 import { Routes, Route, Link, useLocation } from 'react-router-dom'
-import { LayoutDashboard, Database, Activity, ShieldCircle, LogOut, Shield, Brain } from 'lucide-react'
+import { LayoutDashboard, Database, Activity, ShieldCircle, LogOut, Shield, Brain, Braces } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
 import MissionPanel from '../components/MissionPanel'
 import { MemoryExplorer } from './MemoryExplorer'
@@ -7,18 +7,20 @@ import { AgentGrid } from '../components/AgentGrid'
 import { SecurityPanel } from './SecurityPanel'
 import { RevolutionPanel } from './RevolutionPanel'
 import { MetricsDashboard } from './MetricsDashboard'
+import { MissionStudio } from './MissionStudio'
 
 export default function Dashboard() {
   const { user, logout } = useAuthStore()
   const location = useLocation()
 
   const navItems = [
-    { name: 'Missions', path: '/', icon: <LayoutDashboard size={20} /> },
+    { name: 'Missions',   path: '/', icon: <LayoutDashboard size={20} /> },
     { name: 'Revolution', path: '/evolution', icon: <Brain size={20} className="text-purple-500" /> },
-    { name: 'Memory',   path: '/memory', icon: <Database size={20} /> },
-    { name: 'Agents',   path: '/agents', icon: <Activity size={20} /> },
-    { name: 'Telemetry', path: '/telemetry', icon: <Activity size={20} /> },
-    { name: 'Security', path: '/settings', icon: <ShieldCircle size={20} /> },
+    { name: 'Studio',     path: '/studio', icon: <Braces size={20} /> },
+    { name: 'Memory',     path: '/memory', icon: <Database size={20} /> },
+    { name: 'Agents',     path: '/agents', icon: <Activity size={20} /> },
+    { name: 'Telemetry',  path: '/telemetry', icon: <Activity size={20} /> },
+    { name: 'Security',   path: '/settings', icon: <ShieldCircle size={20} /> },
   ]
 
   return (
@@ -31,7 +33,7 @@ export default function Dashboard() {
           </div>
           <div>
             <h1 className="text-lg font-black tracking-tight leading-none uppercase">LEVI-AI</h1>
-            <span className="text-[10px] uppercase tracking-widest font-black text-purple-500 opacity-80">Sovereign v15.0</span>
+            <span className="text-[10px] uppercase tracking-widest font-black text-purple-500 opacity-80">Sovereign v22.0</span>
           </div>
         </div>
 
@@ -85,6 +87,7 @@ export default function Dashboard() {
         <Routes>
           <Route path="/"        element={<MissionPanel />} />
           <Route path="/evolution" element={<RevolutionPanel />} />
+          <Route path="/studio"    element={<MissionStudio />} />
           <Route path="/memory"  element={<MemoryExplorer />} />
           <Route path="/agents"  element={<AgentGrid />} />
           <Route path="/telemetry" element={<MetricsDashboard />} />

@@ -68,6 +68,10 @@ async def get_performance_metrics(
                 "latency_history": latency_history,
                 "intent_distribution": intents
             }
+    except Exception as e:
+        logger.error(f"[Analytics] Error fetching metrics: {e}")
+        return {"error": str(e)}
+
 @router.get("/pulse")
 async def get_real_time_pulse():
     """
@@ -75,18 +79,28 @@ async def get_real_time_pulse():
     Includes hardware pressure, cognitive throughput, and fidelity trends.
     """
     from backend.kernel.kernel_wrapper import kernel
+    from backend.db.models import GraduatedRule
+    from backend.db.postgres_db import get_read_session
+    from sqlalchemy import select, func
     
     # 1. Hardware Pressure
     gpu = kernel.get_gpu_metrics()
     vram_pct = (gpu.get("vram_used_mb", 0) / gpu.get("vram_total_mb", 8192)) * 100
     
-    # 2. Cognitive Metrics (Mocked from recent activity if no real history exists)
-    # In production, this reads from Redis Streams
+    # 2. Cognitive Fidelity (Average of Graduated Rules)
+    try:
+        async with get_read_session() as session:
+            stmt = select(func.avg(GraduatedRule.fidelity_score))
+            res = await session.execute(stmt)
+            fidelity = res.scalar() or 0.95 # Graduation baseline fallback
+    except:
+        fidelity = 0.95
+
     return {
         "vram_pressure": round(vram_pct, 1),
-        "fidelity": 0.97, # Graduation baseline
-        "throughput": 1.2, # Missions/sec
-        "latency_ms": 312,
+        "fidelity": round(float(fidelity), 3),
+        "throughput": round(kernel.get_system_throughput(), 2), # Live throughput from kernel
+        "latency_ms": kernel.get_avg_latency(),
         "gpu_temp": gpu.get("temp_c", 45.0),
         "gpu_name": gpu.get("device_name", "Nvidia RTX")
     }

@@ -9,27 +9,27 @@ from backend.db.redis import r_async as redis_client
 logger = logging.getLogger(__name__)
 
 # --- v15.0 Compensation Handlers ---
-async def async_reverse_debit(node: Dict[str, Any]):
-    logger.warning(f"[Compensation] Reversing debit for account {node.get('parameters', {}).get('account_id')}")
-    return {"status": "refunded"}
+async def async_restore_fs_snapshot(node: Dict[str, Any]):
+    from backend.kernel.kernel_wrapper import kernel
+    snapshot_id = node.get("parameters", {}).get("snapshot_id", "latest")
+    logger.critical(f" [🛡️] MISSION_CRITICAL: Restoring FS Snapshot {snapshot_id}")
+    kernel.restore_fs_snapshot(snapshot_id)
+    return {"status": "fs_restored"}
 
-async def async_delete_gcs_bucket(node: Dict[str, Any]):
-    logger.warning(f"[Compensation] Deleting GCS bucket {node.get('parameters', {}).get('bucket_name')}")
-    return {"status": "deleted"}
-
-async def async_revoke_webhook(node: Dict[str, Any]):
-    logger.warning(f"[Compensation] Revoking webhook {node.get('parameters', {}).get('webhook_id')}")
-    return {"status": "revoked"}
-
-async def async_cleanup_temp_files(node: Dict[str, Any]):
-    logger.warning("[Compensation] Cleaning up sandbox temp files.")
-    return {"status": "cleaned"}
+async def async_purge_mcm_facts(node: Dict[str, Any]):
+    from backend.services.mcm import mcm_service
+    mission_id = node.get("parameters", {}).get("mission_id")
+    logger.critical(f" [🛡️] MISSION_CRITICAL: Purging MCM facts for {mission_id}")
+    await mcm_service.purge_mission_facts(mission_id)
+    return {"status": "mcm_purged"}
 
 COMPENSATION_HANDLERS: Dict[str, Callable] = {
     "debit_account": async_reverse_debit,
     "create_gcs_bucket": async_delete_gcs_bucket,
     "invoke_webhook": async_revoke_webhook,
     "execute_code": async_cleanup_temp_files,
+    "fs_snapshot": async_restore_fs_snapshot,
+    "mcm_fact": async_purge_mcm_facts,
 }
 
 class CompensationCoordinator:

@@ -25,10 +25,10 @@ class CacheManager:
     
     # 🎓 Tier-0: Deterministic O(1) Graduated Rules
     _T0_BYPASS_CACHE: Dict[str, Any] = {
-        "analysis:security": {"mode": BrainMode.THOUGHTFUL, "temperature": 0.2, "fidelity_enforced": True},
-        "planning:rapid": {"mode": BrainMode.REACTION, "temperature": 0.9, "fidelity_enforced": False},
-        "mission:audit": {"mode": BrainMode.CRITICAL, "temperature": 0.0, "fidelity_enforced": True},
-        "system:diagnostics": {"mode": BrainMode.SOVEREIGN, "temperature": 0.5, "fidelity_enforced": True}
+        "analysis:security": {"mode": BrainMode.DEEP, "temperature": 0.2, "fidelity_enforced": True},
+        "planning:rapid": {"mode": BrainMode.FAST, "temperature": 0.9, "fidelity_enforced": False},
+        "mission:audit": {"mode": BrainMode.SECURE, "temperature": 0.0, "fidelity_enforced": True},
+        "system:diagnostics": {"mode": BrainMode.BALANCED, "temperature": 0.5, "fidelity_enforced": True}
     }
 
     @classmethod

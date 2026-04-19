@@ -169,5 +169,24 @@ impl SovereignNetStack {
         nic.send_packet(&reply[..total_len]);
         println!(" [OK] ICMP Echo Reply (type=0) transmitted with checksum 0x{:04X}.", checksum);
     }
+
+    pub fn emit_ping(&self, target_ip: [u8; 4]) {
+        println!(" [NET] Outbound ICMP Echo Request -> {:?}.", target_ip);
+        let mut packet = [0u8; 42]; // Min size for ARP/ICMP frame
+        // Ethernet Header
+        packet[12] = 0x08; packet[13] = 0x00; // IPv4
+        // IPv4 Header
+        packet[23] = 1; // ICMP
+        packet[26..30].copy_from_slice(&self.ip_address);
+        packet[30..34].copy_from_slice(&target_ip);
+        // ICMP Type 8 (Echo Request)
+        packet[34] = 8;
+        
+        let mut nic = crate::nic::NIC_DEVICE.lock();
+        if let Some(ref mut d) = *nic {
+            d.send_packet(&packet);
+            println!(" [OK] ICMP Echo Request emitted via NIC TX Descriptor.");
+        }
+    }
 }
 

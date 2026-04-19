@@ -48,8 +48,9 @@ impl AtaDriver {
             Port::<u8>::new(self.io_base + 4).write(u8::try_from((lba >> 8) & 0xFF).unwrap());
             Port::<u8>::new(self.io_base + 5).write(u8::try_from((lba >> 16) & 0xFF).unwrap());
             Port::<u8>::new(self.io_base + 7).write(0x30u8); // Command: Write Sectors
-
-            self.wait_for_ready();
+            
+            // K-5: Poll DRQ before writing payload
+            self.wait_for_drq().expect("ATA: DRQ poll failed during write");
 
             for i in 0..source.len() {
                 Port::<u16>::new(self.io_base).write(source[i]);

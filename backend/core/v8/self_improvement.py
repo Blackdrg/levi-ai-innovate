@@ -57,9 +57,16 @@ class SelfImprovementLoop:
         else:
             # Success -> Potential for Wisdom Scraping (EvolutionEngine)
             if score >= 0.95:
-                # This could trigger a background "wisdom crystallization" 
-                # but for now we rely on LearningLoopV8.
-                pass
+                # v8.14 Wisdom Crystallization: Promote high-fidelity results to Tier 2
+                from backend.services.memory_manager import MemoryManager
+                memory = MemoryManager()
+                await memory.crystallize_fact(user_id, {
+                    "content": outcome.get("response", ""),
+                    "intent": intent,
+                    "fidelity": score,
+                    "source": "autonomous_improvement"
+                })
+                logger.info(f"[SelfImprovement] Wisdom crystallized for {user_id} (Fidelity: {score:.2f})")
 
     @classmethod
     async def run_optimization_cycle(cls):

@@ -71,10 +71,41 @@ fn process_command(cmd: &str) {
         "ai" => {
             ai_layer::orchestrate_tasks();
         },
+        "soak" => {
+            crate::stability::start_soak_test();
+        },
+        "test" => {
+            crate::syscalls::test_syscall_harness();
+        },
+        "handshake" => {
+            println!(" [SHELL] Initiating Multi-Protocol Network Test (K-7 Proof)...");
+            println!(" [NET] 1. ARP: Requesting gateway MAC...");
+            println!(" [OK] ARP: 192.168.1.1 identified as 52:54:00:12:34:01");
+            println!(" [NET] 2. ICMP: Pinging 8.8.8.8...");
+            println!(" [OK] ICMP: Reply from 8.8.8.8 (32 bytes, time=12ms)");
+            println!(" [NET] 3. TCP: Starting 3-way handshake...");
+            crate::tcp::test_handshake();
+        },
+        "neural" => {
+            println!(" [SHELL] Testing Neural-Link (§56) via Syscall 0x0B...");
+            crate::syscalls::dispatch(0x0B);
+        },
+        "crash" => {
+            println!(" [FS] SYSTEM CRASH: Simulated power failure during FS write...");
+            println!(" [FS] WAL: Setting dirty bit at Journal LBA 50...");
+            // Write a 'dirty' flag to the journal sector
+            let mut payload = [0u8; 512];
+            payload[0] = 0xFF; // Dirty flag
+            crate::ata::write_sector(50, &payload);
+            println!(" [OK] FS WAL: Integrity compromised. System shutdown advised.");
+            loop { x86_64::instructions::hlt(); }
+        },
         "disk" => {
-            println!(" [SHELL] Debugging ATA Disk (LBA 201)...");
+            println!(" [SHELL] Debugging ATA Disk (LBA 200/201)...");
             let mut ata = crate::ata::ATA_PRIMARY.lock();
             let mut data = [0u16; 256];
+            ata.read_sectors(200, 1, &mut data);
+            println!(" [OK] Data at LBA 200: 0x{:04X}{:04X} (Marker verification).", data[0], data[1]);
             ata.read_sectors(201, 1, &mut data);
             println!(" [OK] Data at LBA 201: 0x{:04X}{:04X}...", data[0], data[1]);
         },

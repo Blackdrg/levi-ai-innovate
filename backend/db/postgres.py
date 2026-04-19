@@ -89,6 +89,29 @@ class PostgresDB:
         raise last_exc
 
     @classmethod
+    async def init_db(cls):
+        """
+        Sovereign v22 GA: Autonomous SQL Migration.
+        Ensures all tables defined in models.py are created in the target Postgres fabric.
+        """
+        engine = cls.get_engine()
+        if engine is None:
+            logger.error("🚫 [Postgres] Cannot initialize DB: Engine not established.")
+            return
+
+        try:
+            # Import models inside to avoid circular dependencies
+            from . import models
+            async with engine.begin() as conn:
+                logger.info("🛠️ [Postgres] Synchronizing SQL metadata...")
+                # In v1.4+, metadata.create_all is the standard for auto-migration
+                await conn.run_sync(Base.metadata.create_all)
+            logger.info("✅ [Postgres] Table crystallization complete.")
+        except Exception as e:
+            logger.critical(f"💥 [Postgres] Schema synchronization FAILED: {e}")
+            raise
+
+    @classmethod
     @asynccontextmanager
     async def session_scope(cls):
         """Transactional session scope management (Graduation #18)."""
@@ -105,6 +128,30 @@ class PostgresDB:
             raise
         finally:
             await session.close()
+    
+    @classmethod
+    def _session_factory_internal(cls):
+        """Compatibility bridge for internal session creation."""
+        if cls._session_factory is None:
+            cls.get_engine()
+        return cls._session_factory()
+
+    @classmethod
+    async def cls_verify(cls) -> bool:
+        """Deep health check of the Postgres fabric."""
+        try:
+            session = await cls.get_session()
+            if not session: return False
+            async with session:
+                await session.execute(text("SELECT 1"))
+            return True
+        except Exception:
+            return False
+
+    @classmethod
+    async def check_health(cls) -> bool:
+        """Alias for deep health check."""
+        return await cls.cls_verify()
 
     @classmethod
     async def close(cls):

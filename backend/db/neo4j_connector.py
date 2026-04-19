@@ -42,6 +42,41 @@ class Neo4jStore:
             logger.error(f"[Neo4j] Health check failed: {e}")
             return False
 
+    async def clear_user_graph(self, tenant_id: str):
+        """
+        Sovereign v15.0: Hard Purge (GDPR Art 17).
+        Physically deletes all entities for a specific tenant/user.
+        """
+        async def _run():
+            driver = await self.connect()
+            async with driver.session() as session:
+                # Delete all nodes where tenant_id matches, and their relationships
+                cypher = "MATCH (e:Entity {tenant_id: $tenant_id}) DETACH DELETE e"
+                await session.run(cypher, tenant_id=tenant_id)
+                logger.info(f"[Neo4j] Absolute resonance wipe complete for tenant: {tenant_id}")
+
+        try:
+            await neo4j_breaker.async_call(_run)
+        except Exception as e:
+            logger.error(f"[Neo4j] FAILED to purge graph for tenant {tenant_id}: {e}")
+            raise
+
+    async def delete_mission_nodes(self, mission_id: str):
+        """
+        Targeted lifecycle pruning.
+        """
+        async def _run():
+            driver = await self.connect()
+            async with driver.session() as session:
+                cypher = "MATCH (e:Entity {source_mission_id: $mission_id}) DETACH DELETE e"
+                await session.run(cypher, mission_id=mission_id)
+                logger.debug(f"[Neo4j] Pruned nodes for mission: {mission_id}")
+
+        try:
+            await neo4j_breaker.async_call(_run)
+        except Exception as e:
+            logger.error(f"[Neo4j] Failed to prune mission nodes: {e}")
+
     async def close(self):
         if self._driver:
             await self._driver.close()

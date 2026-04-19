@@ -3,7 +3,7 @@ import os
 import json
 import logging
 import hashlib
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)

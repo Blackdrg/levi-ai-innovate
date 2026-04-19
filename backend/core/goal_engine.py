@@ -4,6 +4,7 @@ import json
 import asyncio
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
+from pydantic import BaseModel
 
 from backend.db.models import Goal, Mission
 from backend.db.postgres import PostgresDB

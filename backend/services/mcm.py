@@ -15,6 +15,8 @@ from backend.services.arweave_service import arweave_audit
 # Memory is Not Truth-Aware Gap Closure
 from backend.utils.event_bus import sovereign_event_bus
 
+HAS_PUBSUB = HAS_REDIS # v22 GA Graduation: PUBSUB is provided by internalized Redis Streams
+
 logger = logging.getLogger(__name__)
 
 class MemoryConsistencyManager:
@@ -291,5 +293,22 @@ class MemoryConsistencyManager:
                     )
                 except Exception as e:
                     logger.error(f"❌ [MCM] Arweave Anchoring failed: {e}")
+
+    async def purge_mission_facts(self, mission_id: str) -> None:
+        """
+        Hard Rollback: Prunes all facts associated with a mission ID from Postgres and Redis.
+        """
+        logger.warning(f" [🗑️] MCM: Purging all facts for mission {mission_id}")
+        
+        async with get_write_session() as session:
+            # Delete episodic facts from Postgres
+            from sqlalchemy import delete
+            await session.execute(delete(UserFact).where(UserFact.category == f"mission_{mission_id}"))
+            
+        if HAS_REDIS:
+            # Cull from Redis Stream or cache if indexed
+            redis_client.delete(f"mcm:interaction:{mission_id}")
+            
+        logger.info(f" ✅ [MCM] Fact purge complete for mission {mission_id}.")
 
 mcm_service = MemoryConsistencyManager()

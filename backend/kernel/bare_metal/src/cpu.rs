@@ -47,11 +47,20 @@ pub fn init() {
         {
             println!(" [WARN] CPU: Virtual environment detected, proceeding in emulator mode.");
         }
-    } else if vendor_str == "AuthenticAMD" || vendor_str == "GenuineIntel" {
-        println!(" [OK] CPU: Hardware governance enabled (Ring 0).");
     } else {
         println!(" [WARN] CPU: Unknown physical hardware architecture.");
     }
+
+    // --- Sovereign Security Hardening: Enable NX Bit (EFER.NXE) ---
+    use x86_64::registers::model_specific::Efer;
+    use x86_64::registers::model_specific::EferFlags;
+    
+    unsafe {
+        let mut flags = Efer::read();
+        flags.insert(EferFlags::NO_EXECUTE_ENABLE);
+        Efer::write(flags);
+    }
+    println!(" [OK] CPU: IA32_EFER.NXE=1 (No-Execute protection active).");
 }
 
 pub fn boot_aps() {

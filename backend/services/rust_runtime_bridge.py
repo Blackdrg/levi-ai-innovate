@@ -29,4 +29,13 @@ class RustRuntimeBridge:
         except:
             return False
 
+    async def send_gossip(self, pulse_data: dict) -> bool:
+        """Proxies a DCN pulse to the native Rust P2P layer."""
+        try:
+            response = await self.client.post("/dcn/gossip", json=pulse_data)
+            return response.status_code == 200
+        except Exception as e:
+            logger.error(f"❌ [RustBridge] Gossip proxy failed: {e}")
+            return False
+
 rust_bridge = RustRuntimeBridge()

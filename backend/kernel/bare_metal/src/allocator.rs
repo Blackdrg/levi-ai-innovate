@@ -7,8 +7,27 @@ use x86_64::{
 };
 use linked_list_allocator::LockedHeap;
 
+use core::alloc::{GlobalAlloc, Layout};
+
+struct TrackingAllocator<A: GlobalAlloc>(A);
+
+unsafe impl<A: GlobalAlloc> GlobalAlloc for TrackingAllocator<A> {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        let ptr = self.0.alloc(layout);
+        if !ptr.is_null() {
+            ALLOC_COUNT.fetch_add(1, core::sync::atomic::Ordering::SeqCst);
+        }
+        ptr
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        self.0.dealloc(ptr, layout);
+        ALLOC_COUNT.fetch_sub(1, core::sync::atomic::Ordering::SeqCst);
+    }
+}
+
 #[global_allocator]
-static ALLOCATOR: LockedHeap = LockedHeap::empty();
+static ALLOCATOR: TrackingAllocator<LockedHeap> = TrackingAllocator(LockedHeap::empty());
 
 pub static ALLOC_COUNT: core::sync::atomic::AtomicUsize = core::sync::atomic::AtomicUsize::new(0);
 
@@ -20,11 +39,14 @@ pub fn track_free() {
     ALLOC_COUNT.fetch_sub(1, core::sync::atomic::Ordering::SeqCst);
 }
 
-pub fn check_leaks() {
+pub fn check_leaks() -> usize {
     let count = ALLOC_COUNT.load(core::sync::atomic::Ordering::SeqCst);
     if count > 0 {
         crate::println!(" [MEM] Potential leak detected: {} active allocations.", count);
+    } else {
+        crate::println!(" [MEM] 0 leaks detected. Residency stable.");
     }
+    count
 }
 
 pub const HEAP_START: usize = 0x_4444_4444_0000;
@@ -52,7 +74,7 @@ pub fn init_heap(
     }
 
     unsafe {
-        ALLOCATOR.lock().init(HEAP_START, HEAP_SIZE);
+        ALLOCATOR.0.lock().init(HEAP_START, HEAP_SIZE);
     }
 
     Ok(())

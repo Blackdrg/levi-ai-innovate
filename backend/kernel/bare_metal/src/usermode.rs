@@ -116,7 +116,7 @@ pub unsafe extern "C" fn user_entry_stub() -> ! {
         "int 0x80",           // INT 0x80 → Ring-0 syscall_handler
         // Infinite idle — a real process would call sys_exit here
         "2:",
-        "hlt",
+        "pause",
         "jmp 2b",
         options(noreturn),
     );

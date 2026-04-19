@@ -29,6 +29,7 @@ opt-level = "z"
 
 # `bootimage build` will produce a bootable ISO image in target/
 [package.metadata.bootimage]
+run-args = ["-drive", "format=raw,file={}", "-serial", "mon:stdio", "-m", "512M"]
 test-args = ["-device", "isa-debug-exit,iobase=0xf4,iosize=0x04", "-serial", "stdio",
              "-display", "none"]
 test-success-exit-code = 33

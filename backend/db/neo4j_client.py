@@ -129,6 +129,36 @@ class Neo4jClient:
             logger.error(f"[Neo4j] Resonance retrieval failure: {e}")
             return []
     @classmethod
+    async def add_mission_record(cls, mission_id: str, user_id: str, objective: str, response: str, signatures: List[str]):
+        """
+        Anchors a completed mission to the Knowledge Graph with BFT signature proofs.
+        v22 GA: Enforces 10-signature quorum verification.
+        """
+        cypher = """
+        MERGE (u:User {id: $user_id})
+        CREATE (m:Mission {
+            id: $mission_id,
+            objective: $objective,
+            response: $response,
+            timestamp: datetime(),
+            verified_signatures: $signatures,
+            status: "GRADUATED"
+        })
+        CREATE (u)-[:EXECUTED]->(m)
+        """
+        try:
+            await cls.execute_query(cypher, {
+                "user_id": user_id,
+                "mission_id": mission_id,
+                "objective": objective,
+                "response": response,
+                "signatures": signatures[:10]
+            })
+            logger.info(f" ✅ [Neo4j] Mission node created for {mission_id} with {len(signatures)} sigs.")
+        except Exception as e:
+            logger.error(f"❌ [Neo4j] Mission record failure: {e}")
+
+    @classmethod
     async def clear_user_data(cls, user_id: str):
         """Detaches and deletes all nodes associated with a user for absolute privacy."""
         cypher = """

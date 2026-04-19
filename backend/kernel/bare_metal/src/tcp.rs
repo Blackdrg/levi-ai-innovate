@@ -416,3 +416,22 @@ pub fn http_client() {
     sock.tx_segment(&mut nic, TCP_PSH | crate::tcp::TCP_ACK, req);
     crate::println!(" [OK] HTTP Request sent successfully via NIC.");
 }
+
+pub fn test_handshake() {
+    println!(" [NET] Testing TCP 3-way handshake (K-7 Proof)...");
+    let mut nic = crate::nic::NicDriver::new();
+    let mut sock = TcpSocket::new([192, 168, 1, 100], 4444, [0x52, 0x54, 0x00, 0x12, 0x34, 0x56]);
+    
+    // Step 1: SYN
+    sock.connect(&mut nic, [1, 1, 1, 1], 80, [0xFF; 6]);
+    
+    // Simulate incoming SYN-ACK
+    let mut syn_ack = [0u8; 60];
+    syn_ack[13] = TCP_SYN | TCP_ACK;
+    println!(" [NET] Simulated SYN-ACK packet received.");
+    sock.on_segment(&mut nic, &syn_ack);
+    
+    if sock.state == TcpState::Established {
+        println!(" [OK] TCP Handshake SUCCESS: State = ESTABLISHED.");
+    }
+}

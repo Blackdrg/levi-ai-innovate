@@ -177,6 +177,12 @@ DEFAULT_AGENTS = {
         input_schema={"type": "object", "properties": {"input": {"type": "string"}}, "required": ["input"]},
         output_schema={"type": "object"}
     ),
+    "cognition": AgentCapability(
+        name="Cognition",
+        agent_type="reasoning",
+        input_schema={"type": "object", "properties": {"context": {"type": "string"}}, "required": ["context"]},
+        output_schema={"type": "object"}
+    ),
     "system": AgentCapability(
         name="SystemController",
         agent_type="os_control",

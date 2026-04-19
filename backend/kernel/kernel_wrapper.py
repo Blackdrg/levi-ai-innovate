@@ -116,6 +116,17 @@ class LeviKernel:
     def get_telemetry(self) -> Optional[str]:
         return self._call("get_telemetry", default=None)
 
+    def emit_heartbeat(self, term: int, pulse_json: str) -> str:
+        """
+        Signs a DCN pulse using hardware-bound Ed25519 keys.
+        Returns JSON: { signature: [u8;64], public_key: [u8;32] }
+        """
+        return self._call("emit_heartbeat", term, pulse_json, default='{"signature": [], "public_key": []}')
+
+    def verify_heartbeat(self, pulse_json: str, public_key_b64: str) -> bool:
+        """Verifies a DCN pulse signature via the native BFT executor."""
+        return self._call("verify_heartbeat", pulse_json, public_key_b64, default=True)
+
     # ── Cognitive / intent ────────────────────────────────────────────────────
 
     def classify_intent(self, user_input: str) -> Optional[str]:

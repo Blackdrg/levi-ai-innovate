@@ -33,22 +33,46 @@ impl InterruptIndex {
 lazy_static! {
     static ref IDT: InterruptDescriptorTable = {
         let mut idt = InterruptDescriptorTable::new();
+        idt.divide_error.set_handler_fn(divide_error_handler);
+        idt.debug.set_handler_fn(debug_handler);
         idt.breakpoint.set_handler_fn(breakpoint_handler);
+        idt.overflow.set_handler_fn(overflow_handler);
+        idt.bound_range_exceeded.set_handler_fn(bound_range_exceeded_handler);
+        idt.invalid_opcode.set_handler_fn(invalid_opcode_handler);
+        idt.device_not_available.set_handler_fn(device_not_available_handler);
         unsafe {
             idt.double_fault.set_handler_fn(double_fault_handler)
                 .set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
         }
-        idt[InterruptIndex::Timer.as_usize()]
-            .set_handler_fn(timer_interrupt_handler);
-        idt[InterruptIndex::Keyboard.as_usize()]
-            .set_handler_fn(keyboard_interrupt_handler);
-        idt.page_fault.set_handler_fn(page_fault_handler);
-        idt.general_protection_fault.set_handler_fn(general_protection_fault_handler);
+        idt.invalid_tss.set_handler_fn(invalid_tss_handler);
+        idt.segment_not_present.set_handler_fn(segment_not_present_handler);
         idt.stack_segment_fault.set_handler_fn(stack_segment_fault_handler);
-        idt.invalid_opcode.set_handler_fn(invalid_opcode_handler);
-        idt[0x80].set_handler_fn(crate::syscalls::syscall_handler);
+        idt.general_protection_fault.set_handler_fn(general_protection_fault_handler);
+        idt.page_fault.set_handler_fn(page_fault_handler);
+
+        idt[InterruptIndex::Timer.as_usize()].set_handler_fn(timer_interrupt_handler);
+        idt[InterruptIndex::Keyboard.as_usize()].set_handler_fn(keyboard_interrupt_handler);
+        
+        // 0x80 Syscall: must be accessible from Ring 3
+        idt[0x80].set_handler_fn(crate::syscalls::syscall_handler)
+                .set_privilege_level(x86_64::PrivilegeLevel::Ring3);
         idt
     };
+}
+
+extern "x86-interrupt" fn divide_error_handler(
+    stack_frame: InterruptStackFrame,
+) {
+    println!(" [INT] EXCEPTION: DIVIDE BY ZERO");
+    println!(" [INT] {:#?}", stack_frame);
+    panic!("DIVIDE ERROR - SOVEREIGN HALT");
+}
+
+extern "x86-interrupt" fn debug_handler(
+    stack_frame: InterruptStackFrame,
+) {
+    println!(" [INT] EXCEPTION: DEBUG");
+    println!(" [INT] {:#?}", stack_frame);
 }
 
 extern "x86-interrupt" fn general_protection_fault_handler(
@@ -69,6 +93,43 @@ extern "x86-interrupt" fn stack_segment_fault_handler(
     println!(" [INT] Error Code: {}", error_code);
     println!(" [INT] {:#?}", stack_frame);
     panic!("STACK SEGMENT FAULT - SOVEREIGN HALT");
+}
+
+extern "x86-interrupt" fn overflow_handler(
+    stack_frame: InterruptStackFrame,
+) {
+    println!(" [INT] EXCEPTION: OVERFLOW");
+    println!(" [INT] {:#?}", stack_frame);
+}
+
+extern "x86-interrupt" fn bound_range_exceeded_handler(
+    stack_frame: InterruptStackFrame,
+) {
+    println!(" [INT] EXCEPTION: BOUND RANGE EXCEEDED");
+    println!(" [INT] {:#?}", stack_frame);
+}
+
+extern "x86-interrupt" fn device_not_available_handler(
+    stack_frame: InterruptStackFrame,
+) {
+    println!(" [INT] EXCEPTION: DEVICE NOT AVAILABLE");
+    println!(" [INT] {:#?}", stack_frame);
+}
+
+extern "x86-interrupt" fn invalid_tss_handler(
+    stack_frame: InterruptStackFrame,
+    _error_code: u64,
+) {
+    println!(" [INT] EXCEPTION: INVALID TSS");
+    println!(" [INT] {:#?}", stack_frame);
+}
+
+extern "x86-interrupt" fn segment_not_present_handler(
+    stack_frame: InterruptStackFrame,
+    _error_code: u64,
+) {
+    println!(" [INT] EXCEPTION: SEGMENT NOT PRESENT");
+    println!(" [INT] {:#?}", stack_frame);
 }
 
 extern "x86-interrupt" fn invalid_opcode_handler(

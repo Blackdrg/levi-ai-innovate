@@ -21,7 +21,7 @@ class GraphEngine:
     def __init__(self):
         self.store = Neo4jStore()
 
-    async def upsert_triplet(self, user_id: str, subject: str, relation: str, obj: str, tenant_id: str = "default", mission_id: Optional[str] = None):
+    async def upsert_triplet(self, user_id: str, subject: str, relation: str, obj: str, tenant_id: str = "default", mission_id: Optional[str] = None, metadata: Optional[Dict[str, Any]] = None):
         """
         Sovereign v15.0: Hardened entry point for relational knowledge ingestion.
         Sanitizes input and maps strings to the OS Ontology.
@@ -101,6 +101,10 @@ class GraphEngine:
     async def delete_mission_nodes(self, mission_id: str):
         """Sovereign v15.0 GA: Targeted lifecycle pruning."""
         await self.store.delete_mission_nodes(mission_id)
+        
+    async def clear_user_graph(self, user_id: str):
+        """Sovereign v15.0 GA: Hardened absolute memory wipe for privacy/compliance."""
+        await self.store.clear_user_graph(user_id)
 
     async def close(self):
         await self.store.close()

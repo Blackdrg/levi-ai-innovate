@@ -58,7 +58,6 @@ from .orchestrator_types import (
     BrainMode, 
     ExecutionPolicy, 
     ToolResult,
-    MissionOutcome,
     IntentNode,
     IntentEdge
 )
@@ -315,3 +314,6 @@ class LeviBrain:
 
 # --- SYSTEM INTEGRATION ---
 # Handled by Orchestrator via 'LeviBrain()' invocation.
+
+# Backward compatibility alias
+LeviBrainV14 = LeviBrain

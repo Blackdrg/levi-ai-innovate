@@ -1,121 +1,145 @@
-import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { useTelemetryStore } from '../stores/telemetryStore';
-import { Activity, BarChart3, TrendingUp } from 'lucide-react';
+import React, { useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useLeviStore } from '../stores/leviStore';
+import { Activity, Thermometer, Cpu, Shield, Braces } from 'lucide-react';
 
-const Sparkline = ({ data, color, target }: { data: number[], color: string, target: number }) => {
-  const max = Math.max(...data, target * 1.5);
-  const min = Math.min(...data, 0);
-  const range = max - min;
-  const width = 200;
-  const height = 60;
-
-  const points = data.map((v, i) => ({
-    x: (i / (data.length - 1)) * width,
-    y: height - ((v - min) / range) * height
-  }));
-
-  const pathContent = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
-  const targetY = height - ((target - min) / range) * height;
-
+const ThermalGauge = ({ label, value, unit, color, max }: any) => {
+  const percentage = Math.min((value / max) * 100, 100);
+  
   return (
-    <div className="sparkline-container">
-      <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
-        <line x1="0" y1={targetY} x2={width} y2={targetY} stroke="rgba(255,255,255,0.1)" strokeDasharray="4 2" />
-        <path d={pathContent} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" />
-        <circle cx={points[points.length - 1]?.x} cy={points[points.length - 1]?.y} r="3" fill={color} />
-      </svg>
-
-      <style>{`
-        .sparkline-container { background: rgba(0,0,0,0.2); border-radius: 4px; padding: 4px; overflow: visible; }
-      `}</style>
+    <div className="p-4 rounded-2xl bg-white/5 border border-white/10 relative overflow-hidden group">
+      <div className="flex justify-between items-center mb-4">
+        <div className="flex items-center gap-2">
+          <Thermometer size={16} className="text-neutral-500" />
+          <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">{label}</span>
+        </div>
+        <span className="text-xl font-black font-mono">{value.toFixed(1)}{unit}</span>
+      </div>
+      
+      <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
+        <motion.div 
+          initial={{ width: 0 }}
+          animate={{ width: `${percentage}%` }}
+          className="h-full"
+          style={{ background: color }}
+        />
+      </div>
+      
+      {/* Decorative Glow */}
+      <div className="absolute top-0 right-0 w-24 h-24 blur-3xl opacity-10 rounded-full" style={{ background: color }}></div>
     </div>
   );
 };
 
-const MetricCard = ({ title, value, target, history, unit, color }: any) => (
-  <div className="metric-card">
-    <div className="metric-info">
-      <h3>{title}</h3>
-      <div className="metric-value">
-        <span className="current">{value.toFixed(1)}{unit}</span>
-        <span className="target">/ TAR: {target}{unit}</span>
-      </div>
+const AgentTile = ({ agent }: any) => (
+  <div className={`p-3 rounded-xl border transition-all duration-300 ${
+    agent.status === 'READY' ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-400' : 'bg-red-500/5 border-red-500/20 text-red-400'
+  }`}>
+    <div className="flex justify-between items-start mb-2">
+      <span className="text-[10px] font-black tracking-tighter">{agent.name}</span>
+      <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${agent.status === 'READY' ? 'bg-emerald-500' : 'bg-red-500'}`} />
     </div>
-    <Sparkline data={history} color={color} target={target} />
-
-    <style>{`
-      .metric-card {
-        background: rgba(15, 23, 42, 0.4);
-        border: 1px solid rgba(255, 255, 255, 0.05);
-        padding: 1.5rem;
-        border-radius: 12px;
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-      }
-      h3 { font-size: 0.75rem; color: #64748b; font-weight: 700; letter-spacing: 0.05em; }
-      .metric-value { display: flex; flex-direction: column; }
-      .current { font-size: 1.5rem; font-weight: 700; color: #f1f5f9; font-family: 'JetBrains Mono', monospace; }
-      .target { font-size: 0.7rem; color: #475569; font-weight: 600; }
-    `}</style>
+    <div className="text-[8px] font-mono opacity-60 uppercase">{agent.model}</div>
+    <div className="mt-2 text-xs font-black">{agent.latency}ms</div>
   </div>
 );
 
 export const MetricsDashboard: React.FC = () => {
-  const pulse = useTelemetryStore((state) => state.pulse);
-  const [metrics, setMetrics] = useState<any>({
-    auth: { val: 42, target: 100, hist: [45, 42, 48, 41, 42, 43, 42], color: '#38bdf8' },
-    dag: { val: 320, target: 500, hist: [350, 310, 340, 320, 330, 320, 320], color: '#fbbf24' },
-    search: { val: 85, target: 150, hist: [90, 82, 88, 85, 87, 85, 85], color: '#10b981' },
-    inference: { val: 1200, target: 2000, hist: [1300, 1150, 1250, 1200, 1210, 1200, 1200], color: '#f43f5e' },
-    execution: { val: 2400, target: 5000, hist: [2600, 2350, 2500, 2400, 2450, 2400, 2400], color: '#a855f7' },
-  });
-
-  useEffect(() => {
-     if (pulse?.type === 'METRICS_UPDATE') {
-        // Update logic
-     }
-  }, [pulse]);
+  const { agents, thermal, syscalls, ksm } = useLeviStore();
 
   return (
-    <div className="metrics-dashboard">
-      <header className="dashboard-header">
-        <div className="title-pnl">
-          <TrendingUp className="text-blue-400" />
-          <h1>SYSTEM TELEMETRY v14.0</h1>
+    <div className="p-8 h-full overflow-y-auto space-y-8 no-scrollbar">
+      <header className="flex justify-between items-end">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <Shield size={16} className="text-blue-500" />
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-500">Live Telemetry</span>
+          </div>
+          <h2 className="text-3xl font-black uppercase tracking-tight">Sovereign Cluster v22</h2>
         </div>
-        <div className="status-badge">SOVEREIGN_OS_ONLINE</div>
+        <div className="px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+          <span className="text-[10px] font-black uppercase tracking-widest text-emerald-500">Node_Status: ACTIVE</span>
+        </div>
       </header>
 
-      <div className="metrics-grid">
-        <MetricCard title="AUTH LATENCY" value={metrics.auth.val} target={metrics.auth.target} history={metrics.auth.hist} unit="ms" color={metrics.auth.color} />
-        <MetricCard title="DAG GENERATION" value={metrics.dag.val} target={metrics.dag.target} history={metrics.dag.hist} unit="ms" color={metrics.dag.color} />
-        <MetricCard title="VECTOR SEARCH" value={metrics.search.val} target={metrics.search.target} history={metrics.search.hist} unit="ms" color={metrics.search.color} />
-        <MetricCard title="LOCAL INFERENCE" value={metrics.inference.val} target={metrics.inference.target} history={metrics.inference.hist} unit="ms" color={metrics.inference.color} />
-        <MetricCard title="WAVE EXECUTION" value={metrics.execution.val} target={metrics.execution.target} history={metrics.execution.hist} unit="ms" color={metrics.execution.color} />
+      {/* Primary Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <ThermalGauge label="Kernel CPU Temp" value={thermal.cpu} unit="°C" color="#3b82f6" max={100} />
+        <ThermalGauge label="Sovereign GPU Temp" value={thermal.gpu_temp} unit="°C" color={thermal.gpu_temp > 75 ? "#ef4444" : "#f59e0b"} max={100} />
+        <ThermalGauge label="Neural VRAM Usage" value={thermal.vram} unit="GB" color="#8b5cf6" max={24} />
+        
+        {/* KSM Deduplication (Section 94) */}
+        <div className="p-4 rounded-2xl bg-white/5 border border-purple-500/20 relative overflow-hidden group">
+          <div className="flex justify-between items-center mb-4">
+            <div className="flex items-center gap-2">
+              <Shield size={16} className="text-purple-400" />
+              <span className="text-[10px] font-black uppercase tracking-widest text-purple-400">KSM Savings</span>
+            </div>
+            <span className="text-xl font-black font-mono text-purple-400">{ksm.savings_pct}%</span>
+          </div>
+          <div className="text-[8px] font-black uppercase text-neutral-500 tracking-tighter">
+            HAL-0 Memory Deduplication: ACTIVE
+          </div>
+          <div className="absolute -bottom-2 -right-2 opacity-5 text-purple-500">
+             <Cpu size={80} />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Agent Grid */}
+        <section className="glass rounded-3xl p-6 border border-white/5">
+          <div className="flex items-center gap-2 mb-6">
+            <Cpu size={18} className="text-neutral-500" />
+            <h3 className="text-xs font-black uppercase tracking-widest">Cognitive Swarm (16 Nodes)</h3>
+          </div>
+          <div className="grid grid-cols-4 gap-4">
+            {agents.map((agent, i) => (
+              <AgentTile key={i} agent={agent} />
+            ))}
+          </div>
+        </section>
+
+        {/* Syscall Monitor */}
+        <section className="glass rounded-3xl p-6 border border-white/5 flex flex-col h-[400px]">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-2">
+              <Braces size={18} className="text-neutral-500" />
+              <h3 className="text-xs font-black uppercase tracking-widest">HAL-0 Syscall Monitor</h3>
+            </div>
+            <span className="text-[10px] font-mono text-neutral-500">Tracing: Kernel_Entry_Vector</span>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto space-y-2 font-mono text-[10px] pr-2 custom-scrollbar">
+            <AnimatePresence initial={false}>
+              {syscalls.map((sc) => (
+                <motion.div
+                  key={sc.id}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="p-2 rounded bg-white/5 border-l-2 border-blue-500/50 flex justify-between group hover:bg-white/10 transition-colors"
+                >
+                  <div className="flex gap-4">
+                    <span className="text-blue-500 font-bold">0x{sc.name.split('_')[1] || '??'}</span>
+                    <span className="text-neutral-300">{sc.name}</span>
+                  </div>
+                  <div className="flex gap-4 opacity-40 group-hover:opacity-100 transition-opacity">
+                    <span className="text-neutral-500">ARGS: {sc.args.join(', ')}</span>
+                    <span className="text-neutral-600">{new Date(sc.timestamp).toLocaleTimeString()}</span>
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
+        </section>
       </div>
 
       <style>{`
-        .metrics-dashboard { padding: 2rem; color: #f1f5f9; }
-        .dashboard-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3rem; }
-        .title-pnl { display: flex; align-items: center; gap: 1rem; }
-        h1 { font-family: 'JetBrains Mono', monospace; font-size: 1.5rem; letter-spacing: 0.1em; color: #38bdf8; }
-        .status-badge { 
-          background: rgba(16, 185, 129, 0.1); 
-          border: 1px solid rgba(16, 185, 129, 0.3); 
-          color: #10b981; 
-          padding: 0.5rem 1rem; 
-          border-radius: 99px; 
-          font-family: 'JetBrains Mono', monospace; 
-          font-size: 0.7rem; 
-          font-weight: bold;
-        }
-        .metrics-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-          gap: 2rem;
-        }
+        .glass { background: rgba(255, 255, 255, 0.02); backdrop-filter: blur(12px); }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(59, 130, 246, 0.2); border-radius: 10px; }
       `}</style>
     </div>
   );

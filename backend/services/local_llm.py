@@ -1,6 +1,6 @@
 import os
 import logging
-from typing import Optional
+from typing import Optional, List
 from backend.core.model_router import ModelRouter
 
 logger = logging.getLogger(__name__)

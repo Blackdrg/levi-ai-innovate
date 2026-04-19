@@ -19,6 +19,7 @@ from opentelemetry import propagate
 from .dcn.load_balancer import dcn_balancer
 from .dcn.peer_discovery import HybridGossip, DCNPeer
 from .dcn.consistency import ConsistencyEngine
+from .v13.vram_guard import VRAMGuard
 
 logger = logging.getLogger(__name__)
 
@@ -101,15 +102,15 @@ class DCNProtocol:
     async def broadcast_gossip(self, mission_id: str, payload: Any, pulse_type: str = "cognitive_gossip"):
         """Proxies gossip pulses to the native Rust DCN."""
         logger.info(f"📤 [DCN-Bridge] Propagating gossip: {pulse_type} (Mission: {mission_id})")
-        # In this graduation, we use the rust_bridge to talk to the native DCN
-        # which handles the actual multi-node consensus.
-        pass
+        pulse = self.sign_pulse(mission_id, payload, mode=ConsensusMode.GOSSIP)
+        pulse.payload_type = pulse_type
+        await self.rust.send_gossip(pulse.model_dump())
 
     async def broadcast_mission_truth(self, mission_id: str, outcome: Dict[str, Any]):
         """Commit mission truth through the native Raft cluster."""
         logger.info(f"🧬 [DCN-Bridge] COMMITTING Mission Truth via Rust Raft Cluster: {mission_id}")
-        # The Rust runtime handles the Raft commit and peer sync.
-        pass
+        pulse = self.sign_pulse(mission_id, outcome, mode=ConsensusMode.RAFT)
+        await self.rust.send_gossip(pulse.model_dump())
 
     async def _get_current_term(self) -> int:
         """Retrieves the globally agreed upon Raft term from Redis."""
@@ -497,6 +498,12 @@ class DCNProtocol:
         elif pulse.payload_type == "governance_vote":
             from backend.core.dcn.governance import governance_engine
             asyncio.create_task(governance_engine.handle_vote_pulse(pulse.node_id, pulse.payload))
+
+        # 🔥 Section 33: Thermal Governance Response
+        elif pulse.payload_type == "thermal_migration":
+            logger.warning(f"🌡️ [DCN] Thermal Alert from {pulse.node_id}! Evacuating regional agents.")
+            from backend.core.orchestrator import _orchestrator as orchestrator
+            asyncio.create_task(orchestrator.migrate_agents_to_cooler_nodes())
 
     async def start_consensus_listener(self):
         """

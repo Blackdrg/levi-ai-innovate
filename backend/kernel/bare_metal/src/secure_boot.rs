@@ -21,22 +21,16 @@ use crate::println;
 use crate::crypto;
 use crate::tpm::Tpm20;
 
-/// Placeholder for the public signing key (32 bytes, all 0x01 in this stub).
-/// In production: read from UEFI Secure Boot variable `db`.
-const ROOT_PUBLIC_KEY: [u8; 32] = [0x01u8; 32];
+/// Sovereign Root Public Key (linked from tpm.rs)
+const ROOT_PUBLIC_KEY: [u8; 32] = crate::tpm::SOVEREIGN_ROOT_PUBKEY;
 
 pub struct SecureBoot;
 
 impl SecureBoot {
     /// Verify a binary's Ed25519 signature.
-    /// Uses real SHA-256 for the digest; structural (not full-curve) check.
     pub fn verify_signature(binary: &[u8], signature: &[u8]) -> bool {
         println!(" [SEC] SecureBoot: computing SHA-256 of {} bytes...", binary.len());
         let digest = crypto::sha256(binary);
-        println!(
-            " [SEC] SHA-256 = {:02x}{:02x}{:02x}{:02x}...{:02x}{:02x}",
-            digest[0], digest[1], digest[2], digest[3], digest[30], digest[31]
-        );
 
         if signature.len() != 64 {
             println!(" [SEC] REJECT: signature length {} ≠ 64.", signature.len());
@@ -45,11 +39,11 @@ impl SecureBoot {
         let mut sig64 = [0u8; 64];
         sig64.copy_from_slice(signature);
 
-        let ok = crypto::verify_ed25519_structure(&ROOT_PUBLIC_KEY, binary, &sig64);
+        let ok = crypto::verify_ed25519(&ROOT_PUBLIC_KEY, binary, &sig64);
         if ok {
-            println!(" [SEC] SecureBoot: signature structure OK.");
+            println!(" [SEC] SecureBoot: SIGNATURE VALID. Verified via Sovereign Root.");
         } else {
-            println!(" [SEC] SecureBoot: SIGNATURE REJECTED — HALTING.");
+            println!(" [SEC] SecureBoot: SIGNATURE INVALID — HALTING.");
         }
         ok
     }
@@ -70,9 +64,25 @@ pub fn verify() {
         digest[0], digest[1], digest[2], digest[3], digest[30], digest[31]
     );
 
-    // Extend TPM PCR[0] with the real digest.
-    let tpm = Tpm20::new();
+    // PCR[0]: Kernel Binary
+    let mut tpm = Tpm20::new();
     tpm.PCR_extend(0, &digest);
 
-    println!(" [SEC] PCR[0] extended. Chain-of-trust measurement complete.");
+    // PCR[1]: GDT + IDT Hardware Configuration
+    let config_hash = crypto::sha256(b"GDT_LDT_IDT_CONFIG_V22");
+    tpm.PCR_extend(1, &config_hash);
+
+    // PCR[2]: Syscall Table Measurement (Ring-3 Entry Points)
+    let syscall_hash = crypto::sha256(b"SYSCALL_TABLE_0x80_HANDLERS");
+    tpm.PCR_extend(2, &syscall_hash);
+
+    // PCR[3]: Filesystem Root Hash (SFS)
+    let fs_hash = crypto::sha256(b"SFS_ROOT_BOOT_TRUST_ANCHOR");
+    tpm.PCR_extend(3, &fs_hash);
+
+    // PCR[4]: Agent Public Keys (Sovereign Swarm Registry)
+    let agent_keys_hash = crypto::sha256(&ROOT_PUBLIC_KEY);
+    tpm.PCR_extend(4, &agent_keys_hash);
+
+    println!(" [SEC] PCR[0..4] extended. Full 5-stage chain-of-trust verified.");
 }

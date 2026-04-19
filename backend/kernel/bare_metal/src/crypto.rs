@@ -62,6 +62,16 @@ pub fn verify_ed25519_structure(public_key: &[u8; 32], message: &[u8], signature
     verify_ed25519(public_key, message, signature)
 }
 
+/// Sign a message using Ed25519 via the `ed25519-dalek` crate.
+pub fn sign_ed25519(seed: &[u8; 32], message: &[u8]) -> [u8; 64] {
+    use ed25519_dalek::{SigningKey, Signer};
+    let signing_key = SigningKey::from_bytes(seed);
+    let signature = signing_key.sign(message);
+    let sig_bytes = signature.to_bytes();
+    println!(" [CRYPTO] Ed25519: Message signed (64 bytes generated)");
+    sig_bytes
+}
+
 /// SHA-256 of `data`, printed for audit.
 pub fn hash_and_log(label: &str, data: &[u8]) -> [u8; 32] {
     let digest = sha256(data);

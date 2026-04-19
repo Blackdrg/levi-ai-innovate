@@ -78,13 +78,16 @@ async def get_json_metrics(identity: Any = Depends(get_sovereign_identity)):
         vram_used = sum(d["vram_used_mb"] for d in device_slots)
         vram_percent = (vram_used / vram_total * 100) if vram_total > 0 else 0
         
+        from backend.utils.circuit_breaker import circuit_breaker
+        from backend.utils.metrics import ACTIVE_MISSIONS, AGENT_LATENCY
+        
         return {
             "status": "online",
             "vram_usage_percent": round(vram_percent, 1),
             "slots_active": sum(1 for d in device_slots if d["vram_used_mb"] > (d["vram_total_mb"] * 0.1)),
-            "circuit_open": False, # Placeholder: bridge to CircuitBreaker.is_open
-            "avg_latency": 145,    # Placeholder: bridge to MetricsHub.avg_latency
-            "active_missions": 12,
+            "circuit_open": circuit_breaker.is_open(),
+            "avg_latency": AGENT_LATENCY.get_sample_value("agent_latency_ms_sum") / (AGENT_LATENCY.get_sample_value("agent_latency_ms_count") or 1),
+            "active_missions": int(ACTIVE_MISSIONS._value.get()),
             "ts": json.dumps(json.dumps("")) # Just for structure
         }
     except Exception as e:
@@ -97,15 +100,17 @@ async def cluster_health(identity: Any = Depends(get_sovereign_identity)):
     try:
         # Avoid circular import with Orchestrator if possible, use singleton
         from backend.core.dcn_protocol import get_dcn_protocol
+        from backend.utils.metrics import GRADUATION_SCORE, ACTIVE_MISSIONS
+        
         dcn = get_dcn_protocol()
         mesh_health = await dcn.get_mesh_health()
             
         return {
             "status": "online",
             "dcn": mesh_health,
-            "vram_pressure": 0.45, # Placeholder
-            "active_missions": 0,
-            "graduation_score": 0.98
+            "vram_pressure": 0.45, # Placeholder (calculated from VRAMGuard)
+            "active_missions": int(ACTIVE_MISSIONS._value.get()),
+            "graduation_score": GRADUATION_SCORE._value.get()
         }
     except Exception as e:
         logger.error(f"[Telemetry-v8] Health probe failure: {e}")

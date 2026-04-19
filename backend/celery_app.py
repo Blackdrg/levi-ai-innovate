@@ -114,10 +114,10 @@ celery_app.conf.update(
     worker_pool="solo" if IS_WINDOWS else "prefork",
 )
 
-    # ── Celery Beat: Periodic Task Schedule ──────────────────────
-    # ALL legacy schedules have been migrated to Sovereign Event Streams.
-    # See backend/services/pulse_emitter.py for the autonomous rhythm.
-    celery_app.conf.beat_schedule = {}
+# ── Celery Beat: Periodic Task Schedule ──────────────────────
+# ALL legacy schedules have been migrated to Sovereign Event Streams.
+# See backend/services/pulse_emitter.py for the autonomous rhythm.
+celery_app.conf.beat_schedule = {}
 
 # ── Thread-local task context for log enrichment ─────────────
 import threading

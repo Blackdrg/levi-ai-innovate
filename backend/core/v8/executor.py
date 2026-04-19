@@ -90,7 +90,7 @@ class GraphExecutor:
                  from backend.db.postgres_db import PostgresDB
                  from sqlalchemy import select
                  from backend.db.models import AbortedMission
-                 from backend.core.v8.brain import ToolResult as BrainToolResult
+                 from ..orchestrator_types import ToolResult as BrainToolResult
                  async with PostgresDB._session_factory() as session:
                      stmt = select(AbortedMission).where(AbortedMission.mission_id == mission_id)
                      res = await session.execute(stmt)
@@ -289,7 +289,7 @@ class GraphExecutor:
             # 2. Secure Call via Global VRAM Pool & AI Service Breaker
             if GLOBAL_VRAM_POOL:
                 # v14.0: Burst Mode allowed for L3/L4 tiers or high-load
-                is_local = await GLOBAL_VRAM_POOL.acquire(vram_needed, burst_mode=(model_tier in ["L3", "L4"]))
+                is_local = await GLOBAL_VRAM_POOL.acquire(vram_needed, burst_mode=(target_tier in ["L3", "L4"]))
                 if not is_local:
                     logger.warning(f"🚀 [Cloud Burst] Routing {agent_name} to cloud for mission {session_id}")
                     # Transition to Cloud Fallback
@@ -490,11 +490,22 @@ class GraphExecutor:
     async def _resync_graph_node(self, user_id: str, node: Any) -> bool:
         """Force-syncs the relevant graph triplets for a node."""
         try:
-            from backend.engines.memory.graph_engine import GraphEngine
+            from backend.memory.graph_engine import GraphEngine
             ge = GraphEngine()
-            # Logic to re-extract triplets from inputs and re-upsert
+            # Re-extract triplets from inputs and re-upsert
+            if hasattr(node, 'metadata') and "triplets" in node.metadata:
+                for t in node.metadata["triplets"]:
+                    await ge.upsert_triplet(
+                        user_id=user_id, 
+                        subject=t.get("subject"), 
+                        relation=t.get("relation"), 
+                        obj=t.get("object"), 
+                        metadata=t.get("metadata")
+                    )
             return True
-        except: return False
+        except Exception as e:
+            logger.error(f"[Compensation] Graph resync failed: {e}")
+            return False
 
     async def _scrub_orphaned_tasks(self, mission_id: str, node_id: str) -> bool:
         """Sovereign v14.1.0: Orphaned Task Scrubbing."""

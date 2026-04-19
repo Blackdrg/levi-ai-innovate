@@ -47,7 +47,7 @@ class LearningLoop:
         logger.info(f"[LearningLoop] Capturing outcome for mission {mission_id} (Fidelity: {fidelity:.2f})")
 
         try:
-            async with PostgresDB._session_factory() as session:
+            async with await PostgresDB.get_session() as session:
                 async with session.begin():
                     # 1. Store Detailed Evolution Metric (Trace)
                     metric = EvolutionMetric(
@@ -94,7 +94,7 @@ class LearningLoop:
     async def _check_evolution_trigger(cls):
         """Triggers the feedback engine after a certain number of missions."""
         try:
-            async with PostgresDB._session_factory() as session:
+            async with await PostgresDB.get_session() as session:
                 stmt = select(func.count()).select_from(EvolutionMetric).where(EvolutionMetric.status == "success")
                 res = await session.execute(stmt)
                 count = res.scalar() or 0
@@ -110,7 +110,7 @@ class LearningLoop:
         """Step 2.2: Build Feedback Engine - Identify successful patterns and repeated failures."""
         logger.info("[LearningLoop] Feedback Engine: Analyzing recent mission traces...")
         try:
-            async with PostgresDB._session_factory() as session:
+            async with await PostgresDB.get_session() as session:
                 # 1. Distill SUCCESSFUL Patterns
                 stmt = select(EvolutionMetric).where(
                     EvolutionMetric.accuracy_score >= 0.95,
@@ -175,7 +175,7 @@ class LearningLoop:
         """Step 2.3: Rule Engine (REAL EVOLUTION) - Promote high-fidelity patterns to hard-coded overrides."""
         logger.info("[LearningLoop] Rule Engine: Distilling Graduated Rules...")
         try:
-            async with PostgresDB._session_factory() as session:
+            async with await PostgresDB.get_session() as session:
                 # Select success patterns with high win_count and high fidelity
                 stmt = select(SuccessPattern).where(
                     SuccessPattern.win_count >= 5,
@@ -228,7 +228,7 @@ class LearningLoop:
         """Used by the Planner to check for deterministic rule overrides."""
         try:
             pattern_key = query.lower().strip()[:200]
-            async with PostgresDB._session_factory() as session:
+            async with await PostgresDB.get_session() as session:
                 stmt = select(GraduatedRule).where(
                     GraduatedRule.task_pattern == pattern_key,
                     GraduatedRule.is_stable == True,
@@ -249,7 +249,7 @@ class LearningLoop:
     @classmethod
     async def _increment_rule_usage(cls, rule_id: int):
         try:
-            async with PostgresDB._session_factory() as session:
+            async with await PostgresDB.get_session() as session:
                 await session.execute(update(GraduatedRule).where(GraduatedRule.id == rule_id).values(uses_count=GraduatedRule.uses_count + 1))
                 await session.commit()
         except Exception: pass
