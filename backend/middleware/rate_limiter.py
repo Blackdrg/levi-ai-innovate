@@ -2,7 +2,7 @@ import time
 import logging
 from fastapi import Request, HTTPException, status
 from starlette.middleware.base import BaseHTTPMiddleware
-from backend.redis_client import r as redis_client, HAS_REDIS
+from backend.db.redis import get_redis_client, HAS_REDIS
 from backend.config.system import TIERS
 
 logger = logging.getLogger(__name__)
@@ -36,6 +36,9 @@ class SovereignRateLimiter(BaseHTTPMiddleware):
         window_key = f"rate_limit:{user_id}:{current_time // window_sec}"
         
         try:
+            redis_client = get_redis_client()
+            if not redis_client:
+                return await call_next(request)
             count = redis_client.incr(window_key)
             if count == 1:
                 redis_client.expire(window_key, window_sec * 2)

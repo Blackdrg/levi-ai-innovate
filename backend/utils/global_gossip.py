@@ -4,7 +4,12 @@ import logging
 import asyncio
 from typing import Optional
 from google.cloud import pubsub_v1
-from backend.redis_client import r_async as redis_client, HAS_REDIS_ASYNC
+from backend.db.redis import get_async_redis_client, HAS_REDIS_ASYNC
+
+# Lazy accessor – resolves to the async Redis client once the HA initializer runs.
+def _get_redis():
+    return get_async_redis_client()
+
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +57,11 @@ class GlobalGossipBridge:
 
     async def _redis_to_pubsub(self):
         """Listens to local Redis and elevates high-fidelity fragments to the global topic."""
-        pubsub = redis_client.pubsub()
+        client = _get_redis()
+        if not client:
+            logger.warning("[DCN-Bridge] No async Redis client — redis_to_pubsub disabled.")
+            return
+        pubsub = client.pubsub()
         await pubsub.subscribe(self.REDIS_CHANNEL)
         
         logger.info("[DCN-Bridge] Listening to local Redis for global elevation...")
@@ -80,10 +89,12 @@ class GlobalGossipBridge:
                 # Fast forward to local Redis
                 payload = message.data.decode("utf-8")
                 loop = asyncio.get_event_loop()
-                asyncio.run_coroutine_threadsafe(
-                    redis_client.publish(self.REDIS_CHANNEL, payload), 
-                    loop
-                )
+                _client = _get_redis()
+                if _client:
+                    asyncio.run_coroutine_threadsafe(
+                        _client.publish(self.REDIS_CHANNEL, payload), 
+                        loop
+                    )
                 message.ack()
                 logger.debug(f"📥 [DCN-Bridge] Ingested global fragment into local Redis.")
             except Exception as e:

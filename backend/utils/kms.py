@@ -85,7 +85,15 @@ class LocalKMSAdapter(GenericKMS):
     def __init__(self):
         from cryptography.hazmat.primitives import hashes
         from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-        self.secret = os.getenv("SYSTEM_SECRET", "levi-default-0000").encode()
+        import keyring
+        import secrets
+        
+        secret = keyring.get_password("levi-ai", "sovereign-master-key")
+        if not secret:
+            secret = secrets.token_hex(32)
+            keyring.set_password("levi-ai", "sovereign-master-key", secret)
+            
+        self.secret = secret.encode()
         self.salt = b'sovereign_local_kms_v1'
 
     def _derive_key(self) -> bytes:
@@ -152,10 +160,16 @@ class SovereignKMS:
     def _get_key(cls):
         if cls._signing_key is None:
             from cryptography.hazmat.primitives.asymmetric import ed25519
+            import keyring
+            import secrets
             # In production, this would be backed by Vault or TPM
-            seed = os.getenv("SOVEREIGN_ROOT_SECRET", "default_sovereign_non_repudiation_seed_32chars")[:32].encode()
+            seed_str = keyring.get_password("levi-ai", "sovereign-root-secret")
+            if not seed_str:
+                seed_str = secrets.token_hex(32)
+                keyring.set_password("levi-ai", "sovereign-root-secret", seed_str)
+            
             # Ensure it is exactly 32 bytes
-            seed = seed.ljust(32, b'\0')
+            seed = seed_str.encode()[:32].ljust(32, b'\0')
             cls._signing_key = ed25519.Ed25519PrivateKey.from_private_bytes(seed)
         return cls._signing_key
 

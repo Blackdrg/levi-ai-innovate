@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { ShieldAlert, Fingerprint, Lock, ShieldCheck, RefreshCcw } from 'lucide-react';
 import { api } from '../lib/api';
+import { useLeviStore } from '../stores/leviStore';
 
 export const SecurityPanel: React.FC = () => {
   const [isRollingBack, setIsRollingBack] = useState(false);
   const [rollbackStatus, setRollbackStatus] = useState<string | null>(null);
+  const { healLogs } = useLeviStore();
 
   const handleRollback = async () => {
     if (!confirm("CRITICAL ACTION: Are you sure you want to trigger a system-wide emergency rollback? This will revert the entire cluster to the previous stable state.")) return;
@@ -27,11 +29,20 @@ export const SecurityPanel: React.FC = () => {
     }
   };
 
-  const events = [
+  const staticEvents = [
     { id: '1', type: 'PII_MASKED', details: 'User email masked in logs', ts: '2026-04-10 20:45' },
     { id: '2', type: 'RBAC_DENIAL', details: 'Unauthorized access attempt to /admin', ts: '2026-04-10 20:42' },
     { id: '3', type: 'PROMPT_SHIELD', details: 'Injection attempt blocked: "ignore all instructions"', ts: '2026-04-10 20:38' },
-    { id: '4', type: 'ROLLBACK_TRIGGER', details: 'System health check failure - Rollback initiated', ts: '2026-04-10 20:35' },
+  ];
+
+  const events = [
+    ...healLogs.map((log, i) => ({
+      id: `heal-${i}`,
+      type: log.action,
+      details: `${log.target} -> ${log.result} (Fidelity: ${log.fidelity.toFixed(2)})`,
+      ts: log.timestamp
+    })),
+    ...staticEvents
   ];
 
   return (

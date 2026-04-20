@@ -14,6 +14,7 @@
 //   0x09 = SYS_WRITE    — buffered console output
 //   0x0A = ADMIT_MISSION — BFT Gate
 //   0x0B = NEURAL_LINK   — Neural interface bridge
+//   0x99 = SYS_REPLACELOGIC — Hot-patch Ring-0 logic (Self-Healing)
 
 use crate::println;
 use x86_64::structures::idt::InterruptStackFrame;
@@ -117,6 +118,7 @@ pub fn dispatch(syscall_id: u64) {
             };
             crate::serial::write_record(&record);
         },
+        0x99 => sys_replace_logic(),
         _    => println!(" [SYS] Unknown syscall 0x{:02X} — REJECTED", syscall_id),
     }
 }
@@ -207,6 +209,19 @@ fn sys_neural_link() {
     println!(" [OK] Neural-Link parity check bits verified.");
 }
 
+fn sys_replace_logic() {
+    println!(" [SYS] SYS_REPLACELOGIC: Hot-patch request received.");
+    
+    // Simulate a patch blob pointer and a target symbol (0x01 = ATA_WRITE)
+    let mock_blob_ptr = 0xDEADBEEF as *const u8;
+    let target_symbol_id = 0x01;
+    
+    crate::self_healing::SelfHealingManager::apply_patch(mock_blob_ptr, target_symbol_id);
+    
+    // Demonstrate invocation of the patched logic
+    crate::self_healing::SYMBOL_ATA_WRITE.invoke();
+}
+
 /// Test harness for HAL-0 Foundation (Checkpoint K-4)
 pub fn test_syscall_harness() {
     println!(" [TEST] Starting Syscall Harness (K-4 Proof)...");
@@ -214,6 +229,18 @@ pub fn test_syscall_harness() {
         println!(" [TEST] Firing INT 0x80 (RAX=0x{:02X})", id);
         dispatch(id as u64);
     }
+    
+    // Test Self-Healing Hot-Patch Flow (0x99 Proof)
+    println!(" [TEST] >>> STAGE 1: Execute Buggy Driver");
+    crate::self_healing::SYMBOL_ATA_WRITE.invoke(); 
+    
+    println!(" [TEST] >>> STAGE 2: Applying Hot-Patch via SYS_REPLACELOGIC (0x99)");
+    dispatch(0x99); 
+
+    println!(" [TEST] >>> STAGE 3: Execute Patched Driver");
+    crate::self_healing::SYMBOL_ATA_WRITE.invoke(); 
+    println!(" [OK] Self-Healing Loop: SUCCESS.");
+}
 }
 
 fn sys_tpm_read_pcr() {

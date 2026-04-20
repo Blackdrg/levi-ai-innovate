@@ -16,8 +16,13 @@ import { CircuitBreaker } from '../components/CircuitBreaker';
 import { RBACGuard } from '../components/RBACGuard';
 import { motion } from 'framer-motion';
 
+import { Shell as ShellLayout } from 'lucide-react';
+import { useLeviStore } from '../stores/leviStore';
+
 export const Shell: React.FC = () => {
   const { user, logout } = useAuth();
+  // @ts-ignore
+  const wsConnected = useLeviStore(s => s.wsConnected);
 
   const navItems = [
     { to: '/', icon: <Terminal size={20} />, label: 'TASK PLENUM' },
@@ -69,7 +74,9 @@ export const Shell: React.FC = () => {
       <main className="main-viewport">
         <header className="top-bar">
           <div className="breadcrumb">
-            SYSTEM_STATUS: <span className="text-emerald-400">NOMINAL</span>
+            SYSTEM_STATUS: <span className={wsConnected ? "text-emerald-400" : "text-red-500 font-bold animate-pulse"}>
+              {wsConnected ? "NOMINAL" : "DCN DISCONNECTED - DATA STALE"}
+            </span>
           </div>
           <div className="top-actions">
             <CircuitBreaker />

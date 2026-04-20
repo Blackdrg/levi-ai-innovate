@@ -15,7 +15,8 @@ from fastapi import APIRouter, Depends, Request
 from backend.utils.exceptions import LEVIException
 from backend.auth.logic import verify_admin
 from backend.db.firestore_db import db as firestore_db, update_analytics
-from backend.utils.network import groq_breaker, together_breaker, CircuitBreaker
+from backend.utils.circuit_breaker import CircuitBreaker
+from backend.utils.network import groq_breaker, together_breaker
 from backend.db.redis import r as redis_client, HAS_REDIS
 
 logger = logging.getLogger(__name__)

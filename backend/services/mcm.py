@@ -269,6 +269,15 @@ class MemoryConsistencyManager:
             # We use PID to find recent mission context (synthetic for this demo branch)
             fact_text = f"Kernel-Validated Outcome (PID {pid}): Sub-30ms ABI compliance confirmed."
             
+            # Risk 5 Mitigation: Run contradiction detection before graduating to the ledger
+            from backend.db.neo4j_client import Neo4jClient
+            entities = await Neo4jClient.get_resonance_entities("root_sovereign", fact_text)
+            has_contradiction = any("not" in e.get("entity", {}).get("text", "").lower() for e in entities)
+            
+            if has_contradiction:
+                logger.warning(f"❌ [MCM] GRADUATION HALTED: Contradiction detected for fact '{fact_text}'")
+                return
+
             async with get_write_session() as session:
                 fact = UserFact(
                     user_id="root_sovereign", 
@@ -299,16 +308,20 @@ class MemoryConsistencyManager:
         Hard Rollback: Prunes all facts associated with a mission ID from Postgres and Redis.
         """
         logger.warning(f" [🗑️] MCM: Purging all facts for mission {mission_id}")
-        
-        async with get_write_session() as session:
-            # Delete episodic facts from Postgres
-            from sqlalchemy import delete
-            await session.execute(delete(UserFact).where(UserFact.category == f"mission_{mission_id}"))
-            
-        if HAS_REDIS:
-            # Cull from Redis Stream or cache if indexed
-            redis_client.delete(f"mcm:interaction:{mission_id}")
-            
-        logger.info(f" ✅ [MCM] Fact purge complete for mission {mission_id}.")
+        try:
+            async with get_write_session() as session:
+                # Delete episodic facts from Postgres
+                from sqlalchemy import delete
+                await session.execute(delete(UserFact).where(UserFact.category == f"mission_{mission_id}"))
+                
+            if HAS_REDIS:
+                # Cull from Redis Stream or cache if indexed
+                redis_client.delete(f"mcm:interaction:{mission_id}")
+                redis_client.hdel("orchestrator:missions", mission_id)
+                
+            logger.info(f" ✅ [MCM] Fact purge complete for mission {mission_id}.")
+        except Exception as e:
+            # Idempotent error handling
+            logger.error(f" [MCM] Silent failure ignoring idempotent double-delete for {mission_id}: {e}")
 
 mcm_service = MemoryConsistencyManager()

@@ -2,7 +2,7 @@
 /* eslint-disable */
 // noinspection ALL
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useLeviPulse, useLeviMissions, useEvolution, useSwarm, useTelemetryPulse } from "./hooks/useLevi";
+import { useLeviPulse, useLeviMissions, useEvolution, useSwarm, useTelemetryPulse, useKernelTelemetry } from "./hooks/useLevi";
 import leviService from "./api/leviService";
 import { ThemeProvider, useTheme, ThemeType } from "./context/ThemeContext";
 import { motion, AnimatePresence } from "framer-motion";
@@ -1724,6 +1724,8 @@ function GoalArchitectView(){
 
 /* ══ SYSTEM RESILIENCE (SELF-HEALING) VIEW ══════════════════════════════ */
 function HealView(){
+  const { healLogs } = useLeviStore();
+
   return(
     <div style={{padding:24, animation:"fadeUp .3s ease"}}>
        <div style={{display:"grid", gridTemplateColumns:"repeat(2, 1fr)", gap:20, marginBottom:20}}>
@@ -1743,28 +1745,23 @@ function HealView(){
              </div>
           </Card>
           <Card>
-             <h3 style={{fontSize:13, fontWeight:800, color:C.t1, marginBottom:16, letterSpacing:1}}>VRAM PRESSURE (HAL-0)</h3>
-             <Bar v={68} color={C.am} h={8} style={{marginBottom:10}}/>
-             <div style={{display:"flex", justifyContent:"space-between", fontSize:10, color:C.t2, fontFamily:"'JetBrains Mono'"}}>
-                <span>USED: 8,192 MB</span>
-                <span>LIMIT: 12,288 MB</span>
-             </div>
+             <h3 style={{fontSize:13, fontWeight:800, color:C.t1, marginBottom:16, letterSpacing:1}}>AUTONOMOUS MUTATION</h3>
+             <div style={{fontSize:24, fontWeight:900, color:C.cy, marginBottom:4}}>DRA ACTIVATED</div>
+             <div style={{fontSize:10, color:C.t2}}>Dynamic Relocation Engine (Ring-0) ready.</div>
           </Card>
        </div>
 
        <Card>
-          <h3 style={{fontSize:13, fontWeight:800, color:C.t1, marginBottom:16, letterSpacing:1}}>AUTONOMOUS RECOVERY LOG</h3>
+          <h3 style={{fontSize:13, fontWeight:800, color:C.t1, marginBottom:16, letterSpacing:1}}>AUTONOMOUS RECOVERY LOG (LIVE)</h3>
           <div style={{display:"flex", flexDirection:"column", gap:10}}>
-             {[
-               {t:"10:14:22", action:"OOM_RECOVERY", target:"mission_983", res:"DAG_SPAWNED"},
-               {t:"10:12:05", action:"VRAM_EVICTION", target:"Low_Priority_Proc", res:"PREEMPTED"},
-               {t:"10:08:42", action:"FORENSIC_SWEEP", target:"Kernel_Hang_Detect", res:"RESOLVED"}
-             ].map(l=>(
-               <div key={l.t} style={{display:"flex", gap:20, padding:12, background:C.bg, borderRadius:10, border:`1px solid ${C.bd}`, fontSize:11, fontFamily:"'JetBrains Mono'"}}>
-                  <span style={{color:C.t2}}>{l.t}</span>
-                  <span style={{color:C.rd, fontWeight:800}}>[{l.action}]</span>
+             {healLogs.length === 0 ? (
+               <div style={{padding:40, textAlign:"center", color:C.t3, fontSize:12}}>Awaiting logic telemetry from HAL-0...</div>
+             ) : healLogs.map(l=>(
+               <div key={l.timestamp} style={{display:"flex", gap:20, padding:12, background:C.bg, borderRadius:10, border:`1px solid ${C.bd}`, fontSize:11, fontFamily:"'JetBrains Mono'"}}>
+                  <span style={{color:C.t2}}>{l.timestamp}</span>
+                  <span style={{color:l.result === "CRITICAL_FAULT" ? C.rd : C.cy, fontWeight:800}}>[{l.action}]</span>
                   <span style={{color:C.t1, flex:1}}>{l.target}</span>
-                  <span style={{color:C.gn}}>{l.res}</span>
+                  <span style={{color:l.result === "RESOLVED" ? C.gn : C.rd}}>{l.result}</span>
                </div>
              ))}
           </div>
@@ -1919,6 +1916,9 @@ function App(){
   const [col,setCol]=useState(false);
   const [isAuth, setIsAuth] = useState(!!localStorage.getItem('levi-token'));
   const { pulse } = useLeviPulse();
+
+  // Activate Kernel Telemetry Stream
+  useKernelTelemetry();
 
   const logout = () => {
     localStorage.removeItem('levi-token');

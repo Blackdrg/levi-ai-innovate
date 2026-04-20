@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from backend.db.redis import r_async as redis_client, HAS_REDIS_ASYNC
 from backend.db.postgres import PostgresDB
-from backend.db.models import User
+from backend.db.models import UserCredit
 from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
@@ -96,7 +96,7 @@ class SlidingWindowRateLimiter:
         
         try:
             async with PostgresDB._session_factory() as session:
-                stmt = select(User).where(User.id == user_id)
+                stmt = select(UserCredit).where(UserCredit.user_id == user_id)
                 res = await session.execute(stmt)
                 user = res.scalar_one_or_none()
                 return user.tier if user else "free"

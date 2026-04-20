@@ -42,6 +42,7 @@ mod user_shell;
 pub mod security;
 mod ksm;
 mod wasm;
+mod self_healing;
 
 extern crate alloc;
 

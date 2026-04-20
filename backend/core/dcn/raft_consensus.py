@@ -404,6 +404,28 @@ class RaftConsensus:
             logger.warning("[Raft] Snapshot restore failed: %s", exc)
             return False
 
+    async def trigger_election(self):
+        """Force an immediate election if leader is unhealthy."""
+        from backend.db.redis import get_async_redis_client
+        redis = get_async_redis_client()
+        if redis:
+            await redis.delete(self.leader_key)
+        await self.elect_leader()
+
+    async def check_leader_health(self):
+        """Monitor leader heartbeat with strict 5.0s failover."""
+        from backend.db.redis import get_async_redis_client
+        redis = get_async_redis_client()
+        if not redis: return
+        
+        if self.is_leader:
+            await redis.set("raft:last_heartbeat", str(time.time()), ex=10)
+        else:
+            last_heartbeat = await redis.get("raft:last_heartbeat")
+            if last_heartbeat is None or (time.time() - float(_s(last_heartbeat))) > 5.0:
+                logger.warning("⚠️ [Raft] Leader heartbeat missed! Forcing election.")
+                await self.trigger_election()
+
     # ------------------------------------------------------------------
     # Background Loop
     # ------------------------------------------------------------------
@@ -416,9 +438,12 @@ class RaftConsensus:
             try:
                 await self.elect_leader()
                 try:
-                    await asyncio.wait_for(
-                        self._stop.wait(), timeout=_ELECTION_INTERVAL
-                    )
+                    # Original code waited entire _ELECTION_INTERVAL.
+                    # We poll check_leader_health more frequently.
+                    for _ in range(int(_ELECTION_INTERVAL)):
+                        if self._stop.is_set(): break
+                        await asyncio.sleep(1)
+                        await self.check_leader_health()
                 except asyncio.TimeoutError:
                     pass
             except asyncio.CancelledError:

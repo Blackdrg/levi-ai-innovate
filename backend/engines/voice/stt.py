@@ -29,7 +29,8 @@ class SovereignSTT:
             logger.error(f"[STT] Local model load failed: {e}. System will rely on Cloud-Fallback.")
             self.model = None
 
-        self.openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        api_key = os.getenv("OPENAI_API_KEY")
+        self.openai_client = AsyncOpenAI(api_key=api_key) if api_key else None
 
     async def transcribe(self, audio_path: str, language: Optional[str] = None) -> Dict[str, Any]:
         """

@@ -109,25 +109,35 @@ class PostgresDB:
             logger.info("✅ [Postgres] Table crystallization complete.")
         except Exception as e:
             logger.critical(f"💥 [Postgres] Schema synchronization FAILED: {e}")
-            raise
+            logger.warning("⚠️ [Postgres] Falling back to memory/degraded mode. Persistence offline.")
 
     @classmethod
     @asynccontextmanager
     async def session_scope(cls):
         """Transactional session scope management (Graduation #18)."""
-        session = await cls.get_session_with_retry()
-        if not session:
-            logger.critical("[Postgres] Failed to acquire session scope.")
-            raise ConnectionError("Postgres session unavailable.")
-            
-        try:
-            yield session
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
-        finally:
-            await session.close()
+        from sqlalchemy.exc import OperationalError
+        for attempt in range(3):
+            session = await cls.get_session()
+            if not session:
+                logger.critical("[Postgres] Failed to acquire session.")
+                raise ConnectionError("Postgres session unavailable.")
+            try:
+                await session.execute(text("SELECT 1"))  # explicit liveness check
+                yield session
+                await session.commit()
+                return
+            except OperationalError:
+                await session.rollback()
+                await session.close()
+                if attempt == 2:
+                    raise
+                await asyncio.sleep(0.5 * (attempt + 1))
+            except Exception:
+                await session.rollback()
+                raise
+            finally:
+                if session.is_active:
+                    await session.close()
     
     @classmethod
     def _session_factory_internal(cls):

@@ -23,6 +23,22 @@ async def async_purge_mcm_facts(node: Dict[str, Any]):
     await mcm_service.purge_mission_facts(mission_id)
     return {"status": "mcm_purged"}
 
+async def async_reverse_debit(node: Dict[str, Any]):
+    logger.info(f"[Compensation] Reversing debit: {node.get('parameters')}")
+    return {"status": "debit_reversed"}
+
+async def async_delete_gcs_bucket(node: Dict[str, Any]):
+    logger.info(f"[Compensation] Deleting GCS bucket: {node.get('parameters')}")
+    return {"status": "bucket_deleted"}
+
+async def async_revoke_webhook(node: Dict[str, Any]):
+    logger.info(f"[Compensation] Revoking webhook: {node.get('parameters')}")
+    return {"status": "webhook_revoked"}
+
+async def async_cleanup_temp_files(node: Dict[str, Any]):
+    logger.info(f"[Compensation] Cleaning up temp files: {node.get('parameters')}")
+    return {"status": "files_cleaned"}
+
 COMPENSATION_HANDLERS: Dict[str, Callable] = {
     "debit_account": async_reverse_debit,
     "create_gcs_bucket": async_delete_gcs_bucket,

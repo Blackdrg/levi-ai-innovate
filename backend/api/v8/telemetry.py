@@ -116,3 +116,6 @@ async def cluster_health(identity: Any = Depends(get_sovereign_identity)):
         logger.error(f"[Telemetry-v8] Health probe failure: {e}")
         return {"status": "error", "message": str(e)}
 
+def broadcast_mission_event(user_id: str, event_type: str, data: Any):
+    """Bridge for the evolution core to emit telemetry via SovereignBroadcaster."""
+    SovereignBroadcaster.publish(event_type, data, user_id)

@@ -14,11 +14,20 @@ interface SyscallLog {
   args: number[];
 }
 
+interface HealLog {
+  timestamp: string;
+  action: string;
+  target: string;
+  result: string;
+  fidelity: number;
+}
+
 interface LeviState {
   // Telemetry v22.0
   pulse: any | null;
   agents: AgentStatus[];
   syscalls: SyscallLog[];
+  healLogs: HealLog[];
   thermal: {
     cpu: number;
     vram: number;
@@ -38,10 +47,13 @@ interface LeviState {
   
   // Mission Tracking
   activeMissions: string[];
+  wsConnected: boolean;
   
   // Actions
+  setWsConnected: (status: boolean) => void;
   setPulse: (pulse: any) => void;
   addSyscall: (sc: SyscallLog) => void;
+  addHealLog: (log: HealLog) => void;
   updateThermal: (t: Partial<LeviState['thermal']>) => void;
   setAgents: (agents: AgentStatus[]) => void;
 }
@@ -55,6 +67,7 @@ export const useLeviStore = create<LeviState>((set) => ({
     model: 'SOVEREIGN_V22'
   })),
   syscalls: [],
+  healLogs: [],
   thermal: {
     cpu: 45,
     vram: 12.4,
@@ -72,11 +85,17 @@ export const useLeviStore = create<LeviState>((set) => ({
     bft_finality: 'Tier-4'
   },
   activeMissions: [],
+  wsConnected: false,
 
+  setWsConnected: (status) => set({ wsConnected: status }),
   setPulse: (pulse) => set({ pulse }),
   
   addSyscall: (sc) => set((state) => ({
     syscalls: [sc, ...state.syscalls].slice(0, 50)
+  })),
+
+  addHealLog: (log) => set((state) => ({
+    healLogs: [log, ...state.healLogs].slice(0, 20)
   })),
 
   updateThermal: (t) => set((state) => ({

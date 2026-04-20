@@ -7,7 +7,12 @@ import os
 from typing import Dict, Any, Optional
 from pydantic import BaseModel, Field
 from datetime import datetime, timezone
-from backend.redis_client import r as redis_client, HAS_REDIS
+from backend.db.redis import get_redis_client as _get_sync_redis, HAS_REDIS
+
+# Lazy accessor — resolved when actually used
+def _redis():
+    return _get_sync_redis()
+
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +74,9 @@ class GossipEngine:
         
         if HAS_REDIS:
             logger.info(f"[DCN] Gossiping high-fidelity fragment {fragment.fragment_id}")
-            redis_client.publish(self.CHANNEL, fragment.json())
+            client = _redis()
+            if client:
+                client.publish(self.CHANNEL, fragment.json())
 
     async def start_listening(self):
         """Starts the background gossip listener."""
@@ -79,7 +86,11 @@ class GossipEngine:
         logger.info("[DCN] Gossip engine listener active.")
 
     async def _listener_loop(self):
-        pubsub = redis_client.pubsub()
+        client = _redis()
+        if not client:
+            logger.warning("[DCN] No Redis client — gossip listener disabled.")
+            return
+        pubsub = client.pubsub()
         pubsub.subscribe(self.CHANNEL)
         
         for message in pubsub.listen():

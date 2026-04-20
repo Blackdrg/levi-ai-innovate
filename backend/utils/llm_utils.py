@@ -1,9 +1,33 @@
 import os
 import logging
 import json
+import re
 from typing import Dict, List, Optional, Any
 
 logger = logging.getLogger(__name__)
+
+# System PII Hardening
+SENSITIVE_PATTERNS = [
+    r'\b\d{3}-\d{2}-\d{4}\b',           # SSN
+    r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',  # email
+    r'\b(?:\d[ -]?){13,16}\b',           # credit card
+]
+
+def sanitize_text(text: str) -> str:
+    if not isinstance(text, str):
+        return text
+    for pattern in SENSITIVE_PATTERNS:
+        text = re.sub(pattern, '[REDACTED]', text)
+    return text
+
+def sanitize_messages(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    sanitized = []
+    for m in messages:
+        new_m = m.copy()
+        if "content" in new_m and isinstance(new_m["content"], str):
+            new_m["content"] = sanitize_text(new_m["content"])
+        sanitized.append(new_m)
+    return sanitized
 
 # v15.0 GA: CONFIDENCE THRESHOLD FOR CLOUD FALLBACK
 LLM_CONFIDENCE_THRESHOLD = 0.65
@@ -22,15 +46,19 @@ async def _async_call_llm_api(
     if use_heavyweight:
         local_model = os.getenv("OLLAMA_MODEL_HEAVY", "llama3.1:70b")
     
+    # 🛡️ PII Hardening
+    safe_messages = sanitize_messages(messages)
+    
     # 1. PRIMARY: LOCAL INFERENCE (Ollama)
-    local_res = await call_ollama_llm(messages, model=local_model, temperature=temperature)
+    local_res = await call_ollama_llm(safe_messages, model=local_model, temperature=temperature)
     
     # 2. HYBRID FALLBACK: CHECK CONFIDENCE / AVAILABILITY
     if "Local brain offline" in local_res or len(local_res) < 10:
         logger.warning(f"[LLM] Local brain weak or offline. Assessing cloud fallback...")
-        return await call_cloud_fallback(messages, temperature=temperature)
+        cloud_res = await call_cloud_fallback(safe_messages, temperature=temperature)
+        return sanitize_text(cloud_res)
     
-    return local_res
+    return sanitize_text(local_res)
 
 async def call_lightweight_llm(messages: List[Dict[str, Any]], model: Optional[str] = None) -> str:
     """Step 3.2: Replaces OpenAI calls in Planner/Reasoning with Local inference."""

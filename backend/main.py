@@ -99,6 +99,10 @@ async def lifespan(app: FastAPI):
     await mcm_service.start()
     logger.info("🧬 [MCM] Tier 0–3 Harmony Sync active.")
     
+    from backend.kernel.serial_bridge import kernel_bridge
+    await kernel_bridge.start()
+    logger.info("🛰️ [KernelBridge] Serial telemetry bridge ACTIVE.")
+
     from backend.services.thermal_monitor import thermal_monitor
     await thermal_monitor.start()
     logger.info("🔥 [Thermal] Section 33 Thermal Governance active.")
@@ -147,6 +151,10 @@ async def lifespan(app: FastAPI):
         audio_processor.stop()
     if event_consumer:
         await event_consumer.stop()
+
+    from backend.kernel.serial_bridge import kernel_bridge
+    await kernel_bridge.stop()
+    logger.info("🛰️ [KernelBridge] Serial bridge deactivated.")
 
     await memory_manager.shutdown()
     logger.info("✅ Shutdown complete.")

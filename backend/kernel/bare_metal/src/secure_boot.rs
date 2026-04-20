@@ -66,6 +66,7 @@ pub fn verify() {
 
     // PCR[0]: Kernel Binary
     let mut tpm = Tpm20::new();
+    tpm.init();
     tpm.PCR_extend(0, &digest);
 
     // PCR[1]: GDT + IDT Hardware Configuration

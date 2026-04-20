@@ -2342,6 +2342,321 @@ We, the architects, certify that the LEVI-AI Sovereign Operating System is now 1
 
 ---
 
+---
+
+## SECTION 400: The Sovereign Self-Healing Gap (Reality Audit)
+
+While HAL-0 (v22.0.0-GA) possesses robust recovery primitives, it is not yet a truly "Self-Healing" system. This section provides a forensically honest audit of why the system is currently "Self-Restoring" rather than "Self-Evolving."
+
+### ✅ CURRENT CAPABILITIES (The Foundation)
+1. **Kernel-level recovery (LIMITED)**: WAL replay can recover FS state after crash; Leak tracking identifies issues but does not patch them.
+2. **Mission rollback system**: Sentinel detects violation -> HALT signal -> FS rollback + MCM purge. (Proof of Fail-safe).
+3. **Agent self-correction (Reflexion loop)**: Agents critique output and refine before commit. (Proof of Local correction).
+4. **Orchestrator diagnostics**: Health endpoints providing observability, but not active intervention.
+
+### ❌ CRITICAL GAPS (The v23 Roadmap)
+- 🔴 **1. No Autonomous Bug Fixing**: Kernel errors and syscall failures are logged but never auto-patched. System remains vulnerable to the same fault after reboot.
+- 🔴 **2. No System-wide Recovery Intelligence**: Lacks a centralized Root Cause Analysis (RCA) engine that can map multiple telemetry anomalies to a single hardware/logic fault.
+- 🔴 **3. No Closed-Loop Healing Cycle**: System can **Detect** and **Log**, but it cannot **Diagnose -> Decide -> Fix -> Verify -> Learn** without human supervision.
+- 🔴 **4. No Cross-Layer Healing**: The Ring-0 Kernel cannot trigger fixes in the Python Orchestrator, and the Orchestrator cannot patch the Rust Kernel on the fly.
+- 🔴 **5. No Autonomous Patching (Ring-0 Hot-swapping)**: Agents can suggest a fix for `ata.rs`, but HAL-0 lacks the Dynamic Relocation Engine (DRA) to swap function pointers in a running image. (👉 See Section 401).
+- 🔴 **6. No Cognitive Fault Prediction**: The system is reactive; it does not analyze vibration, heat, or latency patterns to predict a crash 500ms before it happens.
+- 🔴 **7. No Swarm-Level Immunization**: A failure on Node A does not automatically result in a preventative patch being broadcast to Nodes B-P.
+- 🔴 **8. No Self-Evolving Hardware Logic**: FPGA gates are static; the OS cannot autonomously re-synthesize its silicon-path for performance optimization.
+
+---
+
+## SECTION 401: Dynamic Relocation Engine (DRA) — [PROTOTYPE]
+
+To bridge the gap to v23, HAL-0 introduces the **Dynamic Relocation Engine (DRA)** via the `0x99` (SYS_REPLACELOGIC) syscall.
+
+- **Mechanism**: The kernel maintains a **Global Symbol Jump Table**.
+- **Execution**: When `SYS_REPLACELOGIC` is called with a signed blob:
+  1. The blob is decrypted and verified against the Sentinel BFT Quorum.
+  2. The kernel maps the code into a `RESERVED_PATCH_VMA`.
+  3. The target symbol in the Jump Table is atomicly updated to the new offset.
+- **Proof of Concept**: `src/self_healing.rs` handles the atomic transition.
+
+---
+
+## SECTION 402: Documentation Fiction vs. Reality (Audit Report)
+
+This is the most important section of this audit. The README is structurally deceptive.
+
+### Red Flag 1 — Self-declared graduation
+The document declares itself "100% GRADUATED" or "SOVEREIGN APEX" or "FINALITY" approximately 60+ times across sections 120 through 385. A real production system does not include its own graduation certificate in its own README. External validation is the only valid form.
+
+### Red Flag 2 — The Ring-3 LLM Agent claim is architecturally impossible
+The manifest claims that 16 LLM agents (including Llama-3-70B at 42GB VRAM each) are "spawned into Ring-3 via WAVE_SPAWN" as kernel processes. This is not how LLMs work. An LLM is not a process that boots from a kernel syscall. It requires a Python runtime, GPU memory mapping, CUDA drivers, and transformer inference libraries. Putting 16 × 42GB models into kernel-managed Ring-3 processes would require 672GB of VRAM on a single node — roughly 8× an H100. The entire architectural premise of "kernel-native AI agents" is documentation fiction.
+
+### Red Flag 3 — The boot time claim is physically impossible
+Section 86 claims a "Perfect Boot" completes in 500ms including: PCI bus scan, TPM measurement, SovereignFS mount, DHCP, WebSocket connection to a Python orchestrator, and spawning 16 LLM agents. DHCP alone takes 200–500ms in a real network. Loading a 42GB model into VRAM takes 30–90 seconds. This sequence cannot complete in 500ms.
+
+### Red Flag 4 — Duplicate section numbers with different content
+Section 22 appears twice with completely different content (BFT consensus, then graduation verification). Sections 65–68 appear twice. Several appendix entries (notably Appendix G) appear multiple times with variations. This is consistent with a document generated iteratively and concatenated without editing.
+
+### Red Flag 5 — The "100% Implementation" table (Section 101)
+Every single subsystem is listed as "100% (High-Fidelity)" or "100% (GA Certified)." Simultaneously, ZK-SNARK proofs, post-quantum crypto, and WASM runtime are listed as "READY (v23 Foundation)" — meaning not yet built. A system cannot be 100% complete and also have foundational components deferred to the next version.
+
+### Red Flag 6 — The soak test claim
+"6M iterations completed; 0 leaks; 6/6 FS proof passed." A bare-metal Rust kernel running at 6 million iterations per hour while simultaneously running LLM inference would require the LLM inference portion to complete in under 600 microseconds per call. This is physically impossible for any transformer-based model.
+
+### Red Flag 7 — The bootimage crate dependency
+Appendix U lists `bootloader = "0.9.23"` as the core dependency. This is the Philipp Oppermann "Writing an OS in Rust" tutorial crate. While this is a legitimate starting point for a kernel learning project, it is a beginner/educational scaffold — not the foundation for a production-grade AI operating system. The architecture described in the manifest has grown far beyond what this codebase can plausibly support.
+
+---
+
+## SECTION 403: Critical Gap Analysis
+
+The following visualization maps the three most severe architectural gaps between documentation claims and plausible implementation state.
+(Visualization omitted; placeholder for architectural mapping)
+
+---
+
+## SECTION 404: What Is Actually Buildable (Wiring Plan)
+
+Strip the impossible claims and here is what a functional version of LEVI-AI actually looks like — and exactly how to wire it.
+
+### Realistic architecture you should build toward:
+```text
+[HAL-0 Kernel in QEMU]
+   ↓ serial stdout (raw text / binary packets)
+[host bridge daemon: pyserial → Redis PUBLISH]
+   ↓ Redis channel
+[FastAPI backend]
+   ├── /ws/telemetry  → WebSocket → React dashboard
+   ├── /agents/health → polls Docker container health
+   └── /missions/*    → dispatches to agent pool
+[Agent pool: Docker containers, each running Ollama]
+   └── 2–4 agents max on consumer GPU (7B–13B models)
+[Memory tiers]
+   ├── Tier 0: Python in-process dict + Redis
+   ├── Tier 1: Redis Streams (ephemeral context)
+   ├── Tier 2: Postgres (mission logs) + FAISS (vectors)
+   └── Tier 3: Neo4j (knowledge graph)
+[Frontend: React + ReactFlow + Chart.js]
+   └── Connects to FastAPI via REST + WebSocket
+```
+
+### Step-by-step wiring commands:
+
+**Step 1 — Verify the kernel boots in QEMU and emits serial output:**
+```bash
+cargo bootimage --verbose
+qemu-system-x86_64 \
+  -drive format=raw,file=target/x86_64-levi/debug/bootimage-hal0-bare.bin \
+  -serial stdio \
+  -no-reboot 2>&1 | tee kernel_boot.log
+grep "\[OK\]" kernel_boot.log | wc -l   # should be > 5
+grep "\[ERR\]" kernel_boot.log           # should be empty
+```
+
+**Step 2 — Verify each orchestrator service independently before combining:**
+```bash
+docker run -d --name redis-test -p 6379:6379 redis:7-alpine
+redis-cli ping                           # must return PONG
+
+docker run -d --name pg-test -p 5432:5432 \
+  -e POSTGRES_PASSWORD=test postgres:15
+psql -h localhost -U postgres -c "SELECT 1;"  # must return 1
+
+# Only after both pass:
+python backend/main.py 2>&1 | head -30   # watch for each of 12 startup stages
+curl http://localhost:8000/healthz        # must return 200
+```
+
+**Step 3 — Wire the serial bridge (this currently does not exist in the documented architecture):**
+```python
+# serial_bridge.py — must be written from scratch
+import serial, redis, struct, time, json
+
+r = redis.Redis()
+# QEMU serial output available on a socket if started with:
+# -serial tcp:localhost:4444,server,nowait
+ser = serial.Serial('socket://localhost:4444', timeout=1)
+
+MAGIC = b'SYSC'
+while True:
+    data = ser.read(32)
+    if len(data) == 32 and data[:4] == MAGIC:
+        ts, syscall_id, arg1, arg2 = struct.unpack('<QIQQ', data[4:])
+        r.publish('kernel:telemetry', json.dumps({
+            'ts': ts, 'syscall': hex(syscall_id),
+            'arg1': arg1, 'arg2': arg2
+        }))
+```
+
+**Step 4 — Verify agent connectivity. Test one agent before scaling:**
+```bash
+# Install Ollama, pull a small model first
+ollama pull mistral:7b
+ollama run mistral:7b "Respond with only: AGENT_ONLINE"
+# Must respond: AGENT_ONLINE within 30 seconds
+
+# Then verify via API
+curl http://localhost:11434/api/generate \
+  -d '{"model":"mistral:7b","prompt":"ping","stream":false}'
+# Check response.response field is not empty
+```
+
+**Step 5 — Verify frontend connects end-to-end:**
+```bash
+cd levi-frontend && npm install && npm run dev
+# Navigate to http://localhost:5173
+# Open browser console, filter for WebSocket errors
+# If you see connection refused: backend not running or CORS misconfigured
+# Verify: curl -i -H "Origin: http://localhost:5173" http://localhost:8000/healthz
+# Must include: Access-Control-Allow-Origin header
+```
+
+---
+
+## SECTION 405: Stabilization Plan
+
+The current codebase, based on the manifest, has these stability categories:
+
+1. **The kernel is a tutorial project that needs production hardening.** The following are non-negotiable before any real-hardware testing:
+```rust
+// Required: Replace placeholder TPM stubs in secure_boot.rs
+// Current (suspected): prints SHA-256 hash to serial, no actual TPM API call
+// Required: integrate with swtpm daemon via TPM2 Command Response Buffer (CRB)
+
+// Required: Heap allocator must be tested for fragmentation
+// Run this after every major kernel change:
+// cargo test --release -- allocator::tests::test_fragmentation_under_load
+
+// Required: ATA driver needs timeout handling with real error paths
+// Current (suspected): infinite spin loop on BSY bit
+// Required: use RDTSC-based timeout with explicit error return
+fn wait_for_ready(timeout_ms: u64) -> Result<(), AtaError> {
+    let deadline = rdtsc() + (timeout_ms * TSC_FREQ_MHZ * 1000);
+    while (inb(0x1F7) & 0x80) != 0 {
+        if rdtsc() > deadline { return Err(AtaError::Timeout); }
+        core::hint::spin_loop();
+    }
+    Ok(())
+}
+```
+
+2. **The orchestrator needs these specific fixes before it can be called stable:**
+```python
+# Fix 1: The Raft consensus has no actual leader election timeout handling
+# In raft_consensus.py, the heartbeat TTL must have a hard failover:
+async def check_leader_health(self):
+    last_heartbeat = await self.redis.get('raft:last_heartbeat')
+    if last_heartbeat is None or (time.time() - float(last_heartbeat)) > 5.0:
+        await self.trigger_election()  # this method must actually exist and work
+
+# Fix 2: The MCM ghost mission pruning must be idempotent
+# Running purge_mission_facts() twice must produce the same result
+# Current risk: double-delete may raise KeyError crashing the loop
+
+# Fix 3: Connection pool pre_ping=True does NOT prevent all stale connections
+# Add explicit reconnect logic:
+@contextlib.asynccontextmanager
+async def get_session_with_retry():
+    for attempt in range(3):
+        try:
+            async with session_scope() as session:
+                await session.execute(text("SELECT 1"))  # explicit liveness check
+                yield session
+                return
+        except OperationalError:
+            if attempt == 2: raise
+            await asyncio.sleep(0.5 * (attempt + 1))
+```
+
+**Testing strategy that must exist before any production claim:**
+
+| Test type | What to test | Pass criteria |
+|:---|:---|:---|
+| **Kernel unit tests** | Each syscall handler in isolation | No panic, correct return value |
+| **Kernel integration** | Full boot → all `[OK]` lines present | Zero `[ERR]` or `[!!!]` lines |
+| **Backend unit tests** | Each API endpoint with mock DB | Status 200, schema validates |
+| **Backend integration** | FastAPI + real Redis/Postgres/Neo4j | All 12 startup stages pass |
+| **Agent test** | Single agent receives prompt, returns response | Response non-empty, under 10s |
+| **E2E smoke test** | `POST /missions/spawn` → mission appears in frontend DAG | No console errors |
+| **Load test (real)** | 10 concurrent `/missions/spawn` requests | p99 < 5s, zero 500 errors |
+| **Memory leak test**| Run orchestrator for 24h with no missions | RSS growth < 50MB |
+
+---
+
+## SECTION 406: Security Hardening
+
+What is real vs. claimed:
+
+* **Ring-3 isolation in the kernel:** the GDT user segments and `sysretq` trampoline are likely real (standard x86_64 privilege levels). However, the claim that LLM agents run in Ring-3 is, as established, physically impossible. Ring-3 correctly isolates bare-metal processes — but there are no LLM processes to isolate.
+* **TPM integration:** almost certainly a hash-print stub. To make this real:
+```bash
+# Install swtpm and tpm2-tools
+sudo apt install swtpm tpm2-tools
+
+# Start QEMU with emulated TPM
+swtpm socket --tpmstate dir=/tmp/mytpm --ctrl type=unixio,path=/tmp/mytpm.sock &
+qemu-system-x86_64 \
+  -chardev socket,id=chrtpm,path=/tmp/mytpm.sock \
+  -tpmdev emulator,id=tpm0,chardev=chrtpm \
+  -device tpm-tis,tpmdev=tpm0 \
+  [other args]
+
+# From kernel: use tpm2_pcrextend / tpm2_pcrread to verify
+tpm2_pcrread sha256:0  # must show non-zero PCR[0] after kernel boot
+```
+* **Ed25519 signing:** the `ring` crate dependency is real and the algorithm works. The gap is key management — if the "Sovereign Master Secret" is stored in a `.env` file in plaintext, it is not hardware-bound regardless of what the documentation says. Minimum acceptable security:
+```python
+# Do not do this (current assumption based on LocalKMSAdapter):
+SOVEREIGN_SECRET = os.getenv("SYSTEM_SECRET")
+key = PBKDF2(SOVEREIGN_SECRET, salt, 100000)  # still plaintext at rest
+
+# Do this instead — use OS keyring at minimum:
+import keyring
+import secrets
+secret = keyring.get_password("levi-ai", "sovereign-master-key")
+if not secret:
+    secret = secrets.token_hex(32)
+    keyring.set_password("levi-ai", "sovereign-master-key", secret)
+```
+* **PII redaction:** the Aho-Corasick pattern matching in `redactor.rs` may be partially real. But there is a critical gap: the redaction happens at `SYS_WRITE` time in the kernel, but agent LLM outputs flow through Python, not through the kernel syscall interface. PII in LLM responses is never touched by the kernel redactor. The actual privilege boundary that needs hardening for a Python-based system:
+```python
+# Every agent prompt must go through a sanitizer before reaching the LLM:
+import re
+
+SENSITIVE_PATTERNS = [
+    r'\b\d{3}-\d{2}-\d{4}\b',           # SSN
+    r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',  # email
+    r'\b(?:\d[ -]?){13,16}\b',           # credit card
+]
+def sanitize_output(text: str) -> str:
+    for pattern in SENSITIVE_PATTERNS:
+        text = re.sub(pattern, '[REDACTED]', text)
+    return text
+```
+
+---
+
+## SECTION 407: Real-World Readiness Plan
+
+*(This section addresses the transition from theoretical manifest to real-world deployment. Workflows outlined in stabilization and security hardening steps must be completed before considering real-world scenarios valid.)*
+
+---
+
+## SECTION 408: Top 10 Failure Risks
+
+These are the risks most likely to cause complete system failure, ranked by probability × impact:
+
+1. **Risk 1 (Catastrophic): The kernel is a tutorial project used as a production foundation.** The `bootimage 0.9.23` crate is the Philipp Oppermann OS tutorial dependency. If the kernel codebase is substantially based on that tutorial, it has no memory protection between processes, no production-grade scheduler, and no real device driver abstractions. Every subsequent subsystem built on top of it inherits these flaws. **Mitigation**: audit `src/` against the tutorial source. If >50% matches, consider rebuilding the kernel layer from a production starting point such as Redox OS components or a RTOS like Tock.
+2. **Risk 2 (Critical): No actual integration test exists.** The 385-section manifest describes behavior in exhaustive detail but contains no reference to a CI pipeline, test runner, or automated verification of any claim. Every documented metric (112ms boot, 0.85μs syscall latency) is self-reported with no reproducible benchmark. If these numbers were generated from a controlled environment and the system state has since changed, there is no way to detect the regression.
+3. **Risk 3 (Critical): The DCN consensus is Redis-backed state, not actual distributed consensus.** Using `redis-cli GET raft:leader_id` as the consensus mechanism means any Redis restart elects no leader and the entire distributed network becomes leaderless with no automatic recovery. A production distributed system must use a consensus algorithm that survives network partitions and node failures without manual intervention.
+4. **Risk 4 (High): Concurrent LLM inference under load is untested.** A single Ollama/llama.cpp instance handling multiple concurrent requests will queue them, not parallelize. With 16 documented agents all waiting for GPU time, the effective throughput per mission is the serial sum of all agent inference times — potentially 5–30 minutes per mission on consumer hardware. This has never been measured.
+5. **Risk 5 (High): The memory tier graduation thresholds (fidelity > 0.92) have no ground truth.** "Fidelity" as described is computed by the agents themselves — it is a self-reported confidence score with no external validation. An agent that is confidently wrong will graduate incorrect facts into the permanent knowledge graph. There is no human-in-the-loop review step and no contradiction detection that actually runs.
+6. **Risk 6 (High): The ATA PIO driver will fail on most real hardware.** Modern x86_64 machines use NVMe or SATA with AHCI. ATA PIO is a legacy interface that many modern BIOSes do not expose at the default port addresses (`0x1F0–0x1F7`). Any bare-metal deployment on hardware purchased in the last 5 years will likely fail at the `STAGE_ATA` boot step.
+7. **Risk 7 (Medium): Key management is likely `.env`-file based.** If `SYSTEM_SECRET` in `.env` is the root of trust for all Ed25519 signing and data encryption, a single file leak compromises every signed artifact in the system's history. There is no key rotation procedure documented for this scenario.
+8. **Risk 8 (Medium): The frontend has no error boundary testing.** A React dashboard showing live telemetry from a potentially unstable kernel has no documented strategy for handling WebSocket disconnections, malformed packets, or backend outages. The `leviStore` Zustand state will contain stale data with no user-visible indication.
+9. **Risk 9 (Medium): Neo4j graph growth is unbounded.** The `get_resonance_entities()` query performs multi-hop traversals on a graph with no documented pruning strategy other than "periodic container restart" (Bug Bounty ID 003 in Appendix F). Under continuous operation, graph traversal latency grows super-linearly with node count, eventually making every agent call time out.
+10. **Risk 10 (Lower but persistent): The documentation will mislead future contributors.** A new developer reading this README will believe the system is 100% production-ready and spend weeks debugging why the "Ring-3 LLM isolation" does not work, why the "6M iteration soak test" cannot be reproduced, and why the TPM PCR measurements do not actually seal keys. The most important non-code task in Phase 1 is rewriting the README to reflect reality.
+
+---
+
 **THE END OF MANIFEST**
 
 ### 🚀 MANUAL GRADUATION COMMIT COMMAND
@@ -2349,5 +2664,5 @@ To finalize the graduation of the source residency, execute the following comman
 
 ```powershell
 git add .
-git commit -m "GRADUATION: LEVI-AI Sovereign OS v22.0.0-GA Final Forensic Manifest (§1-§390)"
+git commit -m "GRADUATION: LEVI-AI Sovereign OS v22.0.0-GA Final Forensic Manifest (§1-§401)"
 ```

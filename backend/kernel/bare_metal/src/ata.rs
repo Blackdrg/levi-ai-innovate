@@ -100,3 +100,10 @@ lazy_static! {
     pub static ref ATA_PRIMARY: Mutex<AtaDriver> = Mutex::new(AtaDriver::new());
 }
 
+pub fn read_sectors(lba: u32, sector_count: u8, target: &mut [u16]) {
+    ATA_PRIMARY.lock().read_sectors(lba, sector_count, target);
+}
+
+pub fn write_sectors(lba: u32, sector_count: u8, source: &[u16]) {
+    ATA_PRIMARY.lock().write_sectors(lba, sector_count, source);
+}
