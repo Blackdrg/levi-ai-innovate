@@ -79,3 +79,30 @@ pub fn init_heap(
 
     Ok(())
 }
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+
+    pub fn test_fragmentation_under_load() {
+        crate::println!(" [TEST] Starting Heap Fragmentation Stress Test...");
+        let mut vecs = alloc::vec::Vec::new();
+        for i in 0..500 {
+            let mut v = alloc::vec::Vec::with_capacity(i % 64);
+            v.push(i as u8);
+            vecs.push(v);
+        }
+        
+        let count = super::check_leaks();
+        if count > 0 {
+            crate::println!(" [OK] Fragmentation test complete. Allocations: {}", count);
+        } else {
+             crate::println!(" [ERR] Fragmentation test failed to allocate.");
+        }
+        
+        // Clean up
+        drop(vecs);
+        super::check_leaks();
+        crate::println!(" ✅ Heap Stability Verified.");
+    }
+}

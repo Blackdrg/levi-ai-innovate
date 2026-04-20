@@ -1,161 +1,91 @@
+# backend/kernel/serial_bridge.py
+import serial
+import redis
 import struct
 import json
-import asyncio
+import time
 import logging
+import asyncio
 import os
-from datetime import datetime, timezone
-from backend.broadcast_utils import SovereignBroadcaster
 
-logger = logging.getLogger("serial-bridge")
+logger = logging.getLogger("SerialBridge")
 
-# Magic number identifying the Sovereign Kernel Serial Protocol
-LEVI_MAGIC = 0x4C455649 # "LEVI"
-
-# Record Type Mapping
-RECORD_TYPES = {
-    0x01: "MEM_RESERVE",
-    0x02: "WAVE_SPAWN",
-    0x03: "BFT_SIGN",
-    0x04: "PROC_KILL",
-    0x05: "FS_WRITE",
-    0x06: "FS_READ",
-    0x07: "NET_PING",
-    0x08: "DCN_PULSE",
-    0x09: "SYS_WRITE",
-    0x99: "SYS_REPLACELOGIC",
-    0xCC: "COGNITIVE_CRISIS",
-    0xFE: "MISSION_OUTCOME",
-    0xFF: "HEARTBEAT",
-}
-
-class SerialBridge:
+class SerialTelemetryBridge:
     """
-    Bridges the gap between the Bare-Metal HAL-0 Kernel and the Cognitive Soul (Python).
-    Reads binary records from the serial port and broadcasts them via the Sovereign Event Bus.
+    Sovereign v22.1: Kernel-to-Host Telemetry Bridge.
+    Stabilization Plan Fix: Implements the 32-byte SYSC binary packet format.
     """
+    MAGIC = b'SYSC'
+    
     def __init__(self):
-        # Default to a local socket for QEMU testing, or a serial device
-        self.port = os.getenv("KERNEL_SERIAL_PORT", "localhost:1234")
-        self.is_running = False
+        self.port = os.getenv("SERIAL_PORT", "socket://localhost:4444")
+        self.baud = int(os.getenv("SERIAL_BAUD", "115200"))
+        self.redis_client = redis.Redis(
+            host=os.getenv("REDIS_HOST", "localhost"),
+            port=int(os.getenv("REDIS_PORT", "6379")),
+            db=0
+        )
+        self._running = False
         self._task = None
 
     async def start(self):
-        if self._task:
-            return
-        self.is_running = True
-        self._task = asyncio.create_task(self._run_loop())
-        logger.info("🛰️ [KernelBridge] Serial-to-WebSocket bridge activated.")
+        if self._running: return
+        self._running = True
+        self._task = asyncio.create_task(self._bridge_loop())
+        logger.info(f"🛰️ [SerialBridge] Listening on {self.port}...")
 
     async def stop(self):
-        self.is_running = False
+        self._running = False
         if self._task:
             self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
-            self._task = None
+            try: await self._task
+            except asyncio.CancelledError: pass
+        logger.info("🛑 [SerialBridge] Stopped.")
 
-    async def _run_loop(self):
-        while self.is_running:
-            try:
-                if ":" in self.port:
-                    # QEMU -server -serial tcp:localhost:1234
-                    host, port = self.port.split(":")
-                    logger.info(f"🛰️ [KernelBridge] Connecting to QEMU serial socket at {host}:{port}...")
-                    reader, writer = await asyncio.open_connection(host, int(port))
-                    await self._read_loop(reader)
+    async def _bridge_loop(self):
+        """
+        Binary Packet Format (32 bytes):
+        [4] MAGIC ('SYSC')
+        [8] Timestamp (u64)
+        [4] Syscall ID (u32)
+        [8] Arg 1 (u64)
+        [8] Arg 2 (u64)
+        """
+        try:
+            # Using loop.run_in_executor for blocking serial reads
+            loop = asyncio.get_event_loop()
+            ser = await loop.run_in_executor(None, lambda: serial.serial_for_url(self.port, timeout=1))
+            
+            while self._running:
+                data = await loop.run_in_executor(None, lambda: ser.read(32))
+                if not data: continue
+                
+                if len(data) == 32 and data[:4] == self.MAGIC:
+                    try:
+                        ts, syscall_id, arg1, arg2 = struct.unpack('<QIQQ', data[4:])
+                        payload = {
+                            'type': 'kernel_telemetry',
+                            'timestamp': ts,
+                            'syscall': hex(syscall_id),
+                            'arg1': arg1,
+                            'arg2': arg2,
+                            'origin': 'HAL-0'
+                        }
+                        # Publish to internal telemetry stream
+                        self.redis_client.publish('system:telemetry', json.dumps(payload))
+                        self.redis_client.set("system:last_pulse", json.dumps(payload))
+                        logger.debug(f" [SYSC] {hex(syscall_id)} ({arg1}, {arg2})")
+                    except Exception as e:
+                        logger.error(f"Failed to unpack telemetry: {e}")
                 else:
-                    # Real Serial Device
-                    await self._read_loop_serial()
-            except Exception as e:
-                logger.error(f"❌ [KernelBridge] Connection failed: {e}. Retrying in 5s...")
-                await asyncio.sleep(5)
+                    # Alignment search
+                    if self.MAGIC in data:
+                        idx = data.index(self.MAGIC)
+                        # Re-align next read
+                        await loop.run_in_executor(None, lambda: ser.read(idx))
 
-    async def _read_loop(self, reader):
-        # Record format: [magic: u32][seq: u64][pid: u32][syscall_id: u8][ts: u32][fidelity: u8] = 22 bytes
-        record_size = 22
-        while self.is_running:
-            try:
-                data = await reader.readexactly(record_size)
-                self._process_record(data)
-            except asyncio.IncompleteReadError:
-                logger.warning("⚠️ [KernelBridge] Serial stream interrupted.")
-                break
-            except Exception as e:
-                logger.error(f"❌ [KernelBridge] Read error: {e}")
-                break
-
-    async def _read_loop_serial(self):
-        try:
-            import serial
-            ser = serial.Serial(self.port, 115200, timeout=0.1)
-            logger.info(f"🛰️ [KernelBridge] Opened serial port {self.port}")
-            while self.is_running:
-                if ser.in_waiting >= 22:
-                    data = ser.read(22)
-                    self._process_record(data)
-                await asyncio.sleep(0.01)
-        except ImportError:
-            logger.error("❌ [KernelBridge] 'pyserial' not installed. Cannot use real serial port.")
-            self.is_running = False
         except Exception as e:
-            logger.error(f"❌ [KernelBridge] Serial error: {e}")
-            await asyncio.sleep(5)
+            logger.error(f"Serial Bridge fatal error: {e}")
+            self._running = False
 
-    def _process_record(self, data):
-        try:
-            # Struct: < (little endian), I (u32), Q (u64), I (u32), B (u8), I (u32), B (u8)
-            magic, seq, pid, rtype, ts, fidelity = struct.unpack("<I Q I B I B", data)
-            if magic != LEVI_MAGIC:
-                return
-
-            event_name = RECORD_TYPES.get(rtype, f"UNKNOWN_0x{rtype:02X}")
-            
-            # 1. Broadcaster (for Frontend WebSocket)
-            SovereignBroadcaster.publish(
-                "kernel_event",
-                {
-                    "type": "kernel_event",
-                    "payload": {
-                        "seq": seq,
-                        "pid": pid,
-                        "event": event_name,
-                        "id": rtype,
-                        "timestamp": ts,
-                        "fidelity": fidelity,
-                        "status": "EXECUTED"
-                    }
-                },
-                user_id="system:pulse"
-            )
-
-            # 2. Logic hooks (MCM graduation)
-            if rtype == 0xFE: # MISSION_OUTCOME (Fidelity Pulse)
-                self._handle_mission_outcome(seq, pid, ts, fidelity)
-                
-            logger.debug(f"🔵 [KernelBridge] Recv: {event_name} (seq={seq}, pid={pid}, fidelity={fidelity})")
-                
-        except Exception as e:
-            logger.error(f"❌ [KernelBridge] Parse error: {e}")
-
-    def _handle_mission_outcome(self, seq, pid, ts, fidelity):
-        """Triggers the MCM graduation logic based on kernel mission outcome."""
-        try:
-            from backend.services.mcm import mcm_service
-            # Use real fidelity score from kernel (normalized to 0.0 - 1.0)
-            f_score = fidelity / 255.0
-            
-            if hasattr(mcm_service, "graduate"):
-                asyncio.create_task(mcm_service.graduate({
-                    "source": "kernel",
-                    "seq": seq,
-                    "timestamp": ts,
-                    "fidelity": f_score
-                }))
-        except Exception as e:
-            logger.error(f"❌ [KernelBridge] MCM Hook failed: {e}")
-
-
-# Global Instance
-kernel_bridge = SerialBridge()
+kernel_bridge = SerialTelemetryBridge()

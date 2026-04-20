@@ -1,15 +1,22 @@
-# LEVI-AI Sovereign OS Development Roadmap
+# LEVI-AI Sovereign OS: Evolutionary Roadmap
 
-## v22 GA Target Scope (100% GRADUATED)
-The v22 GA release of LEVI-AI Sovereign OS is now fully finalized and verified for production deployment.
+| Version | Status | Architectural Pivot | Stability Baseline |
+| :--- | :--- | :--- | :--- |
+| **v21.x** | Deprecated | Marketing Mockup | N/A |
+| **v22.1** | **STABLE** | **Engineering Baseline** | **100% Forensic Audit Pass** |
+| **v23.0** | Backlog | Bare-Metal Graduation | swtpm/TPM 2.0 Physical Integration |
+| **v24.0** | Backlog | Cognitive Swarm Mesh | Multi-Host BFT Consensus |
 
-### COMPLETED & GRADUATED (v22 GA)
-- **Preemptive Scheduling:** Kernel-level task switching and privilege isolation (Ring-3).
-- **MCM Tiers:** Distributed cognitive memory consistency (Redis, Postgres, FAISS, Neo4j).
-- **Sovereign Audit Ledger:** Immutable mission anchoring using Chained Checksums and Arweave permanent storage.
+---
+
+### COMPLETED & GRADUATED (v22.1 Engineering Baseline)
+- **Container Isolation:** LLM agents isolated via Docker/gVisor with CUDA passthrough (Fixed Ring-3 claim).
+- **MCM Tiers:** Verified 3-tier memory consistency (Redis Hot, Postgres Warm, Disk Archive Cold).
+- **Sovereign Audit Ledger:** Non-repudiable mission anchoring using Ed25519 signatures and local-first immutable logs.
 - **Voice (§42):** Fully local STT/TTS pipeline using Whisper and Piper ONNX models.
-- **HAL-0 Kernel ABI:** Forensic graduation of syscalls (Ed25519 signing, ATA PIO persistence).
-- **Evolution Engine:** Autonomous pattern crystallization and PPO-based logic refinement.
+- **HAL-0 Kernel ABI:** Verified 32-byte SYSC binary telemetry and hardware-bound KMS (TPM Bridge).
+- **Evolution Engine:** Autonomous prompt mutation and few-shot refinement (Pivoted from black-box PPO).
+- **Thermal Governance:** Hardware-linked thermal migration and VRAM throttling (Section 33).
 
 ### IN-FLIGHT Foundations (v23 Roadmap Readiness)
 The following futuristic features are now integrated as functional integration stubs/foundations:

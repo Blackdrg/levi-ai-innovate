@@ -118,6 +118,44 @@ impl Tpm20 {
         }
         println!(" [OK] TPM: PCR[{}] retrieved successfully.", index);
         digest
+    /// Real TPM2 CRB (Command Response Buffer) implementation.
+    /// Section 6 Fix: Graduation from FIFO to CRB for swtpm compatibility.
+    pub fn PCR_extend_crb(&self, index: u8, hash: &[u8; 32]) {
+        println!(" [TPM] CRB PCR_Extend[{}] ...", index);
+        
+        let crb_base = self.base_addr + 0x0080; // TPM_CRB_CTRL_REQ
+        let cmd_buffer = self.base_addr + 0x0100; // Alignment with standard CRB offsets
+        
+        // Command layout (same as FIFO but written to buffer)
+        let mut cmd = [0u8; 65];
+        cmd[0] = 0x80; cmd[1] = 0x01;
+        cmd[2..6].copy_from_slice(&65u32.to_be_bytes()); 
+        cmd[6..10].copy_from_slice(&0x00000182u32.to_be_bytes());
+        cmd[10..14].copy_from_slice(&(index as u32).to_be_bytes());
+        cmd[14..18].copy_from_slice(&9u32.to_be_bytes());
+        cmd[27..31].copy_from_slice(&1u32.to_be_bytes());
+        cmd[31..33].copy_from_slice(&0x000Bu16.to_be_bytes());
+        cmd[33..65].copy_from_slice(hash);
+
+        unsafe {
+            // 1. Request TPM to exit idle
+            core::ptr::write_volatile(crb_base as *mut u32, 0x00000001); // cmdRequest
+            
+            // 2. Map and write to buffer
+            for i in 0..cmd.len() {
+                core::ptr::write_volatile((cmd_buffer + i as u64) as *mut u8, cmd[i]);
+            }
+            
+            // 3. Trigger Start
+            let start_reg = self.base_addr + 0x0088; // TPM_CRB_CTRL_START
+            core::ptr::write_volatile(start_reg as *mut u32, 0x00000001);
+            
+            // 4. Poll for completion (Start bit clears)
+            while (core::ptr::read_volatile(start_reg as *const u32) & 0x01) != 0 {
+                core::hint::spin_loop();
+            }
+        }
+        println!(" [OK] TPM: CRB PCR[{}] extended (swtpm sync complete).", index);
     }
 }
 

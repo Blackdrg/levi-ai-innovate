@@ -67,23 +67,23 @@ pub fn verify() {
     // PCR[0]: Kernel Binary
     let mut tpm = Tpm20::new();
     tpm.init();
-    tpm.PCR_extend(0, &digest);
+    tpm.PCR_extend_crb(0, &digest);
 
     // PCR[1]: GDT + IDT Hardware Configuration
     let config_hash = crypto::sha256(b"GDT_LDT_IDT_CONFIG_V22");
-    tpm.PCR_extend(1, &config_hash);
+    tpm.PCR_extend_crb(1, &config_hash);
 
     // PCR[2]: Syscall Table Measurement (Ring-3 Entry Points)
     let syscall_hash = crypto::sha256(b"SYSCALL_TABLE_0x80_HANDLERS");
-    tpm.PCR_extend(2, &syscall_hash);
+    tpm.PCR_extend_crb(2, &syscall_hash);
 
     // PCR[3]: Filesystem Root Hash (SFS)
     let fs_hash = crypto::sha256(b"SFS_ROOT_BOOT_TRUST_ANCHOR");
-    tpm.PCR_extend(3, &fs_hash);
+    tpm.PCR_extend_crb(3, &fs_hash);
 
     // PCR[4]: Agent Public Keys (Sovereign Swarm Registry)
     let agent_keys_hash = crypto::sha256(&ROOT_PUBLIC_KEY);
-    tpm.PCR_extend(4, &agent_keys_hash);
+    tpm.PCR_extend_crb(4, &agent_keys_hash);
 
     println!(" [SEC] PCR[0..4] extended. Full 5-stage chain-of-trust verified.");
 }

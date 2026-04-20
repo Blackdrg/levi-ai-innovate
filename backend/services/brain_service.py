@@ -141,20 +141,24 @@ class BrainService:
         return policy
 
     async def call_local_llm(self, prompt: str, model_type: str = "default", domain: str = "default", with_identity: bool = False) -> str:
-        """Sovereign v14.1: Direct local LLM interface with optimized policy gradient params."""
+        """Sovereign v22.1: Direct local LLM interface with PII Governance and optimized params."""
         from backend.utils.internal_client import internal_client
         from backend.core.policy_gradient import policy_gradient
         from backend.core.identity import identity_system
+        from backend.core.security.pii_governance import governance
         
         # 🧪 [Engine 9] Policy Gradient: Fetch Optimized Parameters
         params = await policy_gradient.get_optimal_params(agent_type="inference", domain=domain)
         model = params.get("model", "llama3.1:8b")
         
+        # 🛡️ [Governance] Sanitize input before it leaves the secure zone
+        clean_prompt = governance.scrub_text(prompt)
+
         # 🧠 [Identity] Inject personality bias if requested
-        final_prompt = prompt
+        final_prompt = clean_prompt
         if with_identity:
             bias = await identity_system.get_personality_bias_prompt()
-            final_prompt = f"{bias}\n\nTask: {prompt}"
+            final_prompt = f"{bias}\n\nTask: {clean_prompt}"
 
         ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
         
@@ -174,10 +178,14 @@ class BrainService:
                 }
             )
             response.raise_for_status()
-            return response.json().get("response", "")
+            raw_response = response.json().get("response", "")
+            
+            # 🛡️ [Governance] Sanitize output to prevent PII leaks in synthetic responses
+            return governance.scrub_text(raw_response)
         except Exception as e:
             logger.error(f"[BrainService] Local LLM call failed: {e}")
             return f"Error: {str(e)}"
+
 
     def verify_service_token(self, token: str) -> bool:
         """Validates internal service-to-service token."""

@@ -114,15 +114,19 @@ class PostgresDB:
     @classmethod
     @asynccontextmanager
     async def session_scope(cls):
-        """Transactional session scope management (Graduation #18)."""
+        """Transactional session scope management (Section 5 Stabilization)."""
         from sqlalchemy.exc import OperationalError
+        import asyncio
+        
         for attempt in range(3):
             session = await cls.get_session()
             if not session:
                 logger.critical("[Postgres] Failed to acquire session.")
                 raise ConnectionError("Postgres session unavailable.")
+                
             try:
-                await session.execute(text("SELECT 1"))  # explicit liveness check
+                # Section 5 Fix: Explicit liveness check
+                await session.execute(text("SELECT 1"))
                 yield session
                 await session.commit()
                 return
@@ -131,13 +135,18 @@ class PostgresDB:
                 await session.close()
                 if attempt == 2:
                     raise
+                # Exponential backoff: 0.5s, 1.0s, 1.5s
                 await asyncio.sleep(0.5 * (attempt + 1))
             except Exception:
                 await session.rollback()
                 raise
             finally:
-                if session.is_active:
-                    await session.close()
+                # Ensure closure
+                try: 
+                    if session and session.is_active:
+                        await session.close()
+                except: 
+                    pass
     
     @classmethod
     def _session_factory_internal(cls):

@@ -1,0 +1,57 @@
+name: Sovereign OS CI/CD
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  kernel-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install Rust
+        run: rustup update stable && rustup component add llvm-tools-preview
+      - name: Kernel Lint
+        working-directory: backend/kernel/bare_metal
+        run: cargo clippy -- -D warnings
+      - name: Kernel Unit Tests
+        working-directory: backend/kernel/bare_metal
+        run: cargo test --lib
+
+  backend-stability:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: [6379:6379]
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: test
+        ports: [5432:5432]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install Dependencies
+        run: pip install -r requirements.txt
+      - name: Run Backend Logic Audit
+        run: python scripts/forensic_audit.py
+
+  frontend-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      - name: Install Dependencies
+        working-directory: levi-frontend
+        run: npm install
+      - name: Frontend Build Check
+        working-directory: levi-frontend
+        run: npm run build

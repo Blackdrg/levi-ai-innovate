@@ -13,12 +13,13 @@ lazy_static! {
 
 #[repr(C, packed)]
 pub struct TelemetryRecord {
-    pub magic: u32,      // 0xDEADBEEF or 0x4C455649
+    pub magic: u32,      // 0x4C455649 ("LEVI")
     pub seq_id: u64,
     pub pid: u32,
-    pub syscall_id: u8,
+    pub syscall_id: u32,
     pub timestamp: u32,
     pub fidelity: u8,    // 0-255 score from kernel
+    pub reserved: [u8; 7],
 }
 
 

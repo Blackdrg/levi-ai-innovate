@@ -268,22 +268,33 @@ class RaftConsensus:
         await redis.rpush(self.log_key, json.dumps(payload))
         await redis.expire(self.log_key, _LOG_TTL)
 
-        # ACK (in Redis-backed single-broker: auto-ACK all active nodes)
-        ack_key = self._k(f"ack:{index}")
-        pipe = redis.pipeline()
-        pipe.sadd(ack_key, self.node_id)
-        for follower in active_nodes:
-            pipe.sadd(ack_key, follower)
-        pipe.expire(ack_key, 300)
-        await pipe.execute()
-
-        ack_count = await redis.scard(ack_key)
-        committed = ack_count >= quorum
+        # 🪐 Sovereign v22.1: Real Quorum Verification
+        # In a real Raft, the leader sends AppendEntries and waits for responses.
+        # Here, followers poll the log and SET an ACK in Redis.
+        # The leader waits up to 2.0s for the quorum to form.
+        
+        timeout = 2.0
+        start_wait = time.time()
+        ack_count = 1 # Self
+        committed = False
+        
+        while time.time() - start_wait < timeout:
+            ack_key = self._k(f"ack:{index}")
+            # Add my own ACK if not present
+            await redis.sadd(ack_key, self.node_id)
+            
+            ack_count = await redis.scard(ack_key)
+            if ack_count >= quorum:
+                committed = True
+                break
+            await asyncio.sleep(0.1)
 
         if committed:
             await redis.set(self.commit_index_key, str(index))
             if _PROM:
                 _COMMITS.labels(cluster=self.cluster_key).inc()
+        else:
+            logger.warning(f"⚠️ [Raft] Quorum TIMEOUT for index {index}. Only {ack_count}/{quorum} acks.")
 
         if _PROM:
             _REP_LAT.labels(cluster=self.cluster_key).observe(time.monotonic() - t0)
@@ -405,30 +416,65 @@ class RaftConsensus:
             return False
 
     async def trigger_election(self):
-        """Force an immediate election if leader is unhealthy."""
+        """Force a deterministic re-election by clearing leader keys."""
         from backend.db.redis import get_async_redis_client
         redis = get_async_redis_client()
         if redis:
-            await redis.delete(self.leader_key)
+            # Atomically remove leader key and current heartbeat to allow NX grab
+            pipe = redis.pipeline()
+            pipe.delete(self.leader_key)
+            pipe.delete(f"raft:{self.cluster_key}:heartbeat")
+            pipe.delete(f"raft:{self.cluster_key}:leader_id")
+            await pipe.execute()
+            logger.warning(f"🗳️ [Raft] Local node {self.node_id} TRIGGERED CLUSTER RE-ELECTION.")
         await self.elect_leader()
 
     async def check_leader_health(self):
-        """Monitor leader heartbeat with strict 5.0s failover."""
+        """Monitor leader heartbeat with strict 5.0s failover (Section 5 Stabilization)."""
         from backend.db.redis import get_async_redis_client
         redis = get_async_redis_client()
         if not redis: return
         
+        # 1. Leadership assertion (If I am leader, I must refresh)
         if self.is_leader:
-            await redis.set("raft:last_heartbeat", str(time.time()), ex=10)
+            pipe = redis.pipeline()
+            pipe.set(f"raft:{self.cluster_key}:heartbeat", str(time.time()), ex=10)
+            pipe.set(f"raft:{self.cluster_key}:leader_id", self.node_id, ex=10)
+            await pipe.execute()
         else:
-            last_heartbeat = await redis.get("raft:last_heartbeat")
-            if last_heartbeat is None or (time.time() - float(_s(last_heartbeat))) > 5.0:
-                logger.warning("⚠️ [Raft] Leader heartbeat missed! Forcing election.")
+            # 2. Liveness check (If I am follower, I must verify leader)
+            last_heartbeat = await redis.get(f"raft:{self.cluster_key}:heartbeat")
+            leader_id = await redis.get(f"raft:{self.cluster_key}:leader_id")
+            
+            # Use soft STR normalization for bytes returned by Redis
+            hb_val = _s(last_heartbeat)
+            if not hb_val or (time.time() - float(hb_val)) > 5.0:
+                logger.warning(f"⚠️ [Raft] Leader ({_s(leader_id)}) heartbeated last at {hb_val}. THRESHOLD EXCEEDED (5.0s).")
                 await self.trigger_election()
 
-    # ------------------------------------------------------------------
-    # Background Loop
-    # ------------------------------------------------------------------
+    async def _follower_log_observer(self):
+        """
+        Follower-side mission verification loop.
+        Syncs local state with leader log and ACKs new entries.
+        """
+        from backend.db.redis import get_async_redis_client
+        redis = get_async_redis_client()
+        if not redis: return
+
+        # 1. Get current log length
+        log_len = await redis.llen(self.log_key)
+        
+        # 2. ACK the latest uncommitted entry
+        commit_raw = await redis.get(self.commit_index_key)
+        commit_idx = int(_s(commit_raw)) if commit_raw else -1
+        
+        if log_len > (commit_idx + 1):
+             # There's a new entry pending commitment
+             target_idx = commit_idx + 1
+             ack_key = self._k(f"ack:{target_idx}")
+             await redis.sadd(ack_key, self.node_id)
+             await redis.expire(ack_key, 300)
+             logger.debug(f" [Raft] Follower ACK sent for index {target_idx}")
 
     async def _election_loop(self) -> None:
         """Periodically assert or acquire leadership."""
@@ -444,6 +490,8 @@ class RaftConsensus:
                         if self._stop.is_set(): break
                         await asyncio.sleep(1)
                         await self.check_leader_health()
+                        if not self.is_leader:
+                            await self._follower_log_observer()
                 except asyncio.TimeoutError:
                     pass
             except asyncio.CancelledError:
@@ -522,38 +570,32 @@ class RaftConsensus:
 
     async def run_raft_failover_simulation(self):
         """
-        Section 7 Checklist C: 3-Node Raft Failover Verification.
-        E2E Test: 
-          1. Elect Leader (hal_1)
-          2. Kill Leader
-          3. Verify Failover < 2s
-          4. Restore Node
+        Hard Real-Time Core Verification:
+        Actually induces a local leadership loss and measures re-election timing.
         """
-        logger.info(" [🛡️] RAFT: Starting 3-node failover simulation (hal_1, hal_2, hal_3)...")
-        nodes = ["hal_1", "hal_2", "hal_3"]
+        logger.info("📡 [Raft-Audit] Starting REAL-TIME failover verification pulse...")
         
-        # 1. Election
-        leader = nodes[0]
-        logger.info(f" [RAFT] Consensus reached. LEADER: {leader} TERM: 1")
-        
-        # 2. Kill Leader
-        logger.warning(f" [!!!!] RAFT: Simulated CRITICAL FAILURE on {leader} (Leadership lost)")
-        start_failover = time.time()
-        
-        # 3. Failover < 2s
-        await asyncio.sleep(1.2) # Simulate detection + election
-        new_leader = nodes[1]
-        failover_time = (time.time() - start_failover) * 1000
-        logger.info(f" [OK] RAFT: New leader elected: {new_leader} TERM: 2 (Failover: {failover_time:.1f}ms)")
-        
-        if failover_time < 2000:
-            logger.info(" [PASS] RAFT: Failover latency < 2000ms. S7-C verified.")
-        else:
-            logger.error(" [FAIL] RAFT: Failover latency excessive.")
+        if not self.is_leader:
+            logger.info(" [Audit] Node is currently FOLLOWER. Awaiting leader death signal.")
+            return
 
-        # 4. Restore
-        logger.info(f" [RAFT] Restoring {leader}... re-joining as FOLLOWER. No split-brain.")
-        logger.info(" [PASS] RAFT: Cluster health 100%. Persistence synced.")
+        # 1. Induced Failure
+        start_t = time.time()
+        logger.warning(" [!!!] RAFT: Inducing SELF-FAILURE for audit residency proof.")
+        self.is_leader = False # Demote self
+        
+        # 2. Wait for background loop to detect missing heartbeat and re-elect
+        # The election loop usually runs every _ELECTION_INTERVAL, but we poll health every 1s.
+        timeout = 10.0
+        while time.time() - start_t < timeout:
+            leader_state = await self.elect_leader()
+            if leader_state.get("leader"):
+                elapsed = (time.time() - start_t) * 1000
+                logger.info(f" ✅ [PASS] RAFT: Leadership recovered in {elapsed:.1f}ms. Leader: {leader_state['leader']}")
+                return
+            await asyncio.sleep(0.5)
+            
+        logger.error(" ❌ [FAIL] RAFT: Failover timeout exceeded 10s.")
 
 
 # ---------------------------------------------------------------------------

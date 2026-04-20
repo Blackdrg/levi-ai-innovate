@@ -80,9 +80,9 @@ export const useLeviStore = create<LeviState>((set) => ({
     status: 'ACTIVE'
   },
   sovereignty: {
-    boot_time: '115ms',
-    pii_scrub_rate: '100%',
-    bft_finality: 'Tier-4'
+    boot_time: '...',
+    pii_scrub_rate: '...',
+    bft_finality: '...'
   },
   activeMissions: [],
   wsConnected: false,

@@ -102,6 +102,14 @@ class SelfHealingEngine:
     async def handle_kernel_pulse(self, payload: Dict[str, Any]):
         """Reactive healing triggered by Kernel Telemetry pulses."""
         # Check for OOM signals or driver failures
+        msg = payload.get("message", "")
+        if "FAULT: ATA Driver parity error" in msg:
+             logger.critical("🩺 [SelfHealing] CRITICAL KERNEL DRIVER FAULT DETECTED. Initiating Hot-Patch (DRA)...")
+             # Send SYS_REPLACELOGIC (0x99) with Symbol ID 0x01 (ATA_WRITE)
+             patch_request = {"SYS_REPLACELOGIC": {"symbol_id": 0x01, "blob_ptr": 0x0}} # 0x0 = use internal default_logic
+             kernel.sys_call("mainframe", json.dumps(patch_request))
+             logger.info(" ✅ [SelfHealing] Kernel Hot-Patch applied via DRA.")
+
         if payload.get("type") == "OOM-KILLED":
             mid = payload.get("mission_id")
             logger.critical(f"💣 [SelfHealing] KERNEL OOM-KILL DETECTED: {mid}. Initializing state recovery.")

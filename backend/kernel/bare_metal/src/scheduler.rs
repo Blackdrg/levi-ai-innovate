@@ -62,6 +62,12 @@ impl Scheduler {
         next_pcb.state = ProcessState::Running;
         self.current_pid = Some(next_pcb.pid);
         self.processes.push_back(next_pcb);
+        
+        // 🪐 Sovereign v22.1: Performance Monitoring Integration
+        #[cfg(feature = "diagnostics")]
+        {
+            crate::stability::PERF_MONITOR.lock().context_switches += 1;
+        }
     }
 
     pub fn cleanup_zombies(&mut self) -> usize {

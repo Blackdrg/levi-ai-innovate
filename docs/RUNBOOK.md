@@ -1,141 +1,44 @@
-# 🏃 LEVI-AI Operational Runbook (v14.1.0-Autonomous-SOVEREIGN Graduation)
+# Sovereign OS: Production Disaster Recovery Runbook
+**Version 22.1 Engineering Baseline**
 
-Operations and recovery procedures for the LEVI-AI v14.1.0-Autonomous-SOVEREIGN Graduation Production Architecture.
+This runbook defines the procedures for responding to disaster scenarios identified in Section 9 of the Manifest.
 
----
+## 1. Scenario: Kernel Panic / Fatal Syscall Breach
+**Symptoms**: Syscall monitor shows `HARD_FAULT`, Node becomes unresponsive to gRPC pulses.
+**Automatic Response**: Self-Healing Engine triggers `preempt_mission` and then `SYS_REPLACELOGIC` (0x99).
+**Manual Remediation**:
+1. Check UART logs for the specific faulting instruction pointer (RIP).
+2. If the driver is corrupted, use `levi flash --verify` to re-sync the boot partition.
+3. Pulse the hardware RESET and verify PCR[0] integrity at boot.
 
-## 1. Standard Boot Procedure
+## 2. Scenario: DCN Split-Brain (Consensus Failure)
+**Symptoms**: Multiple nodes claiming to be `Leader` for the same region. Raft `commit_index` diverges.
+**Remediation**:
+1. Identify the partition boundary (check `dcn_balancer` connectivity matrix).
+2. Force a cluster-wide re-election: `python scripts/levi.py consensus reset`.
+3. Verify `dcn_log_truth` syncs from the node with the highest index.
 
-```powershell
-# 1. Launch all infrastructure services
-docker-compose up -d
+## 3. Scenario: Thermal Governor Evacuation
+**Symptoms**: Telemetry shows Core Temp > 85°C. `thermal_migration` pulses detected.
+**Response**:
+1. Orchestrator automatically migrates all active agents to the nearest "Cool" node.
+2. Verify VRAM pressure on the target node.
+3. If no cool nodes available, the system initiates "Cognitive Hibernation" (Priority: Low).
 
-# 2. Verify all containers are healthy
-docker-compose ps
+## 4. Scenario: KMS Master Secret Corruption
+**Symptoms**: Mission signatures fail validation. `KMS_Logic_Error` in logs.
+**Remediation**:
+1. Restore Master Secret from the hardware-backed vault.
+2. Trigger `kms.rekey_swarm()` to propagate the new public key.
+3. Re-verify all missions anchored in the last hour.
 
-# 3. Run production readiness audit
-pytest tests/production_readiness_suite.py -v
-
-# 4. Confirm Ollama models are ready
-ollama list
-# Required: llama3.1:8b, phi3:mini, nomic-embed-text
-```
-
----
-
-## 2. System Health Checks
-
-### Full Connectivity Audit
-```powershell
-pytest tests/production_readiness_suite.py -v
-```
-Checks: Redis, Postgres, Neo4j, FAISS, circuit breakers, SSRF, rate limiting.
-
-### Individual Service Pings
-```powershell
-# Redis
-redis-cli ping
-# → PONG
-
-# Postgres
-psql $DATABASE_URL -c "SELECT version();"
-
-# Neo4j
-curl http://localhost:7474/
-
-# Ollama
-curl http://localhost:11434/api/tags
-```
-
-### Telemetry Health
-```powershell
-curl http://localhost:8000/health
-# Expected: {"status": "online", "version": "v14.0.0"}
-```
+## 5. Scenario: Agent Escape (Isolation Breach)
+**Symptoms**: Container process attempting to access `/proc` or `/dev` outside permitted paths.
+**Automatic Response**: gVisor/Docker hard-kill on the container ID. `MISSION_DEATH` pulse emitted.
+**Forensic Action**:
+1. Quarantine the agent context in Neo4j.
+2. Audit the mission input for prompt-injection vectors.
+3. Update `redactor.py` with the identified bypass patterns.
 
 ---
-
-## 3. Emergency Recovery Procedures
-
-### 3.1 Full DR Restore (RTO: < 300s)
-```powershell
-python -m backend.scripts.restore_drill
-```
-
-### 3.2 Task State Corruption
-```powershell
-# Clear transient Redis state
-redis-cli --scan --pattern "task:*" | ForEach-Object { redis-cli del $_ }
-
-# Restart services
-docker-compose restart
-```
-
-### 3.3 Inference Latency Spikes (> 5s)
-```powershell
-# Check GPU VRAM pressure
-nvidia-smi
-
-# If VRAM > 90%, reduce active semaphore slots in env
-# MAX_CONCURRENT=2 (temporary load reduction)
-
-# Do NOT enable CLOUD_FALLBACK unless explicitly required
-```
-
-### 3.4 Postgres Failover (PITR)
-```powershell
-# Restore from WAL archive (5-min granularity)
-pg_restore -d levidb ./vault/backups/wal/latest.dump
-
-# Verify data integrity
-psql $DATABASE_URL -c "SELECT COUNT(*) FROM sessions;"
-```
-
-### 3.5 FAISS Index Corruption
-```powershell
-# Restore from last snapshot
-python -m backend.core.snapshot restore --store faiss
-```
-
----
-
-## 4. Scheduled Maintenance
-
-| Task | Frequency | Command |
-| :--- | :--- | :--- |
-| **Restore Drill** | Weekly | `python -m backend.scripts.restore_drill` |
-| **FAISS Reindex** | Monthly | `python -c "from backend.core.vector_store import VectorStore; VectorStore().rebuild_index()"` |
-| **FAISS Snapshot** | Every 6h | Automatic via `SnapshotOrchestrator` |
-| **Postgres WAL** | Every 5min | Automatic via `postgresql.conf` |
-| **Readiness Audit** | On every deploy | `pytest tests/production_readiness_suite.py` |
-
----
-
-## 5. Performance KPI Thresholds
-
-| Metric | Target | Action if Breached |
-| :--- | :--- | :--- |
-| **API Latency** | < 500ms | Check Redis circuit breaker, restart Gateway |
-| **Vector Recall** | < 100ms | Rebuild FAISS index |
-| **Inference (L3.1)** | < 2.5s | Check VRAM pressure, review Semaphore(4) |
-| **DB Write** | < 50ms | Check Postgres WAL lag |
-| **Evaluation Score (S)** | avg > 0.85 | Review Critic agent configuration |
-
----
-
-## 6. Logs & Observability
-
-```powershell
-# Gateway logs
-docker-compose logs -f backend
-
-# Celery worker logs
-docker-compose logs -f worker
-
-# SSE Telemetry stream (raw)
-curl -N http://localhost:8000/api/v1/telemetry/stream
-```
-
----
-
-© 2026 LEVI-AI Sovereign OS — Operational Runbook v14.0.0 Production Stable
+**Sovereign Logic: "Uptime is a byproduct of resilience, not just luck."**

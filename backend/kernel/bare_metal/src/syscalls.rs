@@ -69,9 +69,10 @@ pub extern "x86-interrupt" fn syscall_handler(stack_frame: InterruptStackFrame) 
         magic: LEVI_MAGIC,
         seq_id: SYSCALL_SEQ.fetch_add(1, Ordering::SeqCst),
         pid: active_process_count() as u32,
-        syscall_id: syscall_id as u8,
+        syscall_id: syscall_id as u32,
         timestamp: current_tick as u32,
         fidelity: 100, // Regular syscall fidelity
+        reserved: [0; 7],
     };
     
     crate::serial::write_record(&record);
@@ -89,7 +90,7 @@ pub extern "x86-interrupt" fn syscall_handler(stack_frame: InterruptStackFrame) 
     // Switch back to user context before iretq (handled by iretq trampoline if separate)
 }
 
-pub fn dispatch(syscall_id: u64) {
+pub fn dispatch(syscall_id: u64) -> Result<(), &'static str> {
     match syscall_id {
         0x01 => sys_mem_reserve(),
         0x02 => sys_wave_spawn(),
@@ -103,9 +104,10 @@ pub fn dispatch(syscall_id: u64) {
         0x0A => { // ADMIT_MISSION (BFT Gate)
             println!(" [🛡️] SYSCALL: BFT Admission Gate triggered.");
             crate::crypto::hash_and_log("ADMIT_MISSION", b"MISSION_DATA_STUB");
+            Ok(())
         },
         0x0B => sys_neural_link(),
-        0x10 => (), // BENCH_RTT (handled in handler)
+        0x10 => Ok(()), // BENCH_RTT (handled in handler)
         0xFE => { // FIDELITY_PULSE
             println!(" [🎓] SYSCALL: High-Fidelity graduation pulse detected.");
             let record = crate::serial::TelemetryRecord {
@@ -115,34 +117,51 @@ pub fn dispatch(syscall_id: u64) {
                 syscall_id: 0xFE,
                 timestamp: TIMER_TICKS.load(Ordering::Relaxed) as u32,
                 fidelity: 255, // Max fidelity for graduation
+                reserved: [0; 7],
             };
             crate::serial::write_record(&record);
+            Ok(())
         },
         0x99 => sys_replace_logic(),
-        _    => println!(" [SYS] Unknown syscall 0x{:02X} — REJECTED", syscall_id),
+        _    => {
+            println!(" [SYS] Unknown syscall 0x{:02X} — REJECTED", syscall_id);
+            Err("UNKNOWN_SYSCALL")
+        },
     }
 }
 
-
-// ── individual handlers ─────────────────────────────────────────────────────
-
-fn sys_mem_reserve() {
+fn sys_mem_reserve() -> Result<(), &'static str> {
     println!(" [SYS] MEM_RESERVE: Reserving 4 KiB page for user process.");
+    // Phase 2: Explicit error if HEAP is saturated
+    if crate::allocator::check_leaks() > 5000 {
+        println!(" [ERR] MEM_RESERVE: Out of memory segments.");
+        return Err("OOM_SEGMENTATION_FAULT");
+    }
     println!(" [OK] Virtual Memory backing established at 0x4444_4444_0000.");
+    Ok(())
 }
 
-fn sys_wave_spawn() {
+fn sys_wave_spawn() -> Result<(), &'static str> {
     unsafe {
+        if PROCESS_COUNT >= 16 {
+            println!(" [ERR] WAVE_SPAWN: Agent capacity (16) saturated.");
+            return Err("SWARM_SATURATION");
+        }
         PROCESS_COUNT += 1;
         println!(" [AI] WAVE_SPAWN: Agent PID={} [COGNITION] -> Ring-3", PROCESS_COUNT);
     }
     // Schedule the new task via our async Executor actively dynamically.
     crate::ai_layer::orchestrate_tasks();
+    Ok(())
 }
 
-fn sys_bft_sign() {
+fn sys_bft_sign() -> Result<(), &'static str> {
     // REAL Hardware signature logic via ForensicManager
     let agent_id = active_process_count() as u32;
+    if agent_id == 0 {
+         println!(" [ERR] BFT_SIGN: No active agent context.");
+         return Err("INVALID_CONTEXT");
+    }
     let msg = b"sovereign-pulse-v22-consensus-verified";
     
     let sig = crate::forensics::ForensicManager::sign_mission(agent_id, msg);
@@ -152,25 +171,32 @@ fn sys_bft_sign() {
     
     // For the audit trace, we log the success
     println!(" [SYS] BFT_SIGN: Signature GENERATED & VERIFIED: {}", result);
+    if !result { return Err("SIGNATURE_VERIFICATION_FAILED"); }
+    Ok(())
 }
 
-fn sys_proc_kill() {
+fn sys_proc_kill() -> Result<(), &'static str> {
     unsafe {
         if PROCESS_COUNT > 0 {
             println!(" [SYS] PROC_KILL: Terminating last agent (PID={}).", PROCESS_COUNT);
             PROCESS_COUNT -= 1;
+            Ok(())
         } else {
             println!(" [SYS] PROC_KILL: No active agents to terminate.");
+            Err("NO_TARGET_PROCESS")
         }
     }
 }
 
-fn sys_fs_write() {
+fn sys_fs_write() -> Result<(), &'static str> {
     let payload = b"SYSCALL_WRITE_OK";
-    crate::fs::create_file("sys.log", payload);
+    if !crate::fs::create_file("sys.log", payload) {
+        return Err("FS_WRITE_PERMISSION_DENIED");
+    }
+    Ok(())
 }
 
-fn sys_mcm_graduate() {
+fn sys_mcm_graduate() -> Result<(), &'static str> {
     // REAL MCM Tier promotion: Persist to Tier 3 (SFS / ATA Disk)
     println!(" [MCM] Graduating fact to Tier 3 Persistence...");
     
@@ -183,30 +209,40 @@ fn sys_mcm_graduate() {
         buffer[i] = ((fact_data[i*2] as u16) << 8) | (fact_data[i*2+1] as u16);
     }
     
-    ata.write_sectors(1000, 1, &buffer);
+    if ata.write_sectors(1000, 1, &buffer).is_err() {
+        println!(" [ERR] MCM_GRADUATE: ATA write failed (Hardware Timeout).");
+        return Err("HARDWARE_I/O_FAILURE");
+    }
     println!(" [OK] MCM_GRADUATE: Fact CRYSTALLIZED at LBA 1000.");
+    Ok(())
 }
 
-fn sys_net_ping() {
+fn sys_net_ping() -> Result<(), &'static str> {
     // REAL Network Ping logic
     let target_ip = [8, 8, 8, 8]; // Example target
-    let stack = crate::network::NET_STACK.lock();
-    stack.emit_ping(target_ip);
+    let mut stack = crate::network::NET_STACK.lock();
+    if stack.emit_ping(target_ip).is_err() {
+        return Err("NETWORK_UNREACHABLE");
+    }
+    Ok(())
 }
 
-fn sys_dcn_pulse() {
+fn sys_dcn_pulse() -> Result<(), &'static str> {
     // REAL DCN Pulse logic
     // Signs and broadcasts a node-liveness pulse to the mesh.
     println!(" [DCN] Pulse broadcasted to HAL-1, HAL-2.");
+    Ok(())
 }
 
-fn sys_write() {
+fn sys_write() -> Result<(), &'static str> {
     println!(" [SYS] SYS_WRITE: Buffered console output acknowledged.");
+    Ok(())
 }
 
-fn sys_neural_link() {
+fn sys_neural_link() -> Result<(), &'static str> {
     println!(" [SYS] NEURAL_LINK: Interface Bridge (§56) synchronized.");
     println!(" [OK] Neural-Link parity check bits verified.");
+    Ok(())
 }
 
 fn sys_replace_logic() {

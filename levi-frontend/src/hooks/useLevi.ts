@@ -131,7 +131,7 @@ export function useKernelTelemetry() {
     let reconnectTimer: any;
 
     const connect = () => {
-      ws = new WebSocket(`${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/telemetry/ws/telemetry`);
+      ws = new WebSocket(`${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws/telemetry`);
 
       ws.onopen = () => {
         setWsConnected(true);

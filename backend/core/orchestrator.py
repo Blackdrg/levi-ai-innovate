@@ -115,6 +115,7 @@ class Orchestrator:
         self._active: Dict[str, MissionState] = {}
         self._lock          = asyncio.Lock()
         self._initialized   = False
+        self.paused        = False
 
         # ── Engine matrix (shared instances) ──────────────────────────────────
         self.memory     = MemoryManager()
@@ -235,7 +236,14 @@ class Orchestrator:
         log_session_id.set(session_id)
 
         start_ts = time.time()
-        logger.info("🌀 [Orchestrator] Mission %s awakening (user=%s)", mission_id, user_id)
+        # ── 0. Forensic Integrity Gate ────────────────────────────────────────
+        if self.paused:
+            logger.critical("🛑 [Orchestrator] MISSION DENIED: Cognitive Freeze active (Hardware Breach).")
+            return {
+                "response": "CRITICAL SYSTEM ERROR: Hardware Integrity Breach. All missions halted to protect sovereign data.",
+                "status": "HARDWARE_BREACH_FREEZE",
+                "request_id": mission_id
+            }
 
         # ── 1. Admission control ──────────────────────────────────────────────
         vram_pressure = await self.get_vram_pressure()
@@ -252,6 +260,9 @@ class Orchestrator:
             user_input = intercept.get("new_input", user_input)
 
         # ── 3. Register mission ────────────────────────────────────────────────
+        from backend.core.security.redactor import PIIRedactor
+        user_input = PIIRedactor.scrub(user_input)
+        
         await self._register_mission(mission_id, user_id, user_input)
 
         try:
@@ -270,6 +281,10 @@ class Orchestrator:
                 return result
             if bypass_rule:
                 kwargs.update(bypass_rule)
+
+            # ── 3a. Input Sanitization (Section 6 Privacy Boundary) ─────────────
+            from backend.core.security.redactor import PIIRedactor
+            user_input = PIIRedactor.scrub(user_input)
 
             # ── 3b. Mission admission (HAL-0 BFT gate) ────────────────────────
             admission = {
@@ -309,6 +324,13 @@ class Orchestrator:
             )
 
             kernel.update_mission_state(mission_id, "Succeeded")
+
+            # ── 7. Forensic Crystallization ───────────────────────────────────
+            from backend.core.security.redactor import PIIRedactor
+            response_sanitized = PIIRedactor.scrub(str(result.get("response", "")))
+            result["response"] = response_sanitized
+            
+            await self._record_mission_result(mission_id, response_sanitized)
 
             # ── 5. Post-execution crystallization ──────────────────────────────
             await self._post_execute(mission_id, user_id, user_input, session_id,
@@ -363,15 +385,17 @@ class Orchestrator:
         pulse_hash = await self._sign_pulse(mission_id, result)
         result["audit_sig"] = pulse_hash
         
-        # Anchor mission to the immutable ledger (Neo4j MISSION Node + BFT Sigs)
+        # Anchor mission to the immutable ledger (Neo4j MISSION Node + Real Ed25519 Sig)
         from backend.db.neo4j_client import Neo4jClient
-        synthetic_sigs = [hashlib.sha256(f"sig-{i}-{mission_id}".encode()).hexdigest() for i in range(10)]
+        # Sovereign v22.1: Single-node forensic anchor replaces synthetic quorum
+        audit_sig = await SovereignKMS.sign_trace(f"{mission_id}:{pulse_hash}")
+        
         await Neo4jClient.add_mission_record(
             mission_id=mission_id,
             user_id=user_id,
             objective=user_input,
             response=str(result.get("response", "")),
-            signatures=synthetic_sigs
+            signatures=[audit_sig]
         )
 
         await audit_ledger.anchor_mission(mission_id, {
@@ -445,6 +469,21 @@ class Orchestrator:
         risky = ["delete all", "wipe drive", "format", "shutdown sovereign",
                  "kill kernel", "factory reset"]
         if any(r in raw for r in risky):
+            # 🪐 Sovereign v22.1: Multi-Agent Safety Quorum Logic
+            from backend.core.security.safety_consensus import safety_consensus
+            is_certified = await safety_consensus.verify_integrity(mission_id, user_input)
+            
+            if not is_certified:
+                return {
+                    "action": "REJECT",
+                    "result": {
+                        "response": "🛑 CRITICAL SAFETY FAILURE: The Sovereign Safety Quorum (Sentinel, Critic, Forensic) has REJECTED this mission. Intent classified as Destructive.",
+                        "status": "QUORUM_HARD_REJECT",
+                        "request_id": mission_id,
+                    },
+                }
+
+            # If quorum passes, we still require user stimulus for double-confirmation
             ctx_hash = self._fast_hash(user_id, user_input)
             await state_bridge.set(
                 f"confirm:{user_id}:{ctx_hash}",
@@ -454,7 +493,7 @@ class Orchestrator:
             return {
                 "action": "REJECT",
                 "result": {
-                    "response": "Destructive command detected. Say 'Levi, Execute' to confirm.",
+                    "response": "🛡️ Safety Quorum PASSED. Destructive command requires final manual confirmation. Say 'Levi, Execute' to confirm.",
                     "status":   "AWAIT_CONFIRMATION",
                     "request_id": mission_id,
                 },
@@ -479,7 +518,9 @@ class Orchestrator:
 
     async def _propagate_to_mesh(self, mid: str, res: Dict) -> None:
         if self.mesh_proto and getattr(self.mesh_proto, "is_active", False):
-            await self.mesh_proto.broadcast_gossip(mid, {"status": "success"}, "mission_complete")
+            # 🪐 Sovereign v22.1: Definitively anchoring mission truth across the cognitive swarm
+            await self.mesh_proto.broadcast_mission_truth(mid, res)
+            logger.info("🧬 [Mesh] Mission Truth Propagated (Raft Commit Index escalated).")
 
     # ── State management ──────────────────────────────────────────────────────
 
@@ -558,16 +599,32 @@ class Orchestrator:
         }
 
     async def get_graduation_score(self) -> float:
-        score = 0.95
-        if kernel.rust_kernel:
-            score += 0.03
-        if HAS_REDIS:
-            score += 0.01
+        """
+        Calculates the 100% Truth-Grounded Forensic Score.
+        Components:
+        - Hardware Integrity (Sentinel)
+        - Consensus Fidelity (DCN Raft)
+        - Memory Resonance (MCM Quorum)
+        """
+        score = 0.0
+        
+        # 1. Hardware Residency (0.4)
+        if hasattr(self, 'paused') and not self.paused:
+            score += 0.4
+            
+        # 2. Consensus Mesh Health (0.3)
+        if self.mesh_proto and getattr(self.mesh_proto, "is_active", False):
+            score += 0.3
+            
+        # 3. Mission Stability (0.3)
         success = MISSION_COMPLETED._value.get()
         fail    = MISSION_ABORTED._value.get()
         total   = success + fail
         if total > 0:
-            score *= success / total
+            score += 0.3 * (success / total)
+        else:
+            score += 0.15 # Baseline stability
+            
         final = min(1.0, score)
         GRADUATION_SCORE.set(final)
         return round(final, 3)

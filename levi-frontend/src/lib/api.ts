@@ -94,6 +94,13 @@ class ApiClient {
     return response.data;
   }
 
+  // Brain Pulse (Sovereign v22.1 Reality Proof)
+  async getSystemPulse(): Promise<any> {
+    const response = await this.axiosInstance.get('/api/v1/brain/pulse');
+    return response.data;
+  }
+
+
   // Voice Module (Sovereign v15.0)
   async uploadVoiceCommand(audioBlob: Blob): Promise<any> {
     const formData = new FormData();

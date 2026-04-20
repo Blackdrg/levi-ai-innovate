@@ -136,12 +136,12 @@ def weekly_critic_calibration():
     from backend.scripts.calibrate_critic import calibrate_all_users
     loop = asyncio.get_event_loop()
     return loop.run_until_complete(calibrate_all_users())
-async def execute_mission_from_cloud_task(mission_id: str, perception: dict):
+async def execute_mission_from_queue(mission_id: str, perception: dict):
     """
-    Sovereign v14.1.0: Cloud-Native Mission execution.
-    Triggered by a Cloud Task webhook.
+    Sovereign v22.1: Localized Background Mission execution.
+    Triggered by a local task queue pulse.
     """
-    logger.info(f"🚀 [CloudTask] Executing mission: {mission_id}")
+    logger.info(f"🚀 [SovereignQueue] Executing mission: {mission_id}")
     
     from backend.core.v8.executor import GraphExecutor
     from backend.services.orchestrator.meta_planner import MetaPlanner
@@ -161,10 +161,10 @@ async def execute_mission_from_cloud_task(mission_id: str, perception: dict):
         
         await executor.run(graph, perception)
         
-        logger.info(f"✅ [CloudTask] Mission {mission_id} execution flow completed.")
+        logger.info(f"✅ [SovereignQueue] Mission {mission_id} execution flow completed.")
         return True
     except Exception as e:
-        logger.error(f"❌ [CloudTask] Mission {mission_id} failed: {e}")
+        logger.error(f"❌ [SovereignQueue] Mission {mission_id} failed: {e}")
         return False
 
 @celery_app.task(name="backend.tasks.monitor_embedding_drift")

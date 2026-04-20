@@ -1,68 +1,53 @@
 # backend/services/thermal_monitor.py
-import asyncio
 import logging
+import asyncio
 import os
-from backend.utils.hardware import gpu_monitor
 from backend.core.orchestrator import orchestrator
 
-logger = logging.getLogger("thermal-monitor")
+logger = logging.getLogger("Thermal")
 
-class ThermalGovernance:
+class ThermalMonitor:
     """
-    Sovereign v22-GA Thermal Governance (Section 33).
-    - Migration at 75°C.
-    - Emergency shutdown at 85°C.
-    - VRAM_THERMAL_LIMIT enforced for model scaling.
+    Sovereign v22.1: Server-side Thermal Governance.
+    Section 33 Compliance.
+    Handles signals from hardware monitors and coordinates swarm migration.
     """
     def __init__(self):
-        self.migration_temp = float(os.getenv("AGENT_MIGRATION_TEMP", 75.0))
-        self.shutdown_temp = float(os.getenv("EMERGENCY_SHUTDOWN_TEMP", 85.0))
-        self.vram_limit = float(os.getenv("VRAM_THERMAL_LIMIT", 78.0))
-        self.interval = int(os.getenv("THERMAL_CHECK_INTERVAL", 5))
-        self.is_running = False
+        self._task = None
+        self.critical_threshold = 82.0
+        self.warning_threshold = 75.0
 
     async def start(self):
-        if self.is_running:
-            return
-        self.is_running = True
-        asyncio.create_task(self._monitor_loop())
-        logger.info("🔥 [Thermal] Thermal Governance active. Thresholds: %s°C / %s°C", 
-                    self.migration_temp, self.shutdown_temp)
+        logger.info("🌡️ [Thermal] Monitoring service initialized.")
+        # Background loop to check local metrics if scripts/thermal_monitor.py isn't used
+        self._task = asyncio.create_task(self._self_check_loop())
 
     async def stop(self):
-        self.is_running = False
+        if self._task:
+            self._task.cancel()
 
-    async def _monitor_loop(self):
-        while self.is_running:
+    async def handle_hardware_signal(self, severity: str, temp: float):
+        """Called by the /sys/thermal API endpoint."""
+        logger.warning(f"🌡️ [Thermal] Hardware Signal: {severity.upper()} (Temp: {temp}°C)")
+        
+        if severity == "critical":
+            await orchestrator.enable_vram_throttling()
+            await orchestrator.trigger_thermal_migration()
+        elif severity == "warning":
+            await orchestrator.migrate_agents_to_cooler_nodes()
+
+    async def _self_check_loop(self):
+        from backend.utils.hardware import gpu_monitor
+        while True:
             try:
                 temp = gpu_monitor.get_temperature()
-                vram_usage = gpu_monitor.get_vram_usage()
-                
-                # Check for stress-ng simulation (Section 33 Testing)
-                if os.path.exists("stress_test_active"):
-                    # Simulate rapid heat climb if stress-ng is "running" via this indicator
-                    temp = 80.0 # Force into migration zone for testing
-                
-                # 1. Emergency Shutdown (Section 33)
-                if temp >= self.shutdown_temp:
-                    logger.critical("🚨 [Thermal] EMERGENCY SHUTDOWN triggered at %s°C!", temp)
-                    await orchestrator.force_abort_all("THERMAL_EMERGENCY")
-                    os._exit(1) # Panic exit
-                
-                # 2. Agent Migration (Section 33)
-                elif temp >= self.migration_temp:
-                    logger.warning("⚠️ [Thermal] Temperature at %s°C. Triggering agent migration...", temp)
-                    await orchestrator.trigger_thermal_migration()
-                
-                # 3. VRAM Throttling (Section 33)
-                elif temp >= self.vram_limit:
-                    logger.info("🌡️ [Thermal] Temperature at %s°C (Limit %s°C). Reducing model precision.", 
-                                temp, self.vram_limit)
-                    await orchestrator.enable_vram_throttling()
-                
+                if temp >= self.critical_threshold:
+                    await self.handle_hardware_signal("critical", temp)
+                elif temp >= self.warning_threshold:
+                    await self.handle_hardware_signal("warning", temp)
+                await asyncio.sleep(60)
             except Exception as e:
-                logger.error(f"[Thermal] Monitor error: {e}")
-            
-            await asyncio.sleep(self.interval)
+                logger.error(f"[Thermal] Self-check failed: {e}")
+                await asyncio.sleep(60)
 
-thermal_monitor = ThermalGovernance()
+thermal_monitor = ThermalMonitor()

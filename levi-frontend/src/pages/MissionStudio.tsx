@@ -125,10 +125,11 @@ export const MissionStudio: React.FC = () => {
               {[
                 { k: 'Pre-Conditions', v: 'Context_Verified' },
                 { k: 'Post-Conditions', v: 'Memory_Crystallized' },
-                { k: 'Security_Level', v: 'Ring-3_Isolated' },
-                { k: 'Proof_Type', v: 'ZK-STARK' },
-                { k: 'BFT_Quorum', v: '10/10_Signatures' },
-                { k: 'Neo4j_Anchor', v: 'MISSION_NODE_CREATED' }
+                { k: 'Security_Level', v: 'Container_Isolated' },
+                { k: 'Proof_Type', v: 'Ed25519_Sovereign' },
+                { k: 'Hardware_Anchor', v: 'TPM_PCR_VERIFIED' },
+                { k: 'Signatures', v: 'KMS_Forensic_Sig' },
+                { k: 'Neo4j_Audit', v: 'MISSION_NODE_ANCHORED' }
               ].map(term => (
                 <div key={term.k} className="flex justify-between text-[10px] font-mono p-2 bg-black/20 rounded">
                   <span className="opacity-40">{term.k}</span>

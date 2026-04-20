@@ -72,7 +72,17 @@ class EvolutionaryIntelligenceEngine:
             logger.debug(f"[Evolution] Rejected: Fidelity {fidelity} < {cls.FIDELITY_GRADUATION_THRESHOLD}")
             return False
             
-        # 2. Reflection Engine (Critic) Veto
+        # 2. Risk 5 Mitigation: External Ground Truth Validation
+        try:
+            from backend.core.evolution.dataset_manager import get_dataset_manager
+            dm = get_dataset_manager()
+            if not await dm.verify_against_ground_truth(query, response):
+                 logger.critical(f"🚨 [Evolution] Ground Truth Mismatch! Possible 'confidently wrong' agent detected for query: {query[:30]}")
+                 return False
+        except Exception:
+            logger.warning("[Evolution] DatasetManager unavailable for ground-truth audit. Proceeding with caution.")
+
+        # 3. Reflection Engine (Critic) Veto
         if context and "critic_report" in context:
             report = context["critic_report"]
             if not report.get("validated", False):
@@ -565,32 +575,26 @@ class EvolutionaryIntelligenceEngine:
             mission_context={"mission_id": mission_id, "path": agent_path}
         )
 
-        # 2. Direct PPO Heartbeat (Atomic weights update)
+        # 2. Linguistic Evolution Pulse (DSPy-style)
         try:
-            from backend.core.evolution.ppo_engine import get_ppo_engine, Trajectory
-            ppo = get_ppo_engine()
+            from backend.core.evolution.prompt_optimizer import get_optimizer
+            optimizer = get_optimizer()
             
-            # Map mission outcome to a reinforced Trajectory
-            # For v19.0, we treat the final fidelity as a scalar reward
-            traj = Trajectory(
-                states=[input_data], 
-                actions=[agent_path[-1] if agent_path else "idling"],
-                rewards=[fidelity]
-            )
+            # Record trajectory for next optimization cycle
+            domain = agent_path[0] if agent_path else "default"
+            await optimizer.optimize_cycle(domain, [{
+                "input": input_data,
+                "output": output_data,
+                "fidelity": fidelity
+            }])
             
             # 🧪 Anchoring: Anchor the batch via DatasetManager
             from backend.core.evolution.dataset_manager import get_dataset_manager
             dm = get_dataset_manager()
             batch_id = dm.anchor_batch([{"input": input_data, "output": output_data, "fidelity": fidelity}])
-            
-            # Trigger PPO train step if buffer is ready
-            ppo.add_trajectory(traj)
-            if len(ppo.trajectories) >= 20: # Optimized for v22 graduation visibility
-                 logger.info(f"🔥 [Evolution] PPO Batch Threshold met (Anchor: {batch_id[:8]}). Optimizing Weights...")
-                 await ppo.train_step()
                 
         except Exception as e:
-            logger.error(f"❌ [Evolution] PPO Wiring failure: {e}")
+            logger.error(f"❌ [Evolution] Prompt Optimizer Wiring failure: {e}")
 
     @classmethod
     def _detect_system_drift(cls) -> bool:
@@ -662,16 +666,10 @@ class EvolutionaryIntelligenceEngine:
     @classmethod
     async def evolve_swarm(cls):
         """
-        Sovereign v22.0: Self-Driven Swarm Evolution.
+        Sovereign v22.1: Self-Driven Swarm Evolution.
         Triggered by Orchestrator Sentinel.
-        Coordinates dreaming cycles and weight tuning.
+        Coordinates dreaming cycles and prompt optimization.
         """
         logger.info("🌌 [Evolution] Sentinel Trigger: Initializing Swarm Evolution Pulse...")
         await cls.run_dreaming_session()
-        
-        # Check if we have enough PPO data to train
-        from .evolution.ppo_engine import get_ppo_engine
-        ppo = get_ppo_engine()
-        if len(ppo.trajectories) >= 20:
-             logger.info("🔥 [Evolution] PPO Graduation Threshold met. Commencing policy optimization...")
-             await ppo.train_step()
+        # PPO optimization removed in v22.1 in favor of real-time prompt optimization.

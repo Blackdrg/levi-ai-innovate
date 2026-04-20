@@ -170,7 +170,7 @@ function Sidebar({view,setView,col,pulse}){
     <div style={{width:col?52:210,flexShrink:0,height:"100vh",background:C.s1,borderRight:`1px solid ${C.bd}`,display:"flex",flexDirection:"column",transition:"width .2s ease",overflow:"hidden",position:"relative",zIndex:10}}>
       <div style={{padding:col?"14px 12px":"16px 18px",borderBottom:`1px solid ${C.bd}`,display:"flex",alignItems:"center",gap:10}}>
         <div style={{width:30,height:30,borderRadius:8,background:`linear-gradient(135deg,${C.pd},${C.cy})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800,color:"#fff",flexShrink:0,boxShadow:C.glow(C.pd,10)}}>L</div>
-        {!col&&<div><div style={{fontSize:13,fontWeight:700,letterSpacing:".5px",color:C.t1,lineHeight:1}}>LEVI-AI</div><div style={{fontSize:10,color:C.t2,letterSpacing:1.5,fontFamily:"'JetBrains Mono'"}}> v17.5.0-BATTLE-TESTED</div></div>}
+        {!col&&<div><div style={{fontSize:13,fontWeight:700,letterSpacing:".5px",color:C.t1,lineHeight:1}}>LEVI-AI</div><div style={{fontSize:10,color:C.t2,letterSpacing:1.5,fontFamily:"'JetBrains Mono'"}}> v22.1-SOVEREIGN</div></div>}
       </div>
       <nav style={{flex:1,padding:"8px 6px",overflowY:"auto"}}>
         {NAV.map((n,i)=>{

@@ -65,12 +65,16 @@ impl AtaDriver {
     fn wait_for_ready(&mut self) -> Result<(), &'static str> {
         unsafe {
             let mut status_port = Port::<u8>::new(self.io_base + 7);
-            let mut timeout = 0;
             
-            // Poll for BSY to clear
+            // Section 5 Fix: Use RDTSC-based timeout for deterministic precision
+            let start = x86_64::instructions::rdtsc();
+            let timeout_cycles = 100_000_000; // Simulated TSC frequency bound
+
             while (status_port.read() & 0x80) != 0 {
-                timeout += 1;
-                if timeout > 1_000_000 { return Err("ATA Timeout: BSY stuck"); }
+                if x86_64::instructions::rdtsc() - start > timeout_cycles {
+                    return Err("ATA Timeout: BSY bit stuck (Hard Threshold)");
+                }
+                core::hint::spin_loop();
             }
 
             // Check for error bit
@@ -85,10 +89,14 @@ impl AtaDriver {
     fn wait_for_drq(&mut self) -> Result<(), &'static str> {
         unsafe {
             let mut status_port = Port::<u8>::new(self.io_base + 7);
-            let mut timeout = 0;
+            let start = x86_64::instructions::rdtsc();
+            let timeout_cycles = 100_000_000;
+
             while (status_port.read() & 0x08) == 0 {
-                timeout += 1;
-                if timeout > 1_000_000 { return Err("ATA Timeout: DRQ not set"); }
+                if x86_64::instructions::rdtsc() - start > timeout_cycles {
+                    return Err("ATA Timeout: DRQ bit missing (Hard Threshold)");
+                }
+                core::hint::spin_loop();
             }
             Ok(())
         }

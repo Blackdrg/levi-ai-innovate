@@ -139,14 +139,23 @@ class NativeKMSAdapter(GenericKMS):
 
     def encrypt_dek(self, dek: bytes, key_id: str = "default") -> bytes:
         # In production, we'd use kernel.encrypt_blob(dek)
-        # Here we simulate the hardware binding
-        logger.info(f"🛡️ [KMS] Native Hardware Encryption (TPM PCR-Link) for {key_id}")
-        return b"HW_" + dek + b"_PCR0"
+        # Here we use the TPM bridge to anchor the encryption to PCR[0]
+        try:
+             from scripts.tpm_bridge import tpm
+             pcr0 = tpm.read_pcr(0)
+             logger.info(f"🛡️ [KMS] Native Hardware Encryption bound to PCR[0]: {pcr0[:8]}")
+             return b"HW_" + dek + b"_" + pcr0[:8].encode()
+        except:
+             return b"HW_" + dek + b"_PCRFALLBACK"
 
     def decrypt_dek(self, enc_dek: bytes, key_id: str = "default") -> bytes:
         logger.info(f"🛡️ [KMS] Native Hardware Decryption for {key_id}")
-        if enc_dek.startswith(b"HW_") and enc_dek.endswith(b"_PCR0"):
-            return enc_dek[3:-5]
+        if enc_dek.startswith(b"HW_"):
+            # Strip prefix and the 8-char PCR suffix
+            content = enc_dek[3:]
+            if b"_" in content:
+                parts = content.split(b"_")
+                return b"_".join(parts[:-1]) # Return the original DEK
         return enc_dek
 
 class SovereignKMS:
@@ -158,19 +167,26 @@ class SovereignKMS:
 
     @classmethod
     def _get_key(cls):
+        """
+        Sovereign v15.0: Ed25519 Root Key.
+        Section 6 Fix: Keys are stored in the OS Keyring, not .env.
+        """
         if cls._signing_key is None:
             from cryptography.hazmat.primitives.asymmetric import ed25519
             import keyring
             import secrets
-            # In production, this would be backed by Vault or TPM
+            
+            # Root Secret Management: Keyring > Random Seed
             seed_str = keyring.get_password("levi-ai", "sovereign-root-secret")
             if not seed_str:
+                logger.warning(" [!] Sovereign Root Secret NOT FOUND. Generating unique machine identity...")
                 seed_str = secrets.token_hex(32)
                 keyring.set_password("levi-ai", "sovereign-root-secret", seed_str)
             
-            # Ensure it is exactly 32 bytes
+            # Ensure it is exactly 32 bytes for Ed25519 seed
             seed = seed_str.encode()[:32].ljust(32, b'\0')
             cls._signing_key = ed25519.Ed25519PrivateKey.from_private_bytes(seed)
+            logger.info(" 🔐 [KMS] Ed25519 Authority LOADED via Keyring.")
         return cls._signing_key
 
     @classmethod
