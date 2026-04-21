@@ -79,10 +79,9 @@ class LearningLoop:
                 await session.commit()
             
             # --- [Phase 16.2] Real PPO Loop: Optimize Hyper-parameters ---
-            from backend.core.evolution.ppo_engine import ppo_engine
-            # Reward = fidelity normalized to [-1, 1]
-            reward = (fidelity - 0.5) * 2
-            await ppo_engine.record_experience(mission_id, reward)
+            # Sovereign v22.1: Legacy PPO training removed. 
+            # Subsumed by EvolutionaryIntelligenceEngine.ingest_mission_outcome.
+            pass
             
             # 3. Check for Evolution Trigger
             await cls._check_evolution_trigger()

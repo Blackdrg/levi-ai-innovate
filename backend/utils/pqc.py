@@ -7,9 +7,10 @@ logger = logging.getLogger("PQC")
 
 class SovereignPQC:
     """
+    [STUB / ROADMAP]
     Sovereign v23.0 Readiness: Post-Quantum Cryptography Wrapper.
     Implements Crystal-Kyber for node-to-node key exchange.
-    (Phase 3 Hardening Implementation)
+    (Phase 3 Hardening Implementation - CURRENTLY MOCKED)
     """
     _liboqs_available = False
     

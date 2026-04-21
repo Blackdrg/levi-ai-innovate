@@ -1,27 +1,28 @@
-# 🪐 LEVI-AI: Sovereign Cognitive OS (v22.0.0-GA-GRADUATED)
+# 🪐 LEVI-AI: Sovereign OS (v22.1 Engineering Baseline)
 
 > [!IMPORTANT]
-> **DOCUMENTATION GRADUATION:** This file (`README.md`) is now a legacy archive. 
-> For the **v17.5.0-GRADUATED** master technical manual, forensic audit, and operational handbook, please refer to:
+> **SOURCE OF TRUTH:** This file (`README.md`) is a high-level overview. 
+> For the **v22.1 Engineering Baseline** master technical manual, forensic audit, and operational handbook, please refer to:
 > ### 👉 **[README_NEW.md](file:///d:/LEVI-AI/README_NEW.md)** 👈
 
 ---
 
-## 🏛️ v17.5.0 GRADUATION SUMMARY
-The system has completed its transition from a hosted simulation to a **Sovereign Native-Ready OS**.
+## 🏛️ v22.1 ENGINEERING SUMMARY
+The system has transitioned from a marketing-led prototype to a verifiable **Engineering Baseline**.
 
-### 🏁 Key Graduation Milestones:
+### 🏁 Key Graduation Milestones (v22.1):
+- 🟢 **Cognitive Core (v8)**: Unified thinking loop (Plan-Execute-Evaluate-Refine) graduated.
 - 🟢 **Native HAL-0 Kernel**: Bare-metal bootloader and hardware drivers (NIC, ACPI) operational.
-- 🟢 **Zero-Trust mesh**: mTLS 1.3 enforced across all cognitive nodes via Istio.
-- 🟢 **O(1) Cognition**: High-fidelity patterns graduated to deterministic Tier-0 rules.
-- 🟢 **Forensic Authority**: Autonomous graduation compliance auditing active.
+- 🟢 **Consensus Finality**: Raft-lite failover verified with 5s hardware heartbeats.
+- 🟢 **Hardware Residency**: TPM 2.0 CRB support active for physical hardware anchoring.
+- 🟢 **Privacy Sovereignty**: Bi-directional PII redaction gated at the orchestrator level.
 
 ---
 
-*(The content below is preserved for historical traceability of the v17.0 lifecycle)*
+*(The content below is preserved for historical traceability of previous lifecycles)*
 
-# 🪐 LEVI-AI: Sovereign Cognitive OS (v17.0.0-GA GLOBAL AUTONOMY)
-> **STATUS**: GLOBAL AUTONOMY GRADUATED. The system has completed its v17.0 lifecycle.
+# 🪐 LEVI-AI: Sovereign Cognitive OS (v22.0.0-GA GLOBAL AUTONOMY)
+> **STATUS**: v22.1 Engineering Baseline Active.
 > **RESOURCES**: [Technical Architecture Manifest](./README_ARCHITECTURE.md)
 
 ---

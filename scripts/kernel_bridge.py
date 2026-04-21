@@ -36,17 +36,45 @@ class KernelBridge:
             print("[*] Continuing in MOCK mode...")
 
     def run(self):
-        print("[*] Kernel Bridge active. Streaming to Redis channel: " + self.channel)
+        print("[*] Kernel Bridge active (Sliding Window Sync). Streaming to: " + self.channel)
+        buffer = b""
         while True:
-            if self.ser and self.ser.in_waiting >= RECORD_SIZE:
-                data = self.ser.read(RECORD_SIZE)
-                self.process_packet(data)
-            elif not self.ser:
-                # Mock high-frequency telemetry for UI validation
-                self.generate_mock_event()
-                time.sleep(0.05) # 20 events per second
+            if self.ser:
+                if self.ser.in_waiting > 0:
+                    buffer += self.ser.read(self.ser.in_waiting)
+                    
+                    while len(buffer) >= RECORD_SIZE:
+                        # Search for LEVI_MAGIC (0x4C455649 -> b'IVE L' in little-endian)
+                        # Actually, LEVI_MAGIC is 0x4C455649. struct.pack("<I", 0x4C455649) is b'IVE L'
+                        # Wait, 0x49 is I, 0x56 is V, 0x45 is E, 0x4C is L.
+                        # So b'IVEL'? No, b'I V E L'. Let's check:
+                        magic_bytes = struct.pack("<I", LEVI_MAGIC)
+                        
+                        idx = buffer.find(magic_bytes)
+                        if idx == -1:
+                            # Not found, keep the last RECORD_SIZE - 1 bytes in case magic is split
+                            if len(buffer) > RECORD_SIZE:
+                                buffer = buffer[-(RECORD_SIZE - 1):]
+                            break
+                        elif idx > 0:
+                            # Discard bytes before magic
+                            print(f"[!] Discarding {idx} bytes of noise.")
+                            buffer = buffer[idx:]
+                            continue
+                        
+                        # We have magic at the start
+                        if len(buffer) < RECORD_SIZE:
+                            break
+                            
+                        chunk = buffer[:RECORD_SIZE]
+                        self.process_packet(chunk)
+                        buffer = buffer[RECORD_SIZE:]
+                else:
+                    time.sleep(0.01)
             else:
-                time.sleep(0.01)
+                # Mock high-frequency telemetry
+                self.generate_mock_event()
+                time.sleep(0.05)
 
     def process_packet(self, data: bytes):
         try:
@@ -94,10 +122,17 @@ class KernelBridge:
                 "timestamp": time.time()
             }
             self.redis_client.publish(self.channel, json.dumps(message))
-            if payload["data"]["syscall_id"] == "0xFE":
+            sc = payload["data"]["syscall_id"]
+            if sc == "0xFE":
                 print(f"[🎓] GRADUATION PULSE: {payload['data']['fidelity']:.2f}")
+            elif sc == "0x04":
+                print(f"[🌐] NET_SEND: Outbound packet emitted via HAL-0.")
+            elif sc == "0x06":
+                print(f"[💾] MCM_GRADUATE: Fact CRYSTALLIZED to Tier 3 hardware.")
+            elif sc == "0x0C":
+                print(f"[📖] MCM_READ: Fact RETRIEVED from Tier 3 hardware.")
             else:
-                print(f"[>] SYSC {payload['data']['syscall_id']} | PID {payload['data']['pid']} | FID {payload['data']['fidelity']:.2f}")
+                print(f"[>] SYSC {sc} | PID {payload['data']['pid']} | FID {payload['data']['fidelity']:.2f}")
         except Exception as e:
             print(f"[!] Redis broadcast failed: {e}")
 

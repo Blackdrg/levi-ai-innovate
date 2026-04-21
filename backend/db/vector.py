@@ -74,38 +74,63 @@ class VectorStore:
                 logger.error(f"VectorStore: Delta replay failed for '{self.index_name}': {e}")
 
     def checkpoint(self):
-        """Persists the current state to disk and clears deltas."""
+        """
+        Sovereign v22.1: Atomic FAISS Checkpoint.
+        Uses temp files + rename + SHA-256 to ensure zero corruption.
+        """
+        import hashlib
+        import shutil
         try:
             start = time.time()
-            faiss.write_index(self.index, self.storage_path + ".index")
-            with open(self.storage_path + ".meta", "w") as f:
-                import json
+            temp_index = self.storage_path + ".index.tmp"
+            temp_meta = self.storage_path + ".meta.tmp"
+            
+            # 1. Write the Index
+            faiss.write_index(self.index, temp_index)
+            
+            # 2. Write the Metadata
+            import json
+            with open(temp_meta, "w") as f:
                 json.dump(self.metadata, f)
+            
+            # 3. Compute SHA-256 for the index
+            sha256_hash = hashlib.sha256()
+            with open(temp_index, "rb") as f:
+                for byte_block in iter(lambda: f.read(4096), b""):
+                    sha256_hash.update(byte_block)
+            checksum = sha256_hash.hexdigest()
+            
+            with open(self.storage_path + ".index.sha256", "w") as f:
+                f.write(checksum)
+
+            # 4. Atomic Rename
+            os.replace(temp_index, self.storage_path + ".index")
+            os.replace(temp_meta, self.storage_path + ".meta")
             
             # Clear logical deltas upon full checkpoint
             delta_path = self.storage_path + ".delta"
             if os.path.exists(delta_path): os.remove(delta_path)
             self._delta_buffer = []
             
-            logger.info(f"VectorStore: Full checkpoint successful for '{self.index_name}' ({time.time()-start:.2f}s).")
+            logger.info(f"🛡️ [VectorStore] Atomic checkpoint SUCCESS for '{self.index_name}' [SHA: {checksum[:8]}...] ({time.time()-start:.2f}s).")
         except Exception as e:
             logger.error(f"VectorStore: Checkpoint failed for '{self.index_name}': {e}")
 
     def checkpoint_delta(self):
         """
-        Sovereign v14.0.0: High-Frequency Delta Snapshot.
-        Persists only the new vectors to a binary .delta file for RPO: 30min optimization.
+        Sovereign v14.0.0: High-Frequency Atomic Delta Snapshot.
         """
         if not self._delta_buffer: return
         
         try:
             start = time.time()
             delta_path = self.storage_path + ".delta"
+            temp_delta = delta_path + ".tmp"
             
-            # Append or overwrite? For simpler replay, we overwrite with the current wave's buffer
-            # Since full checkpoints clear it, this file stays small.
-            with open(delta_path, "wb") as f:
+            with open(temp_delta, "wb") as f:
                 pickle.dump(self._delta_buffer, f)
+            
+            os.replace(temp_delta, delta_path)
             
             logger.info(f"VectorStore: Delta snapshot successful ({len(self._delta_buffer)} vectors, {time.time()-start:.3f}s).")
         except Exception as e:

@@ -25,7 +25,9 @@ celery_app = Celery(
         "backend.services.studio.tasks",
         "backend.services.notifications.tasks",
         "backend.services.payments.tasks",
+        "backend.engines.brain.tasks",
         "backend.core.memory_tasks",
+
         "backend.core.learning_tasks",
         "backend.core.fine_tune_tasks",
         "backend.core.critic_tasks",

@@ -39,6 +39,9 @@ class ContainerOrchestrator:
                 network="sovereign-mesh",
                 mem_limit="4g",
                 nano_cpus=1000000000, # 1 CPU
+                cap_drop=["ALL"],
+                read_only=True,
+                security_opt=["no-new-privileges"],
                 environment={
                     "AGENT_ID": agent_id,
                     "ORCHESTRATOR_URL": os.getenv("INTERNAL_URL", "http://host.docker.internal:8000")

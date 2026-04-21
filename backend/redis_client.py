@@ -1,65 +1,39 @@
-import redis
-import os
-import logging
-from typing import Optional, Any
+"""
+Sovereign Redis Compatibility Proxy.
+Redirects all legacy calls to backend.db.redis for unified state management.
+"""
+from backend.db.redis import (
+    get_redis_client,
+    get_async_redis_client,
+    HAS_REDIS,
+    HAS_REDIS_ASYNC,
+    cache_json,
+    get_cached_json,
+    distributed_lock,
+    save_conversation_buffered,
+    get_conversation,
+    incr_daily_ai_spend,
+    get_daily_ai_spend,
+    get_user_credits,
+    check_exact_match,
+    store_exact_match,
+    incr_failure_count,
+    get_failure_count
+)
 
-logger = logging.getLogger(__name__)
+# Mandatory aliases for Cognitive Engine
+r = get_redis_client()
+cache = r
+r_async = get_async_redis_client()
 
-# --- Configuration ---
-REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
-REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
-REDIS_DB = int(os.getenv("REDIS_DB", 0))
-REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", None)
+def get_redis_connection():
+    return get_redis_client()
 
 class SovereignCache:
-    """
-    Sovereign Persistence Layer (Redis).
-    Hardened for high-concurrency state and backpressure management.
-    """
-    _instance: Optional[redis.Redis] = None
-
-    @classmethod
-    def get_client(cls) -> redis.Redis:
-        """Retrieves and initializes the Redis client singleton."""
-        if cls._instance is not None:
-            return cls._instance
-        
-        try:
-            logger.info(f"[Redis] Connecting to Sovereign Cache at {REDIS_HOST}:{REDIS_PORT}")
-            cls._instance = redis.Redis(
-                host=REDIS_HOST,
-                port=REDIS_PORT,
-                db=REDIS_DB,
-                password=REDIS_PASSWORD,
-                decode_responses=True,
-                socket_timeout=5,
-                retry_on_timeout=True
-            )
-            # Connectivity check
-            cls._instance.ping()
-            return cls._instance
-        except Exception as e:
-            logger.error(f"[Redis] Critical connection failure: {e}")
-            # Fallback to a mock-like behavior if Redis is unavailable in local dev
-            return redis.Redis(host='localhost', port=REDIS_PORT, db=REDIS_DB)
-
-    @classmethod
-    def get(cls, key: str, namespace: str = "global") -> Optional[str]:
-        client = cls.get_client()
-        full_key = f"sovereign:{namespace}:{key}"
-        return client.get(full_key)
-
-    @classmethod
-    def set(cls, key: str, value: Any, ex: int = 3600, namespace: str = "global"):
-        client = cls.get_client()
-        full_key = f"sovereign:{namespace}:{key}"
-        client.set(full_key, value, ex=ex)
-
-    @classmethod
-    def delete(cls, key: str, namespace: str = "global"):
-        client = cls.get_client()
-        full_key = f"sovereign:{namespace}:{key}"
-        client.delete(full_key)
-
-# Global Accessor
-cache = SovereignCache
+    @staticmethod
+    def get_client():
+        return get_redis_client()
+    
+    @staticmethod
+    def get_async_client():
+        return get_async_redis_client()

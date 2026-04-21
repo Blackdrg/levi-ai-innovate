@@ -16,17 +16,14 @@ from backend.db.redis import r as redis_client, HAS_REDIS
 from backend.db.postgres_db import get_read_session
 
 from backend.api.utils.auth import get_current_user
-from backend.core.brain import LeviBrainV14
+from backend.engines.brain.orchestrator import orchestrator as brain_orchestrator
 from backend.engines.utils.security import SovereignSecurity
 from sqlalchemy import text
 from backend.utils.audit import AuditLogger
 from backend.utils.runtime_tasks import create_tracked_task, is_shutting_down
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="", tags=["Orchestration v13"])
-
-# Initialize the v14.0.0 Brain Service Monolith (Controlled)
-brain = LeviBrainV14()
+router = APIRouter(prefix="", tags=["Orchestration v22"])
 
 class MissionRequest(BaseModel):
     input: str = Field(..., description="The high-level user mission or query")
@@ -39,55 +36,35 @@ async def orchestrate_mission_endpoint(
     current_user: Any = Depends(get_current_user)
 ):
     """
-    Sovereign Mission: Asynchronous Orchestration (v13.0.0).
-    Returns 202 Accepted and a mission_id for polling.
+    Sovereign Mission: Thinking-Loop Orchestration (v22.1).
     """
     user_id = current_user.uid if hasattr(current_user, "uid") else "guest"
     mission_id = f"mission_{uuid.uuid4().hex[:12]}"
     session_id = request.session_id or f"sess_{uuid.uuid4().hex[:8]}"
 
     if is_shutting_down():
-        raise HTTPException(status_code=503, detail="Runtime is draining in-flight missions. Try again shortly.")
+        raise HTTPException(status_code=503, detail="Runtime is draining in-flight missions.")
     
-    logger.info(f"[Orchester-v13] Async Mission {mission_id} received for {user_id}")
+    logger.info(f"[Orchester-v22] Thinking Mission {mission_id} received for {user_id}")
     
     if SovereignSecurity.detect_injection(request.input):
         raise HTTPException(status_code=400, detail="Neural protocol violation.")
 
-    # 1. Initialize mission state in Redis
-    if HAS_REDIS:
-        state = {
-            "mission_id": mission_id,
-            "status": "PROCESSING",
-            "created_at": str(asyncio.get_event_loop().time())
-        }
-        redis_client.setex(f"mission:{mission_id}", 3600, json.dumps(state))
+    # Dispatch to the Cognitive thinking loop
+    async def _run_loop():
+        # Using the streaming logic internally but capturing final output for the task
+        final_res = ""
+        async for chunk in brain_orchestrator.stream_request(user_id, request.input):
+            if "token" in chunk:
+                final_res += chunk["token"]
+            elif chunk.get("event") == "metadata" and chunk.get("data", {}).get("status") == "completed":
+                # Mission complete
+                pass
+        
+        # Log to audit or persistence if needed
+        logger.info(f"[Orchester-v22] Mission {mission_id} finished logic.")
 
-    # 2. Dispatch mission to background (v14 Brain Controlled)
-    async def _run_and_finalize():
-        try:
-            response_data = await brain.run(
-                user_input=request.input,
-                user_id=user_id,
-                session_id=session_id,
-                request_id=mission_id, # Link for policy tracking
-                **(request.context or {})
-            )
-            if HAS_REDIS:
-                final_state = {
-                    "mission_id": mission_id,
-                    "status": "FINALIZED",
-                    "fidelity_score": response_data.get("fidelity_score", 0.95),
-                    "result": response_data.get("response", ""),
-                    "metadata": response_data.get("metrics", {})
-                }
-                redis_client.setex(f"mission:{mission_id}", 3600, json.dumps(final_state))
-        except Exception as e:
-            logger.error(f"[Orchester-v13] Mission {mission_id} failed: {e}")
-            if HAS_REDIS:
-                redis_client.setex(f"mission:{mission_id}", 3600, json.dumps({"status": "FAILED", "error": str(e)}))
-
-    create_tracked_task(_run_and_finalize(), name=f"mission-finalize:{mission_id}")
+    create_tracked_task(_run_loop(), name=f"thinking-mission:{mission_id}")
     
     return {
         "status": "ACCEPTED",
@@ -137,33 +114,23 @@ async def orchestrate_mission_stream_endpoint(
     current_user: Any = Depends(get_current_user)
 ):
     """
-    High-Fidelity SSE Streaming Mission (v14.0.0 Sovereign OS).
-    Streams: Perception -> Goal -> Graph -> Execution -> Synthesis.
+    High-Fidelity SSE Streaming Mission (v22.1 Sovereign OS).
+    Uses the Brain thinking loop directly.
     """
     user_id = current_user.uid if hasattr(current_user, "uid") else "guest"
-    session_id = request.session_id or f"sess_{uuid.uuid4().hex[:8]}"
-
+    
     if SovereignSecurity.detect_injection(request.input):
         raise HTTPException(status_code=400, detail="Neural protocol violation.")
 
     async def sse_generator():
         try:
-            # Route through the v14.0.0 Brain (Streaming Policy Controlled)
-            async for chunk in brain.stream(
-                user_input=request.input,
-                user_id=user_id,
-                session_id=session_id,
-                request_id=None, # System will generate
-                **(request.context or {})
-            ):
-                # Standardize SSE format: event and data
+            async for chunk in brain_orchestrator.stream_request(user_id, request.input):
                 event_type = chunk.get("event", "message")
                 data = json.dumps(chunk.get("data", chunk))
                 yield f"event: {event_type}\ndata: {data}\n\n"
-            
             yield "data: [DONE]\n\n"
         except Exception as e:
-            logger.error(f"[Orchester-v13] Stream failure: {e}")
+            logger.error(f"[Orchester-v22] Stream failure: {e}")
             yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
 
     return StreamingResponse(sse_generator(), media_type="text/event-stream")

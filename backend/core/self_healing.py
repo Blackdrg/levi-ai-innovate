@@ -2,8 +2,10 @@ import logging
 import asyncio
 import json
 import time
+import os
+import shutil
 from typing import Dict, Any, List, Optional
-from backend.core.orchestrator import _orchestrator as orchestrator
+# Removed circular import: from backend.core.orchestrator import _orchestrator as orchestrator
 from backend.core.execution_state import CentralExecutionState, MissionState
 from backend.broadcast_utils import SovereignBroadcaster
 from backend.kernel.kernel_wrapper import kernel
@@ -122,11 +124,40 @@ class SelfHealingEngine:
         # Objective formatted for recursive decomposition (GoalEngine)
         objective = f"Recover from failure in {mission_id}. Reason: {reason}. Perform forensic sweep and resume with priority High."
         
-        await orchestrator.handle_mission_request(
+        from backend.core.orchestrator import _orchestrator as main_orchestrator
+        await main_orchestrator.handle_mission_request(
             request_id=f"heal_{mission_id}_{int(time.time())}",
             user_id="SYSTEM_HEALER",
             objective=objective,
             intent_type="recovery"
         )
+
+    def restore_hardened_config(self, config_path: str):
+        """Restores a system configuration file to its signed and sealed baseline state."""
+        baseline_dir = "/sov/hardened/baselines/"
+        baseline_path = os.path.join(baseline_dir, os.path.basename(config_path))
+        
+        # In this engineering baseline, we attempt to restore from local residency
+        if os.path.exists(baseline_path):
+            try:
+                shutil.copy(baseline_path, config_path)
+                from backend.kernel.kernel_wrapper import kernel as _k
+                # Simulate kernel sign-off for restoration
+                _k.sys_call("mainframe", json.dumps({"SIGN_CONFIG_RESTORE": config_path}))
+                logger.info(f"Configuration {config_path} restored to hardened baseline [v22.1].")
+            except Exception as e:
+                logger.error(f"Failed to restore config {config_path}: {e}")
+        else:
+            logger.warning(f"No hardened baseline found for {config_path} at {baseline_path}.")
+
+    async def execute_autonomous_migration(self, target_schema_v: str):
+        """Executes a non-destructive schema migration to the target v22.1 baseline."""
+        logger.warning(f"Drift Detected: Initiating autonomous migration to {target_schema_v}.")
+        from backend.db.postgres_db import postgres_db
+        try:
+            await postgres_db.migrate_to(target_schema_v)
+            logger.info("Factual Ledger schema synchronized [MIGRATION-PASSED].")
+        except Exception as e:
+            logger.error(f"Autonomous migration failed: {e}")
 
 self_healing = SelfHealingEngine()

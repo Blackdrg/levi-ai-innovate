@@ -171,3 +171,25 @@ class Neo4jClient:
             logger.info(f"[Neo4j] Absolute wipe complete for user: {user_id}")
         except Exception as e:
             logger.error(f"[Neo4j] Wipe failed for user {user_id}: {e}")
+
+    @classmethod
+    async def ensure_relationship_indices(cls):
+        """Creates indices for cross-agent knowledge relationship traversal."""
+        queries = [
+            "CREATE INDEX fact_resonance_idx IF NOT EXISTS FOR [r:RESONANCE] ON (r.score)",
+            "CREATE INDEX agent_wisdom_idx IF NOT EXISTS FOR (a:Agent) ON (a.id)"
+        ]
+        for q in queries:
+            await cls.execute_query(q)
+        logger.info(" ✅ [Neo4j] Knowledge Graph relationship indices resident.")
+
+    @classmethod
+    async def calculate_relationship_gravity(cls, fact_a: str, fact_b: str):
+        """Calculates the semantic weight of the relationship between two facts."""
+        cypher = "MATCH (a {id: $a})-[r]-(b {id: $b}) RETURN r.weight as weight"
+        results = await cls.execute_query(cypher, {"a": fact_a, "b": fact_b})
+        if results:
+            gravity = results[0].get('weight', 0.5)
+            logger.info(f"Gravity between {fact_a} and {fact_b}: {gravity}")
+            return gravity
+        return 0.0

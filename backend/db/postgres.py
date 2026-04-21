@@ -177,5 +177,54 @@ class PostgresDB:
         if cls._engine:
             await cls._engine.dispose()
             cls._engine = None
-            cls._session_factory = None
-            logger.info("Sovereign Postgres link severed.")
+        cls._session_factory = None
+        logger.info("Sovereign Postgres link severed.")
+
+    async def track_event(self, mission_id: str, event_type: str, data: dict):
+        """Standard v22-GA tracking bridge for mission-specific events."""
+        async with self.session_scope() as session:
+            try:
+                from .models import MissionMetric
+                metric = MissionMetric(
+                    mission_id=mission_id,
+                    status=event_type,
+                    latency_ms=data.get("latency_ms", 0),
+                    intent=data.get("intent", "telemetry"),
+                    fidelity=data.get("fidelity", 1.0),
+                    user_id=data.get("user_id", "system")
+                )
+                session.add(metric)
+                # session.commit() is handled by session_scope()
+            except Exception as e:
+                logger.error(f"[PostgresDB] Telemetry tracking failed: {e}")
+
+    async def track_generic_event(self, event_type: str, data: dict):
+        """Standard v22-GA tracking bridge for system-wide analytics."""
+        await self.track_event("SYSTEM", event_type, data)
+
+    async def persist_knowledge_delta(self, mission_id: str, knowledge_delta: dict):
+        """Persists a mission's knowledge delta into the factual ledger."""
+        async with self.session_scope() as session:
+            try:
+                import json
+                query = text("INSERT INTO factual_ledger (mission_id, knowledge_delta, timestamp) VALUES (:mid, :delta, NOW())")
+                await session.execute(query, {"mid": mission_id, "delta": json.dumps(knowledge_delta)})
+                logger.info(f"Knowledge delta persisted for mission: {mission_id}.")
+            except Exception as e:
+                logger.error(f"Failed to persist knowledge delta for {mission_id}: {e}")
+
+    async def create_factual_snapshot(self):
+        """Generates an ACID-compliant snapshot of the entire factual ledger."""
+        async with self.session_scope() as session:
+            try:
+                # PostgreSQL native snapshot export
+                result = await session.execute(text("SELECT pg_export_snapshot()"))
+                snapshot_id = result.scalar()
+                logger.info(f"Factual Snapshot created [ID: {snapshot_id}].")
+                return snapshot_id
+            except Exception as e:
+                logger.error(f"Failed to create factual snapshot: {e}")
+                return None
+
+# Global instance for legacy callers
+postgres_db = PostgresDB()

@@ -13,6 +13,7 @@ import asyncio
 import json
 import time
 from enum import Enum
+from cryptography.exceptions import InvalidSignature
 from typing import Dict, Any, Optional, Callable, List
 from pydantic import BaseModel, Field
 from opentelemetry import propagate

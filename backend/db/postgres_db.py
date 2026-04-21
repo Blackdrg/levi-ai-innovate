@@ -2,12 +2,8 @@
 Sovereign Postgres SQL Fabric v14.0.0 [STABLE PROXY].
 Redirects to backend.db.postgres for unified session management.
 """
-
-import logging
-from .postgres import PostgresDB as UnifiedDB, Base
+from .postgres import PostgresDB as UnifiedDB, Base, postgres_db as unified_postgres_db
 from contextlib import asynccontextmanager
-
-logger = logging.getLogger(__name__)
 
 class PostgresDB(UnifiedDB):
     """
@@ -29,9 +25,7 @@ async def get_write_session():
         yield session
 
 async def verify_resonance():
-    try:
-        session = await UnifiedDB.get_session_with_retry(retries=1)
-        await session.close()
-        return True
-    except:
-        return False
+    return await UnifiedDB.check_health()
+
+# Global instance for common service access
+postgres_db = unified_postgres_db

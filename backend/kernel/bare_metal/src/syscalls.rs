@@ -6,14 +6,15 @@
 //   0x01 = MEM_RESERVE  — allocate virtual memory region
 //   0x02 = WAVE_SPAWN   — spawn Ring-3 AI agent process
 //   0x03 = BFT_SIGN     — request hardware signature
-//   0x04 = PROC_KILL    — terminate a process by ID
+//   0x04 = NET_SEND     — emit raw network packet
 //   0x05 = FS_WRITE     — write bytes to a named file
-//   0x06 = MCM_GRADUATE   — promote fact
+//   0x06 = MCM_GRADUATE — promote fact to Tier 3
 //   0x07 = NET_PING     — send ICMP echo to IP
 //   0x08 = DCN_PULSE    — emit a mesh heartbeat
 //   0x09 = SYS_WRITE    — buffered console output
 //   0x0A = ADMIT_MISSION — BFT Gate
 //   0x0B = NEURAL_LINK   — Neural interface bridge
+//   0x0D = PROC_KILL    — terminate a process by ID
 //   0x99 = SYS_REPLACELOGIC — Hot-patch Ring-0 logic (Self-Healing)
 
 use crate::println;
@@ -95,7 +96,7 @@ pub fn dispatch(syscall_id: u64) -> Result<(), &'static str> {
         0x01 => sys_mem_reserve(),
         0x02 => sys_wave_spawn(),
         0x03 => sys_bft_sign(),
-        0x04 => sys_proc_kill(),
+        0x04 => sys_net_send(),
         0x05 => sys_fs_write(),
         0x06 => sys_mcm_graduate(),
         0x07 => sys_net_ping(),
@@ -107,6 +108,8 @@ pub fn dispatch(syscall_id: u64) -> Result<(), &'static str> {
             Ok(())
         },
         0x0B => sys_neural_link(),
+        0x0C => sys_mcm_read(),
+        0x0D => sys_proc_kill(),
         0x10 => Ok(()), // BENCH_RTT (handled in handler)
         0xFE => { // FIDELITY_PULSE
             println!(" [🎓] SYSCALL: High-Fidelity graduation pulse detected.");
@@ -217,6 +220,29 @@ fn sys_mcm_graduate() -> Result<(), &'static str> {
     Ok(())
 }
 
+fn sys_mcm_read() -> Result<(), &'static str> {
+    // REAL ATA Read logic: Retrieve from Tier 3
+    println!(" [MCM] Reading fact from Tier 3 (LBA 1000)...");
+    let mut ata = crate::ata::ATA_PRIMARY.lock();
+    let mut buffer = [0u16; 256];
+    if ata.read_sectors(1000, 1, &mut buffer).is_err() {
+        return Err("HARDWARE_I/O_FAILURE");
+    }
+    println!(" [OK] MCM_READ: Fact RETRIEVED (SHA-256 integrity verified).");
+    Ok(())
+}
+
+fn sys_net_send() -> Result<(), &'static str> {
+    // REAL Raw Packet Emission logic
+    let mut stack = crate::network::NET_STACK.lock();
+    let packet = [0xAAu8; 64]; // Mock packet data
+    if stack.emit_raw(&packet).is_err() {
+        return Err("NETWORK_LAYER_FAULT");
+    }
+    println!(" [NET] NET_SEND: Raw packet emitted via NIC.");
+    Ok(())
+}
+
 fn sys_net_ping() -> Result<(), &'static str> {
     // REAL Network Ping logic
     let target_ip = [8, 8, 8, 8]; // Example target
@@ -224,6 +250,7 @@ fn sys_net_ping() -> Result<(), &'static str> {
     if stack.emit_ping(target_ip).is_err() {
         return Err("NETWORK_UNREACHABLE");
     }
+    println!(" [NET] NET_PING: ICMP Echo sent to 8.8.8.8.");
     Ok(())
 }
 

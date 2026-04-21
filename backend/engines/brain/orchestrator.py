@@ -1,181 +1,137 @@
 import asyncio
 import logging
 import time
+import json
+from datetime import datetime
+from typing import List, Dict, Any, Optional, AsyncGenerator
+
+# Local imports
 from .planner import BrainPlanner
 from .pipeline import FlowState, FlowPipeline
 from backend.core.agent_registry import AgentRegistry
-from backend.engines.utils.security import SovereignSecurity
-from backend.engines.utils.i18n import SovereignI18n
-from backend.utils.audit import AuditLogger
+from backend.redis_client import cache
+from backend.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
+class DistributedOrchestrator:
+    """
+    Sovereign v22.1 Distributed Worker Proxy.
+    Responsible for task dispatching to Celery workers and cross-node telemetry.
+    Note: Mission lifecycle is governed by the Core Orchestrator (backend/core/orchestrator.py).
+    """
+
+    def __init__(self):
+        self.queue = celery_app
+
+    async def execute_task(self, mission_id: str, agent: str, input_data: str, user_id: str = "system") -> Dict[str, Any]:
+        """Enqueue a task and wait for the result."""
+        from backend.utils.tracing import traced_span
+        
+        async with traced_span("orchestrator.execute_task", mission_id=mission_id, agent=agent, user_id=user_id) as span:
+            logger.info(f"📤 [Orchestrator] Enqueuing {agent} task for mission {mission_id}")
+            
+            # Notify via Pub/Sub
+            self.broadcast_mission_event(mission_id, "task_queued", {"agent": agent})
+            
+            # 1. Enqueue via Celery
+            task = self.queue.send_task(
+                "backend.engines.brain.tasks.run_agent_task",
+                args=[{"mission_id": mission_id, "agent": agent, "input": input_data, "user_id": user_id}],
+                queue="default"
+            )
+
+            # 2. Polling for result
+            max_wait = 180 # Increased to 3 minutes for complex tasks
+            start_time = time.time()
+
+            # Performance optimization for eager/local execution
+            if hasattr(task, 'ready') and task.ready():
+                logger.info(f"✅ [Brain] Task {task.id} completed immediately (Eager).")
+                span.set_attribute("task.eager", True)
+                return task.result if isinstance(task.result, dict) else {"status": "completed", "output": str(task.result)}
+            
+            while time.time() - start_time < max_wait:
+                status = cache.get(f"task:{task.id}:status")
+                if status == "executing":
+                    self.broadcast_mission_event(mission_id, "task_executing", {"agent": agent, "task_id": task.id})
+                
+                if status in ["completed", "failed"]:
+                    result_raw = cache.get(f"task:{task.id}:result")
+                    if result_raw:
+                        try:
+                            import ast
+                            result = ast.literal_eval(result_raw)
+                            self.broadcast_mission_event(mission_id, "task_finished", {"agent": agent, "status": status})
+                            span.set_attribute("task.status", status)
+                            return result
+                        except:
+                            return {"status": status, "output": result_raw}
+                
+                await asyncio.sleep(1)
+                
+            span.set_attribute("task.status", "timeout")
+            return {"status": "failed", "error": "Task timed out"}
+
+    def broadcast_mission_event(self, mission_id: str, event_type: str, data: Dict[str, Any], user_id: str = "global"):
+        """Publish mission events to Global Sovereign Telemetry."""
+        from backend.broadcast_utils import SovereignBroadcaster
+        
+        # We map missions events to the global broadcast protocol
+        SovereignBroadcaster.publish(event_type, {
+            "mission_id": mission_id,
+            "data": data,
+            "timestamp": time.time()
+        }, user_id=user_id)
+        
+        logger.debug(f"📡 [Global Broadcast] Mission {mission_id} -> {event_type}")
+
+    def get_mission_state(self, mission_id: str) -> Optional[Dict[str, Any]]:
+
+
+        """Retrieve state from Redis."""
+        state_json = cache.get(f"mission:{mission_id}:state")
+        if state_json:
+            return json.loads(state_json)
+        return None
+
+distributed_orchestrator = DistributedOrchestrator()
+
 class BrainOrchestrator:
     """
-    Sovereign Orchestration Core v7.
-    Manages the lifecycle of a query via the Global Agent Registry.
+    Sovereign Orchestration Core v22.1.
+    High-level API for the Cognitive Engine.
     """
     
     def __init__(self):
         self.planner = BrainPlanner()
 
-    async def stream_request(self, user_id: str, query: str, lang: str = "en"):
+    async def stream_request(self, user_id: str, query: str) -> AsyncGenerator[Dict[str, Any], None]:
         """
-        Final Production-Grade Orchestration Stream.
+        [Brain-v22] Unified Thinking-Loop Stream.
+        Yields tokens and activity events from the Cognitive Engine.
         """
-        logger.info(f"Sovereign Mission initiated: {user_id}")
+        logger.info(f"🧠 [Orchestrator] Initiating Sovereign Stream for {user_id}")
         
-        # 1. Security Input Scrubbing
-        query = SovereignSecurity.mask_pii(query, user_id=user_id)
-        if SovereignSecurity.detect_injection(query):
-            yield {"event": "error", "data": "Security violation detected."}
-            return
-
-        state = FlowState(user_id=user_id, query=query)
-        pipeline = FlowPipeline(state)
+        from .cognitive_engine import cognitive_engine
         
-        try:
-            # 2. Intelligence Planning
-            yield {"event": "activity", "data": "Architecting Neural Mission Strategy..."}
-            state.intent = await self.planner.classify_task(state.query)
-            state.plan = await self.planner.create_plan(state.query, state.intent)
-            yield {"event": "metadata", "data": {"intent": state.intent, "mission_steps": len(state.plan), "request_id": str(state.start_time)}}
+        last_state = None
+        async for update in cognitive_engine.run(user_id, query):
+            if update.get("event") == "final_state":
+                last_state = update["data"]
+            yield update
             
-            # 3. Standardized Agent Dispatch
-            yield {"event": "activity", "data": "Dispatching Sovereign Fleet..."}
-            await self._execute_mission_fleet(state)
+        if last_state:
+            results = last_state.get("shared_context", {}).get("results", [])
+            if results:
+                final_text = results[-1].get("output", "")
+                # Simulate streaming of the final result if it's too long
+                for token in final_text.split(" "):
+                    yield {"token": token + " "}
             
-            # Log Mission Fleet Execution
-            self._log_mission_execution(state)
-            
-            # 4. Neural Response Synthesis (Real streaming)
-            yield {"event": "activity", "data": "Synthesizing Mission Intelligence..."}
-            
-            from backend.engines.chat.generation import SovereignGenerator
-            generator = SovereignGenerator()
-            
-            context_mission = ""
-            for s_id, res in state.engine_results.items():
-                context_mission += f"\n[Step {s_id}] Result: {res.message[:1500]}"
+        yield {"event": "metadata", "data": {"status": "completed", "fidelity": last_state.get("shared_context", {}).get("score", 100) if last_state else 0}}
 
-            history = [{"role": "system", "content": f"Sovereign Context: {context_mission}"}]
-            
-            state.final_response = ""
-            async for token in generator.stream_response(messages=history + [{"role": "user", "content": state.query}], lang=lang):
-                state.final_response += token
-                yield {"token": token}
+distributed_orchestrator = DistributedOrchestrator()
+orchestrator = distributed_orchestrator
 
-            # 5. Global Telemetry Pulse & Memory Persistence
-            state.latency_ms = (time.perf_counter() - state.start_time) * 1000
-            yield {"event": "metadata", "data": {"latency_ms": state.latency_ms, "status": "completed"}}
-            
-            # 6. Automatic Memory Persistence (Background)
-            from backend.utils.runtime_tasks import create_tracked_task
-            create_tracked_task(self._persist_mission_memory(state), name=f"mission-persistence-{user_id}")
 
-        except Exception as e:
-            logger.error(f"Orchestration Anomaly: {e}", exc_info=True)
-            yield {"event": "error", "data": f"Mission interrupted: {str(e)}"}
-
-    async def _persist_mission_memory(self, state: FlowState):
-        """Asynchronous memory consolidation and self-evolution for the Sovereign OS."""
-        try:
-            from backend.engines.memory.vault import MemoryVault
-            from backend.engines.brain.learning_loop import LearningLoop
-            
-            # 1. Memory Persistence
-            vault = MemoryVault(state.user_id)
-            mock_embedding = [0.1] * 384 
-            await vault.store(
-                content=f"User asked: {state.query}\nLEVI responded: {state.final_response}",
-                embedding=mock_embedding,
-                metadata={"intent": state.intent, "latency": state.latency_ms}
-            )
-            
-            # 2. Neural Telemetry Ingestion (Self-Evolution)
-            evolver = LearningLoop()
-            await evolver.ingest_telemetry(state)
-            
-            logger.info(f"[Orchestrator] Mission intelligence and telemetry persisted for {state.user_id}")
-        except Exception as e:
-            logger.error(f"Persistence/Learning failure: {e}")
-
-    def _log_mission_execution(self, state: FlowState):
-        """Standardized v7 Mission execution logging for global analytics."""
-        mission_log = {
-            "user_id": state.user_id,
-            "query": state.query,
-            "intent": state.intent,
-            "steps": len(state.plan),
-            "agents_used": [s["agent_name"] for s in state.plan],
-            "results": {s_id: res.success for s_id, res in state.engine_results.items()},
-            "timestamp": datetime.fromtimestamp(state.start_time).isoformat()
-        }
-        logger.info(f"[MissionLogger] Mission complete: {json.dumps(mission_log)}")
-
-    async def _execute_mission_fleet(self, state: FlowState):
-        """Dispatches the plan across the Sovereign registry."""
-        executed = set()
-        
-        while len(executed) < len(state.plan):
-            ready = [s for s in state.plan if s["step"] not in executed and (not s.get("depends_on") or s["depends_on"] in executed)]
-            if not ready: break
-
-            tasks = []
-            for step in ready:
-                # Use registry mapping
-                agent_name = step.get("agent_name", step.get("action_key"))
-                params = step.get("params", {}).copy()
-                params["user_id"] = state.user_id
-                
-                # Context passing logic
-                if step.get("depends_on"):
-                    prev_res = state.engine_results.get(step["depends_on"])
-                    params["input_context"] = prev_res.message if prev_res else ""
-
-                tasks.append(self._dispatch_agent_step(step["step"], agent_name, params, state))
-            
-            if tasks: await asyncio.gather(*tasks)
-            for s in ready: executed.add(s["step"])
-
-    async def _dispatch_agent_step(self, step_id, name, params, state):
-        """Unified dispatch to the hardened agent registry."""
-        await AuditLogger.log_event(
-            event_type="AGENT",
-            action="Dispatch",
-            user_id=state.user_id,
-            resource_id=name,
-            metadata={"step_id": step_id, "params_keys": list(params.keys())}
-        )
-        result = await AgentRegistry.dispatch(name, params)
-        state.engine_results[step_id] = result
-        
-        await AuditLogger.log_event(
-            event_type="AGENT",
-            action="Result",
-            user_id=state.user_id,
-            resource_id=name,
-            status="success" if result.success else "failed",
-            metadata={"step_id": step_id, "error": result.error if not result.success else None}
-        )
-
-    async def synthesize_mission_results(self, state: FlowState, lang: str = "en") -> str:
-        """Final synthesis mission via the DialogueArchitect."""
-        if not state.engine_results:
-            return SovereignI18n.get_prompt("error_fallback", lang)
-
-        context_mission = ""
-        for s_id, res in state.engine_results.items():
-            context_mission += f"\n[Step {s_id}] Result: {res.message[:1500]}"
-
-        # Engage the DialogueArchitect for final synthesis
-        final_res = await AgentRegistry.dispatch("chat", {
-            "input": state.query,
-            "history": [{"role": "system", "content": f"Context: {context_mission}"}],
-            "mood": "philosophical"
-        })
-        
-        return final_res.message if final_res.success else final_res.error
-
-# Global Orchestration Pulse
-orchestrator = BrainOrchestrator()

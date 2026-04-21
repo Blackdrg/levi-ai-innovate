@@ -94,6 +94,14 @@ def _create_ha_clients():
         
         HAS_REDIS = True
         HAS_REDIS_ASYNC = True
+
+        # v22.1: Enforce Memory Governance (4GB + LRU)
+        try:
+            r.config_set("maxmemory", "4gb")
+            r.config_set("maxmemory-policy", "allkeys-lru")
+            logger.info("🧠 [Redis] Memory Governance ACTIVE (4GB max / allkeys-lru).")
+        except Exception as e:
+            logger.warning(f"⚠️ [Redis] Could not enforce memory governance (Permissions?): {e}")
     except Exception as e:
         if is_prod:
             logger.error(f"CRITICAL: [Redis] Mandatory infrastructure failed ({e}) in PRODUCTION. System Halted.")
@@ -160,6 +168,14 @@ class SovereignStateBridge:
         cls._local_state.pop(key, None)
 
 state_bridge = SovereignStateBridge()
+
+# ── Consolidation Layer: Registry for legacy and distributed callers ───────
+cache = r  # Standard alias used by CognitiveEngine and DistributedOrchestrator
+r_sync = r # Explicit sync alias
+
+def get_redis_connection():
+    """Proxy for legacy redis_client.py callers."""
+    return get_redis_client()
 
 def is_jti_blacklisted(jti: str) -> bool:
     client = get_redis_client()

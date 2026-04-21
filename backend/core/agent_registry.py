@@ -180,9 +180,17 @@ DEFAULT_AGENTS = {
     "cognition": AgentCapability(
         name="Cognition",
         agent_type="reasoning",
-        input_schema={"type": "object", "properties": {"context": {"type": "string"}}, "required": ["context"]},
+        input_schema={"type": "object", "properties": {"input": {"type": "string"}}, "required": ["input"]},
         output_schema={"type": "object"}
     ),
+    "sentinel": AgentCapability(
+        name="Sentinel",
+        agent_type="security",
+        input_schema={"type": "object", "properties": {"input": {"type": "string"}}, "required": ["input"]},
+        required_role="user",
+        output_schema={"type": "object"}
+    ),
+
     "system": AgentCapability(
         name="SystemController",
         agent_type="os_control",

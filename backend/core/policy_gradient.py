@@ -29,7 +29,7 @@ class PolicyGradientEngine:
     async def get_optimal_params(cls, agent_type: str, domain: str = "default", mission_id: str = "default") -> Dict[str, Any]:
         """
         Retrieves the optimized policy for a specific agent and domain.
-        v16.2: Uses PPO policy network to select actions (temperature).
+        v22.1: Uses PPO policy network to select actions (temperature).
         """
         try:
             from backend.core.evolution.ppo_engine import ppo_engine
@@ -51,7 +51,7 @@ class PolicyGradientEngine:
     async def update_policy(cls, mission_id: str, fidelity: float):
         """
         Updates the internal policy weights based on a mission's outcome.
-        v16.2: Uses PPO record_experience with critic score as reward.
+        v22.1: Uses PPO record_experience with critic score as reward.
         """
         logger.info(f"📊 [PolicyGradient] Recording experience for mission {mission_id} (Reward: {fidelity:.2f})")
         
@@ -64,10 +64,11 @@ class PolicyGradientEngine:
     @classmethod
     async def run_optimization_pass(cls):
         """
-        Sovereign v16.2: Real PPO Training Pass.
+        Sovereign v22.1: Real PPO Training Pass.
         """
         logger.info("🤖 [PolicyGradient] Starting real PPO optimization pass...")
         from backend.core.evolution.ppo_engine import ppo_engine
         await ppo_engine.train_step()
 
 policy_gradient = PolicyGradientEngine()
+

@@ -1,5 +1,9 @@
-# 📊 LEVI-AI: v14.1 Production Graduation Report
-## **System Implementation Summary: Distributed Cognitive OS**
+# 📊 [ARCHIVE] LEVI-AI: v14.1 Production Graduation Report
+> [!WARNING]
+> This document is a LEGACY ARCHIVE from the v14.x branch. 
+> For the current engineering baseline, refer to [README_NEW.md](file:///d:/LEVI-AI/README_NEW.md).
+
+## **System Implementation Summary: Distributed Cognitive OS (Legacy)**
 
 **Release Date**: 2026-04-10  
 **System Version**: v14.1.0-Autonomous-SOVEREIGN  

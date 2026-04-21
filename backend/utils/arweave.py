@@ -10,8 +10,10 @@ logger = logging.getLogger(__name__)
 
 class ArweaveAnchoring:
     """
+    [STUB / ROADMAP]
     Sovereign v17.0: Arweave Blockchain Anchoring.
     Provides verifiable, permanent proof of system state and audit logs.
+    (Currently simulated for v22.1 engineering baseline)
     """
     ARWEAVE_GATEWAY = os.getenv("ARWEAVE_GATEWAY", "https://arweave.net")
     WALLET_PATH = os.getenv("ARWEAVE_WALLET", "./certs/arweave_wallet.json")

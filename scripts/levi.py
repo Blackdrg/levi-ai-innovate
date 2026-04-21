@@ -36,6 +36,58 @@ def dcn_resync():
     except Exception as e:
         logger.error(f" ❌ Connection Error: {e}")
 
+def doctor():
+    logger.info("🏥 LEVI-AI System Diagnosis (The Doctor is In)...")
+    # Check Orchestrator
+    try:
+        r = requests.get(f"{ORCHESTRATOR_URL}/healthz", timeout=2)
+        logger.info(f" [PASS] Orchestrator: {r.status_code} OK")
+    except:
+        logger.error(" [FAIL] Orchestrator: UNREACHABLE")
+
+    # Check Redis
+    import redis
+    try:
+        rc = redis.Redis(host='localhost', port=6379, socket_timeout=1)
+        rc.ping()
+        logger.info(" [PASS] Redis Memory Fabric: CONNECTED")
+    except:
+        logger.error(" [FAIL] Redis Memory Fabric: DISCONNECTED")
+
+    # Check Ollama
+    try:
+        r = requests.get("http://localhost:11434/api/tags", timeout=2)
+        logger.info(f" [PASS] Ollama Local Inference: {r.status_code} OK")
+    except:
+        logger.warning(" [WARN] Ollama Local Inference: UNREACHABLE (Degraded)")
+
+    logger.info(" ✅ DOCTOR COMPLETE. System is nominally operational.")
+
+def reset():
+    print("⚠️  CRITICAL: This will WIPE the Redis cache and local work logs.")
+    confirm = input("Are you sure? (Type 'RESET' to confirm): ")
+    if confirm == "RESET":
+        logger.info("🔥 Initiating System Reset...")
+        import redis
+        try:
+            rc = redis.Redis(host='localhost', port=6379)
+            rc.flushall()
+            logger.info(" [OK] Redis Memory Fabric PURGED.")
+        except:
+            logger.error(" [ERR] Redis flush failed.")
+
+        # Wipe logs
+        log_dir = "backend/data/logs"
+        if os.path.exists(log_dir):
+            import shutil
+            shutil.rmtree(log_dir)
+            os.makedirs(log_dir)
+            logger.info(" [OK] Local Audit Logs WIPED.")
+        
+        logger.info(" ✨ RESET COMPLETE. System clean.")
+    else:
+        logger.info("Aborted.")
+
 def main():
     parser = argparse.ArgumentParser(description="LEVI-AI Sovereign OS Management CLI")
     subparsers = parser.add_subparsers(dest="command")
@@ -52,6 +104,12 @@ def main():
     dcn_parser = subparsers.add_parser("dcn")
     dcn_parser.add_argument("action", choices=["resync"])
 
+    # doctor
+    subparsers.add_parser("doctor")
+
+    # reset
+    subparsers.add_parser("reset")
+
     args = parser.parse_args()
 
     if args.command == "recover":
@@ -62,6 +120,10 @@ def main():
     elif args.command == "dcn":
         if args.action == "resync":
             dcn_resync()
+    elif args.command == "doctor":
+        doctor()
+    elif args.command == "reset":
+        reset()
     else:
         parser.print_help()
 

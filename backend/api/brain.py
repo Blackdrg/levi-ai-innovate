@@ -75,3 +75,23 @@ async def brain_strategy_endpoint(
     except Exception as e:
         logger.error(f"[BrainAPI] Strategic failure: {e}")
         return {"status": "error", "message": "The cosmic brain pulse is out of sync."}
+
+@router.get("/stream")
+async def strategy_stream(
+    message: str,
+    session_id: Optional[str] = None,
+    identity: UserIdentity = Depends(get_sovereign_identity)
+):
+    """
+    [Phase 2] Sovereign Cognitive Streaming.
+    Wires the user directly into the agentic thinking-loop.
+    """
+    from fastapi.responses import StreamingResponse
+    from backend.engines.brain.orchestrator import orchestrator as brain_orchestrator
+    import json
+    
+    async def event_generator():
+        async for update in brain_orchestrator.stream_request(identity.user_id, message):
+            yield f"data: {json.dumps(update)}\n\n"
+            
+    return StreamingResponse(event_generator(), media_type="text/event-stream")

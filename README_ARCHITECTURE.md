@@ -1,5 +1,5 @@
 # 🪐 LEVI-AI: Sovereign OS Architecture Manifest
-## Version: v22.0.0-GA-GRADUATED (Native Sovereignty)
+## Version: v22.1 (Engineering Baseline)
 ## Status: 100% NATIVE & FORENSICALLY CERTIFIED
 
 > [!IMPORTANT]

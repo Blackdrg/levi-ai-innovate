@@ -76,9 +76,22 @@ class VectorDB:
             return cls._instances[instance_key]
 
     async def _load(self):
-        """Loads index and metadata with v13.0 integrity checks."""
+        """Loads index and metadata with v22.1 SHA-256 integrity checks."""
         if os.path.exists(self.index_path) and os.path.exists(self.meta_path):
             try:
+                # v22.1: Verify SHA-256 before loading
+                sha_path = f"{self.index_path}.sha256"
+                if os.path.exists(sha_path):
+                    with open(sha_path, "r") as f:
+                        expected_sha = f.read().strip()
+                    
+                    with open(self.index_path, "rb") as f:
+                        actual_sha = hashlib.sha256(f.read()).hexdigest()
+                    
+                    if actual_sha != expected_sha:
+                        logger.error(f"🚨 [VectorDB] SHA-256 VERIFICATION FAILED for {self.collection_name}")
+                        raise ValueError("Index corruption detected: SHA-256 mismatch.")
+                
                 self.index = faiss.read_index(self.index_path)
                 with open(self.meta_path, "r") as f:
                     data = json.load(f)
@@ -96,9 +109,12 @@ class VectorDB:
                             logger.critical("[VectorDB] RE-INDEXING FAILED: No raw text found. Manual intervention required.")
                             raise ValueError("Deterministic re-indexing impossible: Text data missing in metadata.")
                             
-                logger.info(f"Loaded collection '{self.collection_name}' with {len(self.metadata)} records.")
+                logger.info(f"Loaded collection '{self.collection_name}' ({len(self.metadata)} records). Hash verified.")
             except Exception as e:
                 logger.error(f"Failed to load collection {self.collection_name}: {e}")
+                # Fallback to fresh index if loading fails and we are not in strict mode
+                self.index = faiss.IndexFlatIP(self.dimension)
+                self.metadata = []
 
     async def rebuild_index(self):
         """
@@ -157,21 +173,35 @@ class VectorDB:
 
     def _save(self):
         try:
-            # Atomic save to prevent corruption on GCS FUSE/Persistent Storage
+            # v22.1: Atomic save (temp + rename) + SHA-256 Checksum
+            import hashlib
             temp_index = f"{self.index_path}.tmp"
             temp_meta = f"{self.meta_path}.tmp"
+            temp_sha = f"{self.index_path}.sha256.tmp"
             
             faiss.write_index(self.index, temp_index)
+            
+            # Generate SHA-256 for the index
+            with open(temp_index, "rb") as f:
+                index_sha = hashlib.sha256(f.read()).hexdigest()
+            
+            with open(temp_sha, "w") as f:
+                f.write(index_sha)
+            
             with open(temp_meta, "w") as f:
                 json.dump({
                     "model_name": self.model_name,
                     "dimension": self.dimension,
-                    "records": self.metadata
+                    "records": self.metadata,
+                    "sha256": index_sha
                 }, f, default=str)
                 
+            # Atomic Rename Sequence
             os.replace(temp_index, self.index_path)
+            os.replace(temp_sha, f"{self.index_path}.sha256")
             os.replace(temp_meta, self.meta_path)
-            logger.info(f"Persisted collection '{self.collection_name}' to storage.")
+            
+            logger.info(f"✨ [VectorDB] Persisted '{self.collection_name}' (Hash: {index_sha[:8]}...).")
         except Exception as e:
             logger.error(f"Persistence error for {self.collection_name}: {e}")
 

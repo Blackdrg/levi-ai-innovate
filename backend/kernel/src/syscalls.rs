@@ -13,6 +13,9 @@ pub enum SysCallType {
     Kill = 62, // Send signal
     Mmap = 9,
     Munmap = 11,
+    NetSend = 0x04,
+    McmGraduate = 0x06,
+    McmRead = 0x0C,
 }
 
 pub struct SysCallDispatcher;
@@ -33,6 +36,18 @@ impl SysCallDispatcher {
             SysCallType::Kill => {
                 // Implementation for sys_kill
                 Ok(0)
+            },
+            SysCallType::NetSend => {
+                // Implementation for raw packet emission
+                Ok(1)
+            },
+            SysCallType::McmGraduate => {
+                // Implementation for tier-3 persistence
+                Ok(1)
+            },
+            SysCallType::McmRead => {
+                // Implementation for fact retrieval from Tier 3
+                Ok(1)
             },
             _ => Err("Syscall not yet implemented in this Ring".to_string()),
         }

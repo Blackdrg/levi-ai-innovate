@@ -17,8 +17,10 @@ PII_PATTERNS = {
 
 class SovereignShield:
     """
+    [STUB / ROADMAP Foundations]
     Sovereign Shield v8 Security Layer.
     Protects user PII before it leaves the local execution boundary.
+    (ZK-SNARKs and advanced redaction are currently ROADMAP items)
     """
 
     @staticmethod

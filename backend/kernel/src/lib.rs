@@ -388,13 +388,19 @@ impl LeviKernel {
             Some("Read")   => 0,
             Some("Spawn")  => 57,
             Some("Alloc")  => 9,
+            Some("NetSend") => 0x04,
+            Some("Graduate") => 0x06,
+            Some("McmRead") => 0x0C,
             _              => 0,
         };
 
         let call_type = match call_num {
-            1  => syscalls::SysCallType::Write,
-            62 => syscalls::SysCallType::Kill,
-            _  => syscalls::SysCallType::Read,
+            1    => syscalls::SysCallType::Write,
+            62   => syscalls::SysCallType::Kill,
+            0x04 => syscalls::SysCallType::NetSend,
+            0x06 => syscalls::SysCallType::McmGraduate,
+            0x0C => syscalls::SysCallType::McmRead,
+            _    => syscalls::SysCallType::Read,
         };
 
         let result = syscalls::SysCallDispatcher::dispatch(call_type, vec![])

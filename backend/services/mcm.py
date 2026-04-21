@@ -77,9 +77,11 @@ class MemoryConsistencyManager:
             )
         except Exception as e:
             logger.error(f"❌ [MCM] Event processing failure: {e}")
-            # Emit shadow failure event
+            # Emit shadow failure event (GA Fix: Added required mission_id and source)
             asyncio.create_task(sovereign_event_bus.emit("system_errors", {
                 "event_type": "MCM_PROCESS_FAILURE",
+                "mission_id": mission_id or "SYSTEM_MCM",
+                "source": self.region,
                 "payload": {"error": str(e), "event_ref": event}
             }))
 
@@ -219,7 +221,7 @@ class MemoryConsistencyManager:
             redis_client.hset(f"mcm:fidelity:{fact_id}", agent_id, str(fidelity))
             
             votes = redis_client.scard(quorum_key)
-            required_quorum = 9 # BFT Quorum for 16 agents (3f + 1 where f=5)
+            required_quorum = 11 # BFT Quorum for 16 agents (2f + 1 where n=3f+1, so f=5, 2(5)+1=11)
             
             logger.info(f"🧬 [BFT] Fact {fact_id}: {votes}/{required_quorum} votes recorded.")
             
@@ -236,6 +238,10 @@ class MemoryConsistencyManager:
                     redis_client.delete(f"mcm:fidelity:{fact_id}")
         else:
             # Fallback for single-node development
+            is_prod = os.getenv("ENVIRONMENT") == "production"
+            if is_prod:
+                logger.critical("🚨 [SECURITY] BFT Quorum BYPASSED in PRODUCTION mode. Redis is offline or disconnected.")
+            
             if fidelity >= 0.95:
                 await self._anchor_to_permanent_storage(fact_id, fidelity)
 

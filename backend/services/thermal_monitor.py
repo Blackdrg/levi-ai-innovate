@@ -41,6 +41,13 @@ class ThermalMonitor:
         while True:
             try:
                 temp = gpu_monitor.get_temperature()
+                vram = gpu_monitor.get_vram_usage()
+                
+                # VRAM Throttling (90% Threshold)
+                if vram.get("active") and vram["percent"] > 90.0:
+                    logger.warning(f"🌡️ [Thermal] VRAM Pressure Critical: {vram['percent']:.1f}%")
+                    await orchestrator.enable_vram_throttling()
+
                 if temp >= self.critical_threshold:
                     await self.handle_hardware_signal("critical", temp)
                 elif temp >= self.warning_threshold:

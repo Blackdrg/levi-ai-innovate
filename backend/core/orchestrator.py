@@ -84,6 +84,7 @@ VRAM_ADMISSION   = 0.94    # fraction — missions blocked above this
 VRAM_CRITICAL    = 0.98
 MISSION_TTL_SEC  = 900
 PULSE_INTERVAL   = 30
+DISTRIBUTED_COGNITION = os.getenv("DISTRIBUTED_COGNITION", "true").lower() == "true"
 # ─────────────────────────────────────────────────────────────────────────────
 
 logger = logging.getLogger(__name__)
@@ -308,20 +309,47 @@ class Orchestrator:
                 # but the mission itself is being tracked/registered by the native runtime.
             
             # ── 4. Brain delegation ───────────────────────────────────────────
-            brain = _get_brain()
+            if DISTRIBUTED_COGNITION and not streaming:
+                from backend.engines.brain.cognitive_engine import cognitive_engine
+                
+                logger.info("🧠 [Orchestrator] Delegating to DISTRIBUTED Cognitive Engine: %s", mission_id)
+                kernel.update_mission_state(mission_id, "Thinking")
+                
+                # Consume the generator to get the final state
+                final_state = None
+                async for update in cognitive_engine.run(user_id, user_input):
+                    if update["event"] == "final_state":
+                        final_state = update["data"]
+                
+                if not final_state:
+                     raise RuntimeError("Cognitive engine failed to return final state.")
+                
+                from backend.engines.brain.cognitive_engine import MissionState
+                # Format response for core orchestrator compatibility
+                result = {
+                    "response": cognitive_engine.final_output(
+                        MissionState.model_validate(final_state)
+                    ),
+                    "request_id": mission_id,
+                    "fidelity": final_state["shared_context"].get("score", 0.0) / 100.0,
+                    "status": "success" if final_state["status"] == "COMPLETED" else "failed",
+                    "intent": final_state.get("intent", "chat")
+                }
+            else:
+                brain = _get_brain()
 
-            if streaming:
-                return self._handle_stream(brain, user_input, user_id, session_id,
-                                           mission_id, **kwargs)
+                if streaming:
+                    return self._handle_stream(brain, user_input, user_id, session_id,
+                                               mission_id, **kwargs)
 
-            result = await brain.route(
-                user_input=user_input,
-                user_id=user_id,
-                session_id=session_id,
-                streaming=False,
-                request_id=mission_id,
-                **kwargs,
-            )
+                result = await brain.route(
+                    user_input=user_input,
+                    user_id=user_id,
+                    session_id=session_id,
+                    streaming=False,
+                    request_id=mission_id,
+                    **kwargs,
+                )
 
             kernel.update_mission_state(mission_id, "Succeeded")
 
