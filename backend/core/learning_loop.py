@@ -46,6 +46,23 @@ class LearningLoop:
         
         logger.info(f"[LearningLoop] Capturing outcome for mission {mission_id} (Fidelity: {fidelity:.2f})")
 
+        # Sovereign v22.1: Enforce 3/4 Raft Quorum for Crystallization
+        # Requirement: 3 valid signatures from the 4-node consensus fabric
+        signatures = metadata.get("signatures", [])
+        if not signatures or len(signatures) < 3:
+            logger.warning(f"⚠️ [LearningLoop] Rejected {mission_id}: Insufficient Quorum ({len(signatures) if signatures else 0}/3).")
+            return
+
+        from backend.utils.kms import SovereignKMS
+        valid_sigs = 0
+        for sig in signatures:
+            if await SovereignKMS.verify_trace(f"{mission_id}:{query}", sig):
+                valid_sigs += 1
+        
+        if valid_sigs < 3:
+             logger.error(f"🚨 [LearningLoop] QUORUM VALIDATION FAILURE for {mission_id}: {valid_sigs}/3 signatures.")
+             return
+
         try:
             async with await PostgresDB.get_session() as session:
                 async with session.begin():
@@ -252,3 +269,16 @@ class LearningLoop:
                 await session.execute(update(GraduatedRule).where(GraduatedRule.id == rule_id).values(uses_count=GraduatedRule.uses_count + 1))
                 await session.commit()
         except Exception: pass
+
+    @classmethod
+    async def run_promotion_cycle(cls):
+        """Autonomous stability audit: Promotes stable patterns to Deterministic Rules."""
+        await cls.distill_graduated_rules()
+
+    @classmethod
+    async def run_forever(cls, interval_seconds=3600):
+        """Main autonomous learning cycle entry point."""
+        logger.info(f"🧬 [LearningLoop] Autonomous pulse active (V22.1-ENGINEERING)")
+        while True:
+            await cls.run_promotion_cycle()
+            await asyncio.sleep(interval_seconds)

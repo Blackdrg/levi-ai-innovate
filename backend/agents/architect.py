@@ -28,25 +28,46 @@ class ArchitectAgent(BaseAgent):
         
         logger.info(f"🏗️ [Architect] Designing DAG for goal: {goal}")
         
-        # 1. Generate DAG Structure
+        # 1. Generate DAG Structure with Axiom 29.2
+        axiom = (
+            "Complexity is the enemy of truth. Decompose every user mission into the smallest possible set of "
+            "independent, verifiable nodes. Ensure that the resulting Directed Acyclic Graph (DAG) maximizes "
+            "parallel execution while strictly respecting causal dependencies."
+        )
+        
         prompt = (
+            f"SYSTEM AXIOM: {axiom}\n\n"
             "You are the LEVI Architect. Decompose the following goal into a multi-wave DAG.\n"
             f"GOAL: {goal}\n"
             f"AVAILABLE AGENTS: {', '.join(available_agents)}\n\n"
-            "Format the output as a LIST of waves, where each wave is a list of tasks.\n"
-            "Example: [[{\"agent\": \"Scout\", \"task\": \"...\"}], [{\"agent\": \"Artisan\", \"task\": \"...\"}]]"
+            "CRITICAL-PATH HEURISTIC (Section 83.1):\n"
+            "Priority(T_i) = Complexity(T_i) + Σ Latency(Children(T_i)).\n\n"
+            "Format the output as a JSON object containing a LIST of 'waves', where each wave is a list of tasks. "
+            "Each task MUST have 'agent', 'task', 'dependencies' (list of task indices), and 'estimated_latency_ms'.\n"
+            "Example:\n"
+            "{\n"
+            "  \"waves\": [\n"
+            "    [{\"id\": 0, \"agent\": \"Scout\", \"task\": \"...\", \"dependencies\": [], \"estimated_latency_ms\": 200}],\n"
+            "    [{\"id\": 1, \"agent\": \"Artisan\", \"task\": \"...\", \"dependencies\": [0], \"estimated_latency_ms\": 500}]\n"
+            "  ]\n"
+            "}"
         )
         
         dag_res = await call_heavyweight_llm([{"role": "user", "content": prompt}])
         
         # 2. Extract JSON DAG
         import re
-        json_match = re.search(r"\[.*\]", dag_res, re.DOTALL)
-        dag = json.loads(json_match.group()) if json_match else []
+        json_match = re.search(r"\{.*\}", dag_res, re.DOTALL)
+        try:
+            dag_data = json.loads(json_match.group()) if json_match else {"waves": []}
+            waves = dag_data.get("waves", [])
+        except Exception as e:
+            logger.error(f"Failed to parse Architect DAG: {e}")
+            waves = []
         
         return AgentOutput(
             agent_id=self.agent_id,
             success=True,
-            output=f"DAG designed with {len(dag)} waves.",
-            data={"dag": dag}
+            output=f"DAG designed with {len(waves)} waves.",
+            data={"dag": waves}
         )

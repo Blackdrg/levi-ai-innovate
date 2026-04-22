@@ -1,14 +1,21 @@
-# prometheus.yml
 global:
   scrape_interval: 15s
+  evaluation_interval: 15s
+
 rule_files:
-  - infrastructure/prometheus/alerts.yml
+  - "/etc/prometheus/rules.yml"
 
 scrape_configs:
-  - job_name: 'levi_api'
+  - job_name: "levi-orchestrator"
     static_configs:
-      - targets: ['backend:8000']
+      - targets: ["orchestrator:8000"]
+    metrics_path: "/metrics"
 
-  - job_name: 'prometheus'
+  - job_name: "prometheus"
     static_configs:
-      - targets: ['localhost:9090']
+      - targets: ["localhost:9090"]
+
+  - job_name: "zipkin"
+    static_configs:
+      - targets: ["zipkin:9411"]
+    metrics_path: "/metrics"

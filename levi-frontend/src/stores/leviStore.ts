@@ -60,12 +60,13 @@ interface LeviState {
 
 export const useLeviStore = create<LeviState>((set) => ({
   pulse: null,
-  agents: Array.from({ length: 16 }, (_, i) => ({
-    name: `AGENT_${i+1}`,
-    status: 'READY',
-    latency: 0,
-    model: 'SOVEREIGN_V22'
-  })),
+  agents: [
+    { name: 'Sovereign', status: 'READY', latency: 3.4, model: 'Coordinator' },
+    { name: 'Artisan',   status: 'READY', latency: 320, model: 'Worker' },
+    { name: 'Analyst',   status: 'READY', latency: 450, model: 'Researcher' },
+    { name: 'Critic',    status: 'READY', latency: 280, model: 'Forensic' },
+    { name: 'Scout',     status: 'READY', latency: 150, model: 'Search' }
+  ],
   syscalls: [],
   healLogs: [],
   thermal: {

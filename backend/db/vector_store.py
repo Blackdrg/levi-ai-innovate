@@ -13,9 +13,10 @@ from typing import List, Dict, Any
 from backend.utils.vector_db import VectorDB
 from backend.utils.encryption import SovereignVault
 
+from backend.utils.circuit_breaker import ollama_breaker
 logger = logging.getLogger(__name__)
 
-def embed_text(text: str) -> list:
+async def embed_text(text: str) -> list:
     """
     Returns a 768-dim vector for the given text using local Ollama.
     """
@@ -25,11 +26,9 @@ def embed_text(text: str) -> list:
     base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     model = os.getenv("OLLAMA_MODEL_EMBED", "nomic-embed-text")
     
-    try:
-        # We use a synchronous request here because the caller (VectorDB)
-        # currently wraps this in asyncio.to_thread.
-        with httpx.Client(timeout=30.0) as client:
-            response = client.post(
+    async def _do_embed():
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
                 f"{base_url}/api/embeddings",
                 json={
                     "model": model,
@@ -38,6 +37,9 @@ def embed_text(text: str) -> list:
             )
             response.raise_for_status()
             return response.json()["embedding"]
+
+    try:
+        return await ollama_breaker.call(_do_embed)
     except Exception as e:
         logger.error(f"[VectorStore] Ollama Embedding Error: {e}")
         

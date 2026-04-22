@@ -1,0 +1,93 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": 2,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "title": "GPU VRAM Pressure",
+      "type": "gauge",
+      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "leiva_vram_usage_percent",
+          "legendFormat": "VRAM Usage %"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 100,
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 85 },
+              { "color": "red", "value": 94 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Mission Latency (E2E)",
+      "type": "histogram",
+      "gridPos": { "h": 8, "w": 6, "x": 6, "y": 0 },
+      "targets": [
+        {
+          "expr": "mission_latency_ms",
+          "legendFormat": "Latency ms"
+        }
+      ]
+    },
+    {
+      "title": "Graduation Count (Truth Anchored)",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "missions_completed_total",
+          "legendFormat": "Missions Graduated"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": null }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Thermal Migration Events",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 0 },
+      "targets": [
+        {
+          "expr": "rate(leiva_thermal_events_total[5m])",
+          "legendFormat": "{{severity}}"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 36,
+  "style": "dark",
+  "tags": ["sovereign", "v22.1", "hardening"],
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "title": "Sovereign OS v22.1 Resilience & Hardening",
+  "uid": "sovereign-v22-hardening",
+  "version": 1
+}

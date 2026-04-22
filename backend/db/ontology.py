@@ -10,6 +10,7 @@ class EntityType(str, Enum):
     LOCATION = "Location"
     TECHNOLOGY = "Technology"
     EVENT = "Event"
+    FACT = "Fact"
     UNKNOWN = "Unknown"
 
 class RelationType(str, Enum):
@@ -22,6 +23,10 @@ class RelationType(str, Enum):
     DEPENDS_ON    = "DEPENDS_ON"
     RELATED_TO    = "RELATED_TO"
     SOURCED_FROM  = "SOURCED_FROM"   # CitationBundle → Neo4j triplet type
+    CAUSED_BY     = "CAUSED_BY"
+    ASSOCIATED_WITH = "ASSOCIATED_WITH"
+    CONTRADICTS   = "CONTRADICTS"
+    SYNCHRONIZED_WITH = "SYNCHRONIZED_WITH"
 
 class Entity(BaseModel):
     name: str = Field(..., description="Unique name/identifier of the entity")

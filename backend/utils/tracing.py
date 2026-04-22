@@ -39,20 +39,34 @@ def setup_tracing(app: Optional[Any] = None) -> trace.Tracer:
         
         provider = trace.get_tracer_provider()
         
+        zipkin_endpoint = os.getenv("ZIPKIN_ENDPOINT")
+        
+        if zipkin_endpoint:
+            from opentelemetry.exporter.zipkin.json import ZipkinExporter
+            zipkin_processor = BatchSpanProcessor(ZipkinExporter(endpoint=zipkin_endpoint))
+            provider.add_span_processor(zipkin_processor)
+            logger.info("[Tracing] Zipkin exporter initialized: %s", zipkin_endpoint)
+
         if otlp_endpoint:
             from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
             span_processor = BatchSpanProcessor(OTLPSpanExporter(endpoint=otlp_endpoint))
             provider.add_span_processor(span_processor)
             logger.info("[Tracing] OpenTelemetry initialized. Exporting to %s", otlp_endpoint)
-        else:
+        
+        if not zipkin_endpoint and not otlp_endpoint:
             from opentelemetry.sdk.trace.export import ConsoleSpanExporter
             processor = BatchSpanProcessor(ConsoleSpanExporter())
             provider.add_span_processor(processor)
             logger.info("[Tracing] OpenTelemetry initialized with ConsoleExporter (Baseline).")
 
         if app:
+            from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
             FastAPIInstrumentor.instrument_app(app)
             logger.info("[Tracing] FastAPI instrumentation active.")
+            
+        from opentelemetry.instrumentation.celery import CeleryInstrumentor
+        CeleryInstrumentor().instrument()
+        logger.info("[Tracing] Celery instrumentation active.")
             
     except Exception as e:
         logger.warning("[Tracing] OTEL init anomaly: %s. Continuing with default tracer.", e)
@@ -82,3 +96,14 @@ async def traced_span(name: str, **attributes: Any) -> AsyncIterator[Any]:
         raise
     finally:
         span.end()
+
+def set_mission_baggage(mission_id: str):
+    """Sets mission_id in OpenTelemetry baggage for cross-boundary propagation."""
+    from opentelemetry import baggage, context
+    ctx = baggage.set_baggage("mission_id", mission_id)
+    return context.attach(ctx)
+
+def get_mission_baggage() -> Optional[str]:
+    """Retrieves mission_id from OpenTelemetry baggage."""
+    from opentelemetry import baggage
+    return baggage.get_baggage("mission_id")

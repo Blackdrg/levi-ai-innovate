@@ -108,9 +108,12 @@ class SelfHealingEngine:
         if "FAULT: ATA Driver parity error" in msg:
              logger.critical("🩺 [SelfHealing] CRITICAL KERNEL DRIVER FAULT DETECTED. Initiating Hot-Patch (DRA)...")
              # Send SYS_REPLACELOGIC (0x99) with Symbol ID 0x01 (ATA_WRITE)
-             patch_request = {"SYS_REPLACELOGIC": {"symbol_id": 0x01, "blob_ptr": 0x0}} # 0x0 = use internal default_logic
-             kernel.sys_call("mainframe", json.dumps(patch_request))
-             logger.info(" ✅ [SelfHealing] Kernel Hot-Patch applied via DRA.")
+             if os.getenv("ALLOW_HOTPATCH", "0") == "1":
+                 patch_request = {"SYS_REPLACELOGIC": {"symbol_id": 0x01, "blob_ptr": 0x0}} # 0x0 = use internal default_logic
+                 kernel.sys_call("mainframe", json.dumps(patch_request))
+                 logger.info(" ✅ [SelfHealing] Kernel Hot-Patch applied via DRA.")
+             else:
+                 logger.warning(" 🛑 [SelfHealing] Hot-Patch (0x99) blocked by ALLOW_HOTPATCH=0.")
 
         if payload.get("type") == "OOM-KILLED":
             mid = payload.get("mission_id")

@@ -1,0 +1,11 @@
+# backend/kernel/bare_metal/.cargo/config.toml
+
+[build]
+target = "x86_64-hal0.json"
+
+[target.'cfg(target_os = "none")']
+runner = "bootimage run"
+
+[unstable]
+build-std = ["core", "compiler_builtins", "alloc"]
+build-std-features = ["compiler-builtins-mem"]

@@ -3,6 +3,11 @@ use x86_64::{
     VirtAddr, PhysAddr
 };
 use bootloader::bootinfo::{MemoryMap, MemoryRegionType};
+use spin::Mutex;
+
+/// Global Kernel Memory Management Structures
+pub static MAPPER: Mutex<Option<OffsetPageTable<'static>>> = Mutex::new(None);
+pub static FRAME_ALLOCATOR: Mutex<Option<BootInfoFrameAllocator>> = Mutex::new(None);
 
 /// Initialize a new OffsetPageTable.
 pub unsafe fn init(physical_memory_offset: VirtAddr) -> OffsetPageTable<'static> {

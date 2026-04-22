@@ -21,7 +21,7 @@ from .agent_config import AgentConfig
 
 class AgentRegistry:
     """
-    Sovereign v15.0 Agent Registry.
+    Sovereign v22.1 Agent Registry.
     Enforces strict TEC (Task Execution Contract) and hierarchical configurations.
     """
     _agents: Dict[str, AgentCapability] = {}
@@ -55,155 +55,108 @@ class AgentRegistry:
             logger.error(f"[Registry] Input validation FAILED for {agent_name}: {e.message}")
             return False
 
-    @classmethod
-    async def graduate_rule(cls, rule: Dict[str, Any]):
-        """
-        Sovereign v15.2: Dynamic Rule Graduation.
-        Promotes a successful evolutionary pattern to a deterministic agent capability.
-        """
-        import time
-        name = rule.get("tag", f"evolved_{int(time.time())}")
-        logger.info(f"🚀 [Registry] Graduating evolutionary rule to core capability: {name}")
-        
-        # Construct a specialized capability for the evolved rule
-        cap = AgentCapability(
-            name=name,
-            agent_type="evolved_logic",
-            input_schema=rule.get("input_schema", {"type": "object"}),
-            output_schema=rule.get("output_schema", {"type": "object"}),
-            is_sovereign=True,
-            required_role="user"
-        )
-        
-        cls.register(name, cap)
+# ── The Sovereign v22.1 Swarm (16 Nodes) ───────────────────────────
 
-# Default Agent Configurations (Hardened v15.0 Swarm)
 DEFAULT_AGENTS = {
-    "scout": AgentCapability(
-        name="Scout",
-        agent_type="search",
-        input_schema={"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]},
-        output_schema={"type": "object"}
-    ),
-    "artisan": AgentCapability(
-        name="Artisan",
-        agent_type="coder",
-        input_schema={"type": "object", "properties": {"code": {"type": "string"}}, "required": ["code"]},
-        required_role="developer",
-        output_schema={"type": "object"}
-    ),
-    "librarian": AgentCapability(
-        name="Librarian",
-        agent_type="research",
-        input_schema={"type": "object", "properties": {"file_id": {"type": "string"}}, "required": ["file_id"]},
-        output_schema={"type": "object"}
-    ),
-    "critic": AgentCapability(
-        name="Critic",
-        agent_type="validation",
-        input_schema={"type": "object", "properties": {"draft": {"type": "string"}}, "required": ["draft"]},
-        output_schema={"type": "object"}
+    "sovereign": AgentCapability(
+        name="Sovereign",
+        agent_type="core",
+        input_schema={"type": "object"},
+        output_schema={"type": "object"},
+        required_role="admin"
     ),
     "architect": AgentCapability(
         name="Architect",
         agent_type="planner",
-        input_schema={"type": "object", "properties": {"objective": {"type": "string"}}, "required": ["objective"]},
+        input_schema={"type": "object"},
         output_schema={"type": "object"}
     ),
-    "chronicler": AgentCapability(
-        name="Chronicler",
-        agent_type="memory",
-        input_schema={"type": "object", "properties": {"event": {"type": "string"}}, "required": ["event"]},
-        output_schema={"type": "object"}
-    ),
-    "sentinel": AgentCapability(
-        name="Sentinel",
-        agent_type="security",
-        input_schema={"type": "object", "properties": {"payload": {"type": "string"}}, "required": ["payload"]},
-        required_role="admin",
-        output_schema={"type": "object"}
-    ),
-    "vision": AgentCapability(
-        name="Vision",
-        agent_type="video",
-        input_schema={"type": "object", "properties": {"source": {"type": "string"}}, "required": ["source"]},
-        output_schema={"type": "object"}
-    ),
-    "echo": AgentCapability(
-        name="Echo",
-        agent_type="audio",
-        input_schema={"type": "object", "properties": {"audio_data": {"type": "string"}}, "required": ["audio_data"]},
-        output_schema={"type": "object"}
+    "artisan": AgentCapability(
+        name="Artisan",
+        agent_type="builder",
+        input_schema={"type": "object"},
+        output_schema={"type": "object"},
+        required_role="developer"
     ),
     "analyst": AgentCapability(
         name="Analyst",
         agent_type="analysis",
-        input_schema={"type": "object", "properties": {"data": {"type": "object"}}, "required": ["data"]},
+        input_schema={"type": "object"},
         output_schema={"type": "object"}
     ),
-    "curator": AgentCapability(
-        name="Curator",
-        agent_type="graph",
-        input_schema={"type": "object", "properties": {"triplets": {"type": "array"}}, "required": ["triplets"]},
-        output_schema={"type": "object"}
-    ),
-    "messenger": AgentCapability(
-        name="Messenger",
-        agent_type="notification",
-        input_schema={"type": "object", "properties": {"msg": {"type": "string"}}, "required": ["msg"]},
-        output_schema={"type": "object"}
-    ),
-    "consensus": AgentCapability(
-        name="Consensus",
-        agent_type="consensus",
-        input_schema={"type": "object", "properties": {"goal": {"type": "string"}}, "required": ["goal"]},
-        output_schema={"type": "object"}
-    ),
-    "policy": AgentCapability(
-        name="Policy",
-        agent_type="optimization",
-        input_schema={"type": "object", "properties": {"mission_id": {"type": "string"}}, "required": ["mission_id"]},
-        output_schema={"type": "object"}
-    ),
-    "dreamer": AgentCapability(
-        name="Dreamer",
-        agent_type="evolution",
-        input_schema={"type": "object", "properties": {"pattern": {"type": "string"}}, "required": ["pattern"]},
-        output_schema={"type": "object"}
-    ),
-    "sovereign": AgentCapability(
-        name="Sovereign",
-        agent_type="core",
-        input_schema={"type": "object", "properties": {"input": {"type": "string"}}, "required": ["input"]},
-        output_schema={"type": "object"}
-    ),
-    "cognition": AgentCapability(
-        name="Cognition",
-        agent_type="reasoning",
-        input_schema={"type": "object", "properties": {"input": {"type": "string"}}, "required": ["input"]},
+    "critic": AgentCapability(
+        name="Critic",
+        agent_type="gatekeeper",
+        input_schema={"type": "object"},
         output_schema={"type": "object"}
     ),
     "sentinel": AgentCapability(
         name="Sentinel",
         agent_type="security",
-        input_schema={"type": "object", "properties": {"input": {"type": "string"}}, "required": ["input"]},
-        required_role="user",
+        input_schema={"type": "object"},
         output_schema={"type": "object"}
     ),
-
-    "system": AgentCapability(
-        name="SystemController",
-        agent_type="os_control",
-        input_schema={
-            "type": "object", 
-            "properties": {
-                "action": {"type": "string", "enum": ["read_file", "write_file", "list_dir", "process_status", "system_health"]},
-                "params": {"type": "object"}
-            }, 
-            "required": ["action"]
-        },
-        required_role="admin",
+    "historian": AgentCapability(
+        name="Historian",
+        agent_type="chronicler",
+        input_schema={"type": "object"},
         output_schema={"type": "object"}
+    ),
+    "forensic": AgentCapability(
+        name="Forensic",
+        agent_type="auditor",
+        input_schema={"type": "object"},
+        output_schema={"type": "object"},
+        required_role="admin"
+    ),
+    "nomad": AgentCapability(
+        name="Nomad",
+        agent_type="bridge",
+        input_schema={"type": "object"},
+        output_schema={"type": "object"}
+    ),
+    "thermal": AgentCapability(
+        name="Thermal",
+        agent_type="guardian",
+        input_schema={"type": "object"},
+        output_schema={"type": "object"}
+    ),
+    "epistemic": AgentCapability(
+        name="Epistemic",
+        agent_type="resonator",
+        input_schema={"type": "object"},
+        output_schema={"type": "object"}
+    ),
+    "pulse": AgentCapability(
+        name="Pulse",
+        agent_type="sync",
+        input_schema={"type": "object"},
+        output_schema={"type": "object"}
+    ),
+    "shield": AgentCapability(
+        name="Shield",
+        agent_type="privacy",
+        input_schema={"type": "object"},
+        output_schema={"type": "object"}
+    ),
+    "shadow": AgentCapability(
+        name="Shadow",
+        agent_type="redundancy",
+        input_schema={"type": "object"},
+        output_schema={"type": "object"}
+    ),
+    "hive": AgentCapability(
+        name="Hive",
+        agent_type="swarm",
+        input_schema={"type": "object"},
+        output_schema={"type": "object"}
+    ),
+    "genesis": AgentCapability(
+        name="Genesis",
+        agent_type="bootstrapper",
+        input_schema={"type": "object"},
+        output_schema={"type": "object"},
+        required_role="admin"
     )
 }
 
@@ -214,6 +167,7 @@ for name, cap in DEFAULT_AGENTS.items():
         type=cap.agent_type,
         mtls_endpoint=f"https://agent-{name}.internal:5001",
         timeout_ms=cap.timeout_seconds * 1000,
-        max_retries=cap.max_retries
+        max_retries=cap.max_retries,
+        capabilities=[cap.agent_type]
     )
     AgentRegistry.register(name, cap, config=config)

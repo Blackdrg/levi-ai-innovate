@@ -116,6 +116,10 @@ class LeviKernel:
     def get_telemetry(self) -> Optional[str]:
         return self._call("get_telemetry", default=None)
 
+    def write_record(self, event_id: int, arg1: int, arg2: int) -> None:
+        """v22.1: KHTP Binary Telemetry Syscall."""
+        self._call("write_record", event_id, arg1, arg2)
+
     def emit_heartbeat(self, term: int, pulse_json: str) -> str:
         """
         Signs a DCN pulse using hardware-bound Ed25519 keys.

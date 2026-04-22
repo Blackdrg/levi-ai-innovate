@@ -1,35 +1,57 @@
 version: '3.8'
 
 services:
-  hal-0:
-    build:
-      context: .
-      dockerfile: backend/levi_runtime/Dockerfile
+  # --- Persistent Substrate ---
+  postgres:
+    image: postgres:14-alpine
+    container_name: levi-postgres
     environment:
-      - NODE_ID=HAL-0-PRIMARY
-      - PORT=8001
-      - DCN_PEERS=hal-1:8002,hal-2:8003
+      POSTGRES_DB: levi_ai
+      POSTGRES_PASSWORD: sovereign_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - levi_pg_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: levi-redis
+    ports:
+      - "6379:6379"
+
+  # --- The Native Core (HAL-0) ---
+  kernel-service:
+    build:
+      context: ./backend/kernel
+      dockerfile: Dockerfile
+    container_name: levi-kernel
     ports:
       - "8001:8001"
+    depends_on:
+      - redis
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
 
-  hal-1:
+  # --- The Sovereign Mainframe (Soul) ---
+  mainframe:
     build:
       context: .
-      dockerfile: backend/levi_runtime/Dockerfile
-    environment:
-      - NODE_ID=HAL-1-FOLLOWER
-      - PORT=8002
-      - DCN_PEERS=hal-0:8001,hal-2:8003
+      dockerfile: Dockerfile
+    container_name: levi-mainframe
     ports:
-      - "8002:8002"
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - redis
+      - kernel-service
+    environment:
+      - DATABASE_URL=postgresql://postgres:sovereign_password@postgres:5432/levi_ai
+      - REDIS_HOST=redis
+      - RUST_RUNTIME_URL=http://kernel-service:8001
+      - ENVIRONMENT=production
+    volumes:
+      - ./data:/app/data
 
-  hal-2:
-    build:
-      context: .
-      dockerfile: backend/levi_runtime/Dockerfile
-    environment:
-      - NODE_ID=HAL-2-FOLLOWER
-      - PORT=8003
-      - DCN_PEERS=hal-0:8001,hal-1:8002
-    ports:
-      - "8003:8003"
+volumes:
+  levi_pg_data:

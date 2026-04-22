@@ -24,56 +24,55 @@ def run_agent_task(self, payload: dict):
     # 2. Run Agent
     # Since Celery workers usually run in a sync loop, we use a loop to run the async agent dispatch
     async def _dispatch():
-        try:
-            from backend.core.agent_registry import AgentRegistry
-            from backend.agents.base import AgentResult
-            
-            agent_cap = AgentRegistry.get_agent(agent_name)
-            if not agent_cap:
-                # Fallback to local sync if agent not found in registry
-                from backend.core.local_engine import handle_local_sync
-                logger.warning(f"Agent {agent_name} not found in registry, using fallback.")
-                result = await handle_local_sync([
-                    {"role": "system", "content": f"You are the {agent_name} agent."},
-                    {"role": "user", "content": input_data}
-                ])
-                return {"status": "completed", "output": result}
-            
-            from backend.agents.cognition import CognitionAgent, CognitionInput
-            from backend.agents.sentinel import SentinelAgent, SentinelInput
-            from backend.agents.memory_agent import MemoryAgent, MemoryInput # LIBRARIAN
-            from backend.agents.task_agent import TaskAgent, TaskInput # EXECUTOR
-            
-            agent_map = {
-                "cognition": (CognitionAgent, CognitionInput),
-                "sentinel": (SentinelAgent, SentinelInput),
-                "librarian": (MemoryAgent, MemoryInput),
-                "executor": (TaskAgent, TaskInput),
-                # Aliases for MAS
-                "researcher": (CognitionAgent, CognitionInput),
-                "research": (CognitionAgent, CognitionInput),
-                "writer": (CognitionAgent, CognitionInput),
-                "critic": (SentinelAgent, SentinelInput),
-                "auditor": (SentinelAgent, SentinelInput),
-                "memory": (MemoryAgent, MemoryInput),
-                "chat": (CognitionAgent, CognitionInput)
-            }
+        from backend.utils.tracing import traced_span, get_mission_baggage
+        
+        mission_baggage = get_mission_baggage()
+        if mission_baggage:
+            logger.info(f"🧬 [Tracing] Resuming context for mission: {mission_baggage}")
 
-            
-            mapping = agent_map.get(agent_name.lower())
-            if not mapping:
-                from backend.core.local_engine import handle_local_sync
-                result = await handle_local_sync([
-                    {"role": "system", "content": f"You are the {agent_name} agent."},
-                    {"role": "user", "content": input_data}
-                ])
-                return {"status": "completed", "output": result}
-
-            agent_cls, input_cls = mapping
-            agent_instance = agent_cls()
-            
+        async with traced_span(f"agent:{agent_name}", mission_id=mission_id) as span:
             try:
-                # Prepare input data with user/session context if available
+                from backend.core.agent_registry import AgentRegistry
+                from backend.agents.base import AgentResult
+                
+                agent_cap = AgentRegistry.get_agent(agent_name)
+                if not agent_cap:
+                    from backend.core.local_engine import handle_local_sync
+                    result = await handle_local_sync([
+                        {"role": "system", "content": f"You are the {agent_name} agent."},
+                        {"role": "user", "content": input_data}
+                    ])
+                    return {"status": "completed", "output": result}
+                
+                from backend.agents.cognition import CognitionAgent, CognitionInput
+                from backend.agents.sentinel import SentinelAgent, SentinelInput
+                from backend.agents.memory_agent import MemoryAgent, MemoryInput
+                from backend.agents.task_agent import TaskAgent, TaskInput
+                
+                agent_map = {
+                    "cognition": (CognitionAgent, CognitionInput),
+                    "sentinel": (SentinelAgent, SentinelInput),
+                    "librarian": (MemoryAgent, MemoryInput),
+                    "executor": (TaskAgent, TaskInput),
+                    "researcher": (CognitionAgent, CognitionInput),
+                    "writer": (CognitionAgent, CognitionInput),
+                    "critic": (SentinelAgent, SentinelInput),
+                    "memory": (MemoryAgent, MemoryInput),
+                    "chat": (CognitionAgent, CognitionInput)
+                }
+                
+                mapping = agent_map.get(agent_name.lower())
+                if not mapping:
+                    from backend.core.local_engine import handle_local_sync
+                    result = await handle_local_sync([
+                        {"role": "system", "content": f"You are the {agent_name} agent."},
+                        {"role": "user", "content": input_data}
+                    ])
+                    return {"status": "completed", "output": result}
+
+                agent_cls, input_cls = mapping
+                agent_instance = agent_cls()
+                
                 input_kwargs = {"input": input_data}
                 if hasattr(input_cls, "user_id"):
                     input_kwargs["user_id"] = payload.get("user_id", "system")
@@ -90,14 +89,8 @@ def run_agent_task(self, payload: dict):
                     "agent": agent_name
                 }
             except Exception as e:
-                logger.error(f"Error executing agent {agent_name}: {e}")
+                logger.error(f"Agent execution failed: {e}", exc_info=True)
                 return {"status": "failed", "error": str(e)}
-
-
-        except Exception as e:
-            logger.error(f"Agent execution failed: {e}", exc_info=True)
-            return {"status": "failed", "error": str(e)}
-
 
     loop = asyncio.get_event_loop()
     result = loop.run_until_complete(_dispatch())

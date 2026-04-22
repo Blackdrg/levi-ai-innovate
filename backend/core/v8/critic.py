@@ -51,8 +51,8 @@ class ReflectionEngine:
             }, shadow_audit_context)
 
             metrics = audit_raw.get("data", {})
-            fidelity_score = metrics.get("quality_score", metrics.get("fidelity", 0.5))
-            shadow_score = shadow_audit.get("data", {}).get("quality_score", 0.5)
+            fidelity_score = metrics.get("fidelity_score", metrics.get("quality_score", metrics.get("fidelity", 0.5)))
+            shadow_score = shadow_audit.get("data", {}).get("fidelity_score", shadow_audit.get("data", {}).get("quality_score", 0.5))
             
             if fidelity_score is None:
                 fidelity_score = 0.5 # Default to neutral if missing

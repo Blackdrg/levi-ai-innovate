@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 from sqlalchemy.orm import declarative_base
 from sqlalchemy import text
 
+from backend.utils.circuit_breaker import postgres_breaker
 logger = logging.getLogger(__name__)
 
 Base = declarative_base()
@@ -21,10 +22,15 @@ class PostgresDB:
     @classmethod
     def get_engine(cls):
         if cls._engine is None:
-            db_url = os.getenv("DATABASE_URL")
+            from backend.utils.secrets import secret_manager
+            db_url = secret_manager.get_secret("DATABASE_URL")
             if not db_url:
-                logger.warning("DATABASE_URL not found. Postgres will be unavailable.")
-                return None
+                user = os.getenv("DB_USER", "levi")
+                pw = secret_manager.get_secret("DB_PASSWORD") or os.getenv("DB_PASSWORD", "sovereign")
+                host = os.getenv("DB_HOST", "postgres")
+                port = os.getenv("DB_PORT", "5432")
+                db = os.getenv("DB_NAME", "levi_ai")
+                db_url = f"postgresql+asyncpg://{user}:{pw}@{host}:{port}/{db}"
             
             # Convert postgres:// to postgresql+asyncpg:// if needed
             if db_url.startswith("postgres://"):
@@ -119,26 +125,31 @@ class PostgresDB:
         import asyncio
         
         for attempt in range(3):
-            session = await cls.get_session()
-            if not session:
-                logger.critical("[Postgres] Failed to acquire session.")
-                raise ConnectionError("Postgres session unavailable.")
-                
-            try:
+            async def run_session():
+                session = await cls.get_session()
+                if not session:
+                    raise ConnectionError("Postgres session unavailable.")
                 # Section 5 Fix: Explicit liveness check
                 await session.execute(text("SELECT 1"))
+                return session
+            
+            session = None
+            try:
+                session = await postgres_breaker.call(run_session)
                 yield session
                 await session.commit()
                 return
             except OperationalError:
-                await session.rollback()
-                await session.close()
+                if session:
+                    await session.rollback()
+                    await session.close()
                 if attempt == 2:
                     raise
                 # Exponential backoff: 0.5s, 1.0s, 1.5s
                 await asyncio.sleep(0.5 * (attempt + 1))
             except Exception:
-                await session.rollback()
+                if session:
+                    await session.rollback()
                 raise
             finally:
                 # Ensure closure

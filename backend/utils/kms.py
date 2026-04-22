@@ -225,3 +225,23 @@ class SovereignKMS:
                  format=serialization.PublicFormat.Raw
              )
              return base64.b64encode(raw).decode()
+
+    @classmethod
+    def hmac_sign_audit(cls, data: str) -> str:
+        """
+        Sovereign v22.1: Offline HMAC Authority.
+        Signs audit records using a key sealed in the OS keyring.
+        The secret is never exposed as an environment variable.
+        """
+        import hmac
+        import hashlib
+        import keyring
+        
+        # 🛡️ Sealed Key Retrieval
+        secret = keyring.get_password("levi-ai", "audit-chain-sealed-secret")
+        if not secret:
+            import secrets
+            secret = secrets.token_hex(64)
+            keyring.set_password("levi-ai", "audit-chain-sealed-secret", secret)
+            
+        return hmac.new(secret.encode(), data.encode(), hashlib.sha256).hexdigest()

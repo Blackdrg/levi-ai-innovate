@@ -37,9 +37,9 @@ docker-compose up -d --build
 # 5. Health Audit
 echo "🧪 Auditing System Integrity..."
 sleep 5
-STATUS=$(curl -s http://localhost:8000/ | grep -o "online")
+STATUS=$(curl -s http://localhost:8000/healthz | grep -o "alive")
 
-if [ "$STATUS" == "online" ]; then
+if [ "$STATUS" == "alive" ]; then
     echo "🏁 GRADUATION REACHED. LEVI-AI Sovereign OS is now pulsing at http://localhost:8000"
 else
     echo "⚠️ Resonance Drift detected. Check logs with 'docker-compose logs -f'"

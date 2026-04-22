@@ -17,7 +17,8 @@ from backend.utils.event_bus import sovereign_event_bus
 
 HAS_PUBSUB = HAS_REDIS # v22 GA Graduation: PUBSUB is provided by internalized Redis Streams
 
-logger = logging.getLogger(__name__)
+import structlog
+logger = structlog.get_logger(__name__)
 
 class MemoryConsistencyManager:
     """
@@ -140,7 +141,7 @@ class MemoryConsistencyManager:
         Grounded Tiers: 1 (Redis), 2 (Postgres/Vector), 3 (Archive).
         Replaces the previous 5-tier hyperbole with a functional 3-tier architecture.
         """
-        logger.info(f"[MCM] Synchronizing {event_type} for {user_id} (Source: {source})")
+        logger.info("[MCM] Synchronizing event.", event_type=event_type, mission_id=session_id, source=source)
 
         try: 
             # TIER 1: HOT (Redis & Neo4j Interaction) - < 50ms
@@ -232,6 +233,9 @@ class MemoryConsistencyManager:
                 
                 if avg_fidelity >= 0.92:
                     logger.info(f"🎓 [MCM-T3] QUORUM REACHED ({avg_fidelity:.2f}): Anchoring Truth to Arweave.")
+                    from backend.utils.metrics import GRADUATION_COUNT
+                    f_range = "0.92-0.95" if avg_fidelity < 0.95 else "0.95-1.0"
+                    GRADUATION_COUNT.labels(fidelity_range=f_range).inc()
                     await self._anchor_to_permanent_storage(fact_id, avg_fidelity)
                     # Cleanup quorum keys
                     redis_client.delete(quorum_key)

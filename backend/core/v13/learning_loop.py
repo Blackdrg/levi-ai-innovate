@@ -26,9 +26,10 @@ class LearningLoop:
         """
         if fidelity < self.threshold: return 
         
-        # Appendix G: Tier-4 BFT Verification
-        if not signatures or len(signatures) < 1:
-            logger.warning(f"⚠️ [LearningLoop] Rejected mission {mission_id}: NO BFT SIGNATURES.")
+        # Sovereign v22.1: Enforces 3/4 Raft Quorum for Crystallization
+        # Requirement: 3 valid signatures from the 4-node consensus fabric
+        if not signatures or len(signatures) < 3:
+            logger.warning(f"⚠️ [LearningLoop] Rejected mission {mission_id}: Insufficient Quorum ({len(signatures) if signatures else 0}/3).")
             return
 
         from backend.utils.kms import SovereignKMS
@@ -37,8 +38,8 @@ class LearningLoop:
             if await SovereignKMS.verify_trace(f"{mission_id}:{query}", sig):
                 valid_sigs += 1
         
-        if valid_sigs < 1:
-             logger.error(f"🚨 [LearningLoop] BFT AUTHENTICATION FAILURE for mission {mission_id}.")
+        if valid_sigs < 3:
+             logger.error(f"🚨 [LearningLoop] QUORUM VALIDATION FAILURE for {mission_id}: {valid_sigs}/3 valid signatures.")
              return
 
         try:

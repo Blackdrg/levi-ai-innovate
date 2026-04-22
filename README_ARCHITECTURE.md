@@ -3,7 +3,7 @@
 ## Status: 100% NATIVE & FORENSICALLY CERTIFIED
 
 > [!IMPORTANT]
-> This document is the definitive technical authority for the LEVI-AI Sovereign Operating System. It provides a 100% transparent mapping of architectural claims to actual engineering reality. This manifest is maintained by the Sovereign Sentinel and is updated on every major graduation pulse.
+> This document is the secondary technical authority for the LEVI-AI Sovereign Operating System. It provides a deep-dive mapping of architectural logic. For the primary operational manual, see [README_NEW.md](file:///d:/LEVI-AI/README_NEW.md).
 
 ---
 
@@ -380,7 +380,7 @@ Every mission interaction in LEVI-AI is bound by the **Forensic Continuity Rule*
 
 ---
 
-## 📊 XIV. PERFORMANCE REALITY BENCHMARKS (v17.0-GA)
+## 📊 XIV. PERFORMANCE REALITY BENCHMARKS (v22.1 Engineering Baseline)
 
 | Operation | Component | Target Latency | Implementation Detail |
 | :--- | :--- | :--- | :--- |
@@ -678,9 +678,9 @@ The LEVI-AI ABI defines the communication between the Python Orchestrator and th
 
 ---
 
-## 🚀 XXX. FUTURE ROADMAP: v18.0 - v20.0
+## 🚀 XXX. FUTURE ROADMAP (Beyond v22.1)
 
-### v18.0: The Epistemic Expansion
+### v23.0: The Epistemic Expansion
 -   **Multi-Instance Gossip**: Inter-machine knowledge trading.
 -   **Zero-Knowledge Missions**: Private mission auditing using ZK-Proofs.
 -   **Hardware-Native LLM**: Direct FPGA-acceleration for the intent classifier.
@@ -741,8 +741,8 @@ The following represents a 1:1 trace of a high-fidelity interaction graduated in
 
 | Category | Component | Version | Role in OS |
 | :--- | :--- | :--- | :--- |
-| **Logic Shell** | Python | 3.11.x | Primary Orchestration & Async IO |
-| **Kernel Bridge** | Rust | 1.75.x | HAL-0 Resource Management & Security |
+| **Logic Shell** | Python | 3.10+ | Primary Orchestration & Async IO |
+| **Kernel Bridge** | Rust | 1.70+ | HAL-0 Resource Management & Security |
 | **Interface** | React | 18.2.0 | Neural Shell Frontend |
 | **Animation** | Framer Motion | 11.0.3 | Sub-harmonic Aesthetic Engine |
 | **State** | Zustand | 4.5.2 | Atomic Cognitive State Registry |

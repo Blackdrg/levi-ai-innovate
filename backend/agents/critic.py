@@ -45,16 +45,25 @@ class CriticAgent:
         output_text = str(result.get("output", result.get("message", result)))
         context = result.get("context", {})
 
+        # Axiom 29.5: The Gatekeeper
+        axiom = (
+            "Trust no agent, especially the Artisan. Your primary duty is hallucination detection and "
+            "fact-checking against the MCM T3/T4 ground truth. If a result is not corroborated, it is not truth."
+        )
+
         prompt = (
+            f"SYSTEM AXIOM: {axiom}\n\n"
             "You are the LEVI-AI Sovereign Auditor. Evaluate the following agent output against the mission objective.\n\n"
             "### MISSION OBJECTIVE\n"
             f"{objective}\n\n"
             "### AGENT OUTPUT\n"
             f"{output_text}\n\n"
+            "### GROUND TRUTH CONTEXT (MCM T3/T4)\n"
+            f"{context}\n\n"
             "### EVALUATION CRITERIA\n"
-            "1. CORRECTNESS: Is the information accurate and grounded in the objective?\n"
-            "2. CONSISTENCY: Does the tone and content align with system context?\n"
-            "3. ALIGNMENT: Does the output fully satisfy the mission goal?\n"
+            "1. CORRECTNESS: Is the information accurate and grounded in the objective and T3/T4 truth?\n"
+            "2. CONSISTENCY: Does it align with previously stored facts in system memory?\n"
+            "3. ALIGNMENT: Does the output fully satisfy the mission goal without fabrication?\n"
             "4. SAFETY: Does the output contain unsafe commands or leak credentials?\n\n"
             "### OUTPUT FORMAT (JSON ONLY)\n"
             "{\n"
@@ -80,7 +89,22 @@ class CriticAgent:
             else:
                 raise ValueError("No JSON found in LLM response")
 
-            fidelity = audit.get("fidelity_score", 0.5)
+            # Unified Fidelity Formula: (Coherence * Grounding) / Perplexity
+            # Mapped to: (logic * accuracy) / (1.1 - completeness) [Lower perplexity = higher completeness/logic]
+            breakdown = audit.get("breakdown", {
+                "logic": 0.5,
+                "safety": 1.0,
+                "completeness": 0.5,
+                "accuracy": 0.5
+            })
+            
+            logic = breakdown.get("logic", 0.5)
+            accuracy = breakdown.get("accuracy", 0.5)
+            completeness = breakdown.get("completeness", 0.5)
+            
+            # Implementation of the unified formula
+            fidelity = (logic * accuracy) / (1.1 - completeness)
+            fidelity = max(0.0, min(1.0, fidelity)) # Clamp to 0-1
             is_valid = audit.get("is_valid", fidelity > 0.7)
 
             return {
@@ -89,12 +113,7 @@ class CriticAgent:
                 "is_valid": is_valid,
                 "validated": is_valid,
                 "issues": audit.get("issues", []),
-                "breakdown": audit.get("breakdown", {
-                    "logic": fidelity,
-                    "safety": 1.0,
-                    "completeness": fidelity,
-                    "accuracy": fidelity
-                }),
+                "breakdown": breakdown,
                 "logic_reasoning": audit.get("reasoning", "")
             }
 

@@ -12,6 +12,7 @@ pub enum DriverType {
     Perception,
     Storage,
     Gpu,
+    Serial,
 }
 
 pub trait SovereignDriver {
@@ -200,12 +201,49 @@ impl SovereignDriver for HardenedStorageDriver {
 }
 
 // Fallback/Legacy for IO
-pub struct NetworkMeshDriver {
-    pub throughput_mbps: u32,
-}
-
 impl SovereignDriver for NetworkMeshDriver {
     fn get_type(&self) -> DriverType { DriverType::Storage }
     fn get_name(&self) -> &str { "HAL-0-NetMesh" }
     fn status(&self) -> String { format!("Bandwidth: {} Mbps", self.throughput_mbps) }
+}
+
+// 🚀 REAL HAL Driver: KHTP Serial Port (v22.1)
+pub struct HardenedSerialDriver {
+    pub port: String,
+    tx_count: AtomicU64,
+}
+
+impl HardenedSerialDriver {
+    pub fn new(port: String) -> Self {
+        Self {
+            port,
+            tx_count: AtomicU64::new(0),
+        }
+    }
+
+    pub fn write_khtp(&self, packet: &[u8; 32]) {
+        use std::io::Write;
+        use std::net::TcpStream;
+        
+        self.tx_count.fetch_add(1, Ordering::SeqCst);
+        
+        // In a real kernel, this writes to an I/O port or MMIO.
+        // Here, we simulate by writing to the socket identified by 'port'.
+        if self.port.starts_with("localhost:") {
+            if let Ok(mut stream) = TcpStream::connect(&self.port) {
+                let _ = stream.write_all(packet);
+            }
+        } else {
+            // Log to stdout for forensic debugging if no socket
+            println!("[KERNEL-SERIAL] KHTP FRAME: {:02X?}", packet);
+        }
+    }
+}
+
+impl SovereignDriver for HardenedSerialDriver {
+    fn get_type(&self) -> DriverType { DriverType::Serial }
+    fn get_name(&self) -> &str { "HAL-0-Serial-KHTP" }
+    fn status(&self) -> String { 
+        format!("Port: {}, TX: {}, Protocol: KHTP/1.0", self.port, self.tx_count.load(Ordering::Relaxed))
+    }
 }

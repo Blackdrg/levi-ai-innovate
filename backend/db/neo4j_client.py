@@ -3,6 +3,7 @@ import logging
 from neo4j import AsyncGraphDatabase
 from typing import List, Dict, Any
 
+from backend.utils.circuit_breaker import neo4j_breaker
 logger = logging.getLogger(__name__)
 
 class Neo4jClient:
@@ -35,17 +36,19 @@ class Neo4jClient:
 
     @classmethod
     async def execute_query(cls, query: str, parameters: Dict[str, Any] = None) -> List[Dict[str, Any]]:
-        driver = await cls.get_driver()
-        if not driver: return []
-        
-        async with driver.session() as session:
-            try:
+        async def _run():
+            driver = await cls.get_driver()
+            if not driver:
+                raise Exception("Neo4j driver not initialized.")
+            async with driver.session() as session:
                 result = await session.run(query, parameters or {})
-                records = await result.data()
-                return records
-            except Exception as e:
-                logger.error(f"[Neo4j] Query failed: {e}")
-                return []
+                return await result.data()
+
+        try:
+            return await neo4j_breaker.call(_run)
+        except Exception as e:
+            logger.error(f"[Neo4j] Query failed (Circuit Breaker: {neo4j_breaker.state.value}): {e}")
+            return []
 
     @classmethod
     async def add_interaction(cls, user_id: str, query: str, response: str, intent: str, sync: bool = True):

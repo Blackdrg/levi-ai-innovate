@@ -14,6 +14,8 @@ from .intent_rules import INTENT_RULES
 from backend.embeddings import embed_text
 
 import torch
+import json
+import os
 from transformers import pipeline
 
 logger = logging.getLogger(__name__)
@@ -48,6 +50,26 @@ class HybridIntentClassifier:
         self._anchor_embeddings = {}
         self._ml_pipeline = None # Lazy load BERT pipeline
         self._onnx_session = None # Phase 0.2 ONNX session
+        
+        # 🎓 T0 Persistent Cache (RocksDB-Lite)
+        self.cache_dir = "d:/LEVI-AI/data/cache"
+        self.t0_cache_path = os.path.join(self.cache_dir, "t0_intents.json")
+        os.makedirs(self.cache_dir, exist_ok=True)
+        self._t0_cache = self._load_t0_cache()
+
+    def _load_t0_cache(self) -> Dict[str, Dict[str, Any]]:
+        if os.path.exists(self.t0_cache_path):
+            try:
+                with open(self.t0_cache_path, "r") as f:
+                    return json.load(f)
+            except Exception: return {}
+        return {}
+
+    def _save_t0_cache(self):
+        try:
+            with open(self.t0_cache_path, "w") as f:
+                json.dump(self._t0_cache, f)
+        except Exception: pass
 
     async def _init_onnx(self):
         """Initialize Phase 0.2 ONNX runtime."""
@@ -83,6 +105,12 @@ class HybridIntentClassifier:
     async def classify(self, user_input: str) -> IntentResult:
         """Entry point for hybrid classification."""
         text = user_input.lower().strip()
+        
+        # 🎓 Tier 0: The Fast-Path Cache (O(1) Persistent)
+        if text in self._t0_cache:
+            c = self._t0_cache[text]
+            logger.info("🎓 [Intent] T0 CACHE HIT: %s", c["intent_type"])
+            return IntentResult(**c)
         
         # Layer 0.1: Actual ONNX Classifier (Phase 0.2)
         await self._init_onnx()
@@ -127,6 +155,12 @@ class HybridIntentClassifier:
 
         # Layer 3: Hybrid ML (DistilBERT + Tiny LLM)
         ml_match = await self._match_ml(text)
+        
+        # 🎓 T0 Promotion: Cache high-confidence results
+        if ml_match.confidence_score > 0.9:
+            self._t0_cache[text] = ml_match.__dict__
+            self._save_t0_cache()
+            
         return ml_match
 
     def _match_rules(self, text: str) -> Optional[IntentResult]:

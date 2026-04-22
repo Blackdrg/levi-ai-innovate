@@ -3,7 +3,8 @@ import httpx
 import logging
 import os
 
-logger = logging.getLogger("levi.rust_bridge")
+import structlog
+logger = structlog.get_logger("levi.rust_bridge")
 
 RUST_RUNTIME_URL = os.getenv("RUST_RUNTIME_URL", "http://127.0.0.1:8001")
 

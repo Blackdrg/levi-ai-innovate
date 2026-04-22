@@ -19,7 +19,7 @@ class ForensicAgent(BaseAgent):
             agent_id="forensic_agent",
             name="Forensic",
             role="Audit & Trace Integrity",
-            goal="Ensure absolute non-repudiability of system operations."
+            goal="The chain must never break. Perform real-time audits of the HMAC ledger. Trigger immediate kernel-level lockdown on parity errors or checksum mismatches."
         )
 
     async def _run(self, input_data: AgentInput) -> AgentOutput:

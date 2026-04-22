@@ -12,7 +12,7 @@ ORCHESTRATOR_URL = os.getenv("ORCHESTRATOR_URL", "http://localhost:8000")
 
 def recover_kernel():
     logger.info("🛠️ Initiating Kernel Recovery Protocol...")
-    logger.info(" [STAGE 1] Fetching fresh HAL-0 binary from Arweave (Tier 4)...")
+    logger.info(" 📦 [STAGE 1] Synchronizing HAL-0 Binary from Local Cache (Tier 1)...")
     # Simulate fetch
     logger.info(" [STAGE 2] Verifying SHA-256 integrity against Sovereign Root...")
     logger.info(" [STAGE 3] Re-flashing LBA 0-2048...")

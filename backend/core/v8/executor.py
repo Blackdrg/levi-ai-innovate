@@ -87,11 +87,11 @@ class GraphExecutor:
         start_wave = 1
         if mission_id:
              try:
-                 from backend.db.postgres_db import PostgresDB
+                 from backend.db.postgres import PostgresDB
                  from sqlalchemy import select
                  from backend.db.models import AbortedMission
                  from ..orchestrator_types import ToolResult as BrainToolResult
-                 async with PostgresDB._session_factory() as session:
+                 async with PostgresDB.session_scope() as session:
                      stmt = select(AbortedMission).where(AbortedMission.mission_id == mission_id)
                      res = await session.execute(stmt)
                      abortion = res.scalar_one_or_none()
@@ -549,9 +549,9 @@ class GraphExecutor:
         # 🛡️ Resilience: Persist Aborted State for Replay (v13.1)
         if mission_id and graph:
             try:
-                from backend.db.postgres_db import PostgresDB
+                from backend.db.postgres import PostgresDB
                 from backend.db.models import AbortedMission
-                async with PostgresDB._session_factory() as session:
+                async with PostgresDB.session_scope() as session:
                     # Serialize Graph (assuming it has a to_dict or we serialize its core components)
                     frozen_dag = {
                         "nodes": [n.__dict__ for n in graph.nodes] if hasattr(graph, 'nodes') else [],
@@ -634,7 +634,7 @@ class GraphExecutor:
         try:
              from backend.db.postgres import PostgresDB
              from backend.db.models import Mission
-             async with PostgresDB._session_factory() as session:
+             async with PostgresDB.session_scope() as session:
                  from sqlalchemy import select
                  # Check if record exists
                  stmt = select(Mission).where(Mission.mission_id == mission_id)

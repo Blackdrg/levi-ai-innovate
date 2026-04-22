@@ -19,7 +19,8 @@ from backend.redis_client import cache
 T = TypeVar("T", bound=BaseModel)
 R = TypeVar("R", bound=BaseModel)
 
-logger = logging.getLogger(__name__)
+import structlog
+logger = structlog.get_logger(__name__)
 
 class AgentResult(BaseModel):
     """Standardized output for all Sovereign Agents."""
@@ -53,7 +54,7 @@ class SovereignAgent(abc.ABC, Generic[T, R]):
         self.name = name
         self.profile = profile # Neural Profile (e.g. The Architect)
         self.system_prompt_template = "" # Domain-specific instructions
-        self.logger = logging.getLogger(f"agent.{name.lower()}")
+        self.logger = structlog.get_logger(f"agent.{name.lower()}")
         if use_bus:
             self.bus = sovereign_bus
             self.bus.register(self.name.lower())

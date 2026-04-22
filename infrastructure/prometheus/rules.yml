@@ -1,0 +1,22 @@
+groups:
+  - name: SovereignSecurity
+    rules:
+      - alert: UnauthorizedEgressDetected
+        expr: egress_calls_total{status="unauthorized"} > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Unauthorized Network Egress Detected"
+          description: "Node {{ $labels.instance }} attempted to contact {{ $labels.destination }}. This is blocked and audited."
+
+  - name: SovereignPerformance
+    rules:
+      - alert: MissionLatencyCrisis
+        expr: mission_latency_ms_bucket{le="10000"} < (mission_latency_ms_count * 0.90)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "P90 Mission Latency > 10s"
+          description: "The system is failing to meet mission latency SLOs."

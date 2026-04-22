@@ -74,6 +74,11 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     let mut frame_allocator = unsafe {
         memory::BootInfoFrameAllocator::init(&boot_info.memory_map)
     };
+    
+    // Globalize memory structures for interrupt-safe demand paging
+    *memory::MAPPER.lock() = Some(unsafe { memory::init(phys_mem_offset) });
+    *memory::FRAME_ALLOCATOR.lock() = Some(unsafe { memory::BootInfoFrameAllocator::init(&boot_info.memory_map) });
+
     allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap failed");
     println!(" [OK] Heap: 100 KiB allocated at 0x4444_4444_0000.");
     allocator::check_leaks();

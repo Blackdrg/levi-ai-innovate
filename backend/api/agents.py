@@ -72,7 +72,8 @@ async def delete_agent(agent_id: str, current_user: dict = Depends(get_current_u
 @router.get("/swarm")
 async def get_agent_swarm():
     """
-    Returns the status and configuration of the 16 Sovereign Swarm agents.
+    Returns the status and configuration of the Sovereign Swarm agents.
+    Capped at 2-4 active agents based on local hardware/VRAM availability.
     Syncs with the internal AGENT_REGISTRY.
     """
     from backend.agents.registry import AGENT_REGISTRY

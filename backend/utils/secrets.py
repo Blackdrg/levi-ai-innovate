@@ -11,6 +11,7 @@ class SecretManager:
     def __init__(self):
         self.backend = os.getenv("SECRET_BACKEND", "env").lower()
         self.client = None
+        self.secrets_path = "/run/secrets"
 
         if self.backend == "aws":
             try:
@@ -36,6 +37,12 @@ class SecretManager:
                 self.backend = "env"
 
     def get_secret(self, secret_name: str) -> Optional[str]:
+        # 🛡️ Sovereign v22.1: Prefer Docker Secrets (File-based)
+        secret_file = os.path.join(self.secrets_path, secret_name.lower())
+        if os.path.exists(secret_file):
+            with open(secret_file, "r") as f:
+                return f.read().strip()
+                
         if self.backend == "env":
             return os.getenv(secret_name)
 

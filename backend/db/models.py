@@ -73,6 +73,7 @@ class MissionMetric(Base):
     token_count = Column(Integer, default=0)
     cost_usd = Column(Float, default=0.0)
     latency_ms = Column(Float, default=0.0)
+    fidelity = Column(Float, default=1.0)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 class CustomAgent(Base):
@@ -162,22 +163,19 @@ class AuditLog(Base):
     @classmethod
     def calculate_checksum(cls, prev_hash: str, row_data: dict) -> str:
         """
-        Sovereign v15.0: HMAC-Chained Integrity Ledger.
-        Formula: hash_n = HMAC_SHA256(secret, data_n + hash_{n-1})
+        Sovereign v22.1: Hardware-Bound HMAC Chaining.
+        Uses the SovereignKMS offline authority to sign the chain link.
         """
-        import hmac
-        import hashlib
+        from backend.utils.kms import SovereignKMS
         import json
-        
-        secret = os.getenv("AUDIT_CHAIN_SECRET", "levi_ai_genesis_key_v15")
         
         # Consistent serialization of row data
         data_str = json.dumps(row_data, sort_keys=True)
         
         # Combine data with previous hash
-        combined = f"{data_str}|{prev_hash}".encode()
+        combined = f"{data_str}|{prev_hash}"
         
-        return hmac.new(secret.encode(), combined, hashlib.sha256).hexdigest()
+        return SovereignKMS.hmac_sign_audit(combined)
 
     @classmethod
     async def verify_chain(cls, session: Any, limit: int = 100) -> Dict[str, Any]:

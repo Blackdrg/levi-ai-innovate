@@ -131,7 +131,7 @@ class BrainOrchestrator:
             
         yield {"event": "metadata", "data": {"status": "completed", "fidelity": last_state.get("shared_context", {}).get("score", 100) if last_state else 0}}
 
-distributed_orchestrator = DistributedOrchestrator()
-orchestrator = distributed_orchestrator
+# Primary Instance for the Sovereign v22.1 Ecosystem
+orchestrator = BrainOrchestrator()
 
 

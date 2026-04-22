@@ -6,6 +6,7 @@ import numpy as np
 import faiss  # type: ignore
 from typing import List, Dict, Any, Optional
 
+from backend.utils.circuit_breaker import faiss_breaker
 logger = logging.getLogger(__name__)
 
 class VectorDB:
@@ -38,6 +39,7 @@ class VectorDB:
             
         self.index_path = os.path.join(self.storage_dir, f"{collection_name}_faiss.bin")
         self.meta_path = os.path.join(self.storage_dir, f"{collection_name}_meta.json")
+        self.wal_path = os.path.join(self.storage_dir, f"{collection_name}.wal")
         self.index = None
         self.metadata: List[Dict[str, Any]] = []
         self._is_rebuilding = False
@@ -110,11 +112,89 @@ class VectorDB:
                             raise ValueError("Deterministic re-indexing impossible: Text data missing in metadata.")
                             
                 logger.info(f"Loaded collection '{self.collection_name}' ({len(self.metadata)} records). Hash verified.")
+                
+                # 🔄 WAL Replay (v22.1 Resilience)
+                await self._replay_wal()
             except Exception as e:
                 logger.error(f"Failed to load collection {self.collection_name}: {e}")
-                # Fallback to fresh index if loading fails and we are not in strict mode
+                
+                # Checkpoint O-9: Rebuild-from-T2 (Postgres) on startup error
                 self.index = faiss.IndexFlatIP(self.dimension)
                 self.metadata = []
+                
+                if self.user_id:
+                    logger.info(f"🧬 [VectorDB] Recovery mode: Triggering T2 Rebuild (Postgres) for {self.user_id}")
+                    # We use a non-circular path to fetch data
+                    asyncio.create_task(self._rebuild_from_t2())
+                
+                # Even if full load fails, try replaying WAL if it exists
+                await self._replay_wal()
+
+    async def _rebuild_from_t2(self):
+        """Fetches facts from Postgres (T2) and adds them to the index."""
+        if not self.user_id: return
+        try:
+            from backend.db.postgres import PostgresDB
+            from backend.db.models import UserFact
+            from sqlalchemy import select
+            
+            async with PostgresDB.session_scope() as session:
+                stmt = select(UserFact).where(UserFact.user_id == self.user_id, UserFact.is_deleted == False)
+                res = await session.execute(stmt)
+                facts = res.scalars().all()
+                
+            if facts:
+                from backend.db.vector_store import embed_text
+                from backend.core.security.user_kms import user_kms
+                
+                texts = []
+                metas = []
+                for f in facts:
+                    try:
+                        raw_fact = await user_kms.decrypt_for_user(self.user_id, f.fact)
+                        if raw_fact:
+                            texts.append(raw_fact)
+                            metas.append({
+                                "user_id": self.user_id,
+                                "fact": f.fact,
+                                "category": f.category,
+                                "importance": f.importance,
+                                "db_id": f.id,
+                                "created_at": f.created_at.isoformat()
+                            })
+                    except Exception: continue
+                
+                if texts:
+                    await self.add(texts, metas)
+                    logger.info(f"✅ [VectorDB] Recalibrated {len(texts)} vectors from T2 for {self.user_id}.")
+        except Exception as e:
+            logger.error(f"❌ [VectorDB] T2 Recovery failed: {e}")
+
+    async def _replay_wal(self):
+        """Replays the Write-Ahead Log for transient persistence."""
+        if os.path.exists(self.wal_path):
+            try:
+                import pickle
+                with open(self.wal_path, "rb") as f:
+                    while True:
+                        try:
+                            # Load one chunk at a time from the WAL
+                            chunk = pickle.load(f)
+                            texts = chunk["texts"]
+                            metas = chunk["metas"]
+                            embs = np.array(chunk["embeddings"]).astype('float32')
+                            
+                            if self.index:
+                                self.index.add(embs)
+                                for i, text in enumerate(texts):
+                                    meta = metas[i].copy()
+                                    meta["text"] = text
+                                    self.metadata.append(meta)
+                        except EOFError:
+                            break
+                logger.info(f"🛡️ [VectorDB] WAL Replay Success for {self.collection_name}.")
+            except Exception as e:
+                logger.error(f"[VectorDB] WAL Replay failed: {e}")
 
     async def rebuild_index(self):
         """
@@ -137,7 +217,7 @@ class VectorDB:
         from backend.db.vector_store import embed_text
         new_embeddings = []
         for text in texts:
-            emb = await asyncio.to_thread(embed_text, text)
+            emb = await embed_text(text)
             # L2-normalization for Cosine Similarity equivalence
             norm_emb = emb / np.linalg.norm(emb)
             new_embeddings.append(norm_emb)
@@ -201,6 +281,10 @@ class VectorDB:
             os.replace(temp_sha, f"{self.index_path}.sha256")
             os.replace(temp_meta, self.meta_path)
             
+            # Truncate WAL upon successful full checkpoint
+            if os.path.exists(self.wal_path):
+                os.remove(self.wal_path)
+            
             logger.info(f"✨ [VectorDB] Persisted '{self.collection_name}' (Hash: {index_sha[:8]}...).")
         except Exception as e:
             logger.error(f"Persistence error for {self.collection_name}: {e}")
@@ -210,7 +294,8 @@ class VectorDB:
             return await self._search_remote(query, limit, min_score, tenant_id)
             
         from backend.db.vector_store import embed_text
-        query_emb = await asyncio.to_thread(embed_text, query)
+        import numpy as np
+        query_emb = await embed_text(query)
         # L2-normalization for Inner Product (Cosine)
         norm_query = query_emb / np.linalg.norm(query_emb)
         query_np = np.array([norm_query]).astype('float32')
@@ -219,7 +304,16 @@ class VectorDB:
         
         # We fetch more than 'limit' to allow for filtering
         search_limit = limit * 2 if tenant_id else limit
-        scores, indices = self.index.search(query_np, search_limit)
+        
+        async def _run_search():
+            return self.index.search(query_np, search_limit)
+
+        try:
+            scores, indices = await faiss_breaker.call(_run_search)
+        except Exception as e:
+            logger.error(f"[VectorDB] FAISS Search failed (Circuit: {faiss_breaker.state.value}): {e}")
+            return []
+
         results = []
         for i, idx in enumerate(indices[0]):
             if idx != -1 and idx < len(self.metadata):
@@ -272,7 +366,7 @@ class VectorDB:
         embeddings = []
         from backend.db.vector_store import embed_text
         for text in texts:
-            emb = await asyncio.to_thread(embed_text, text)
+            emb = await embed_text(text)
             # L2-normalization for Inner Product (Cosine)
             norm_emb = emb / np.linalg.norm(emb)
             embeddings.append(norm_emb)
@@ -290,13 +384,35 @@ class VectorDB:
 
         async with self._lock:
             if self.index:
-                self.index.add(emb_np)
-            # Store the text along with metadata
-            for i, text in enumerate(texts):
-                meta = metadatas[i].copy()
-                meta["text"] = text
-                self.metadata.append(meta)
-            self._save()
+                async def _run_add():
+                    self.index.add(emb_np)
+                
+                await faiss_breaker.call(_run_add)
+                
+                # Store the text along with metadata
+                for i, text in enumerate(texts):
+                    meta = metadatas[i].copy()
+                    meta["text"] = text
+                    self.metadata.append(meta)
+                
+                # High-Frequency WAL Checkpoint (Step 1.5)
+                try:
+                    import pickle
+                    with open(self.wal_path, "ab") as f:
+                        pickle.dump({
+                            "texts": texts,
+                            "metas": metadatas,
+                            "embeddings": embeddings
+                        }, f)
+                except Exception as e:
+                    logger.error(f"[VectorDB] WAL Write failed: {e}")
+
+                # Sovereign v22.1: Periodic WAL checkpoint (every 100 writes)
+                self.wal_count = getattr(self, "wal_count", 0) + 1
+                if self.wal_count >= 100:
+                    logger.info(f"🔄 [VectorDB] Periodic WAL checkpoint (100 writes reached).")
+                    self._save()
+                    self.wal_count = 0
 
     async def _add_remote(self, texts: List[str], metadatas: List[Dict[str, Any]]):
         """Broadcasts vectors to the distributed Tier 3 cluster."""

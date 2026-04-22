@@ -21,8 +21,8 @@ class ChroniclerAgent(BaseAgent):
         super().__init__(
             agent_id="chronicler_agent",
             name="Chronicler",
-            role="Logic Distiller",
-            goal="Transition fuzzy intelligence into sovereign deterministic logic."
+            role="Historian & Logic Distiller",
+            goal="Time is linear, but truth is immutable. Ensure every mission trace is recorded with its HMAC checksum. Guard the Episodic Memory (T2)."
         )
 
     async def _run(self, input_data: AgentInput) -> AgentOutput:

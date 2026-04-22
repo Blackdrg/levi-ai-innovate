@@ -28,7 +28,17 @@ class ModelRouter:
         """
         from backend.core.executor.guardrails import capture_resource_pressure
         from backend.config.system import CLOUD_FALLBACK_ENABLED
+        from backend.utils.circuit_breaker import ollama_breaker, CircuitState
         
+        # 0. Circuit Breaker Logic (Sovereign v22.1)
+        if await ollama_breaker._get_state() == CircuitState.OPEN:
+            if CLOUD_FALLBACK_ENABLED:
+                logger.warning("🚨 [ModelRouter] Ollama Breaker OPEN. Forcing cloud failover.")
+                return "cloud-overflow-tier"
+            else:
+                 logger.critical("🚨 [ModelRouter] Ollama Breaker OPEN and CLOUD_FALLBACK disabled. System HALTED.")
+                 raise RuntimeError("Inference engine offline (Breaker OPEN).")
+
         # 1. Infra Load Shift (Phase 7): Check local VRAM & CPU load
         try:
             from backend.utils.hardware import gpu_monitor

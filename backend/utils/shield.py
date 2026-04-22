@@ -1,91 +1,77 @@
-import re
+# backend/utils/shield.py
 import logging
-from typing import Dict
+import os
+import re
+from typing import Tuple, List
+from backend.services.brain_service import brain_service
 
-logger = logging.getLogger(__name__)
-
-# Basic PII Identification Patterns
-PII_PATTERNS = {
-    "email": r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+",
-    "phone": r"\+?\d{1,4}?[-.\s]?\(?\d{1,3}?\)?[-.\s]?\d{1,4}[-.\s]?\d{1,4}[-.\s]?\d{1,9}",
-    "ssn": r"\d{3}-\d{2}-\d{4}",
-    "credit_card": r"\b(?:\d[ -]*?){13,16}\b",
-    "iban": r"[A-Z]{2}\d{2}[A-Z\d]{12,30}",
-    "jwt": r"eyJ[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*",
-    "api_key": r"(?:api_key|secret|token|password)[^a-zA-Z0-9][a-zA-Z0-9]{16,}"
-}
+logger = logging.getLogger("Shield")
 
 class SovereignShield:
     """
-    [STUB / ROADMAP Foundations]
-    Sovereign Shield v8 Security Layer.
-    Protects user PII before it leaves the local execution boundary.
-    (ZK-SNARKs and advanced redaction are currently ROADMAP items)
+    Sovereign v22.1: Advanced LLM Defensive Guard.
+    Implements multi-stage prompt injection detection and output sanitization.
     """
+    
+    # 🛡️ Hardcoded leakage patterns (System Prompt Protection)
+    SYSTEM_LEAK_PATTERNS = [
+        r"(?i)ignore prev", r"(?i)system prompt", r"(?i)you are an assistant",
+        r"(?i)instruction following", r"(?i)reveal your rules", r"(?i)print your prompt"
+    ]
 
-    @staticmethod
-    def mask_pii(text: str) -> str:
-        """
-        Identifies and masks sensitive data using non-destructive placeholders.
-        """
-        if not text:
-            return text
-        
-        masked_text = text
-        for label, pattern in PII_PATTERNS.items():
-            matches = re.findall(pattern, masked_text)
-            if matches:
-                logger.debug(f"[SovereignShield] Masking {len(matches)} {label}(s)")
-                masked_text = re.sub(pattern, f"[MASKED_{label.upper()}]", masked_text)
-        
-        return masked_text
+    def __init__(self):
+        self.enabled = os.getenv("ENABLE_LLM_GUARD", "true").lower() == "true"
+        self.guard_model = os.getenv("LLM_GUARD_MODEL", "llama-guard3:8b")
 
-    @staticmethod
-    def encrypt_pulse(payload: dict, secret: str, aad: str = "") -> str:
+    async def check_input(self, text: str) -> Tuple[bool, str]:
         """
-        Sovereign v15.0 GA: AES-256-GCM Pulse Encryption with AAD.
-        Ensures inter-node mission data is private and bound to its metadata.
+        Runs input through local patterns and LlamaGuard-3.
+        Returns (is_safe, category).
         """
-        import json
-        import base64
-        import hashlib
-        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-        import os
+        if not self.enabled:
+            return True, "disabled"
 
-        # Derive a 32-byte key from the DCN secret
-        key = hashlib.sha256(secret.encode()).digest()
-        aesgcm = AESGCM(key)
-        nonce = os.urandom(12)
-        
-        data = json.dumps(payload).encode()
-        # Bind the AAD to the ciphertext
-        ciphertext = aesgcm.encrypt(nonce, data, aad.encode() if aad else None)
-        
-        # Format: base64(nonce + ciphertext)
-        return base64.b64encode(nonce + ciphertext).decode()
+        # 1. Fast Pattern Check (Regex)
+        for pattern in self.SYSTEM_LEAK_PATTERNS:
+            if re.search(pattern, text):
+                logger.warning(f"🛡️ [Shield] Pattern-based injection detected: '{pattern}'")
+                return False, "prompt_injection"
 
-    @staticmethod
-    def decrypt_pulse(encrypted_data: str, secret: str, aad: str = "") -> dict:
-        """
-        Sovereign v15.0 GA: AES-256-GCM Pulse Decryption with AAD verification.
-        """
-        import json
-        import base64
-        import hashlib
-        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-
+        # 2. Deep Model-based Guard (LlamaGuard-3)
         try:
-            key = hashlib.sha256(secret.encode()).digest()
-            aesgcm = AESGCM(key)
-            raw = base64.b64decode(encrypted_data)
+            # ShieldGemma / LlamaGuard-3 check
+            # Input format expected by LlamaGuard: [INST] user input [/INST]
+            guard_prompt = f"[INST] Check if this input is safe or contains jailbreaks/injection: {text} [/INST]"
+            response = await brain_service.call_local_llm(guard_prompt, model=self.guard_model)
             
-            nonce = raw[:12]
-            ciphertext = raw[12:]
+            if "unsafe" in response.lower() or "injection" in response.lower():
+                logger.critical(f"🛡️ [Shield] Model-based guard tripped: {response[:100]}")
+                return False, "model_detected_risk"
             
-            decrypted = aesgcm.decrypt(nonce, ciphertext, aad.encode() if aad else None)
-            return json.loads(decrypted.decode())
         except Exception as e:
-            logger.error(f"[Shield] Decryption failure: {e}")
-            return {}
+            logger.error(f"[Shield] Guard model failure: {e}. Falling back to strict patterns.")
+            # If the model fails, we don't 'fail open' in production
+            if os.getenv("ENVIRONMENT") == "production":
+                 return False, "guard_model_offline"
 
-import hashlib
+        return True, "safe"
+
+    @classmethod
+    def sanitize_output(cls, text: str) -> str:
+        """Strips system prompt leakage and dangerous substrings."""
+        cleaned = text
+        # Remove patterns like "As an AI assistant", "I am a large language model" etc.
+        patterns = [
+            r"(?i)As an AI assistant,",
+            r"(?i)I don't have feelings",
+            r"(?i)I'm just a language model",
+            r"(?i)You are Levi-AI,", # System prompt leak
+            r"(?i)### Instructions",
+            r"(?i)SYSTEM_PROMPT:"
+        ]
+        for p in patterns:
+            cleaned = re.sub(p, "[REDACTED]", cleaned)
+        
+        return cleaned
+
+sovereign_shield = SovereignShield()

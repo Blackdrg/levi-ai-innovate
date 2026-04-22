@@ -58,6 +58,7 @@ struct LeviKernel {
     stdlib:              Arc<stdlib::StdLib>,
     boot_report:         Option<bootloader::BootReport>,
     micro_tx:            Option<mpsc::Sender<micro_kernel::Message>>,
+    serial_driver:       Arc<drivers::HardenedSerialDriver>,
     telemetry_rx:        Arc<tokio::sync::Mutex<Option<mpsc::Receiver<String>>>>,
     runtime:             Runtime,
 }
@@ -108,6 +109,10 @@ impl LeviKernel {
             bft_signer.clone(),
             filesystem.clone(),
         ));
+        
+        let serial_port = std::env::var("SERIAL_PORT_RAW").unwrap_or("localhost:4444".to_string());
+        let serial_driver = Arc::new(drivers::HardenedSerialDriver::new(serial_port));
+        driver_registry.register(Box::new(drivers::HardenedSerialDriver::new("localhost:4444".to_string())));
 
         Ok(Self {
             dag_kernel:        dag_executor::DAGKernel::new(),
@@ -131,6 +136,7 @@ impl LeviKernel {
             stdlib,
             boot_report: Some(boot_report),
             micro_tx: Some(tx),
+            serial_driver,
             telemetry_rx: Arc::new(tokio::sync::Mutex::new(Some(tel_rx))),
             runtime,
         })
@@ -150,6 +156,46 @@ impl LeviKernel {
             }
         });
         Ok(result)
+    }
+
+    /// v22.1: KHTP Binary Telemetry Syscall.
+    /// Frame (32 bytes): [KHTP(4)] [TS(8)] [ID(4)] [Arg1(8)] [Arg2(4)] [Res(2)] [CRC16(2)]
+    fn write_record(&self, event_id: u32, arg1: u64, arg2: u32) -> PyResult<()> {
+        let mut packet = [0u8; 32];
+        packet[0..4].copy_from_slice(b"KHTP");
+        
+        let ts = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_micros() as u64;
+            
+        packet[4..12].copy_from_slice(&ts.to_le_bytes());
+        packet[12..16].copy_from_slice(&event_id.to_le_bytes());
+        packet[16..24].copy_from_slice(&arg1.to_le_bytes());
+        packet[24..28].copy_from_slice(&arg2.to_le_bytes());
+        // [28..30] Reserved (0)
+        
+        // Compute CRC16-CCITT (False)
+        let crc = self.compute_crc16(&packet[0..30]);
+        packet[30..32].copy_from_slice(&crc.to_le_bytes());
+        
+        self.serial_driver.write_khtp(&packet);
+        Ok(())
+    }
+
+    fn compute_crc16(&self, data: &[u8]) -> u16 {
+        let mut crc: u16 = 0xFFFF;
+        for &byte in data {
+            crc ^= (byte as u16) << 8;
+            for _ in 0..8 {
+                if crc & 0x8000 != 0 {
+                    crc = (crc << 1) ^ 0x1021;
+                } else {
+                    crc <<= 1;
+                }
+            }
+        }
+        crc
     }
 
     // ── Intent / cognitive ────────────────────────────────────────────────────

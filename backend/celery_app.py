@@ -12,10 +12,9 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 IS_DEV = os.getenv("ENVIRONMENT", "development") == "development"
 IS_WINDOWS = sys.platform == "win32"
 
-# In dev: use in-memory broker so the worker starts without Redis installed.
-# In production: use Redis as the real broker.
-_BROKER = "memory://" if IS_DEV else REDIS_URL
-_BACKEND = "cache+memory://" if IS_DEV else REDIS_URL
+from backend.db.redis import get_celery_broker_url
+_BROKER = "memory://" if IS_DEV else get_celery_broker_url()
+_BACKEND = "cache+memory://" if IS_DEV else get_celery_broker_url()
 
 celery_app = Celery(
     "levi_tasks",
@@ -127,10 +126,25 @@ _task_context = threading.local()
 
 @task_prerun.connect
 def set_task_context(task_id=None, task=None, **kwargs):
-    """Inject task_id into thread-local so WorkerJsonFormatter can access it."""
+    """Inject task_id into thread-local and structlog context."""
     _task_context.task_id = task_id or "none"
     _task_context.task_name = task.name if task else "unknown"
     _task_context.start_time = time.time()
+    
+    # Sovereign v22.1: structlog and OTEL mission_id propagation
+    import structlog
+    from backend.utils.tracing import set_mission_baggage
+    mission_id = "unknown"
+    if 'args' in kwargs:
+         for arg in kwargs['args']:
+            if isinstance(arg, str) and (len(arg) == 36 or "mission" in str(arg).lower()): 
+                mission_id = arg
+                break
+    if 'kwargs' in kwargs:
+        mission_id = kwargs['kwargs'].get('mission_id', mission_id)
+    
+    structlog.contextvars.bind_contextvars(mission_id=mission_id, task_id=task_id)
+    set_mission_baggage(mission_id)
 
 @task_postrun.connect
 def stop_task_timer(task_id=None, task=None, state=None, **kwargs):
@@ -150,6 +164,8 @@ def clear_task_context(**kwargs):
     """Clear task context after task completes."""
     _task_context.task_id = "none"
     _task_context.task_name = "unknown"
+    import structlog
+    structlog.contextvars.clear_contextvars()
 
 
 class WorkerJsonFormatter(JsonFormatter):

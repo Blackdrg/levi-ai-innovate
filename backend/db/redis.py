@@ -19,6 +19,7 @@ def _is_local_url(url: str) -> bool:
 
 # --- Redis Configuration (HA Support v2.1) ---
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+REDIS_URL_CELERY = os.getenv("REDIS_URL_CELERY", "redis://localhost:6379/1")
 REDIS_MODE = os.getenv("REDIS_MODE", "standalone").lower() # standalone | sentinel | cluster
 SENTINEL_SERVICE = os.getenv("REDIS_SENTINEL_SERVICE", "mymaster")
 SENTINEL_NODES = os.getenv("REDIS_SENTINEL_NODES", "") # e.g. "localhost:26379,localhost:26380"
@@ -81,27 +82,10 @@ def _create_ha_clients():
         else: # standalone
             r = redis.from_url(REDIS_URL, **kwargs)
             r_async = async_redis.from_url(REDIS_URL, **kwargs)
-            logger.info("Sovereign Redis: Standalone pulse detected.")
+            logger.info(f"Sovereign Redis: Standalone pulse detected on {REDIS_URL}")
 
-        if r:
-            try:
-                # Use a small timeout for the initial ping to avoid blocking long
-                r.ping()
-            except Exception as ping_err:
-                logger.warning(f"Sovereign Redis: Initial pulse check failed (timeout/offline): {ping_err}")
-                if is_prod:
-                     raise ConnectionError(f"Redis mandatory in production but offline: {ping_err}")
-        
-        HAS_REDIS = True
-        HAS_REDIS_ASYNC = True
-
-        # v22.1: Enforce Memory Governance (4GB + LRU)
-        try:
-            r.config_set("maxmemory", "4gb")
-            r.config_set("maxmemory-policy", "allkeys-lru")
-            logger.info("🧠 [Redis] Memory Governance ACTIVE (4GB max / allkeys-lru).")
-        except Exception as e:
-            logger.warning(f"⚠️ [Redis] Could not enforce memory governance (Permissions?): {e}")
+        # 🛡️ Namespace Validation: Prevent Celery/Raft collision (db=1 vs db=0)
+        validate_namespaces()
     except Exception as e:
         if is_prod:
             logger.error(f"CRITICAL: [Redis] Mandatory infrastructure failed ({e}) in PRODUCTION. System Halted.")
@@ -123,6 +107,21 @@ def get_async_redis_client() -> Optional[async_redis.Redis]:
     if not HAS_REDIS_ASYNC:
         _create_ha_clients()
     return r_async
+
+def validate_namespaces():
+    """Ensures Raft (db=0) and Celery (db=1) are not pointing to the same instance/db."""
+    raft_url = os.getenv("REDIS_URL", "0")
+    celery_url = os.getenv("REDIS_URL_CELERY", "1")
+    
+    if raft_url == celery_url:
+        logger.error("🛑 [Redis] CRITICAL NAMESPACE COLLISION: Raft and Celery share the same Redis DB.")
+        if os.getenv("ENVIRONMENT") == "production":
+            raise RuntimeError("Redis Namespace Collision: Raft and Celery must use separate DBs.")
+    else:
+        logger.info(f"✅ [Redis] Namespace validation passed (Raft: {raft_url}, Celery: {celery_url})")
+
+def get_celery_broker_url():
+    return REDIS_URL_CELERY
 
 # --- Sovereign State Bridge (SPOF Mitigation v16.3) ---
 class SovereignStateBridge:

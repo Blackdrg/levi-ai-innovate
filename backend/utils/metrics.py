@@ -21,6 +21,8 @@ BACKPRESSURE_ACTIVE = Gauge(
     "Backpressure signal for a resource dimension",
     ["resource"],
 )
+VRAM_PERCENT = Gauge("leiva_vram_usage_percent", "Current GPU VRAM usage percentage")
+THERMAL_EVENTS = Counter("leiva_thermal_events_total", "Total count of thermal migration events", ["severity"])
 
 # 2. Mission & Agent Metrics
 ACTIVE_MISSIONS = Gauge("active_missions", "Number of currently processing missions")
@@ -31,6 +33,11 @@ MISSION_FAILURES = Counter(
     "Mission failures grouped by stage",
     ["stage"],
 )
+MISSION_LATENCY = Histogram("mission_latency_ms", "Mission end-to-end latency", buckets=[100, 500, 1000, 5000, 10000, 60000])
+
+# 🛡️ Sovereign v22.1: Security & Graduation Metrics
+EGRESS_CALLS = Counter("egress_calls_total", "Count of external network calls", ["destination", "status"])
+GRADUATION_COUNT = Counter("graduation_total", "Count of high-fidelity facts promoted to Tier 3", ["fidelity_range"])
 MISSION_CU = Histogram("mission_cu_consumption", "Cognitive Units consumed per mission")
 COGNITIVE_UNITS_CONSUMED = Counter("cognitive_units_total", "Total cumulative Cognitive Units consumed")
 AGENT_LATENCY = Histogram("agent_latency_ms", "Agent response latency in milliseconds", ["agent"])
@@ -91,9 +98,11 @@ class MetricsHub:
             vram_info = gpu_monitor.get_vram_usage()
             if vram_info.get("active"):
                 VRAM_AVAILABLE.set(vram_info["available"] * 1024**3)
+                VRAM_PERCENT.set(vram_info.get("percent", 0.0))
             else:
                  # Fallback to a safe estimate if GPU is missing but configured
                  VRAM_AVAILABLE.set(0.0)
+                 VRAM_PERCENT.set(0.0)
         except Exception as exc:
             logger.error("Metrics: telemetry capture drift - %s", exc)
 

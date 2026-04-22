@@ -8,7 +8,9 @@ import logging
 import asyncio
 import os
 
-logger = logging.getLogger("SerialBridge")
+from backend.utils.circuit_breaker import bridge_breaker
+import structlog
+logger = structlog.get_logger("SerialBridge")
 
 class SerialTelemetryBridge:
     """
@@ -32,7 +34,24 @@ class SerialTelemetryBridge:
         if self._running: return
         self._running = True
         self._task = asyncio.create_task(self._bridge_loop())
+        self._watchdog = asyncio.create_task(self._watchdog_loop())
         logger.info(f"🛰️ [SerialBridge] Listening on {self.port}...")
+
+    async def _watchdog_loop(self):
+        """Monitors last_pulse and switch to fallback if kernel is silent > 10s."""
+        while self._running:
+            try:
+                last_pulse = self.redis_client.get("system:last_pulse")
+                if last_pulse:
+                    data = json.loads(last_pulse)
+                    last_ts = data.get("arrival_ts", 0)
+                    if time.time() - last_ts > 10:
+                        logger.warning("🚨 [Watchdog] Kernel SILENT for > 10s. Degrading telemetry...")
+                        self.redis_client.set("system:telemetry_status", "degraded")
+                await asyncio.sleep(2)
+            except Exception as e:
+                logger.error(f"[Watchdog] Error: {e}")
+                await asyncio.sleep(5)
 
     async def stop(self):
         self._running = False
@@ -56,8 +75,17 @@ class SerialTelemetryBridge:
             loop = asyncio.get_event_loop()
             ser = await loop.run_in_executor(None, lambda: serial.serial_for_url(self.port, timeout=1))
             
+            async def _read_serial():
+                return await loop.run_in_executor(None, lambda: ser.read(32))
+            
             while self._running:
-                data = await loop.run_in_executor(None, lambda: ser.read(32))
+                try:
+                    data = await bridge_breaker.call(_read_serial)
+                except Exception as e:
+                    logger.warning(f"Serial read suppressed by circuit breaker: {e}")
+                    await asyncio.sleep(1)
+                    continue
+                
                 if not data: continue
                 
                 if len(data) == 32 and data[:4] == self.MAGIC:
@@ -66,6 +94,7 @@ class SerialTelemetryBridge:
                         payload = {
                             'type': 'kernel_telemetry',
                             'timestamp': ts,
+                            'arrival_ts': time.time(),
                             'syscall': hex(syscall_id),
                             'arg1': arg1,
                             'arg2': arg2,

@@ -150,12 +150,12 @@ class VRAMGuard:
         Reflects actual Llama 3.3 70B and Phi-3 footprints.
         """
         tier_map = {
-            "L1": 4096,   # 4GB (Phi-3-Mini)
-            "L2": 12288,  # 12GB (Llama 3.1 8B 128k Context)
-            "L3": 49152,  # 48GB (Llama 3.3 70B Q4_K_M)
-            "L4": 81920   # 80GB (A100/H100 Max Utility)
+            "L1": 3072,   # 3GB (Phi-3-Mini / Llama 3.2 3B Q4)
+            "L2": 6144,   # 6GB (Llama 3.1 8B Q4 / 7B class)
+            "L3": 10240,  # 10GB (Mistral NeMo 13B / 14B class Q4)
+            "L4": 49152   # 48GB (Llama 3.3 70B Q4 - Extreme Tier)
         }
-        return tier_map.get(model_tier, 8192) # Default to 8GB for safety
+        return tier_map.get(model_tier, 6144) # Default to 6GB (standard agent) for safety
 
     async def check_capacity(self, model_tier: str) -> bool:
         """Checks if any device slot can accommodate the requested model tier."""

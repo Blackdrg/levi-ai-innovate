@@ -22,7 +22,8 @@ from .dcn.peer_discovery import HybridGossip, DCNPeer
 from .dcn.consistency import ConsistencyEngine
 from .v13.vram_guard import VRAMGuard
 
-logger = logging.getLogger(__name__)
+import structlog
+logger = structlog.get_logger(__name__)
 
 class ConsensusMode(str, Enum):
     GOSSIP = "gossip" # Eventual consistency, high availability
@@ -70,8 +71,9 @@ class DCNProtocol:
     """
     
     def __init__(self, node_id: Optional[str] = None):
+        from backend.utils.secrets import secret_manager
         self.node_id = node_id or os.getenv("DCN_NODE_ID", "node_alpha")
-        self.secret = os.getenv("DCN_SECRET", "levi_ai_sovereign_fallback_secret_32_chars")
+        self.secret = secret_manager.get_secret("DCN_SECRET") or os.getenv("DCN_SECRET", "levi_ai_sovereign_fallback_secret_32_chars")
         self.is_active = True
         self.node_state = "follower" # follow, candidate, leader
         self.votes_received = 0
@@ -85,6 +87,10 @@ class DCNProtocol:
         self.last_leader_pulse = time.time()
         self.election_timeout = 90 # 3x heartbeat interval
         self.partition_active = False # For split-brain simulation
+        
+        # 🛡️ Sovereign v22.1: Cert Renewal
+        self._cert_path = os.getenv("DCN_CERT_PATH", "/etc/levi/certs/node.crt")
+        self._cert_renewal_task = None
 
         # Audit Point 27: Strict Secret Validation
         if len(self.secret) < 32:
@@ -367,6 +373,37 @@ class DCNProtocol:
                     await asyncio.sleep(10)
                     await self.poll_shadow_missions()
             create_tracked_task(shadow_polling_loop(), name="dcn-shadow-poll")
+
+        # 🛡️ Sovereign v22.1: mTLS Pre-Renewal (50% TTL)
+        async def cert_renewal_loop():
+            while self.is_active:
+                try:
+                    await self.check_and_renew_certs()
+                except Exception as e:
+                    logger.error(f"[DCN] Cert renewal error: {e}")
+                await asyncio.sleep(3600) # Check every hour
+        create_tracked_task(cert_renewal_loop(), name="dcn-cert-renewal")
+
+    async def check_and_renew_certs(self):
+        """Analyzes cert TTL and triggers renewal at 50% threshold."""
+        if not os.path.exists(self._cert_path): return
+        
+        from cryptography import x509
+        from datetime import datetime, timezone
+        with open(self._cert_path, "rb") as f:
+            cert = x509.load_pem_x509_certificate(f.read())
+            
+        expiry = cert.not_valid_after_utc
+        now = datetime.now(timezone.utc)
+        total_ttl = (expiry - cert.not_valid_before_utc).total_seconds()
+        remaining = (expiry - now).total_seconds()
+        
+        if remaining < (total_ttl / 2):
+            logger.warning(f"🛡️ [DCN] mTLS Cert expiring in {remaining/3600:.1f}h (50% threshold). Renewing...")
+            # Trigger external vault/cert-manager renewal script
+            import subprocess
+            subprocess.run(["/usr/local/bin/levi-renew-certs.sh"], check=True)
+            logger.info("✅ [DCN] mTLS Cert RENEWED.")
 
     async def handle_remote_pulse(self, pulse_data: Dict[str, Any]):
         """

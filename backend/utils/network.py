@@ -38,7 +38,8 @@ standard_retry = retry(
 from backend.utils.circuit_breaker import (
     agent_breaker as ai_service_breaker, 
     neo4j_breaker, 
-    postgres_breaker as redis_breaker
+    postgres_breaker,
+    redis_breaker
 )
 groq_breaker = ai_service_breaker # Aliasing for legacy compatibility
 together_breaker = ai_service_breaker
@@ -86,20 +87,39 @@ async def async_safe_request(method: str, url: str, **kwargs) -> httpx.Response:
         logger.error(f"[Shield] Blocked Async SSRF attempt to unauthorized domain: {url}")
         raise RuntimeError("Network Egress Blocked: Unauthorized domain.")
 
-    async with httpx.AsyncClient() as client:
-        try:
-            logger.info(f"Async API Request [{request_id}]: {method} {url}")
-            response = await client.request(method, url, **kwargs)
-            
-            if response.status_code == 429:
-                logger.warning(f"Async Rate limit hit for {url} (ID: {request_id})")
-            
-            response.raise_for_status()
-            return response
-        except httpx.HTTPStatusError as e:
-            status_code = e.response.status_code
-            logger.error(f"Async HTTP Error {status_code} for {url} (ID: {request_id}): {e}")
-            raise
-        except httpx.RequestError as e:
-            logger.error(f"Async Network Error for {url} (ID: {request_id}): {e}")
-            raise
+    async def _do_request():
+        # 🛡️ Sovereign v22.1: Egress Monitoring & Whitelisting
+        whitelist = os.getenv("EGRESS_WHITELIST", "sovereign.ai,google.com,huggingface.co").split(",")
+        is_safe = False
+        for domain in whitelist:
+            if domain in url:
+                is_safe = True
+                break
+                
+        from backend.utils.metrics import EGRESS_CALLS
+        if not is_safe:
+            logger.critical(f"🚨 [Security] UNEXPECTED EGRESS DETECTED: {url}")
+            EGRESS_CALLS.labels(destination=url, status="unauthorized").inc()
+            # In strict mode, we could block here
+        else:
+            EGRESS_CALLS.labels(destination=url, status="authorized").inc()
+
+        async with httpx.AsyncClient() as client:
+            try:
+                logger.info(f"Async API Request [{request_id}]: {method} {url}")
+                response = await client.request(method, url, **kwargs)
+                
+                if response.status_code == 429:
+                    logger.warning(f"Async Rate limit hit for {url} (ID: {request_id})")
+                
+                response.raise_for_status()
+                return response
+            except httpx.HTTPStatusError as e:
+                status_code = e.response.status_code
+                logger.error(f"Async HTTP Error {status_code} for {url} (ID: {request_id}): {e}")
+                raise
+            except httpx.RequestError as e:
+                logger.error(f"Async Network Error for {url} (ID: {request_id}): {e}")
+                raise
+
+    return await ai_service_breaker.call(_do_request)

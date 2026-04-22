@@ -32,26 +32,32 @@ class CriticAgentV8(BaseV8Agent[CriticInput]):
         # 2. Hallucination & Alignment pass
         alignment = await self._check_alignment(input_data)
         
-        # 3. Final synthesis of metric data
-        quality_score = metrics.get("quality_score", 0.5)
+        # 3. Unified Fidelity Formula: (Coherence * Grounding) / Perplexity
+        # Mapped to: (alignment * grounding) / (1.1 - resonance)
+        alignment_score = metrics.get("alignment", 0.5)
+        grounding_score = metrics.get("grounding", 0.5)
+        resonance_score = metrics.get("resonance", 0.5)
         is_safe = alignment.get("is_safe", False)
         
-        # A mission is successful only if quality is high AND alignment is safe
-        success = quality_score >= 0.85 and is_safe
+        fidelity = (alignment_score * grounding_score) / (1.1 - resonance_score)
+        fidelity = max(0.0, min(1.0, fidelity))
+        
+        # A mission is successful only if fidelity is high AND alignment is safe
+        success = fidelity >= 0.85 and is_safe
         
         return AgentResult(
             success=success,
-            message=f"Sovereign Audit Complete: {int(quality_score*100)}% Fidelity.",
+            message=f"Sovereign Audit Complete: {int(fidelity*100)}% Fidelity.",
             data={
-                "quality_score": quality_score,
+                "fidelity_score": round(fidelity, 4),
                 "is_satisfactory": success,
                 "issues": metrics.get("issues", []),
                 "fix": metrics.get("fix", "No fix required."),
                 "hallucination_detected": not is_safe,
                 "metrics": {
-                    "alignment": metrics.get("alignment", 0.5),
-                    "grounding": metrics.get("grounding", 0.5),
-                    "resonance": metrics.get("resonance", 0.5)
+                    "alignment": alignment_score,
+                    "grounding": grounding_score,
+                    "resonance": resonance_score
                 }
             }
         )

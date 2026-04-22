@@ -4,8 +4,8 @@ import { StatusBar } from 'expo-status-bar';
 import { Brain, Send, Activity, ShieldCheck } from 'lucide-react-native';
 import axios from 'axios';
 
-// Sovereign API Endpoint (v15.2 Hardened)
-const API_URL = "http://localhost:8000/api/v1/orchestrator/mission";
+// Sovereign API Endpoint (v22.1 Engineering Baseline)
+const API_URL = "http://localhost:8000/api/v1/orchestrator/chat";
 
 export default function App() {
   const [input, setInput] = useState('');
@@ -24,7 +24,7 @@ export default function App() {
 
     try {
       const response = await axios.post(API_URL, {
-        input: userMsg,
+        message: userMsg,
         session_id: "mobile_session_1"
       });
 

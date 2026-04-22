@@ -22,6 +22,7 @@ from .task_graph import TaskGraph, TaskNode
 from .intent_classifier import HybridIntentClassifier
 from .learning_loop import LearningLoop
 from .strategy_ledger import StrategyLedger
+from backend.services.cache_manager import CacheManager
 from backend.utils.llm_utils import call_lightweight_llm as _call_lightweight_llm
 from backend.utils.shield import PII_PATTERNS
 from pydantic import BaseModel, Field
@@ -301,6 +302,11 @@ Mission Objective: {objective}
 User Input: {user_input}
 {semantic_text}{episodic_text}{resonance_text}
 
+### SCHEDULING HEURISTIC (Section 83.1)
+Apply the Critical-Path Heuristic for task prioritization:
+Priority = Complexity + Σ Latency(Children).
+Tasks with the highest weight must be executed in early waves to minimize total mission latency.
+
 Available Agents:
 - search_agent, browser_agent, code_agent, python_repl_agent, document_agent, image_agent, video_agent, critic_agent, consensus_agent
 
@@ -399,6 +405,13 @@ class DAGPlanner:
         mode = decision.mode if decision else BrainMode.BALANCED
         graph = None
         
+        # 🟢 Tier 3: Strategy Cache (DAG Reuse)
+        cached_strat = await CacheManager.get_strategy(intent_type, user_input)
+        if cached_strat:
+            logger.info(f"🎯 [Planner] T3 STRATEGY HIT for {intent_type}")
+            graph = self._restore_cached_template(cached_strat, user_input, perception)
+            if graph: return graph
+        
 
         # --- Step 2.4: Graduated Rule Override (REAL EVOLUTION) ---
         rule_override = await LearningLoop.check_rules(user_input)
@@ -445,6 +458,10 @@ class DAGPlanner:
         # 4. Final Structural Audit Pass (Hardened v15.0)
         self._structural_audit_pass(graph)
         
+        # 🎓 Tier 3 Promotion: Store high-fidelity strategies
+        if graph and graph.metadata.get("origin") != "template":
+            await CacheManager.set_strategy(intent_type, user_input, self._serialize_template(graph))
+
         graph.metadata["cost_estimate"] = graph.estimate_cost()
         return graph
 

@@ -21,6 +21,7 @@ ARCHITECTURAL REALITY (honest):
 """
 
 import logging
+import structlog
 import uuid
 import os
 import time
@@ -66,7 +67,7 @@ from backend.utils.logging_context import log_request_id, log_user_id, log_sessi
 from backend.utils.metrics import MetricsHub, MISSION_COMPLETED, MISSION_ABORTED, GRADUATION_SCORE
 from backend.utils.tracing import traced_span
 from backend.utils.latency_tracer import LatencyTracer
-from backend.kernel.kernel_wrapper import kernel
+from backend.kernel.kernel_service import kernel_service
 from backend.utils.kms import SovereignKMS
 from backend.services.graduation import graduation_service
 from backend.services.rust_runtime_bridge import rust_bridge
@@ -139,6 +140,7 @@ class Orchestrator:
         self._metrics   = MetricsHub()
         self._sentinel  = None
         self._pulse     = None
+        self._telemetry = None
         self.mesh_proto = None
 
         # ── Autonomy engines ───────────────────────────────────────────────────
@@ -157,7 +159,11 @@ class Orchestrator:
 
     async def boot_sovereign_os(self) -> None:
         """Multi-stage OS boot."""
-        logger.info("🧩 [Orchestrator] SOVEREIGN BOOT (%s)...", OS_VERSION)
+        from backend.utils.structured_logging import setup_structured_logging
+        setup_structured_logging()
+        self.logger = structlog.get_logger(__name__)
+        
+        self.logger.info("🧩 [Orchestrator] SOVEREIGN BOOT", version=OS_VERSION)
         try:
             await self._calibrate_hardware()
             recovered = await CentralExecutionState.recover_active_missions()
@@ -174,10 +180,19 @@ class Orchestrator:
 
             from .self_healing import self_healing
             await self_healing.start()
+            
+            # 🛡️ Sovereign v22.1: Local-Only Enforcement Gate
+            if os.getenv("ENFORCE_LOCAL_ONLY", "false").lower() == "true":
+                cloud_vars = ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GROQ_API_KEY"]
+                for cv in cloud_vars:
+                    if os.getenv(cv):
+                        raise RuntimeError(f"[Security] Local isolation violation: {cv} found while ENFORCE_LOCAL_ONLY is active.")
 
             self._sentinel = asyncio.create_task(self._sentinel_worker())
+            self._telemetry = asyncio.create_task(self._telemetry_listener_worker())
             self._pulse    = asyncio.create_task(self._pulse_worker())
             asyncio.create_task(self.chaos_agent.ignite_storm())
+            asyncio.create_task(self.learning.run_forever())
 
             # Start kernel telemetry background tasks
             kernel.start_background_tasks()
@@ -237,7 +252,21 @@ class Orchestrator:
         log_session_id.set(session_id)
 
         start_ts = time.time()
-        # ── 0. Forensic Integrity Gate ────────────────────────────────────────
+        
+        # Bind mission_id to logging context and OTEL baggage
+        structlog.contextvars.bind_contextvars(mission_id=mission_id)
+        from backend.utils.tracing import set_mission_baggage
+        set_mission_baggage(mission_id)
+        self.logger.info("🚀 Dispatching Mission", user_id=user_id, input_len=len(user_input))
+        # ── 0. Forensic Integrity Gate (SEP-22 Ethics Protocol) ─────────────
+        from backend.core.security.ethics_gate import ethics_gate
+        is_safe, reason = await ethics_gate.audit_mission(user_input, user_id)
+        if not is_safe:
+            self.logger.critical(f"🛡️ [SEP-22] Mission BLOCKED: {reason}")
+            MISSION_ABORTED.inc()
+            return {"status": "blocked", "reason": f"Ethics Policy Violation (SEP-22): {reason}"}
+
+        # Bind mission_id to logging context and OTEL baggage
         if self.paused:
             logger.critical("🛑 [Orchestrator] MISSION DENIED: Cognitive Freeze active (Hardware Breach).")
             return {
@@ -246,12 +275,23 @@ class Orchestrator:
                 "request_id": mission_id
             }
 
-        # ── 1. Admission control ──────────────────────────────────────────────
-        vram_pressure = await self.get_vram_pressure()
-        if vram_pressure > VRAM_ADMISSION and not kwargs.get("force_admission"):
-            logger.critical("🛑 [Resources] VRAM %.2f > threshold. Offloading.", vram_pressure)
-            return await self._delegate_to_mesh(mission_id, user_id, user_input, session_id,
-                                                "RESOURCE_BACKPRESSURE", **kwargs)
+        # ── 1. Admission control (Section 9: Resonance) ────────────────────────
+        from backend.services.resonance import resonance_engine
+        resonance = await resonance_engine.get_resonance_snapshot()
+        vram_delta = resonance["vram_saturation_delta"]
+        entropy = resonance["system_entropy"]
+        
+        self.logger.info(f"🧮 [Resonance] ΔV: {vram_delta:.4f} | Entropy (S): {entropy:.4f}")
+        
+        if vram_delta >= VRAM_ADMISSION and not kwargs.get("force_admission"):
+            self.logger.warning("🚫 [Admission] Mission REJECTED: VRAM Saturation Delta (ΔV) exceeds 0.94.")
+            MISSION_ABORTED.inc()
+            return {
+                "response": "Cognitive queue saturated (ΔV Threshold). Please standby.",
+                "status": "VRAM_BACKPRESSURE",
+                "vram_delta": vram_delta,
+                "entropy": entropy
+            }
 
         # ── 2. Safety gate ────────────────────────────────────────────────────
         intercept = await self._safety_gate(user_id, user_input, mission_id)
@@ -297,8 +337,9 @@ class Orchestrator:
             kwargs.update(admission)
 
             # ── 3c. Kernel resource reservation ──────────────────────────────
-            kernel.schedule_mission(mission_id, "Normal")
-            kernel.update_mission_state(mission_id, "Analyzing")
+            await kernel_service.schedule_mission(mission_id, "Normal")
+            await kernel_service.update_mission_state(mission_id, "Analyzing")
+            await kernel_service.write_telemetry_record(0x1000, int(start_ts), 0) # MISSION_START
 
             # ── 3d. Native Rust Core Handover ─────────────────────────────────
             # We attempt to hand over the mission to the native core first.
@@ -313,13 +354,20 @@ class Orchestrator:
                 from backend.engines.brain.cognitive_engine import cognitive_engine
                 
                 logger.info("🧠 [Orchestrator] Delegating to DISTRIBUTED Cognitive Engine: %s", mission_id)
-                kernel.update_mission_state(mission_id, "Thinking")
+                await kernel_service.update_mission_state(mission_id, "Thinking")
                 
-                # Consume the generator to get the final state
+                # Wrap delegation in TaskManager for resource governance and circuit breaking
+                task_id = await task_manager.register_task("brain", "cognitive_run", {"mid": mission_id}, mission_id)
+                
                 final_state = None
-                async for update in cognitive_engine.run(user_id, user_input):
-                    if update["event"] == "final_state":
-                        final_state = update["data"]
+                async def _run_brain():
+                    nonlocal final_state
+                    async for update in cognitive_engine.run(user_id, user_input):
+                        if update["event"] == "final_state":
+                            final_state = update["data"]
+                    return final_state
+
+                await task_manager.execute_task(task_id, _run_brain, mission_id=mission_id)
                 
                 if not final_state:
                      raise RuntimeError("Cognitive engine failed to return final state.")
@@ -351,11 +399,14 @@ class Orchestrator:
                     **kwargs,
                 )
 
-            kernel.update_mission_state(mission_id, "Succeeded")
+            # ── 8. Mission finality ───────────────────────────────────────────
+            await kernel_service.update_mission_state(mission_id, "Succeeded")
+            await kernel_service.write_telemetry_record(0x1001, int(time.time()), int(result.get("fidelity", 1.0) * 100)) # MISSION_SUCCESS
 
             # ── 7. Forensic Crystallization ───────────────────────────────────
             from backend.core.security.redactor import PIIRedactor
-            response_sanitized = PIIRedactor.scrub(str(result.get("response", "")))
+            from backend.utils.shield import sovereign_shield
+            response_sanitized = sovereign_shield.sanitize_output(PIIRedactor.scrub(str(result.get("response", ""))))
             result["response"] = response_sanitized
             
             await self._record_mission_result(mission_id, response_sanitized)
@@ -366,9 +417,10 @@ class Orchestrator:
             return result
 
         except Exception as exc:
-            logger.exception("🚑 [Orchestrator] Mission %s fault: %s", mission_id, exc)
-            kernel.update_mission_state(mission_id, "Failed")
+            logger.error("❌ [Orchestrator] Mission %s FAILED: %s", mission_id, exc)
+            await kernel_service.update_mission_state(mission_id, "Failed")
             MISSION_ABORTED.inc()
+            MetricsHub.mission_finished(success=False, stage="orchestrator_fault")
             await self._deregister_mission(mission_id)
             return await self._delegate_to_mesh(mission_id, user_id, user_input, session_id,
                                                 str(exc), **kwargs)
@@ -450,6 +502,9 @@ class Orchestrator:
             pass  # monitoring is non-critical
 
         await self._deregister_mission(mission_id)
+        from backend.utils.metrics import MISSION_LATENCY
+        MISSION_LATENCY.observe(latency)
+        MetricsHub.mission_finished(success=True)
         MISSION_COMPLETED.inc()
         CognitiveTracer.end_trace(mission_id, "success", {"fidelity": result.get("fidelity", 1.0)})
         logger.info("✅ [Orchestrator] Mission %s done in %.1fms", mission_id, latency)
@@ -579,7 +634,7 @@ class Orchestrator:
     # ── Hardware calibration ──────────────────────────────────────────────────
 
     async def _calibrate_hardware(self) -> None:
-        metrics = kernel.get_gpu_metrics()
+        metrics = await kernel_service.get_resource_usage()
         logger.info("🖥️  [Hardware] GPU: %s VRAM: %sMB",
                     metrics.get("gpu_name", "unknown"),
                     metrics.get("vram_total_mb", "?"))
@@ -600,7 +655,7 @@ class Orchestrator:
 
     async def get_vram_pressure(self) -> float:
         try:
-            m = kernel.get_gpu_metrics()
+            m = await kernel_service.get_resource_usage()
             t = m.get("vram_total_mb", 8192)
             u = m.get("vram_used_mb", 0)
             return u / t if t > 0 else 0.0
@@ -686,6 +741,14 @@ class Orchestrator:
                 if iteration % 360 == 0:
                     await self.evolution.evolve_swarm()
 
+                # Archive missions every 24 hours (approx 144 iterations at 10m)
+                if iteration % 144 == 0:
+                    from backend.utils.retention import retention_manager
+                    from backend.services.audit_ledger import audit_ledger
+                    await retention_manager.run_archiving_cycle()
+                    # 🛡️ Sovereign v22.1: Daily S3 Finality Export
+                    await audit_ledger.export_head_hash_to_s3()
+
                 await asyncio.sleep(600 if score > 0.95 else 60)
             except Exception as exc:
                 logger.error("⚠️  [Sentinel] Error: %s", exc)
@@ -704,22 +767,83 @@ class Orchestrator:
 
     async def _reset_hardware_pools(self):
         logger.info("🛠️  [Self-Healing] Flushing VRAM pools...")
-        kernel.flush_vram_buffer()
+        await kernel_service.flush_resource_buffers()
         logger.info("✅ [Self-Healing] VRAM pools flushed.")
 
     # ── Thermal Management (Section 33) ───────────────────────────────────────
 
+    async def enable_vram_throttling(self) -> None:
+        """Section 33: Triggered when temperature >= 78°C."""
+        logger.warning("🌡️ [Thermal] Enabling VRAM throttling (Quantization shift). Reducing admission threshold.")
+        # Reduce admission threshold to 70% to allow hardware cooling
+        global VRAM_ADMISSION
+        VRAM_ADMISSION = 0.70
+        await kernel_service.write_telemetry_record(0x0007, int(time.time()), 1) # THERMAL_THROTTLE
+
     async def trigger_thermal_migration(self) -> None:
-        """Triggered locally by thermal_monitor when T >= 75°C."""
-        logger.warning(" [Thermal] Local heat critical. Notifying swarm...")
-        if self.mesh_proto and getattr(self.mesh_proto, "is_active", False):
-            await self.mesh_proto.broadcast_gossip(self.kernel_id, {"temp": "critical"}, "thermal_migration")
+        """Section 33: Evacuates non-essential agents to cooler nodes."""
+        logger.critical("🌡️ [Thermal] CRITICAL TEMPERATURE. Initiating swarm-wide migration.")
+        await self.dcn.broadcast_gossip(
+            mission_id="system",
+            payload={"action": "evacuate", "origin": self.kernel_id},
+            pulse_type="thermal_migration"
+        )
         await self.rebalance_missions()
 
     async def migrate_agents_to_cooler_nodes(self) -> None:
-        """Section 33: Triggered by Mesh pulse when another node is overheating."""
-        logger.info(" [Thermal] Swarm-level migration pulse received. Rebalancing...")
+        """Gradual migration for warning-level thermal events."""
+        logger.info("🌡️ [Thermal] Warning threshold reached. Balancing load to peers.")
         await self.rebalance_missions()
+
+    # ── Kernel Telemetry Listener ─────────────────────────────────────────────
+
+    async def _telemetry_listener_worker(self):
+        """
+        Sovereign v22.1: Real-time Kernel Syscall Listener.
+        Listens to system:telemetry from the Serial Bridge or Native Kernel.
+        """
+        if not HAS_REDIS: return
+        
+        logger.info("🛰️  [Telemetry] Orchestrator listener ACTIVE.")
+        pubsub = get_redis_client().pubsub()
+        pubsub.subscribe('system:telemetry')
+        
+        try:
+            while not self._shutdown_evt.is_set():
+                msg = pubsub.get_message(ignore_subscribe_messages=True)
+                if msg:
+                    data = json.loads(msg['data'])
+                    await self._handle_kernel_syscall(data)
+                await asyncio.sleep(0.1)
+        except Exception as e:
+            logger.error(f"[Telemetry] Listener loop error: {e}")
+        finally:
+            pubsub.unsubscribe('system:telemetry')
+
+    async def _handle_kernel_syscall(self, payload: Dict[str, Any]):
+        """Dispatches kernel-initiated requests to the mainframe logic."""
+        sc_id = payload.get("syscall")
+        arg1 = payload.get("arg1")
+        
+        # 0x06: MCM_GRADUATE
+        if sc_id == "0x6" or sc_id == 6:
+            logger.info("🎓 [Kernel] MCM_GRADUATE signal received. Triggering graduation cycle.")
+            from backend.utils.retention import retention_manager
+            await retention_manager.run_graduation_cycle()
+            
+        # 0x07: THERMAL_EVENT
+        elif sc_id == "0x7" or sc_id == 7:
+            severity = "critical" if arg1 == 1 else "warning"
+            logger.warning(f"🌡️ [Kernel] THERMAL_EVENT recorded: {severity}")
+            from backend.services.thermal_monitor import thermal_monitor
+            await thermal_monitor.handle_hardware_signal(severity, 85.0 if arg1 == 1 else 75.0)
+
+        # 0x99: SYS_REPLACELOGIC (Self-Healing)
+        elif sc_id == "0x99" or sc_id == 153:
+            logger.critical("🩺 [Kernel] SYS_REPLACELOGIC (0x99) detected. Initiating emergency reboot.")
+            # Triggering local self-healing logic
+            from .self_healing import self_healing
+            await self_healing._perform_emergency_logic_reset()
 
     async def rebalance_missions(self) -> None:
         """Actually offloads work to cooler nodes or reduces local worker count."""

@@ -9,6 +9,9 @@ from pydantic import BaseModel, Field
 from backend.engines.brain.planner import BrainPlanner
 from backend.engines.brain.orchestrator import distributed_orchestrator
 from backend.redis_client import cache
+from backend.db.postgres import PostgresDB
+from backend.db.models import Mission, AbortedMission, Message
+from sqlalchemy import select, update
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +48,56 @@ class MissionState(BaseModel):
         self.save()
 
     def save(self):
-        """Persist mission state to Redis."""
+        """Persist mission state to Redis and Postgres."""
+        # 1. Redis for fast-path
         cache.set(f"mission:{self.mission_id}:state", self.model_dump_json(), ex=3600)
+        
+        # 2. Postgres for forensic truth (Background task)
+        asyncio.create_task(self._save_to_postgres())
+
+    async def _save_to_postgres(self):
+        try:
+            async with PostgresDB._session_factory() as session:
+                mission = await session.get(Mission, self.mission_id)
+                if not mission:
+                    mission = Mission(
+                        mission_id=self.mission_id,
+                        user_id=self.user_id,
+                        objective=self.query,
+                        status=self.status,
+                        payload=self.model_dump()
+                    )
+                    session.add(mission)
+                else:
+                    mission.status = self.status
+                    mission.payload = self.model_dump()
+                    mission.fidelity_score = self.shared_context.get("score", 0.0) / 100.0
+                
+                await session.commit()
+        except Exception as e:
+            logger.error(f"Postgres Mission Save Failed: {e}")
+
+    async def persist_abortion(self, error_node: str):
+        """Standardized v22.1 Resilience: Partial State Persistence."""
+        try:
+            async with PostgresDB._session_factory() as session:
+                abort_record = AbortedMission(
+                    mission_id=self.mission_id,
+                    user_id=self.user_id,
+                    frozen_dag=[step.model_dump() for step in self.plan],
+                    error_node_id=error_node,
+                    payload=self.shared_context
+                )
+                session.add(abort_record)
+                
+                # Update main mission status
+                stmt = update(Mission).where(Mission.mission_id == self.mission_id).values(status="ABORTED")
+                await session.execute(stmt)
+                
+                await session.commit()
+                logger.warning(f"🛡️ [Resilience] Mission {self.mission_id} ABORTED. Partial state persisted to Postgres.")
+        except Exception as e:
+            logger.error(f"Persistence of mission abortion failed: {e}")
 
     @classmethod
     def load(cls, mission_id: str) -> Optional["MissionState"]:
@@ -113,6 +164,11 @@ class CognitiveEngine:
                     state.save()
                     distributed_orchestrator.broadcast_mission_event(mission_id, "mission_completed", {"status": "success"}, user_id=user_id)
                     yield {"event": "mission_complete", "data": {"mission_id": mission_id}}
+
+            # 5. ABORTION (Failure)
+            if state.status == "FAILED":
+                await state.persist_abortion(error_node="CRITIC_OR_EXECUTOR")
+                yield {"event": "error", "data": "Mission aborted after 3 failed fidelity cycles."}
 
 
         yield {"event": "final_state", "data": state.model_dump()}
@@ -259,8 +315,14 @@ class CognitiveEngine:
             state.shared_context["valid"] = False
 
     def should_refine(self, state: MissionState) -> bool:
-        # Refine if invalid and we haven't exhausted global retries (or similar logic)
-        return not state.shared_context.get("valid", True) and len(state.shared_context["errors"]) < self.max_retries
+        # Refine if invalid and we haven't exhausted global retries
+        if not state.shared_context.get("valid", True):
+            if len(state.shared_context["errors"]) < self.max_retries:
+                return True
+            else:
+                state.status = "FAILED"
+                return False
+        return False
 
     def final_output(self, state: MissionState) -> str:
         if state.status == "COMPLETED" and state.shared_context["results"]:

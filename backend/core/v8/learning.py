@@ -198,7 +198,8 @@ class LearningLoopV13:
         Updates fragility and triggers crystallization.
         """
         intent = outcome.get("intent", "general")
-        success = outcome.get("total_score", 0.0) >= 0.8 if "total_score" in outcome else True
+        fidelity = outcome.get("fidelity_score", 0.0)
+        success = fidelity >= 0.85
         level = outcome.get("level", 4)
         
         # 1. Update Domain Fragility (Self-Optimization Weighting)
@@ -208,13 +209,18 @@ class LearningLoopV13:
         if level >= 2 and success:
             query = outcome.get("query")
             response = outcome.get("response")
-            score = outcome.get("total_score", 1.0)
+            score = fidelity
             
             # Track recurring patterns for promotion to Rules Engine
             if PatternRegistry.track_pattern(user_id, query, response, score):
                 
-                # v8.14: Validation Pass via ReflectionEngine before promotion
+                # v22.1: Validation Pass via ReflectionEngine before promotion
                 reflection = ReflectionEngine()
+                # Appendix G: Enforce Quorum Signatures before promotion
+                signatures = outcome.get("signatures", [])
+                if len(signatures) < 3:
+                    logger.warning(f"[V22.1 Evolution] Rule promotion rejected: Insufficient Quorum ({len(signatures)}/3)")
+                    return
                 # Mocking a goal for the reflection pass
                 class MockGoal: objective = "Validate deterministic rule." ; success_criteria = ["No hallucination", "Logical correctness"] ; self_correction_weight = 0.9
                 
@@ -231,7 +237,7 @@ class LearningLoopV13:
         # 2.5 Reinforcement & Failure Learning (v11.0)
         if "latency_ms" in outcome and "results" in outcome:
             reward = ReinforcementLearner.calculate_reward(
-                outcome.get("total_score", 1.0 if success else 0.0),
+                fidelity if success else 0.0,
                 outcome["latency_ms"],
                 len(outcome["results"]),
                 outcome.get("token_count", 0)
@@ -245,7 +251,7 @@ class LearningLoopV13:
             await FailureLearner.analyze_failure(user_id, outcome)
 
         # 3. Trigger Crystallization (Skill Acquisition - Prototype Layer)
-        if success and outcome.get("total_score", 0.0) >= 0.95:
+        if success and fidelity >= 0.95:
             await CrystallizationEngine.crystallize_prototype(user_id, outcome)
             
             # Tier 5: Autonomous Knowledge Graph Extraction (v13 Graduation)
@@ -292,6 +298,21 @@ class LearningLoopV13:
             if resonance > 0.5: survivors.append(mem)
         return survivors
 
-# Graduation Alias for the Sovereign OS (v14.0.0)
-LearningLoopV8 = LearningLoopV13
+# Graduation Alias for the Sovereign OS (v22.1)
+from backend.core.learning_loop import LearningLoop as HardenedLearningLoop
 
+class LearningLoopV8:
+    @staticmethod
+    async def process_mission_outcome(user_id: str, outcome: Dict[str, Any]):
+        """Bridge to the consolidated LearningLoop."""
+        await HardenedLearningLoop.crystallize_pattern(
+            mission_id=outcome.get("mission_id", "v8-legacy"),
+            query=outcome.get("query", ""),
+            result=outcome.get("response", ""),
+            fidelity=outcome.get("fidelity_score", 0.0),
+            metadata={
+                "user_id": user_id,
+                "intent_type": outcome.get("intent", "general"),
+                "signatures": outcome.get("signatures", [])
+            }
+        )

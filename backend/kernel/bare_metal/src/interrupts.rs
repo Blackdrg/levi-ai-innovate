@@ -166,11 +166,23 @@ extern "x86-interrupt" fn page_fault_handler(
     if in_user_stack {
         println!(" [PF] Recovering user-stack fault at 0x{:X} — mapping 4KiB frame.", addr_u64);
         
-        // 100% Reality: Call our global mapper to provide the page.
-        // (In a real kernel this would be protected by a per-process lock).
-        let page = x86_64::structures::paging::Page::containing_address(fault_addr);
-        println!(" [OK] Demand paging successful for {:?}", page);
-        return; // IRQ returns to the same instruction, which now succeeds.
+        // --- Demand Paging Implementation ---
+        let mut mapper_lock = crate::memory::MAPPER.lock();
+        let mut frame_allocator_lock = crate::memory::FRAME_ALLOCATOR.lock();
+        
+        if let (Some(mapper), Some(frame_allocator)) = (mapper_lock.as_mut(), frame_allocator_lock.as_mut()) {
+            use x86_64::structures::paging::{Page, Mapper, PageTableFlags};
+            
+            let page = Page::containing_address(fault_addr);
+            let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::USER_ACCESSIBLE;
+            
+            unsafe {
+                let frame = frame_allocator.allocate_frame().expect("out of memory");
+                mapper.map_to(page, frame, flags, frame_allocator).expect("map_to failed").flush();
+            }
+            println!(" [OK] Demand paging successful for {:?}", page);
+            return; 
+        }
     } else {
         println!(" [INT] Unrecoverable PAGE FAULT\n{:#?}", stack_frame);
         panic!("PAGE FAULT — SOVEREIGN HALT");

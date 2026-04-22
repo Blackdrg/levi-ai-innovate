@@ -63,13 +63,24 @@ class BrainPlanner:
         return "CHAT"
 
     async def create_plan(self, query: str, intent: str) -> List[Dict[str, Any]]:
-        """
+        \"\"\"
         Generates the mission plan. Uses dynamic architecting for complex intents.
-        """
+        \"\"\"
         logger.info(f"Planning Mission Strategy: {intent}")
         
+        # 🎓 Tier 3: Strategy Cache (DAG Reuse)
+        from backend.redis_client import get_cached_json, cache_json
+        cache_key = f"t3_strat:{intent}:{query}"
+        cached = get_cached_json(cache_key)
+        if cached:
+            logger.info(f"🎯 [Brain-Planner] T3 STRATEGY HIT for {intent}")
+            return cached
+
         if intent in ["CAUSAL_LOGIC", "DEEP_RESEARCH"]:
-            return await self.create_dynamic_plan(query, intent)
+            plan = await self.create_dynamic_plan(query, intent)
+            if plan:
+                cache_json(cache_key, plan, expire=86400) # Cache for 24h
+            return plan
             
         plan = self._templates.get(intent, [{"step": 1, "agent_name": "chat"}])
         return self._inject_query(plan, query)
@@ -85,7 +96,10 @@ class BrainPlanner:
             f"Architect a mission for: {query}\n"
             f"Intent: {intent}\n"
             "Return a JSON list of steps. Each step: {'step': int, 'agent_name': str, 'depends_on': list of ints or null, 'params': dict}\n"
-            "Available Agents: RESEARCHER, CRITIC, WRITER, MEMORY, CHAT."
+            "Available Agents: RESEARCHER, CRITIC, WRITER, MEMORY, CHAT.\n\n"
+            "### SCHEDULING HEURISTIC (Section 83.1)\n"
+            "Apply the Critical-Path Heuristic: Priority = Complexity + Σ Latency(Children).\n"
+            "Group independent steps into early waves to minimize total mission latency."
         )
         
         res = await distributed_orchestrator.execute_task("planner", "COGNITION", prompt)
